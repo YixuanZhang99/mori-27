@@ -1,8 +1,46 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
 [project]
 name = "autoresearch-m0"
 version = "0.1.0"
 description = "M0 kernel: an evolution loop with a ledger, receipts, and a resident baseline"
 requires-python = ">=3.11"
+dependencies = [
+    "dacite>=1.9,<2",
+    "numpy>=2,<3",
+    "openai>=1.0,<4",
+    "PyYAML>=6,<7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+
+# Preserve the runtime's existing relative-path contracts without packaging
+# historical verifiers, tests, research materials, or upstream examples.
+[tool.hatch.build.targets.wheel]
+packages = ["core", "zoo"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"config/profiles" = "config/profiles"
+"vendor/openevolve/openevolve" = "vendor/openevolve/openevolve"
+"vendor/openevolve/LICENSE" = "vendor/openevolve/LICENSE"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "core",
+    "zoo",
+    "config/profiles",
+    "vendor/openevolve/openevolve",
+    "vendor/openevolve/LICENSE",
+    "pyproject.toml",
+    "uv.lock",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "linux: Linux x86_64 integration requiring /proc, Bubblewrap or direct seccomp",
+]

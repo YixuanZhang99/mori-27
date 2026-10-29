@@ -25,7 +25,7 @@
 - OpenEvolve 数据库、artifact、谱系和 embedding 状态互操作。
 - MLE-Bench Lite／RE-Bench 的任务与评分契约适配。
 
-**完成度不能由测试数量代替。** 原包 v57 历史记录为 490 项通过，但证书同时明确真实外部 API 与 benchmark campaign 未执行。本次独立复核还发现样本身份校验、单币账本、成本口径及 seccomp ABI 覆盖等问题，详见审查报告；源码保持原包基线，尚未修复这些问题。
+**完成度不能由测试数量代替。** 原包 v57 历史记录为 490 项通过，但证书同时明确真实外部 API 与 benchmark campaign 未执行。本次独立复核还发现样本身份校验、单币账本、成本口径及 seccomp ABI 覆盖等问题，详见审查报告；生产核心源码保持原包基线，尚未修复这些业务与安全问题。
 
 ## 目录
 
@@ -45,46 +45,34 @@ scripts/            导入完整性核验
 MANIFEST.json       原始压缩包清单，保留不改
 ```
 
-## 本地启动
+## Mac 开发与 Linux 自动验收
 
-完整沙箱验收的参考环境为 **Linux x86_64 + Python 3.12 + Bubblewrap**。源码元数据声明 Python ≥3.11；本次实际验证使用 Python 3.12。macOS/ARM 可运行部分离线逻辑与示例，但不能据此认证 Linux 沙箱及完整恢复套件。
-
-在仓库根目录建立独立环境，安装原包列出的测试与宿主依赖：
+当前开发环境使用 **Python 3.12 + uv lock**。在 Mac 上：
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install pytest dacite openai pyyaml numpy
-python scripts/verify_import.py
-cd m0
-python ci/check_axioms.py
-python examples/toy_gepa.py
-python examples/gsm8k_offline.py
-python examples/funsearch_offline.py
+make setup
+make check
 ```
 
-上述例子的模型响应为离线脚本，示例得分不代表真实 GEPA／GSM8K／FunSearch benchmark 成绩。
+`make check` 运行静态公理、342 项可移植测试、离线示例及验收包装器回归；153 项 Linux 集成测试明确排除，由 GitHub Actions 在 Ubuntu x86_64 上执行。Linux 完整验收保留全部 495 项 pytest 测试，任何 skip/xfail 都使验收失败。
 
-在准备好 Bubblewrap 和相应 namespace 支持的 Linux x86_64 环境中，可运行完整测试：
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v57，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
-# Debian/Ubuntu 环境准备
-sudo apt-get update
-sudo apt-get install -y bubblewrap
-# 以下命令从 m0/ 执行
-python -m pytest -q -p no:cacheprovider
+make test          # Mac 可移植测试
+make build         # 生成 wheel 和 sdist
+make accept-linux  # Linux x86_64：全量版本化验收
+make verify-import # 核验初始导入 Git 快照
 ```
 
-`python verifier/v57/verify.py` 是原始版本化验收入口，会更新 `LAST_RUN.json` 并追加 journal；复核历史基线时宜在独立工作副本中运行并另存结果。本次没有覆盖原历史证书。原包的 workflow 位于 `m0/.github/workflows/`，在此仓库根目录布局下不会自动成为 GitHub Actions 工作流；本次未宣称 hosted CI 已验证。
-
-当前 `pyproject.toml` 尚未定义完整安装依赖和打包配置，因此以上采用从 `m0/` 源码目录运行的方式。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；本次已修复其打包和 CI 配置问题，其余业务与安全发现仍待处理。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 
-原包共 1,048 个文件；其中清单覆盖的 1,047 个负载文件全部核验通过。仓库保留 1,020 个负载文件，排除 27 个嵌套 Git 元数据文件；原 README 另存于 `docs/review/README.original.md`。全部生产代码、原测试、配置和历史验收证据字节保持不变。
+原包共 1,048 个文件；其中清单覆盖的 1,047 个负载文件全部核验通过。仓库保留 1,020 个负载文件，排除 27 个嵌套 Git 元数据文件；原 README 另存于 `docs/review/README.original.md`。初始导入时，全部生产代码、原测试、配置和历史验收证据字节保持不变；后续开发通过独立 Git 提交记录。
 
 ```bash
-python scripts/verify_import.py
+make verify-import
 ```
 
 新增文档和审查证据不在原 `MANIFEST.json` 的覆盖范围内。第三方许可证保持原样；项目整体授权待明确，参见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
