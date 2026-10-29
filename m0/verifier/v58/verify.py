@@ -85,6 +85,7 @@ def main():
         run_command("physical_usage_failure_zero_and_replay_regressions",
                     [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
                      "tests/test_cost_integrity.py",
+                     "tests/test_governed_usage.py",
                      "tests/test_external_usage_integrity.py"], timeout=180)
         run_command("budget_finite_cost_reserve_identity_and_atomic_replay_regressions",
                     [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",

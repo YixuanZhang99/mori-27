@@ -21,7 +21,7 @@ from pathlib import Path
 
 from core.executor.sandbox import BubblewrapSandbox
 from core.executor.seccomp import seccomp_arguments
-from core.llm import OpenAICompatibleLLM
+from core.llm import OpenAICompatibleLLM, UsageError, reset_usage, validate_usage
 from core.tasks.adapter import Workspace
 from core.x1.store import AppendOnlyStore
 from zoo.mle_bench_lite.adapter import MLEBenchLiteAdapter
@@ -66,18 +66,10 @@ def prompt_digest(prompt: str) -> str:
 
 
 def _validated_usage(usage: dict) -> dict[str, int]:
-    if not isinstance(usage, dict):
-        raise RuntimeError("LLM response omitted token usage; cost evidence is incomplete")
-    values = {}
-    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
-        value = usage.get(key, 0)
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise RuntimeError(f"LLM token usage has invalid {key}")
-        values[key] = value
-    if values["total_tokens"] <= 0 or values["total_tokens"] < (
-            values["prompt_tokens"] + values["completion_tokens"]):
-        raise RuntimeError("LLM token usage is zero or internally inconsistent")
-    return values
+    try:
+        return validate_usage(usage)
+    except UsageError as exc:
+        raise RuntimeError(f"LLM token usage is incomplete or internally inconsistent: {exc}") from exc
 
 
 def _check_token_budget(usage_dir: Path, token_budget: int | None) -> None:
@@ -96,7 +88,7 @@ def _write_usage_receipt(usage_dir: Path, source: str, model: str,
 
 
 def token_usage_summary(usage_dir: str | Path, require_nonempty: bool = True) -> dict:
-    """Independently aggregate immutable per-call receipts; never trust a summary alone."""
+    """Aggregate receipts; component totals include only explicitly reported components."""
     root = Path(usage_dir)
     records = []
     if root.exists():
@@ -117,12 +109,14 @@ def token_usage_summary(usage_dir: str | Path, require_nonempty: bool = True) ->
             "calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
         bucket["calls"] += 1
         for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
-            bucket[key] += record[key]
+            bucket[key] += record.get(key, 0)
     digest = hashlib.sha256(json.dumps(
         records, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return {"calls": len(records), "receipt_count": len(records),
-            "prompt_tokens": sum(record["prompt_tokens"] for record in records),
-            "completion_tokens": sum(record["completion_tokens"] for record in records),
+            "prompt_tokens": sum(record.get("prompt_tokens", 0) for record in records),
+            "completion_tokens": sum(record.get("completion_tokens", 0) for record in records),
+            "component_usage_complete": all(
+                "prompt_tokens" in record and "completion_tokens" in record for record in records),
             "total_tokens": sum(record["total_tokens"] for record in records),
             "models": sorted({record["model"] for record in records}),
             "by_source": by_source, "receipts_sha256": digest}
@@ -138,6 +132,8 @@ class MeteredOpenAICompatibleLLM:
         self.token_budget = token_budget
         self._cumulative = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         self._usage_known = True
+        self._unmetered_call = False
+        self._components_complete = True
 
     @property
     def model(self):
@@ -149,23 +145,42 @@ class MeteredOpenAICompatibleLLM:
 
     @property
     def last_usage(self):
-        return dict(self._cumulative) if self._usage_known else None
+        if not self._usage_known:
+            return None
+        return (dict(self._cumulative) if self._components_complete else
+                {"total_tokens": self._cumulative["total_tokens"]})
 
     @last_usage.setter
     def last_usage(self, value):
         self._cumulative = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         self._usage_known = value is not None
+        self._unmetered_call = False
+        self._components_complete = True
 
     def __call__(self, prompt: str) -> str:
+        try:
+            _check_token_budget(self.usage_dir, self.token_budget)
+            reset_usage(self.inner)
+        except Exception:
+            # No provider invocation occurred. Preserve prior measured charges;
+            # a pending empty cycle now has an explicit zero additional charge.
+            self._usage_known = not self._unmetered_call
+            raise
+        unknown_before = self._unmetered_call
         self._usage_known = False
-        _check_token_budget(self.usage_dir, self.token_budget)
-        response = self.inner(prompt)
-        receipt = _write_usage_receipt(
-            self.usage_dir, "openai_compatible", self.inner.model, self.inner.last_usage)
-        for key in self._cumulative:
-            self._cumulative[key] += receipt[key]
-        self._usage_known = True
-        return response
+        self._unmetered_call = True
+        try:
+            return self.inner(prompt)
+        finally:
+            # Parsing/provider failures can still carry a trustworthy bill.
+            receipt = _write_usage_receipt(
+                self.usage_dir, "openai_compatible", self.inner.model, self.inner.last_usage)
+            for key in self._cumulative:
+                self._cumulative[key] += receipt.get(key, 0)
+            self._components_complete = self._components_complete and all(
+                key in receipt for key in ("prompt_tokens", "completion_tokens"))
+            self._unmetered_call = unknown_before
+            self._usage_known = not unknown_before
 
 
 class MeteredHostLLM:

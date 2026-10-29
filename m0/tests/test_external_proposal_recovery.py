@@ -55,10 +55,10 @@ call_number = len(Path(count_path).read_text().splitlines())
 if mode == "invalid_once" and call_number > 1:
     mode = "ok"
 if mode in ("malformed", "invalid_once"):
-    # This recovery fixture has a known zero-cost protocol failure. Unknown
+    # This recovery fixture has a known seven-token protocol failure. Unknown
     # meters are covered separately and must keep the reservation open.
     Path(response_path).write_text(json.dumps({"schema_version": 1,
-        "unexpected": True, "token_usage": {"total_tokens": 0}}))
+        "unexpected": True, "token_usage": {"total_tokens": 7}}))
     raise SystemExit(0)
 request = json.loads(Path(request_path).read_text())
 prompt = request["prompt"]

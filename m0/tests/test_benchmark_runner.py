@@ -99,6 +99,9 @@ def test_token_receipt_tamper_and_overspend_fail_closed(tmp_path):
     cost, model, _ = _required_token_cost(run_dir, 1_000)
     assert cost == 18 and model == "same-model"
     receipt_path.write_text(json.dumps({**receipt, "total_tokens": 19}))
+    with pytest.raises(RuntimeError, match="internally inconsistent"):
+        _required_token_cost(run_dir, 1_000)
+    receipt_path.write_text(json.dumps({**receipt, "prompt_tokens": 12, "total_tokens": 19}))
     with pytest.raises(ValueError, match="does not match independent receipts"):
         _required_token_cost(run_dir, 1_000)
     receipt_path.write_text(json.dumps(receipt))

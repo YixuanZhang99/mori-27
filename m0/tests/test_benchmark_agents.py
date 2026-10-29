@@ -130,7 +130,7 @@ def test_sync_meter_accumulates_between_resets_and_refuses_missing_usage(tmp_pat
     assert take_usage(metered) == 0
     assert token_usage_summary(tmp_path / "usage")["total_tokens"] == 36
     missing = MeteredOpenAICompatibleLLM(Inner(total=0), tmp_path / "missing", 1_000)
-    with pytest.raises(RuntimeError, match="zero or internally inconsistent"):
+    with pytest.raises(RuntimeError, match="internally inconsistent"):
         missing("call")
     assert token_usage_summary(tmp_path / "missing", require_nonempty=False)["calls"] == 0
 

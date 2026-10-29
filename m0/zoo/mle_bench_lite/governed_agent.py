@@ -19,6 +19,15 @@ class GenesisAnchoredLLM:
         self.genesis_pending = True
 
     @property
+    def model(self):
+        return getattr(self.llm, "model", "unavailable")
+
+    @property
+    def supplier(self):
+        return getattr(self.llm, "supplier", getattr(
+            getattr(self.llm, "inner", None), "supplier", "unavailable"))
+
+    @property
     def last_usage(self):
         return self.llm.last_usage
 
@@ -29,6 +38,8 @@ class GenesisAnchoredLLM:
     def __call__(self, prompt: str) -> str:
         if self.genesis_pending and prompt.startswith("[draft "):
             self.genesis_pending = False
+            # Loading the declared seed performs no provider operation.
+            self.last_usage = {"total_tokens": 0}
             return self.initial_prompt
         return self.llm(prompt)
 
@@ -44,6 +55,10 @@ def main(argv=None) -> int:
     llm = GenesisAnchoredLLM(runtime.llm, INITIAL_PROMPT.strip())
 
     def evaluator(candidate_id: str, head_sha: str, prompt: str) -> EvalResult:
+        # AgentRuntime's sole paid operation uses the same runtime.llm meter
+        # exposed by GenesisAnchoredLLM. The local evaluator has no extra charge;
+        # Framework consumes the shared model and this explicit zero once each.
+        evaluator.last_usage = {"total_tokens": 0}
         outcome = runtime.evaluate_prompt(candidate_id, prompt)
         valid = bool(outcome["valid_submission"])
         return EvalResult(

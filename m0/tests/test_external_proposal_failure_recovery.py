@@ -113,7 +113,7 @@ def test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process
     assert len(failed) == 1
     assert failed[0]["execution_id"] == proposer_processes[0]["execution_id"]
     assert failed[0]["evidence"]["eval_result"]["status"] == "invalid"
-    assert failed[0]["evidence"]["eval_result"]["cost"]["tokens_in"] > 0
+    assert failed[0]["evidence"]["eval_result"]["cost"]["tokens_in"] == 7
     assert len(list(store.read("batch_execution_settled"))) == 2
     report = list(store.read("m0_batch_recovery_adopted"))[0]["payload"]
     assert report["continued_proposal_count"] == (2 if crash_point == "process" else 1)
