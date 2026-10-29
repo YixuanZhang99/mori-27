@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "name": "composed_prompt",
+  "mode": "benchmark",
+  "provider": {
+    "name": "provided"
+  },
+  "domain": {
+    "name": "legacy_prompt"
+  },
+  "policy": {
+    "name": "greedy"
+  },
+  "operators": [
+    {
+      "name": "draft"
+    },
+    {
+      "name": "reflective"
+    }
+  ],
+  "frontier": {
+    "name": "tree"
+  },
+  "memory": {
+    "name": "scoped"
+  },
+  "executor": {
+    "name": "inprocess"
+  },
+  "admission": {
+    "name": "metric"
+  },
+  "budget": {
+    "name": "tokens"
+  },
+  "skills": []
+}

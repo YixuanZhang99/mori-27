@@ -26,6 +26,47 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def test_v60_keeps_every_v59_command_group_and_timeout(self):
+        previous = command_groups(verifier_tree("v59"))
+        current = command_groups(verifier_tree("v60"))
+        self.assertTrue(previous)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v60_explicitly_executes_composition_end_to_end_without_filters(self):
+        groups = command_groups(verifier_tree("v60"))
+        command = groups["composition_registry_defaults_and_runtime_end_to_end"].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments[:2], ["-m", "pytest"])
+        self.assertTrue({"tests/test_composition_registry.py",
+                         "tests/test_composition_defaults.py",
+                         "tests/test_composed_runtime.py"} <= set(arguments))
+        self.assertNotIn("-m", arguments[2:])
+        self.assertNotIn("--markexpr", arguments)
+
+    def test_archived_v59_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v59/LAST_RUN.json":
+                "7796343856f3706e8f50d8320f89856b98711fd57999d4cb6ffa5e74a94f679c",
+            "m0/verifier/runs/v59.jsonl":
+                "24e18504243a1e3c2c7f7fbadd6c45f17a38de22b92fe2422203e6044197a275",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / "m0/verifier/v59/LAST_RUN.json").read_text())
+        entries = [json.loads(line) for line in
+                   (ROOT / "m0/verifier/runs/v59.jsonl").read_text().splitlines()]
+        self.assertIs(certificate["passed"], True)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["command"], "python3 verifier/v59/verify.py")
+        self.assertEqual(entries[0]["exit_code"], 0)
+        self.assertEqual(entries[0]["checks"], certificate["checks"])
+        self.assertTrue(all(item["passed"] is True for item in certificate["checks"]))
+
     def test_v59_keeps_every_v58_command_group_and_timeout(self):
         previous = command_groups(verifier_tree("v58"))
         current = command_groups(verifier_tree("v59"))

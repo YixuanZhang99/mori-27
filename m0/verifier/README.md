@@ -60,3 +60,5 @@
 - v58 — 严格准入证据、真实用量与预算身份校验、seccomp v2 ABI 防护；保留历史记录，在隔离副本中完成全量 Linux 验收。见 [v58](v58/README.md)。
 
 - v59 — evaluation content binding, shared process identity writer, pre-call configuration validation, decision-bound receipts and isolated repeatable replay; full Linux regression and preserved v1–v58 evidence.
+
+- v60 — S1 模块注册、默认适配和可配置 Framework 组装端到端验收；保留全部 v59 回归与历史证据。S2–S5 尚不由本阶段认证。见 [v60](v60/README.md)。

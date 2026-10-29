@@ -13,6 +13,9 @@ def load_profile(name: str) -> dict:
     path = PROFILE_DIR / f"{name}.json"
     with path.open(encoding="utf-8") as f:
         profile = json.load(f)
+    if "schema_version" in profile:
+        from core.composition.contracts import AssemblyConfig
+        return AssemblyConfig.from_dict(profile).to_dict()
     required = {"name", "operators", "parent_pool", "extensions"}
     missing = required - profile.keys()
     if missing:

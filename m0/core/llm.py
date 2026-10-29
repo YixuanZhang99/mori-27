@@ -1,7 +1,8 @@
 """OpenAI-compatible LLM adapter (stdlib only) with token usage metering.
 
-The adapter is used only by operators/task solvers on the execution side. M1/M3/M9
-never import it. Tests exercise request construction without making network calls.
+The legacy M0 policy and hard budget/admission mechanisms do not import this
+adapter. Configured soft policy adapters may call it inside a metered reservation.
+Tests exercise request construction without making network calls.
 """
 from __future__ import annotations
 

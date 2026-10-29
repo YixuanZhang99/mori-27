@@ -194,7 +194,8 @@ class Framework:
                  extensions: list | None = None, profile_name: str = "m0_default",
                  archive: IslandArchive | MapElitesArchive | None = None,
                  improve_impl: str = "llm_reflective",
-                 accounting_stamp: AccountingStamp | None = None):
+                 accounting_stamp: AccountingStamp | None = None,
+                 assembly: dict | None = None, component_registry=None):
         self.llm = llm
         self.evaluator = evaluator  # callable(candidate_id, head_sha, prompt) -> EvalResult
         self.cfg = config
@@ -240,12 +241,27 @@ class Framework:
         self._replay_sources = None
         self._replay_seed_error = None
         self._replay_registry = None
+        self._composed = None
+        if assembly is not None:
+            from core.composition.defaults import default_registry
+            from core.composition.runtime import ComposedRuntime
+            self._composed = ComposedRuntime(
+                assembly, component_registry or default_registry(), llm, evaluator,
+                config, workdir, self.stamp)
 
     @classmethod
-    def from_profile(cls, name: str, llm, evaluator, config: LoopConfig, workdir: str,
-                     *, accounting_stamp: AccountingStamp | None = None):
+    def from_profile(cls, name: str | dict, llm, evaluator, config: LoopConfig, workdir: str,
+                     *, accounting_stamp: AccountingStamp | None = None,
+                     component_registry=None):
         from core.profiles import extensions_for, load_profile
-        profile = load_profile(name)
+        profile = name if isinstance(name, dict) else load_profile(name)
+        if "schema_version" in profile:
+            return cls(llm, evaluator, config, workdir,
+                       profile_name=profile.get("name", "configured"),
+                       accounting_stamp=accounting_stamp, assembly=profile,
+                       component_registry=component_registry)
+        if component_registry is not None:
+            raise ValueError("component_registry requires an assembly profile")
         pool_cfg = profile["parent_pool"]
         archive = None
         if pool_cfg["structure"] == "islands":
@@ -286,6 +302,10 @@ class Framework:
             self._replay_seed_error = "extension registry: " + type(error).__name__
 
     def evolve(self, task_desc: str) -> dict:
+        if self._composed is not None:
+            self._last_task_desc = task_desc
+            self._last_result = self._composed.run(task_desc)
+            return self._last_result
         cfg = self.cfg
         if not isinstance(cfg, LoopConfig):
             raise ValueError("config must be a LoopConfig")
@@ -1722,6 +1742,8 @@ class Framework:
         return self._last_result
 
     def inspect(self) -> dict:
+        if self._composed is not None:
+            return self._composed.inspect()
         """Machine-readable governance view: self-attestation + receipt coverage."""
         if self._last_result is None:
             raise RuntimeError("evolve() must run before inspect()")
@@ -1763,6 +1785,8 @@ class Framework:
         state adapters require adapter_factory(workdir, store) -> (llm, evaluator).
         A rerun invokes the adapters again and can incur provider charges.
         """
+        if self._composed is not None:
+            return self._composed.replay(task_desc, adapter_factory=adapter_factory)
         if self._last_result is None:
             raise RuntimeError("evolve() must run before certified replay()")
         if not self.cfg.checkpoint_enabled:

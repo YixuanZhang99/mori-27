@@ -2,19 +2,21 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v59**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v60**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
 ## 先读这里
 
+- [统一抽象](docs/AutoResearch模块化统一抽象.md)是当前开发基准；[逐项对照清单](docs/ABSTRACTION_ALIGNMENT.md)记录实现证据、五阶段边界和验收条件。
+- [S1 配置组装使用指南](docs/COMPOSED_RUNTIME.md)：推荐入口 `Framework.from_profile("composed_prompt", ...)`、组件替换、恢复与 replay 契约。
 - [2026-10-29 代码包详细梳理与审查](docs/CODEBASE_REVIEW_2026-10-29.md)：架构、模块支持矩阵、运行验证、可复现问题及后续优先级。
 - [原始接续开发说明](接续开发说明.md)：交接时的状态声明和环境说明。
 - [M0 代码文档](m0/README.md)与[术语及契约](m0/CONTEXT.md)。
 - [导入完整性记录](docs/review/import-audit.json)及[第三方来源](THIRD_PARTY_NOTICES.md)。
 - [原始总索引](docs/review/README.original.md)：完整保留原字节，内部相对路径以原仓库根目录为参照。
 
-## 已有能力
+## 已有 M0 能力
 
 - 通过 `Framework.evolve()`、`inspect()`、`replay()` 驱动和审查搜索。
 - 预算意图、七账户预扣与结算、常驻 IID 随机采样对照。
@@ -29,12 +31,20 @@
 
 v59 继续修复数据集内容绑定、进程身份写入、配置前置校验、完整判定回执与 replay 隔离。旧回执兼容边界、适配器契约及验证范围见 [v59 修复说明](docs/EVALUATION_FIXES_V59.md)。`replay()` 会重新执行适配器，可能再次产生提供方费用。
 
+## 配置组装入口
+
+新开发使用 `Framework.from_profile("composed_prompt", llm, evaluator, config, workdir)`，继续通过 `evolve()`、`inspect()`、`replay()` 操作。S1 将 provider、domain、policy、operators、frontier、memory、executor、admission、budget 和 skills 接入显式注册表；默认 greedy 策略和可选 `llm_cycles` 都使用默认 8 条的有界工作历史。
+
+五阶段顺序为模块组装、统一评估契约、记忆与知识回流、三层准入、分层预算。本阶段仅处理 S1：旧 evaluator 通过 `legacy_prompt` 显式适配 canonical 类型；记忆写入已接入，检索和知识回流待 S3；默认只做 dev 指标准入和 token 预算，三层准入与多资源分层预算仍待后续阶段。旧 M0 的 IID 对照、二元 gate、批次与中断接管能力保留在原路径，不能视为组装路径的完成项。
+
+S1 只接受 `batch_size=max_inflight=1`，支持 cycle 边界恢复；未完成的付费 cycle 会拒绝自动重调。replay 需要独立适配器和新组件实例，并对再次执行的用量记账。可直接运行的离线例子、配置选项及准确边界见 [S1 使用指南](docs/COMPOSED_RUNTIME.md)。
+
 ## 目录
 
 ```text
-m0/                 Python 内核、配置、回归测试、v1–v58 历史及 v59 验收入口
+m0/                 Python 内核、配置、回归测试、v1–v59 历史及 v60 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
-  config/profiles/  三种 profile
+  config/profiles/  三种经典 profile 与 composed_prompt 组装配置
   examples/         三个不需要模型 API key 的示例
   zoo/              MLE-Bench Lite 与 RE-Bench 适配器
   vendor/           OpenEvolve 普通源码快照
@@ -58,7 +68,7 @@ make check
 
 `make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v59，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v60，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
 make test          # Mac 可移植测试
@@ -67,7 +77,7 @@ make accept-linux  # Linux x86_64：全量版本化验收
 make verify-import # 核验初始导入 Git 快照
 ```
 
-详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60 保留原验收命令组并新增 S1 注册表、默认组件与端到端测试。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 

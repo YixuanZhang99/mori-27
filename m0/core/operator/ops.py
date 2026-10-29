@@ -1,7 +1,7 @@
 """M2 operators (M0): draft + reflective improve. LLM proposes; code lands (I-LLM).
 
-The LLM is a plain callable (prompt -> str), so the sync path of M1/M3 never
-touches it: operators run on the execution side, after an intent is granted.
+The LLM is a plain callable (prompt -> str). These legacy M0 operators execute
+after an intent is granted; configured soft policy calls are separately metered.
 """
 from __future__ import annotations
 
