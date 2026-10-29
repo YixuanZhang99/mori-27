@@ -14,6 +14,7 @@ from dataclasses import asdict, replace
 from core.budget.ledger import BudgetLedger
 from core.budget.types import AccountingStamp
 from core.composition.contracts import Decision, OperatorRequest, Proposal
+from core.composition.admission import LayeredAdmissionController, layered_options
 from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
                                         PublicEvaluationData, binding_for, validate_request)
 from core.composition.registry import Registry
@@ -357,6 +358,8 @@ def default_registry():
     registry.register("executor", "inprocess", lambda ctx, opts: InProcessExecutor())
     registry.register("admission", "metric", lambda ctx, opts: MetricAdmission(**opts),
                       validate_options=lambda opts: _objective_options(opts, margin=True))
+    registry.register("admission", "layered", lambda ctx, opts: LayeredAdmissionController(
+        store=ctx.store, **opts), validate_options=layered_options)
     registry.register("budget", "tokens", _tokens, validate_options=_budget_options)
     return registry
 

@@ -21,6 +21,7 @@ from types import FunctionType
 from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorRequest, Proposal
 from core.composition.context import ContextMemory, ContextPackBuilder
 from core.composition.knowledge import KnowledgePack
+from core.composition.admission import LayeredAdmissionController
 from core.composition.evaluation import (EvaluationContract, binding_for, comparison_projection,
     decode_evidence, encode_evidence, measured_costs, public_projection, validate_evidence,
     validate_request)
@@ -115,19 +116,19 @@ class ComposedRuntime:
             if not callable(getattr(operator, "propose", None)):
                 raise ValueError("operator does not implement propose")
         self.frontier, self.memory = self.parts["frontier"], self.parts["memory"]
-        from core.composition.defaults import LegacyPromptDomain, MetricAdmission, PromptOperator
-        if isinstance(self.parts["domain"], LegacyPromptDomain):
-            expected_metric = self.parts["domain"].metric
-            if self.frontier.metric != expected_metric or any(
-                    isinstance(operator, PromptOperator) and operator.metric != expected_metric
-                    for operator in self.parts["operators"]):
-                raise ValueError("configured objective differs across domain/frontier/operators")
-            admission = self.parts["admission"]
-            if isinstance(admission, MetricAdmission) and (
-                    admission.metric != expected_metric or admission.direction != self.frontier.direction):
-                raise ValueError("configured admission objective differs from exploration")
+        from core.composition.defaults import MetricAdmission, PromptOperator
+        expected_metric = self.frontier.metric
+        if getattr(self.parts["domain"], "metric", expected_metric) != expected_metric or any(
+                isinstance(operator, PromptOperator) and operator.metric != expected_metric
+                for operator in self.parts["operators"]):
+            raise ValueError("configured objective differs across domain/frontier/operators")
+        admission = self.parts["admission"]
+        if isinstance(admission, (MetricAdmission, LayeredAdmissionController)) and (
+                admission.metric != expected_metric or admission.direction != self.frontier.direction):
+            raise ValueError("configured admission objective differs from exploration")
         self.applier = StateApplier(self.frontier, self.memory, self.store)
         self.budget = self.parts["budget"]
+        self.layered = self.parts["admission"] if isinstance(self.parts["admission"], LayeredAdmissionController) else None
         preflight = getattr(self.parts["domain"], "validate_context", None)
         if callable(preflight):
             preflight()
@@ -136,6 +137,13 @@ class ComposedRuntime:
                          "domain_version": getattr(self.parts["domain"], "evaluator_version", None),
                          "evaluation_context": getattr(self.parts["domain"], "evaluation_context", ""),
                          "knowledge": getattr(self.parts.get("knowledge"), "manifest_binding", None)}
+        self.manifest["evaluation_contexts"] = {"dev": self.manifest["evaluation_context"]}
+        if self.layered:
+            contexts = self.layered.validate_domain(self.parts["domain"])
+            self.manifest["evaluation_contexts"].update(contexts)
+            if len(set(self.manifest["evaluation_contexts"].values())) != len(self.manifest["evaluation_contexts"]):
+                raise ValueError("dev, admission and final audit require distinct dataset contexts")
+            self.layered.check_integrity(Proposal(Candidate("task-preflight"), task))
         self._validate_domain(EvalRequest("dev"))
         self.manifest["memory_imports"] = [self.memory.validate_import_snapshot(
             spec["path"], expected_sha256=spec["sha256"])
@@ -162,12 +170,15 @@ class ComposedRuntime:
         if (getattr(domain, "evaluator_version", None) != self.manifest["domain_version"]
                 or getattr(domain, "evaluation_context", "") != self.manifest["evaluation_context"]):
             raise ValueError("domain identity changed during configured execution")
+        if self.layered and domain.evaluation_context_for(request) != self.manifest["evaluation_contexts"].get(request.split_id):
+            raise ValueError("domain split context changed during configured execution")
         self._binding(Proposal(Candidate("preflight"), ""), request)
 
     def _binding(self, proposal, request):
         return binding_for(proposal, request,
                            evaluator_version=self.manifest["domain_version"],
-                           evaluation_context=self.manifest["evaluation_context"])
+                           evaluation_context=self.manifest["evaluation_contexts"].get(
+                               request.split_id, self.manifest["evaluation_context"]))
 
     def _module_states(self):
         values = {}
@@ -183,7 +194,7 @@ class ComposedRuntime:
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        return {"runtime": "composed-v3", "manifest": self.manifest, "config": config,
+        return {"runtime": "composed-v4", "manifest": self.manifest, "config": config,
                 "logical_run_id": self._logical_run_id,
                 "context_export": self._context_export,
                 "task_desc": self.task, "next_cycle": self.next_cycle,
@@ -209,7 +220,7 @@ class ComposedRuntime:
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        expected = {"runtime": "composed-v3", "manifest": self.manifest,
+        expected = {"runtime": "composed-v4", "manifest": self.manifest,
                     "task_desc": self.task, "config": config}
         for field in ("runtime", "manifest", "task_desc", "config"):
             if payload.get(field) != expected[field]:
@@ -312,6 +323,73 @@ class ComposedRuntime:
             raise ValueError("memory export artifact differs from its bound content")
 
     @staticmethod
+    def _source_refs(context):
+        refs = []
+        for item in context.get("retrieval", {}).get("grounding", []):
+            provenance = item.get("provenance", {})
+            refs.extend(provenance.get("source_pages", []))
+            refs.extend(item.get("fetch_refs", []))
+        return refs
+
+    async def _execute_layered_calls(self, calls):
+        reserved = []
+        for call in calls:
+            self._validate_domain(call.request)
+            intent = AllocationIntent(_id(self._logical_run_id, "layered", call.key),
+                "layered", call.proposal.candidate.id, self.cfg.intent_cost,
+                snapshot_ref=call.key, account="reeval")
+            receipt = self.budget.quote_reserve(intent)
+            if receipt.verdict != "granted":
+                for _, previous in reserved:
+                    self.budget.release_for(previous)
+                self.store.append("layered_budget_rejected", {"phase": call.phase, "reason": receipt.reason})
+                return False
+            reserved.append((call, intent))
+        for index, (call, intent) in enumerate(reserved):
+            started = False
+            recorded = False
+            try:
+                self.budget.pre_call_check()
+                self.layered.before_call(call)
+                started = True
+                evidence = await self.parts["executor"].execute(
+                    copy.deepcopy(call.proposal), call.request, self.parts["domain"])
+                costs = measured_costs(evidence.eval_result)
+                self.budget.settle(intent, costs["token"])
+                self.layered.record(call, evidence)
+                recorded = True
+                self.store.append("layered_evidence", {"key": call.key, "phase": call.phase,
+                    "evidence": encode_evidence(evidence)})
+            except Exception as error:
+                for _, remaining in reserved[index+1:]:
+                    self.budget.release_for(remaining)
+                if not started:
+                    self.budget.release_for(intent)
+                elif not recorded:
+                    self.layered.mark_failed(call, type(error).__name__)
+                raise
+        return True
+
+    async def _admit_layered(self, proposal, evidence, context):
+        plan = self.layered.prepare(proposal, evidence,
+            self.proposals[self.incumbent] if self.incumbent else None,
+            self.evidence[self.incumbent] if self.incumbent else None,
+            self.parts["domain"], source_refs=self._source_refs(context))
+        if not await self._execute_layered_calls(plan.calls):
+            return self.layered.decline(plan, "global budget cannot fund the admission plan")
+        return self.layered.judge(plan)
+
+    async def _finish_layered(self):
+        if self.layered is None:
+            return
+        plan = self.layered.freeze(self.proposals[self.incumbent] if self.incumbent else None,
+                                   self.parts["domain"])
+        if not await self._execute_layered_calls(plan.calls):
+            self.layered.skip_final("global budget cannot fund final audit")
+        self.layered.final_report()
+        self._save()
+
+    @staticmethod
     def _validate_mutations(mutations, evidence):
         if not isinstance(mutations, list):
             raise ValueError("policy absorb must return a mutation list")
@@ -365,6 +443,9 @@ class ComposedRuntime:
                        for parent in parents):
             raise ValueError("policy selected invalid parents")
         context = self._context(task, cycle, parents)
+        if self.layered:
+            self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
+                                         self._source_refs(context))
         hypotheses = await self._policy("ideate", {**copy.deepcopy(strategy), "context": copy.deepcopy(context)},
                                         copy.deepcopy(self.proposals[parents[0]]) if parents else None, 1)
         strategy = {**strategy, "hypotheses": hypotheses}
@@ -415,6 +496,8 @@ class ComposedRuntime:
             if proposal.candidate.context_pack_ref != context["context_pack_ref"]:
                 raise ValueError("operator dropped or changed retrieval context identity")
             _tokens(proposal.cost)
+            if self.layered:
+                self.layered.check_integrity(proposal, self._source_refs(context))
             if self.parts.get("knowledge") is not None:
                 self._call_cost_known = False
                 audit = self.parts["knowledge"].audit(candidate_id, proposal.artifact)
@@ -438,15 +521,20 @@ class ComposedRuntime:
                                                    "evidence": encode_evidence(evidence)})
         mutations = self.memory.prepare_mutations(mutations, public_projection(evidence),
                                                  evidence_ref, cycle=cycle)
-        # A detached copy prevents admission from mutating execution evidence.
-        decision = self.parts["admission"].judge(comparison_projection(evidence),
-                   comparison_projection(self.evidence[self.incumbent]) if self.incumbent else None)
+        if self.layered:
+            self.budget.settle(intent, self._known_cost + self._policy_tokens)
+            self._current_intent = None
+            decision = await self._admit_layered(proposal, evidence, context)
+        else:
+            decision = self.parts["admission"].judge(comparison_projection(evidence),
+                       comparison_projection(self.evidence[self.incumbent]) if self.incumbent else None)
         if not isinstance(decision, Decision):
             raise ValueError("admission must return a Decision")
         if decision.admit and evidence.eval_result.status is not EvalStatus.OK:
             raise ValueError("failed execution cannot be admitted")
         total = self._known_cost + self._policy_tokens
-        self.budget.settle(intent, total, admission_outcome=decision.admit)
+        if self._current_intent is not None:
+            self.budget.settle(intent, total, admission_outcome=decision.admit)
         self._current_intent = None
         self.store.append("composed_evidence", {"cycle": cycle, "proposal": _jsonable(proposal),
                                                 "evidence_ref": evidence_ref,
@@ -454,7 +542,9 @@ class ComposedRuntime:
         receipt = {"candidate_id": candidate_id, "incumbent": self.incumbent,
                    "evidence": _jsonable(evidence), "decision": asdict(decision)}
         # Full cost is durable evidence; decision plugins must not interpret it.
-        self.store.append("composed_decision", {**receipt, "receipt_id": "sha256:"+payload_digest(receipt)})
+        event_id = "sha256:" + payload_digest(receipt)
+        self.store.append("composed_decision", {**receipt, "event_id": event_id,
+            "receipt_id": decision.receipt_id if self.layered else event_id})
         self.applier.apply(StateMutation(MutationOp.ADD_NODE, candidate_id,
                            {"candidate": proposal.candidate, "evidence": public}, "evaluated candidate"))
         self.applier.apply_all(mutations)
@@ -488,7 +578,7 @@ class ComposedRuntime:
         self.task = task
         if self.cfg.resume_from_checkpoint:
             saved = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
-            if saved.get("runtime") != "composed-v3" or not isinstance(saved.get("logical_run_id"), str) \
+            if saved.get("runtime") != "composed-v4" or not isinstance(saved.get("logical_run_id"), str) \
                     or not saved["logical_run_id"]:
                 raise ValueError("composed checkpoint runtime has no scoped run identity")
             self._logical_run_id = saved["logical_run_id"]
@@ -502,7 +592,7 @@ class ComposedRuntime:
         if self.cfg.resume_from_checkpoint:
             self._restore()
         else:
-            self.store.append("run_start", {"runtime": "composed-v3", "task_desc": task,
+            self.store.append("run_start", {"runtime": "composed-v4", "task_desc": task,
                                            "manifest": self.manifest, "accounting_stamp": asdict(self.stamp)})
             for spec in self.assembly.memory.options.get("imports", []):
                 self.memory.import_snapshot(spec["path"], expected_sha256=spec["sha256"])
@@ -530,13 +620,15 @@ class ComposedRuntime:
             if self.cfg.stop_after_generation == cycle:
                 break
         if self.next_cycle > self.cfg.max_generations or not continued:
+            asyncio.run(self._finish_layered())
             self._finish_context()
-        self.result = {"runtime": "composed-v3", "profile": self.assembly.name,
+        self.result = {"runtime": "composed-v4", "profile": self.assembly.name,
                        "best_candidate_id": self.incumbent,
                        "best_prompt": self.proposals[self.incumbent].artifact if self.incumbent else None,
                        "best_score": self.frontier.nodes[self.incumbent].score if self.incumbent else None,
                        "cycles": self.next_cycle, "ledger": self.budget.account_summary(),
                        "memory_export": self._context_export,
+                       "reporting": self.layered.report() if self.layered else None,
                        "accepted_candidate_ids": [row["payload"]["candidate_id"] for row in
                             self.store.read("composed_decision") if row["payload"]["decision"]["admit"]],
                        "checkpoint_ref": payload_digest(self._payload())}
@@ -560,7 +652,7 @@ class ComposedRuntime:
         root.mkdir(exist_ok=True)
         path = Path(tempfile.mkdtemp(prefix="replay-", dir=root))
         store = AppendOnlyStore(path / "x1.jsonl")
-        certificate = {"passed": False, "runtime": "composed-v3", "mode": "independent_rerun",
+        certificate = {"passed": False, "runtime": "composed-v4", "mode": "independent_rerun",
                        "replay_workdir": str(path.resolve()), "replay_id": path.name}
         try:
             if adapter_factory:

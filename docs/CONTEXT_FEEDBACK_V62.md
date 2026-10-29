@@ -1,5 +1,7 @@
 # S3 作用域上下文与本地知识回流
 
+本页记录 S3 引入的契约；当前 S4 配置运行时为 `composed-v4`，三层准入和旧检查点限制见 [S4 指南](LAYERED_ADMISSION_V63.md)。
+
 S3 将 M5 检索结果作为实际 ContextPack 送入配置路径的 ideation/operator，并以显式 research 配置接入本地文件知识的 ground/audit 双车道。当前运行版本为 `composed-v3`，每次新运行有独立 logical_run_id。实现条款和验收结果追加在 [统一抽象对照清单](ABSTRACTION_ALIGNMENT.md)；本页说明使用范围，不代替当前提交的 Mac/Linux 证据。
 
 当前检索是有作用域的词项相似度与效用排序，知识源是明确配置且实际打开的 UTF-8 文件。没有联网搜索、向量检索、语义质量评测或外部知识服务认证。S4 三层准入、S5 分层预算，以及 S1 尚未接通的拓扑/worktree/HITL/事件总线条款仍按清单保留。

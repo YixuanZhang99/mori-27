@@ -280,7 +280,7 @@ v61 成功证据已从真实 CI artifact 原样归档到 `m0/verifier/v61/LAST_R
 
 S2 没有关闭 S1 的 population、统一采样压力、worktree、HITL 和事件总线缺口，也没有将 S3–S5 标为完成。C-01 通过规范通道与显式旧接口适配推进；C-02 保持旧二元 gate 公理并限制新 gate 输入；C-06 先落实计量覆盖而非宣称多层预算；C-07 通过新运行版本拒绝不完整旧检查点；C-08 保留 v1–v60 verifier 源码与历史记录。
 
-### S3 作用域经验与本地知识回流：实现记录，阶段验收待完成
+### S3 作用域经验与本地知识回流：实现与验收记录
 
 本阶段新增 `composition/context.py` 与 `composition/knowledge.py`，运行版本为 `composed-v3`。范围是有权威来源的 M5 检索、实际 ContextPack 输入、显式跨 run 分享和本地 M6 双车道回流；不是外部联网搜索、向量检索或语义质量认证。可用配置及生命周期见 [S3 指南](CONTEXT_FEEDBACK_V62.md)。
 
@@ -313,7 +313,49 @@ S3 显式组为 `test_composed_context.py`、`test_composition_context.py`、`te
 | Mac `make check` | 最终实现复核通过：1,094 portable、158 Linux deselected、11 axioms、3 examples，包含 run-bound receipt 与导出完整性新增回归；归档 v61 后 `make tooling` 单独复核 27 项全部通过 |
 | 历史与 source 检查 | v62 的 9 项历史/source-only 检查通过，未执行 Linux 工作负载或生成 v62 运行证书 |
 | 打包与导入快照 | `make verify-import` 校验 1,020 文件通过；最终 `make build` 通过 |
-| Linux v62 | pending：待同一 S3 提交的新证书、journal 与 summary，v61 历史成功不替代本阶段结果 |
-| 提交与 main 更新 | pending：待阶段候选 SHA 与对应 CI URL |
+| Linux v62 | [CI 40894739044](https://github.com/YixuanZhang99/mori-27/actions/runs/40894739044) 通过：1,252 pytest、31 检查、641.858 秒；新证书/journal/summary 已核实，历史未改动 |
+| 提交与 main 更新 | 阶段提交 `ccb91c86c4b8dc05d52fb3f09c3fd6cfc13d8891` 已通过同 SHA Linux 验收，main 已更新至该提交 |
+
+v62 成功证据从实际 S3 artifact 原样归档到 `m0/verifier/v62/LAST_RUN.json` 与 `m0/verifier/runs/v62.jsonl`，来源和摘要见 [v63 历史证据说明](../m0/verifier/v63/README.md#archived-v62-evidence-provenance)。该归档不代表 S4 验收通过。
 
 S3 不关闭 S1 尚未实现的种群/采样压力/worktree/HITL/事件总线条款，也未实现 S4 三层准入或 S5 分层预算。C-04 已在本地知识配置路径落实 research/benchmark 的实际行为差异；C-07 升级作用域检查点并保留付费 replay 语义；C-08 继续保持旧 verifier 源码及历史失败证据。
+
+### S4 三层准入与独立终审：实现记录，阶段验收待完成
+
+本增量新增 `composition/admission.py`，在 `composed-v4` 的原生 domain 配置中显式选择 `admission=layered`。默认 `composed_prompt` 继续使用 dev-only metric 兼容路径，因此本阶段不关闭 §8 L510 的“三层默认协议”全部要求。使用方式和非支持配置见 [S4 指南](LAYERED_ADMISSION_V63.md)。
+
+| ID | 本增量已接通行为与实现证据 | 剩余条件，不计为本次完成 |
+| --- | --- | --- |
+| A-01 | 三层调用都返回 S2 canonical EvidenceRecord，并保留完整费用/私有证据；准入只使用受限公开比较视图 | 旧 M0 兼容路径仍保留自己的结果/二元 gate 类型，不声称已全面替换 |
+| A-02 | split 内容、支持能力、选项和完整性在调用前校验；driver 独立控制预扣、回执、冻结与最终报告 | 同进程插件不是安全沙箱；S5 多层物理硬顶和 X2 统一控制尚未接入 |
+| A-04 | 同一 Framework 可显式配置两层或三层 native 协议，research/benchmark 原有隔离保留 | 默认 profile 仍 dev-only；真实多领域 campaign 与完整通用研究默认配置未完成 |
+| M2-04 | admission 失败不晋升；已开始失败计入调用上限，已知费用仍结算；身份错误不发准入回执 | 未知用量保留预扣，未完成操作不自动重调；外部进程接管未组装 |
+| M3-01 | 每个 admission/final 评估经独立预算意图预扣；配对调用在开始前需整组预扣成功 | 当前仍全局 token/reeval 账户，未实现方向/候选限额及 allocate/should_continue 全控制器 |
+| M3-02 | 三层已知 token 实际结算，缺计量覆盖不能按零值通过；付费调用数与物理 token 分开计量 | 多资源单位和全局/方向/候选分层硬顶仍待 S5 |
+| M3-03 | admission/final 的显式 fidelity/seed_set 真实传入 domain，配对使用相同请求与 seeds | 未实现级联晋升、time_limit/resume_from 分配及周期 anchor |
+| M4-01 | frontier 仍存公开 dev 证据；最终选出者必须经过独立 admission，dev_best 与 gate_selected 分开报告 | 仍 tree；种群、骨架/引用图扩展及层级评分未完成 |
+| M5-03 | admission/final 的反馈与私有结果不写入默认 memory；已有 dev 来源约束继续生效 | 不会自动发现错误标为 public 的秘密；无通用语义泄漏检测 |
+| M6-01 | knowledge 的 ground/audit 仍按 S3 独立车道；final 不进入知识 ingest/retrieve 的反馈来源 | 知识 audit 仅 advisory，不等同于独立评估 final_audit；网络 backend 仍未接入 |
+| M8-02 | domain 用完整 EvalRequest 声明三层能力；不支持 split/fidelity/seeds 的 legacy 在付费前拒绝 | 通用 constrained-resource/resume 调度仍未完成 |
+| M8-03 | 冻结各 split 的内容身份；dev/admission/final 内容上下文必须不同；缓存与回执绑定产物、版本、请求、数据与种子 | 摘要由 domain 按实际数据生成；不同字符串不能自行认证真实外部数据权限或内容隔离 |
+| M9-01 | dev_best、gate_selected、final_audit 三元组实际报告；dev 改善但 admission 退步不能晋升；结束后冻结候选再独立终审 | 默认 profile 尚未切三层，真实领域评估仍需提供数据及实现 |
+| M9-02 | 连续公开指标支持 maximize/minimize、dev min_dev_gain、严格 admission margin 与 best 单调晋升；实际记录重算 trigger/判定 | top_k 显式拒绝；旧二元 gate 保留测试但未作为新 layered 规则插件组装，未完成所有领域规则矩阵 |
+| M9-03 | 独立 admission call_budget 在调用前硬限制，包含基线及失败；缓存不重复计数；checkpoint 不能抹掉已开始调用；final 最多一次且仍扣全局 token | 尚未同步扣方向/候选层级和多资源限额，这部分依赖 S5 |
+| M9-04 | 回执绑定并比对实际 dev/admission 记录，重 hash 篡改拒绝；final 数据不进入 policy/operator/frontier/memory/knowledge，反向 final 分数不能改已冻结选择 | 非恶意组件的协议/读写权限受测；同进程恶意插件、语义一致性模型、LLM 辅助 judge 不在本阶段范围 |
+| X1-02 | v4 保存 layered 调用、缓存、实际 dev 记录、回执和冻结状态；边界暂停不终审，完成恢复不重复付费终审；只追加日志阻断回滚遗忘调用 | v1/v2/v3 明确拒绝；仍 serial/tree/inprocess，无中途付费重调或 worktree adoption |
+| X1-03 | domain 三层身份在开始、每次调用及恢复核对；hash_check 必需且不能关闭 | 完整 protected-file/harness 声明及外部工作区执行器仍未统一组装 |
+| X1-04 | 可选 canary 按字面串扫描任务/上下文/候选，blocked_sources 精确匹配上下文来源；两者在相关付费执行前阻断 | 不是通用 URL 规范化/网络防火墙、语义泄漏或所有输出扫描；没有以哈希代替权限隔离 |
+| X1-05 | 持久化 layered 状态、额外评估证据、预算拒绝、比较回执和最终报告，恢复使用真实调用日志 | 仍无订阅事件总线和独立 dashboard 完整事件协议 |
+| X2-02 | 无新增统一人工控制；human_approval 等未实现模式前置拒绝 | HITL 的正式注入槽、保护路径/API/gate 授权仍是未关闭缺口 |
+
+v63 显式组是 `test_layered_admission.py` 与 `test_composed_admission.py`。端到端用例检查 dev 过拟合不晋升、final 反向分数不改选择、预算不足零调用、已知失败费用、分层内容碰撞、来源阻断、恢复与两层报告。组件用例补充基线配对成本、缓存身份、实际记录重算、篡改重新 hash、调用日志不能被旧 checkpoint 遗忘与不支持配置拒绝。保留 v62 所有组和超时，不用删除旧安全公理来接入新 gate。
+
+| 验证项 | 本次执行状态与证据 |
+| --- | --- |
+| Mac `make check` | 最终实现复核通过：1,149 portable、158 Linux deselected、11 axioms、3 examples；归档 v62 后 `make tooling` 单独复核 30 项全部通过；Linux deselected 不计通过 |
+| 历史与 source 检查 | v63 的 9 项历史/source-only 检查通过；未执行 Linux 工作负载或生成 v63 运行证书 |
+| 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
+| Linux v63 | pending：需本阶段同一提交的新证书、journal 与 summary |
+| 提交与 main 更新 | pending：待阶段候选 SHA 与对应 CI URL |
+
+S4 推进 §7 必须的独立准入/三元组与 provenance，覆盖 paired-seed 和禁止无限 test 反馈的已实现子范围；不把连续 margin 称为统计显著性。C-02 保留旧 gate 的 cost/rank 公理且新增受限判定，C-06 仍需 S5 层级物理预算，C-07 升级调用状态与付费恢复边界，C-08 保留旧 verifier 源码与真实历史失败记录。S1 的种群、采样压力、worktree、X2 与事件总线缺口继续保留。

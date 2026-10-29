@@ -347,3 +347,20 @@ def test_policy_context_window_is_validated_before_provider_use(tmp_path, window
     with pytest.raises(ValueError, match="positive integer"):
         default_registry().build(cfg, context(tmp_path, llm=raw))
     assert raw.prompts == []
+
+
+def test_layered_admission_factory_constructs_controller_and_rejects_unsupported_options_before_calls(tmp_path):
+    from core.composition.admission import LayeredAdmissionController
+    cfg = composed_profile()
+    cfg["admission"] = {"name": "layered", "options": {"call_budget": 4,
+        "trigger": {"min_dev_gain": 0.1}, "final_audit": {"isolation": True, "runs": 1}}}
+    ctx = context(tmp_path)
+    built = default_registry().build(cfg, ctx)
+    assert isinstance(built["admission"], LayeredAdmissionController)
+    assert built["admission"].remaining_calls == 4
+    assert built["admission"].store is ctx.store
+    assert not ctx.store.path.exists() and ctx.llm.prompts == []
+    cfg["admission"]["options"]["selection"] = "top_k"
+    with pytest.raises(ValueError, match="top_k"):
+        default_registry().build(cfg, ctx)
+    assert not ctx.store.path.exists() and ctx.llm.prompts == []

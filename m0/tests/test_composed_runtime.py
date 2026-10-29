@@ -75,7 +75,7 @@ def test_default_composition_completes_real_optimization_and_accounts_every_call
     llm, evaluator = CountingLLM(), CountingEvaluator()
     fw = framework(tmp_path, llm=llm, evaluator=evaluator)
     result = fw.evolve(TASK)
-    assert result["runtime"] == "composed-v3"
+    assert result["runtime"] == "composed-v4"
     assert result["cycles"] == llm.calls == evaluator.calls == 4
     assert result["best_score"] == pytest.approx(7 / 12)
     assert "hint_4" in result["best_prompt"] and "hint_6" in result["best_prompt"]
@@ -92,7 +92,7 @@ def test_default_composition_completes_real_optimization_and_accounts_every_call
 
 def test_registered_profile_name_uses_configured_framework_entry_point(tmp_path):
     fw = framework(tmp_path, profile="composed_prompt", cfg=config(max_generations=0))
-    assert fw.evolve(TASK)["runtime"] == "composed-v3"
+    assert fw.evolve(TASK)["runtime"] == "composed-v4"
     assert fw.inspect()["assembly"]["schema_version"] == 1
 
 
