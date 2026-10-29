@@ -29,7 +29,7 @@ from core.loop import Framework, LoopConfig
 fw = Framework(proposer_llm, evaluator, LoopConfig(), "/tmp/my_run")
 result = fw.evolve("Task description")
 print(fw.inspect())       # governance + self-attestation view
-replayed = fw.replay()    # certified rerun into /tmp/my_run/replay; mismatch raises
+replayed = fw.replay()    # certified rerun into /tmp/my_run/replays/replay-*; mismatch raises
 ```
 
 Or compile a classic-system profile without kernel changes:

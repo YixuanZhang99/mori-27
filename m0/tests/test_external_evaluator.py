@@ -256,10 +256,27 @@ def test_batch_failure_and_successful_external_replay_use_independent_evidence(t
     before = len(list(fw.store.read("external_evaluator_outcome")))
     replayed = fw.replay()
     after = len(list(fw.store.read("external_evaluator_outcome")))
-    replay_store = AppendOnlyStore(run_dir / "replay/x1.jsonl")
+    replay_dir = Path(replayed["replay_certificate"]["replay_workdir"])
+    replay_store = AppendOnlyStore(replay_dir / "x1.jsonl")
     assert before == after == 7
     assert len(list(replay_store.read("external_evaluator_outcome"))) == 7
     assert fw.inspect()["replay_certified"] is True
     assert fw.inspect()["formal_governance_pass"] is True
     assert replayed["best_score"] == first["best_score"]
     assert first["ledger"]["spent"]["control"] == 2 * (1000 + 7)
+
+    first_attempt = {str(path.relative_to(replay_dir)): path.read_bytes()
+                     for path in replay_dir.rglob("*") if path.is_file()}
+    repeated = fw.replay()
+    repeated_dir = Path(repeated["replay_certificate"]["replay_workdir"])
+    repeated_store = AppendOnlyStore(repeated_dir / "x1.jsonl")
+    assert repeated["replay_certificate"]["passed"] is True
+    assert repeated_dir != replay_dir
+    assert len(list(repeated_store.read("external_evaluator_outcome"))) == 7
+    assert len(list(fw.store.read("external_evaluator_outcome"))) == before
+    assert {str(path.relative_to(replay_dir)): path.read_bytes()
+            for path in replay_dir.rglob("*") if path.is_file()} == first_attempt
+    assert len(list(fw.store.read("replay_certificate"))) == 2
+    execution_ids = [{row["payload"]["execution_id"] for row in evidence.read(
+        "external_evaluator_outcome")} for evidence in (fw.store, replay_store, repeated_store)]
+    assert len(set.union(*execution_ids)) == 21
