@@ -9,7 +9,7 @@ help:
 	@echo 'make check        Run axioms, portable tests, examples and workflow tests'
 	@echo 'make test         Run portable tests (Linux cases explicitly deselected)'
 	@echo 'make test-linux   Run every test; any skip fails (Linux x86_64 required)'
-	@echo 'make accept-linux Run the full v60 acceptance in a disposable copy'
+	@echo 'make accept-linux Run the full v61 acceptance in a disposable copy'
 	@echo 'make build        Build wheel and sdist into artifacts/dist'
 	@echo 'make verify-import Verify the immutable imported Git baseline'
 

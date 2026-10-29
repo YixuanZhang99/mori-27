@@ -18,6 +18,9 @@ from pathlib import Path
 from types import FunctionType
 
 from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorRequest, Proposal
+from core.composition.evaluation import (EvaluationContract, binding_for, comparison_projection,
+    decode_evidence, encode_evidence, measured_costs, public_projection, validate_evidence,
+    validate_request)
 from core.executor.types import Candidate, CostVec, EvalRequest, EvalResult, EvalStatus, EvidenceRecord
 from core.frontier import ResearchFrontier
 from core.llm import UsageError, take_usage
@@ -45,10 +48,7 @@ def _tokens(cost):
 
 
 def _evidence(data):
-    result = dict(data["eval_result"])
-    result["status"] = EvalStatus(result["status"])
-    result["cost"] = CostVec(**result["cost"])
-    return EvidenceRecord(**{**data, "eval_result": EvalResult(**result)})
+    return decode_evidence({"schema_version": 1, "evidence": data})
 
 
 def _proposal(data):
@@ -130,6 +130,27 @@ class ComposedRuntime:
                          "provider_model": getattr(self.parts["provider"], "model", None),
                          "domain_version": getattr(self.parts["domain"], "evaluator_version", None),
                          "evaluation_context": getattr(self.parts["domain"], "evaluation_context", "")}
+        self._validate_domain(EvalRequest("dev"))
+
+    def _validate_domain(self, request):
+        validate_request(request)
+        domain = self.parts["domain"]
+        check = getattr(domain, "validate_context", None)
+        if callable(check):
+            check()
+        check = getattr(domain, "validate_request", None)
+        if not callable(check):
+            raise ValueError("domain must explicitly validate supported evaluation requests")
+        check(request)
+        if (getattr(domain, "evaluator_version", None) != self.manifest["domain_version"]
+                or getattr(domain, "evaluation_context", "") != self.manifest["evaluation_context"]):
+            raise ValueError("domain identity changed during configured execution")
+        self._binding(Proposal(Candidate("preflight"), ""), request)
+
+    def _binding(self, proposal, request):
+        return binding_for(proposal, request,
+                           evaluator_version=self.manifest["domain_version"],
+                           evaluation_context=self.manifest["evaluation_context"])
 
     def _module_states(self):
         values = {}
@@ -145,14 +166,14 @@ class ComposedRuntime:
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        return {"runtime": "composed-v1", "manifest": self.manifest, "config": config,
+        return {"runtime": "composed-v2", "manifest": self.manifest, "config": config,
                 "task_desc": self.task, "next_cycle": self.next_cycle,
                 "git_state": {"kind": "configured_artifacts"}, "inflight_executor": [],
                 "messages": [{"role": "task", "content": self.task}],
                 "frontier_checkpoint": self.frontier.checkpoint().decode(),
                 "memory": self.memory.checkpoint_state(), "module_states": self._module_states(),
                 "proposals": {key: _jsonable(value) for key, value in self.proposals.items()},
-                "evidence": {key: _jsonable(value) for key, value in self.evidence.items()},
+                "evidence": {key: encode_evidence(value)["evidence"] for key, value in self.evidence.items()},
                 "incumbent": self.incumbent, "ledger": self.budget.account_summary()}
 
     def _save(self):
@@ -169,7 +190,7 @@ class ComposedRuntime:
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        expected = {"runtime": "composed-v1", "manifest": self.manifest,
+        expected = {"runtime": "composed-v2", "manifest": self.manifest,
                     "task_desc": self.task, "config": config}
         for field in ("runtime", "manifest", "task_desc", "config"):
             if payload.get(field) != expected[field]:
@@ -177,6 +198,14 @@ class ComposedRuntime:
         if any(row["payload"]["cycle"] >= payload["next_cycle"]
                for row in self.store.read("composed_cycle_started")):
             raise RuntimeError("unfinished composed cycle requires durable adoption; refusing reexecution")
+        proposals = {key: _proposal(value) for key, value in payload["proposals"].items()}
+        evidence_by_id = {key: _evidence(value) for key, value in payload["evidence"].items()}
+        if set(proposals) != set(evidence_by_id):
+            raise ValueError("checkpoint proposal and evidence identities differ")
+        for key, evidence in evidence_by_id.items():
+            if proposals[key].candidate.id != key or evidence.candidate_id != key:
+                raise ValueError("checkpoint candidate key differs from evidence identity")
+            validate_evidence(evidence, expected_binding=self._binding(proposals[key], EvalRequest("dev")))
         self.budget.restore_from_journal()
         if self.budget.reserves or self.budget.account_summary() != payload["ledger"]:
             raise ValueError("checkpoint budget differs from durable ledger")
@@ -193,8 +222,7 @@ class ComposedRuntime:
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
-        self.proposals = {key: _proposal(value) for key, value in payload["proposals"].items()}
-        self.evidence = {key: _evidence(value) for key, value in payload["evidence"].items()}
+        self.proposals, self.evidence = proposals, evidence_by_id
         self.incumbent, self.next_cycle = payload["incumbent"], payload["next_cycle"]
         self.store.append("composed_resumed", {"next_cycle": self.next_cycle})
 
@@ -230,6 +258,8 @@ class ComposedRuntime:
 
     async def _cycle(self, task, cycle):
         from core.composition.defaults import OperatorFailure
+        evaluation_request = EvalRequest("dev")
+        self._validate_domain(evaluation_request)
         candidate_id = _id(self.assembly.name, task, cycle)
         intent = AllocationIntent(_id(candidate_id, "cycle"), "composed", candidate_id,
                                   self.cfg.intent_cost, snapshot_ref=str(cycle),
@@ -267,7 +297,7 @@ class ComposedRuntime:
         context = self._context(task, cycle, parents)
         request = OperatorRequest(task, candidate_id, cycle,
                                   tuple(copy.deepcopy(self.proposals[p]) for p in parents),
-                                  tuple(copy.deepcopy(self.evidence[p]) for p in parents), context, strategy)
+                                  tuple(public_projection(self.evidence[p]) for p in parents), context, strategy)
         for skill in self.parts["skills"]:
             before = self.parts["provider"].usage_total
             try:
@@ -290,7 +320,9 @@ class ComposedRuntime:
             proposal = Proposal(Candidate(candidate_id, parents, operator=selected, created_cycle=cycle),
                                 "", failure.cost)
             evidence = EvidenceRecord(candidate_id, EvalResult(
-                EvalStatus.FAILED_TO_RUN, cost=CostVec(), text_feedback=str(failure)),
+                EvalStatus.FAILED_TO_RUN, cost=CostVec(), text_feedback=str(failure),
+                contract=EvaluationContract(self._binding(proposal, evaluation_request),
+                    ("token", "eval_count"), binding_source="invocation")),
                 executor_status="failed_to_run", result_text=str(failure))
         else:
             if isinstance(proposal, Proposal):
@@ -303,18 +335,19 @@ class ComposedRuntime:
             _tokens(proposal.cost)
             self._call_cost_known = False
             evidence = await self.parts["executor"].execute(
-                proposal, EvalRequest("dev"), self.parts["domain"])
+                proposal, evaluation_request, self.parts["domain"])
             if isinstance(evidence, EvidenceRecord):
-                self._known_cost += _tokens(evidence.eval_result.cost)
+                self._known_cost += measured_costs(evidence.eval_result)["token"]
                 self._call_cost_known = True
         if not isinstance(evidence, EvidenceRecord) or evidence.candidate_id != candidate_id:
             raise ValueError("executor evidence identity mismatch")
-        _tokens(evidence.eval_result.cost)
-        mutations = await self._policy("absorb", copy.deepcopy(evidence))
+        validate_evidence(evidence, expected_binding=self._binding(proposal, evaluation_request))
+        public = public_projection(evidence)
+        mutations = await self._policy("absorb", public_projection(evidence))
         self._validate_mutations(mutations, evidence)
         # A detached copy prevents admission from mutating execution evidence.
-        decision = self.parts["admission"].judge(copy.deepcopy(evidence),
-                   copy.deepcopy(self.evidence[self.incumbent]) if self.incumbent else None)
+        decision = self.parts["admission"].judge(comparison_projection(evidence),
+                   comparison_projection(self.evidence[self.incumbent]) if self.incumbent else None)
         if not isinstance(decision, Decision):
             raise ValueError("admission must return a Decision")
         if decision.admit and evidence.eval_result.status is not EvalStatus.OK:
@@ -323,13 +356,13 @@ class ComposedRuntime:
         self.budget.settle(intent, total, admission_outcome=decision.admit)
         self._current_intent = None
         self.store.append("composed_evidence", {"cycle": cycle, "proposal": _jsonable(proposal),
-                                                "evidence": _jsonable(evidence)})
+                                                "evidence": encode_evidence(evidence)["evidence"]})
         receipt = {"candidate_id": candidate_id, "incumbent": self.incumbent,
                    "evidence": _jsonable(evidence), "decision": asdict(decision)}
         # Full cost is durable evidence; decision plugins must not interpret it.
         self.store.append("composed_decision", {**receipt, "receipt_id": "sha256:"+payload_digest(receipt)})
         self.applier.apply(StateMutation(MutationOp.ADD_NODE, candidate_id,
-                           {"candidate": proposal.candidate, "evidence": evidence}, "evaluated candidate"))
+                           {"candidate": proposal.candidate, "evidence": public}, "evaluated candidate"))
         self.applier.apply_all(mutations)
         self.applier.apply(StateMutation(MutationOp.MERGE if decision.admit else MutationOp.PRUNE,
                            candidate_id, {} if decision.admit else {"reason": decision.reason}, decision.reason))
@@ -358,7 +391,7 @@ class ComposedRuntime:
         if self.cfg.resume_from_checkpoint:
             self._restore()
         else:
-            self.store.append("run_start", {"runtime": "composed-v1", "task_desc": task,
+            self.store.append("run_start", {"runtime": "composed-v2", "task_desc": task,
                                            "manifest": self.manifest, "accounting_stamp": asdict(self.stamp)})
             self._save()
         for cycle in range(self.next_cycle, self.cfg.max_generations + 1):
@@ -379,7 +412,7 @@ class ComposedRuntime:
                 break
             if self.cfg.stop_after_generation == cycle:
                 break
-        self.result = {"runtime": "composed-v1", "profile": self.assembly.name,
+        self.result = {"runtime": "composed-v2", "profile": self.assembly.name,
                        "best_candidate_id": self.incumbent,
                        "best_prompt": self.proposals[self.incumbent].artifact if self.incumbent else None,
                        "best_score": self.frontier.nodes[self.incumbent].score if self.incumbent else None,
@@ -406,7 +439,7 @@ class ComposedRuntime:
         root.mkdir(exist_ok=True)
         path = Path(tempfile.mkdtemp(prefix="replay-", dir=root))
         store = AppendOnlyStore(path / "x1.jsonl")
-        certificate = {"passed": False, "runtime": "composed-v1", "mode": "independent_rerun",
+        certificate = {"passed": False, "runtime": "composed-v2", "mode": "independent_rerun",
                        "replay_workdir": str(path.resolve()), "replay_id": path.name}
         try:
             if adapter_factory:

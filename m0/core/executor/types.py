@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
+from core.executor.evaluation_contract import EvaluationContract
+
 NodeRef = str
 ArtifactRef = str
 
@@ -64,16 +66,23 @@ class EvalRequest:
     budget_token: int | None = None
     seed_set: list[int] | None = None
     resume_from: ArtifactRef | None = None
+    split_id: str = "dev"
 
     def validate(self) -> None:
-        if not self.fidelity:
+        if type(self.fidelity) is not str or not self.fidelity.strip():
             raise ValueError("fidelity is required")
-        if self.time_limit is not None and self.time_limit <= 0:
+        if type(self.split_id) is not str or not self.split_id.strip():
+            raise ValueError("split_id is required")
+        if self.time_limit is not None and (type(self.time_limit) is not int or self.time_limit <= 0):
             raise ValueError("time_limit must be positive")
-        if self.budget_token is not None and self.budget_token < 0:
+        if self.budget_token is not None and (type(self.budget_token) is not int or self.budget_token < 0):
             raise ValueError("budget_token cannot be negative")
-        if self.seed_set is not None and len(set(self.seed_set)) != len(self.seed_set):
-            raise ValueError("seed_set cannot contain duplicates")
+        if self.seed_set is not None and (type(self.seed_set) is not list
+                or any(type(seed) is not int or seed < 0 for seed in self.seed_set)
+                or len(set(self.seed_set)) != len(self.seed_set)):
+            raise ValueError("seed_set must contain distinct nonnegative integers")
+        if self.resume_from is not None and (type(self.resume_from) is not str or not self.resume_from.strip()):
+            raise ValueError("resume_from must be a non-empty artifact reference")
 
 
 @dataclass(frozen=True)
@@ -87,6 +96,8 @@ class EvalResult:
     partial_curves_ref: str | None = None
     trajectory_ref: str | None = None
     artifacts_ref: ArtifactRef | None = None
+    # Optional for old M0/M7 adapters; mandatory at the configured runtime boundary.
+    contract: EvaluationContract | None = None
 
 
 @dataclass(frozen=True)

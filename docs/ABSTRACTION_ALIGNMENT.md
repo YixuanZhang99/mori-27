@@ -193,7 +193,7 @@
 | S4 | 待实现 | 待实施后列明 | 待运行 | 待运行、待提交 | 三层准入 |
 | S5 | 待实现 | 待实施后列明 | 待运行 | 待运行、待提交 | 分层预算与组合验收 |
 
-### S1 首次组装增量：实现记录，Linux 验收待运行
+### S1 首次组装增量：实现与验收记录
 
 本增量通过 `Framework.from_profile("composed_prompt", ...)` 接入配置注册表与优化闭环。**这只证明下列精确子范围，尚未满足所有标注 S1 的条款。** 当前默认实现为 tree、串行、inprocess、draft/reflective；X2 尚无配置注入，X1 尚无订阅事件总线。旧 M0 的批次、worktree、IID 对照和 HITL 独立组件不能计入新路径覆盖。使用方法及恢复限制见 [S1 使用指南](COMPOSED_RUNTIME.md)。
 
@@ -235,7 +235,45 @@
 | --- | --- |
 | Mac `make check` | 最终复核通过：973 portable、158 Linux deselected、21 tooling、11 axioms、3 examples，包含父节点资格的新增回归；Linux deselected 不计通过 |
 | 打包与导入快照 | `make build` 通过；`make verify-import` 校验 1,020 个保留负载文件通过 |
-| Linux v60 | pending：待验证分支的完整 Actions 新证书、journal 与 summary；不得以 v59 成功替代 |
-| 提交与 main 更新 | pending：待记录阶段候选 SHA 和同一 SHA 的 Linux CI URL；本记录不宣称 S1 全条款或后续阶段通过 |
+| Linux v60 | [CI 40889093796](https://github.com/YixuanZhang99/mori-27/actions/runs/40889093796) 通过：1,131 pytest、29 验收检查，613.777 秒；新证书/journal/summary 均已核实，原历史未改动 |
+| 提交与 main 更新 | 阶段提交 `06491ce5639dd33f7f89bc8e1288f881b54ecb8c` 已通过同 SHA Linux 验收，main 已更新至该提交。本记录认证上述组装子范围，不宣称 S1 全条款或后续阶段通过 |
+
+v60 成功证据从该 CI artifact 原样归档到 `m0/verifier/v60/LAST_RUN.json` 与 `m0/verifier/runs/v60.jsonl`，来源、摘要和字节保护见 [v61 历史证据说明](../m0/verifier/v61/README.md#archived-v60-evidence-provenance)。归档本身不会把 S1 结果当成 S2 结果。
 
 后续仍需单独关闭本表中 S1 原定但未实现的拓扑、采样、executor、X2 和事件总线条款；不得在 S2–S5 推进时静默移除这些缺口。C-01/C-02/C-06 的严格身份、证据和预算迁移继续按阶段实施；C-03 的 LLM 软决策位于 composition 适配边界，原纯机制静态公理保留；C-04 的模式隔离尚未完成；C-05 的公开 API 已复用；C-07 仅覆盖上述明确恢复范围；C-08 保留 v1–v59 源码与历史记录。
+
+### S2 配置路径评估契约：实现记录，阶段验收待完成
+
+本增量的范围是 `composed-v2` 配置运行时，新增 `composition/evaluation.py`，沿用 canonical EvalResult/EvidenceRecord，并要求其携带严格契约。旧 M0 兼容路径保留；本记录不将“新增 codec”扩展为所有 domain/executor 已完成迁移。具体输入、计量和兼容规则见 [S2 指南](EVALUATION_CONTRACT_V61.md)。
+
+| ID | 本增量已接通行为与实现证据 | 剩余条件，不计为本次完成 |
+| --- | --- | --- |
+| A-01 | 配置主循环统一验证和持久化 canonical 证据；严格 codec 往返完整评估字段，旧 evaluator 只经有名适配器进入 | 旧 M0/M7 其他运行路径保留原接口；不能声称全框架只剩一个结果定义 |
+| A-02 | domain 能力/内容校验在付费调用前执行；完整结果与搜索/准入视图分开，身份错绑不得形成 mutation 或准入 | S3 作用域检索、S4 三层数据权限、S5 多层预算仍需各自硬保证 |
+| A-03 | `domain=native` 通过同一个 Framework 入口接收原生 domain；要求版本、内容摘要、validate_request/evaluate | 完整 Provider × Domain × Skills 的生产级兼容矩阵和真实 campaign 未执行 |
+| M2-04 | 失败证据保留状态/费用；业务身份无效但费用已知时仍结算，缺计量覆盖时保留预扣并拒绝继续 | 原生 domain 的未知异常不能自动推断费用；并发或中断 adoption 不由本阶段补齐 |
+| M3-02 | `measured_cost_units` 明确已测维度，有限非负 CostVec 与 total_only/split token 语义受校验 | 当前账本仍只扣 token；多资源、全局/方向/候选限额与分配待 S5 |
+| M4-01 | frontier 接收公开证据投影，完整私有结果独立保存在 journal/checkpoint；恢复校验候选键与产物绑定 | 只有 tree 的 portable restore；种群/拓扑和分层评分仍未接通 |
+| M5-03 | 默认 absorb 只收到公开字段；private payload/metrics/items 不进入默认 memory 或父候选生成输入 | 来源有效性传播、跨 run 记忆权限和检索预算待 S3；错误标成 public 的内容不被自动清洗 |
+| M7-01 | inprocess executor 保留 producer 的原始评估结果，交由 driver 按费用→身份/状态顺序验证 | ExecutorSpec role/frozen hypothesis/context projection 与 worktree 执行仍未组装 |
+| M7-03 | 规范状态/attempt/executor_status 一致性验证，已知失败费用与结果原样持久化 | 新路径仍串行；并发部分失败、已付费中断接管的组合条件未完成 |
+| M8-01 | 严格验证/往返 status、metrics、cost、fidelity、uncertainty、引用、typed public/private、逐项证据；legacy reliability 独立保存在 public.metadata；缺测量覆盖不能用零默认值认证 | legacy reliability 不自动解释为规范 uncertainty；旧外部执行器迁移需独立证据 |
+| M8-02 | EvalRequest 含 split_id，严格验证限额/seed/续跑引用；domain 显式验证支持能力；legacy 不支持参数调用前拒绝 | 调度仍固定 dev；真实 fidelity/seed/time_limit/resume_from 分配与消费待 S5/相应 domain |
+| M8-03 | producer binding 绑定候选、产物、请求、评估器、内容上下文、split、fidelity、seed；运行前及恢复比对冻结身份 | legacy 空上下文仍为不透明边界；任意外部数据的实际完整性由 domain 声明与校验，不能仅凭格式正确的 digest 认证 |
+| M8-04 | native 和 legacy_prompt 通过同一规范结果通道；原生 domain 必须声明身份并拒绝不支持请求 | 未接通通用 eval_cmd、受限工作区权限协商和两个真实领域 campaign |
+| M9-02 | gate 只接收 ComparisonEvidence 中的公开指标/身份/状态/fidelity/uncertainty，无 cost 或完整私有 contract | 三层、trigger/top_k、独立终审及多领域判定规则仍待 S4；当前仅 dev metric gate |
+| M9-04 | 私有字段不发给 policy/operator/default memory，准入获得受限比较视图；完整证据仍可审计 | 这不是独立 final_audit 权限与防泄漏认证；秘密误放 public、恶意插件和终审回流仍需对应边界 |
+| X1-02 | `composed-v2` 检查点严格解码并验证所有 proposal/evidence；完整字段可恢复/replay；v1 缺契约检查点在付费前拒绝 | cycle 中断 adoption、独立资源工厂、组件内部状态仍遵循 S1 限制；无自动补造历史身份 |
+| X1-03 | domain 元数据与冻结 manifest 对齐，每轮调用 validate_context/validate_request，结果 independently bound | 完整 protected-input/harness 文件契约和所有 external executor 接入仍需后续工作 |
+
+新增验收组为 `test_evaluation_contract.py` 与 `test_composed_evaluation.py`；后者通过公开 Framework 检查原生 domain 的完整结果、错绑失败仍计费、未知计量保留预扣、不支持请求零调用、私有字段隔离及 v1 检查点拒绝。v61 保留全部 v60 命令组和超时，v58→v59→v60→v61 的迁移保护继续保留。历史 v60 证据已从真实成功的 S1 CI 原样归档，不代表 S2 验收结果。
+
+| 验证项 | 本次执行状态与证据 |
+| --- | --- |
+| Mac `make check` | 最终实现复核通过：1,048 portable、158 Linux deselected、11 axioms、3 examples，包含 reliability 元数据增量；归档 v60 后 `make tooling` 单独复核 24 项全部通过 |
+| 历史与 source 检查 | v61 的 9 项历史/source-only 检查通过，未执行 Linux 工作负载或生成 v61 运行证书 |
+| 打包与导入快照 | 最终实现的 `make build` 与 `make verify-import`（1,020 文件）通过 |
+| Linux v61 | pending：待同一 S2 提交的完整新证书、journal 与 summary |
+| 提交与 main 更新 | pending：待阶段候选 SHA 与对应 CI URL |
+
+S2 没有关闭 S1 的 population、统一采样压力、worktree、HITL 和事件总线缺口，也没有将 S3–S5 标为完成。C-01 通过规范通道与显式旧接口适配推进；C-02 保持旧二元 gate 公理并限制新 gate 输入；C-06 先落实计量覆盖而非宣称多层预算；C-07 通过新运行版本拒绝不完整旧检查点；C-08 保留 v1–v60 verifier 源码与历史记录。

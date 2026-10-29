@@ -9,11 +9,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 from core.budget.ledger import BudgetLedger
 from core.budget.types import AccountingStamp
 from core.composition.contracts import Decision, OperatorRequest, Proposal
+from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
+                                        PublicEvaluationData, binding_for, validate_request)
 from core.composition.registry import Registry
 from core.composition.strategies import GreedyPolicy, LLMCyclesPolicy, policy_options
 from core.eval.types import validate_eval_result as validate_legacy_result
@@ -176,7 +178,9 @@ class LegacyPromptDomain:
 
     @property
     def evaluator_version(self):
-        return getattr(self.evaluator, "evaluator_version", None)
+        # M0's legacy EvalResult defaults to det-v1. An absent content context
+        # stays explicitly opaque; no dataset digest is invented by the adapter.
+        return getattr(self.evaluator, "evaluator_version", "det-v1")
 
     @property
     def evaluation_context(self):
@@ -187,11 +191,19 @@ class LegacyPromptDomain:
         if callable(check):
             check()
 
+    def validate_request(self, request):
+        validate_request(request)
+        if request.fidelity != "dev" or request.split_id != "dev" \
+                or any(getattr(request, field) is not None for field in
+                       ("time_limit", "budget_token", "seed_set", "resume_from")):
+            raise ValueError("legacy prompt domain only supports an unconstrained dev request")
+
     async def evaluate(self, proposal: Proposal, request) -> EvalResult:
-        request.validate()
+        self.validate_request(request)
         head = hashlib.sha256(proposal.artifact.encode("utf-8")).hexdigest()
-        version = getattr(self.evaluator, "evaluator_version", None)
-        context = getattr(self.evaluator, "evaluation_context", None)
+        version = self.evaluator_version
+        context = self.evaluation_context
+        invocation = binding_for(proposal, request, evaluator_version=version, evaluation_context=context)
         check = getattr(self.evaluator, "validate_context", None)
         if callable(check):
             check()
@@ -207,6 +219,8 @@ class LegacyPromptDomain:
                 candidate_id=proposal.candidate.id, head_sha=head,
                 evaluator_version=version, evaluation_context=context)
             _number(legacy.combined_score, "evaluation objective")
+            metadata = {"adapter": "legacy_prompt", "reliability": json.loads(json.dumps(
+                asdict(legacy.reliability), allow_nan=False))}
         except UsageError:
             raise
         except Exception as caught:
@@ -217,10 +231,21 @@ class LegacyPromptDomain:
         if error is not None:
             detail = f"{type(error).__name__}: {error}"
             return EvalResult(EvalStatus.FAILED_TO_RUN, cost=CostVec(tokens_in=used, eval_count=1),
-                              fidelity=request.fidelity, text_feedback=detail)
+                              fidelity=request.fidelity, text_feedback=detail,
+                              contract=EvaluationContract(invocation, ("token", "eval_count"),
+                                  token_accounting="total_only", binding_source="invocation"))
+        returned_binding = replace(invocation, candidate_id=legacy.candidate_id,
+                                   artifact_sha256=legacy.head_sha,
+                                   evaluator_version=legacy.evaluator_version,
+                                   evaluation_context=legacy.evaluation_context)
         return EvalResult(EvalStatus.OK, {self.metric: float(legacy.combined_score)},
                           cost=CostVec(tokens_in=used, eval_count=1),
-                          fidelity=request.fidelity, text_feedback=legacy.text_feedback)
+                          fidelity=request.fidelity, text_feedback=legacy.text_feedback,
+                          contract=EvaluationContract(returned_binding, ("token", "eval_count"),
+                              token_accounting="total_only",
+                              public=PublicEvaluationData(dict(legacy.public), metadata),
+                              private=PrivateEvaluationData(data=dict(legacy.private)),
+                              items=tuple(ItemOutcome(item.item_id, item.verdict) for item in legacy.items)))
 
 
 class InProcessExecutor:
@@ -228,8 +253,11 @@ class InProcessExecutor:
         result = await domain.evaluate(proposal, request)
         if not isinstance(result, EvalResult):
             raise ValueError("domain must return canonical EvalResult")
+        # The driver must settle known usage even if identity/status validation
+        # fails. Keep the raw producer result intact until that ordered boundary.
         status = {EvalStatus.OK: "scored", EvalStatus.FAILED_TO_RUN: "failed_to_run",
-                  EvalStatus.TIMEOUT: "timeout", EvalStatus.INVALID: "invalid"}[result.status]
+                  EvalStatus.TIMEOUT: "timeout", EvalStatus.INVALID: "invalid"}.get(result.status, "invalid") \
+            if isinstance(result.status, EvalStatus) else "invalid"
         return EvidenceRecord(proposal.candidate.id, result, executor_status=status,
                               result_text=result.text_feedback)
 
@@ -251,6 +279,15 @@ class MetricAdmission:
             raise ValueError("incumbent must have successful evidence")
         if evidence.eval_result.fidelity != incumbent.eval_result.fidelity:
             raise ValueError("admission requires the same fidelity")
+        def binding(result):
+            return getattr(result, "binding", getattr(getattr(result, "contract", None), "binding", None))
+        candidate_binding, baseline_binding = binding(evidence.eval_result), binding(incumbent.eval_result)
+        if (candidate_binding is None) != (baseline_binding is None):
+            raise ValueError("admission requires matching evaluation contracts")
+        if candidate_binding is not None and any(
+                getattr(candidate_binding, field) != getattr(baseline_binding, field)
+                for field in ("evaluator_version", "evaluation_context", "split_id", "fidelity", "seed_set", "request_sha256")):
+            raise ValueError("admission requires the same evaluator, content context, split and seeds")
         baseline = incumbent.eval_result.metrics.get(self.metric)
         _number(baseline, "incumbent objective")
         improvement = value - baseline if self.direction == "maximize" else baseline - value
@@ -263,6 +300,21 @@ def _provided(context, options):
     if not callable(context.llm):
         raise ValueError("provided provider must be callable")
     return context.llm
+
+
+def _native(context, options):
+    domain = context.evaluator
+    if any(not callable(getattr(domain, method, None)) for method in ("evaluate", "validate_request")):
+        raise ValueError("native domain requires evaluate and validate_request")
+    _text(getattr(domain, "evaluator_version", None), "native evaluator_version")
+    evaluation_context = getattr(domain, "evaluation_context", None)
+    if not isinstance(evaluation_context, str) or not evaluation_context:
+        raise ValueError("native domain requires an explicit content evaluation_context")
+    # Pure binding validation uses the same digest syntax as returned evidence.
+    from core.executor.types import EvalRequest
+    binding_for(Proposal(Candidate("native-preflight"), ""), EvalRequest("dev"),
+                evaluator_version=domain.evaluator_version, evaluation_context=evaluation_context)
+    return domain
 
 
 def _tokens(context, options):
@@ -282,6 +334,7 @@ def default_registry():
     registry.register("provider", "provided", _provided)
     registry.register("domain", "legacy_prompt", lambda ctx, opts: LegacyPromptDomain(
         ctx.evaluator, ctx.llm, **opts), validate_options=_domain_options)
+    registry.register("domain", "native", _native)
     registry.register("policy", "greedy", lambda ctx, opts: GreedyPolicy(ctx.scope_context, **opts),
                       validate_options=policy_options)
     registry.register("policy", "llm_cycles", lambda ctx, opts: LLMCyclesPolicy(

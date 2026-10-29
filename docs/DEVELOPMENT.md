@@ -1,6 +1,8 @@
 # Mac 开发与 Linux 自动验收
 
-本文是当前开发入口。开发以 [统一抽象](AutoResearch模块化统一抽象.md)和 [逐项对照清单](ABSTRACTION_ALIGNMENT.md)为基准，当前 v60 验收覆盖 S1 模块组装增量。[S1 使用与边界指南](COMPOSED_RUNTIME.md)说明新的 `Framework.from_profile("composed_prompt", ...)` 配置入口、组件契约及恢复限制。
+本文是当前开发入口。开发以 [统一抽象](AutoResearch模块化统一抽象.md)和 [逐项对照清单](ABSTRACTION_ALIGNMENT.md)为基准，当前 v61 验收在保留 S1 模块组装的基础上增加配置运行时的 S2 评估契约组。[S1 使用与边界指南](COMPOSED_RUNTIME.md)说明 `Framework.from_profile("composed_prompt", ...)` 配置入口和组装阶段边界；[v61 验收说明](../m0/verifier/v61/README.md)限定 S2 认证范围，当前阶段是否通过仍以同一提交的新证据为准。
+
+[S2 统一评估契约指南](EVALUATION_CONTRACT_V61.md)说明 native domain、producer 身份、计量覆盖、公开/私有字段和受限准入视图。配置运行时已升级到 `composed-v2`，恢复缺少严格契约的 S1 `composed-v1` 检查点会明确拒绝；不要补造旧证据以通过新认证。
 
 `CODEBASE_REVIEW_2026-10-29.md` 保留导入时的独立审查结论；v58 修复准入、成本、账本与 seccomp 问题，v59 继续修复数据内容绑定、进程身份写入、配置校验、回执身份及 replay。变更与兼容边界见 [v58 修复说明](SAFETY_FIXES_V58.md)和 [v59 修复说明](EVALUATION_FIXES_V59.md)。旧 M0 路径与经典 profile 的行为保留；S1 配置路径的 dev 准入、token 预算和串行恢复范围应独立阅读，不能沿用旧路径的全部能力声明。
 
@@ -29,7 +31,7 @@ IDE 解释器选择 `m0/.venv/bin/python`。命令通过 `uv run` 进入环境�
 | `make check` | 上述 Mac 日常检查组合 |
 | `make build` | 构建 sdist 及 wheel 到 `artifacts/dist/` |
 | `make test-linux` | Linux 前置检查后执行完整测试，拒绝任何 skip |
-| `make accept-linux` | Linux 前置检查后，在副本中执行完整 v60 版本化验收 |
+| `make accept-linux` | Linux 前置检查后，在副本中执行完整 v61 版本化验收 |
 | `make verify-import` | 校验不可修改的初始 Git 导入快照 |
 
 单文件或单个测试可直接运行，例如：
@@ -43,6 +45,8 @@ uv run --locked python -m pytest -m 'not linux' --fail-on-skip -q
 ## 测试分层的含义
 
 原始测试场景继续保留；当前测试覆盖准入、计量、账本、seccomp，以及数据内容、进程身份写入、配置前置校验、回执上下文、replay 隔离和验收流程回归。S1 增加 `test_composition_registry.py`、`test_composition_defaults.py`、`test_composed_runtime.py`，覆盖组装预检、组件契约、策略/skill 的实际效果、计量、记忆写入、恢复与独立 replay。具体数量以当前提交的 pytest 收集和 Actions 日志为准，包装器的 unittest 单独计数。
+
+S2 的独立验收组运行 `test_evaluation_contract.py` 与 `test_composed_evaluation.py`，验证 canonical 传输与身份/成本契约以及公开运行入口的组合行为；完整 pytest 组仍运行全部旧测试。S2 不等于所有旧 M0 接口已经迁移，也不关闭清单中 S1 尚未接通的 population、worktree、HITL 和事件总线条款。
 
 `m0/tests/conftest.py` 以显式模块/函数清单标记 `linux`，原因是依赖 Bubblewrap、x86_64 seccomp 或 Linux `/proc` 稳定进程身份。混合模块中的纯协议测试仍在 Mac 运行。清单中的文件/函数不存在时，测试收集直接失败。
 
@@ -59,7 +63,7 @@ Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不�
 1. 安装固定版本 uv、系统 Python 3.12、Bubblewrap 与 AppArmor 工具。
 2. 验证 user namespace 可用；必要时只给一份 root-owned CI 专用 bwrap 加允许 userns 的 AppArmor profile，保留全局限制。
 3. 用 lock 安装环境，检查原始导入快照，构建安装包，运行包装器回归及离线示例。
-4. 对当前解释器执行真实沙箱预检，随后在临时 `m0` 副本里运行 v60；所有内部 pytest 调用都强制 `--fail-on-skip --strict-markers`。
+4. 对当前解释器执行真实沙箱预检，随后在临时 `m0` 副本里运行 v61；所有内部 pytest 调用都强制 `--fail-on-skip --strict-markers`。
 5. 无论成功失败都保存本次结果和构建产物，保留 14 天；检查原仓库的历史 verifier 文件没有变化。
 
 Actions 使用完整 commit SHA 固定版本，权限为 `contents: read`，checkout 不持久化访问令牌。同一 ref 的新运行会取消旧运行。
@@ -95,9 +99,11 @@ make accept-linux
 
 ## 证据和历史文件
 
-v60 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。v1–v59 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。新增的 v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v60 的运行结果。
+v61 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。v1–v60 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v61 的运行结果。v60 历史证据必须来自其真实成功的 S1 CI artifact，归档前核对提交、摘要、证书与 journal；不得在 v61 接线上重新运行旧 verifier 后把结果当成历史。
 
-v60 保留 v59 所有命令组和 source 检查，并加入配置组装的三文件端到端组；历史验证范围扩展至 v59。包装器回归保护 v58→v59、v59→v60 的旧命令与超时设置，以及 v59 归档字节来源。当前真正触发 Actions 的是仓库根级 workflow，其与 Makefile、包装器的实际调用链也接受检查。
+v60 成功证据已原样归档自提交 `06491ce5639dd33f7f89bc8e1288f881b54ecb8c` 的 [S1 CI 40889093796](https://github.com/YixuanZhang99/mori-27/actions/runs/40889093796)：1,131 项 pytest、29 个验收检查通过。其 SHA-256 与 artifact 来源见 [v61 归档说明](../m0/verifier/v61/README.md#archived-v60-evidence-provenance)，工具测试固定保护归档字节。
+
+v60 保留 v59 所有命令组并加入配置组装的三文件端到端组；v61 再保留全部 v60 命令与超时，加入 S2 两文件组，历史验证范围扩展至 v60。包装器回归保护 v58→v59、v59→v60、v60→v61 的旧命令与超时设置，以及已经核实的历史归档字节来源。当前真正触发 Actions 的是仓库根级 workflow，其与 Makefile、包装器的实际调用链也接受检查。
 
 每次新结果写入独立目录 `artifacts/linux-acceptance/<UTC-run-id>/`，包含控制台日志、新证书、journal 和结构化摘要；不会把上一轮成功当成本轮结果。包装器要求本次进程退出成功、有效新证书与本次 journal 检查成立，并确认源历史未被改动。CI 的临时 VM 负责最终清理隔离环境；指定进程崩溃恢复测试仍不等价于机器断电或真实远端服务 exactly-once 保证。
 
@@ -130,6 +136,6 @@ make check
 make build
 ```
 
-同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v60 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成。修复覆盖范围见版本修复说明，统一抽象的未完成项和阶段验收条件见 [对照清单](ABSTRACTION_ALIGNMENT.md)。
+同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v61 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成。修复覆盖范围见版本修复说明，统一抽象的未完成项和阶段验收条件见 [对照清单](ABSTRACTION_ALIGNMENT.md)。
 
 相关一手文档：[uv 锁定与同步](https://docs.astral.sh/uv/concepts/projects/sync/)、[uv GitHub Actions](https://docs.astral.sh/uv/guides/integration/github/)、[Ubuntu user namespace 限制](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)。

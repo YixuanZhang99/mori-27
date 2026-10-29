@@ -195,6 +195,9 @@ class Operator(Protocol):
 
 
 class Domain(Protocol):
+    evaluator_version: str
+    evaluation_context: str
+    def validate_request(self, request: EvalRequest) -> None: ...
     async def evaluate(self, proposal: Proposal, request: EvalRequest) -> EvalResult: ...
 
 

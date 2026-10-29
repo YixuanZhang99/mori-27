@@ -1,6 +1,6 @@
 # 配置组装运行时：S1 使用与边界
 
-开发基准是 [AutoResearch 模块化统一抽象](AutoResearch模块化统一抽象.md)，逐项状态及后续验收条件在 [对照清单](ABSTRACTION_ALIGNMENT.md)。五个阶段依次为：S1 模块组装、S2 统一评估契约、S3 记忆与知识回流、S4 三层准入、S5 分层预算。本页说明 S1 增量；当前验收入口为 v60，是否通过以该提交的 Mac 检查和 Linux Actions 新证据为准。
+开发基准是 [AutoResearch 模块化统一抽象](AutoResearch模块化统一抽象.md)，逐项状态及后续验收条件在 [对照清单](ABSTRACTION_ALIGNMENT.md)。五个阶段依次为：S1 模块组装、S2 统一评估契约、S3 记忆与知识回流、S4 三层准入、S5 分层预算。本页保留 S1（v60）的组装说明；当前 v61 的评估契约和 `composed-v2` 兼容变化见 [S2 指南](EVALUATION_CONTRACT_V61.md)。是否通过以对应提交的 Mac 检查和 Linux Actions 新证据为准。
 
 `Framework.from_profile("composed_prompt", ...)` 是新的配置开发入口，继续使用同一组 `evolve()`、`inspect()`、`replay()` 公共方法。旧 `Framework(...)` 默认 M0 路径与 GEPA、FunSearch、MAP-Elites profile 仍保留，其二元准入、IID 对照、批次调度及恢复能力有各自的历史契约；这些能力不能直接视为 S1 组装路径已经具备。
 
@@ -137,4 +137,4 @@ uv run --locked python -m pytest \
   tests/test_composed_runtime.py -q --fail-on-skip --strict-markers
 ```
 
-Linux 的 `make accept-linux` 使用 v60，保留 v59 全部命令组并加入上述三文件组。最终 pytest 全量组仍覆盖所有测试，任何 skip/xfail 都失败。v60 证书单独标明 S1 组装证据，不将 S2–S5 声明为完成。完整环境和证据保存规则见 [开发指南](DEVELOPMENT.md)。
+S1 的 v60 验收保留 v59 全部命令组并加入上述三文件组；当前 `make accept-linux` 使用 v61，继续继承这些组并新增 S2 评估契约组。最终 pytest 全量组仍覆盖所有测试，任何 skip/xfail 都失败。v60 证书只标明 S1 组装证据，不将 S2–S5 声明为完成；后续阶段单独记录。完整环境和证据保存规则见 [开发指南](DEVELOPMENT.md)。

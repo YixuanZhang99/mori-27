@@ -75,7 +75,7 @@ def test_default_composition_completes_real_optimization_and_accounts_every_call
     llm, evaluator = CountingLLM(), CountingEvaluator()
     fw = framework(tmp_path, llm=llm, evaluator=evaluator)
     result = fw.evolve(TASK)
-    assert result["runtime"] == "composed-v1"
+    assert result["runtime"] == "composed-v2"
     assert result["cycles"] == llm.calls == evaluator.calls == 4
     assert result["best_score"] == pytest.approx(7 / 12)
     assert "hint_4" in result["best_prompt"] and "hint_6" in result["best_prompt"]
@@ -92,7 +92,7 @@ def test_default_composition_completes_real_optimization_and_accounts_every_call
 
 def test_registered_profile_name_uses_configured_framework_entry_point(tmp_path):
     fw = framework(tmp_path, profile="composed_prompt", cfg=config(max_generations=0))
-    assert fw.evolve(TASK)["runtime"] == "composed-v1"
+    assert fw.evolve(TASK)["runtime"] == "composed-v2"
     assert fw.inspect()["assembly"]["schema_version"] == 1
 
 
@@ -154,10 +154,20 @@ def test_invalid_options_and_factory_construction_errors_make_no_provider_calls(
 
 
 class CanonicalCostDomain:
+    evaluator_version = "canonical-v1"
+    evaluation_context = "sha256:" + "a" * 64
+
+    def validate_request(self, request):
+        request.validate()
+
     async def evaluate(self, proposal, request):
+        from core.composition.evaluation import EvaluationContract, binding_for
         return EvalResult(EvalStatus.OK, {"dev/score": 0.75},
                           cost=CostVec(tokens_in=5, tokens_out=7, eval_count=1),
-                          fidelity=request.fidelity, text_feedback="canonical domain evidence")
+                          fidelity=request.fidelity, text_feedback="canonical domain evidence",
+                          contract=EvaluationContract(binding_for(proposal, request,
+                              evaluator_version=self.evaluator_version,
+                              evaluation_context=self.evaluation_context), ("token", "eval_count")))
 
 
 def test_native_canonical_domain_cost_is_settled_without_legacy_evaluator(tmp_path):
