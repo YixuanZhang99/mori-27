@@ -5,7 +5,7 @@ No aggregate score is exposed to the gate beyond the existing display field.
 """
 from __future__ import annotations
 
-from core.eval.types import EvalResult
+from core.eval.types import EvalResult, validate_eval_result
 from core.llm import reset_usage, take_usage
 
 
@@ -21,15 +21,31 @@ class CascadingEvaluator:
         self.last_usage = {"total_tokens": 0}
         self.evaluator_version = getattr(base_evaluator, "evaluator_version",
                                          "cascade-det-v1")
+        self._base_evaluator_version = getattr(base_evaluator, "evaluator_version", None)
+        self.evaluation_context = getattr(base_evaluator, "evaluation_context", "")
         self.shallow_count = 0
         self.full_count = 0
 
+    def validate_context(self) -> None:
+        """Validate the pinned base before starting either evaluation tier."""
+        if getattr(self.base, "evaluation_context", "") != self.evaluation_context \
+                or getattr(self.base, "evaluator_version", None) != self._base_evaluator_version:
+            raise ValueError("cascade base evaluation configuration changed")
+        validate = getattr(self.base, "validate_context", None)
+        if callable(validate):
+            validate()
+
     def __call__(self, candidate_id: str, head_sha: str, prompt: str) -> EvalResult:
+        self.last_usage = {"total_tokens": 0}
+        self.validate_context()
         self.last_usage = None
         reset_usage(self.base)
         try:
-            shallow = self.base(candidate_id, head_sha, prompt,
-                                item_limit=self.shallow_items)
+            shallow = validate_eval_result(
+                self.base(candidate_id, head_sha, prompt, item_limit=self.shallow_items),
+                candidate_id=candidate_id, head_sha=head_sha,
+                evaluator_version=self._base_evaluator_version,
+                evaluation_context=self.evaluation_context)
         finally:
             usage = take_usage(self.base)
             self.last_usage = {"total_tokens": usage}
@@ -43,7 +59,11 @@ class CascadingEvaluator:
         self.last_usage = None
         reset_usage(self.base)
         try:
-            full = self.base(candidate_id, head_sha, prompt)
+            full = validate_eval_result(
+                self.base(candidate_id, head_sha, prompt),
+                candidate_id=candidate_id, head_sha=head_sha,
+                evaluator_version=self._base_evaluator_version,
+                evaluation_context=self.evaluation_context)
         finally:
             usage += take_usage(self.base)
             self.last_usage = {"total_tokens": usage}

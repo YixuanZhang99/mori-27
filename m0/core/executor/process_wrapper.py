@@ -28,6 +28,15 @@ materialize_seccomp = _POLICY.materialize_seccomp
 direct_seccomp_preexec = _POLICY.direct_seccomp_preexec
 validate_seccomp_delivery = _POLICY.validate_seccomp_delivery
 
+_IDENTITY_PATH = Path(__file__).resolve().with_name("process_identity.py")
+_IDENTITY_SPEC = importlib.util.spec_from_file_location("_autoresearch_process_identity",
+                                                      _IDENTITY_PATH)
+if _IDENTITY_SPEC is None or _IDENTITY_SPEC.loader is None:
+    raise RuntimeError("cannot load the canonical process identity reader")
+_IDENTITY = importlib.util.module_from_spec(_IDENTITY_SPEC)
+_IDENTITY_SPEC.loader.exec_module(_IDENTITY)
+_start_ticks = _IDENTITY.start_ticks
+
 
 def _atomic_json(path: Path, payload: dict) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -35,12 +44,23 @@ def _atomic_json(path: Path, payload: dict) -> None:
     os.replace(temporary, path)
 
 
-def _start_ticks(pid: int) -> int | None:
+def _record_target_identity(target: subprocess.Popen, path: Path) -> None:
+    """Publish only a stable identity; stop an owned child if publication fails."""
     try:
-        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
-        return int(fields[21])
-    except (OSError, ValueError, IndexError):
-        return None
+        ticks = _start_ticks(target.pid)
+        if ticks is None:
+            raise RuntimeError("target process requires a stable OS start identity")
+        _atomic_json(path, {"pid": target.pid, "start_ticks": ticks})
+    except BaseException:
+        # This is the wrapper's unreaped direct child, not a recovered numeric PID.
+        # Its PID cannot be reused while poll() reports it is still running.
+        if target.poll() is None:
+            try:
+                os.killpg(target.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        target.wait()
+        raise
 
 
 def _apply_resource_limits(spec: dict) -> None:
@@ -90,8 +110,7 @@ def main() -> int:
             finally:
                 if seccomp_fd is not None:
                     os.close(seccomp_fd)
-            _atomic_json(target_path, {"pid": target.pid,
-                                       "start_ticks": _start_ticks(target.pid)})
+            _record_target_identity(target, target_path)
             timed_out = False
             try:
                 returncode = target.wait(timeout=spec.get("time_limit"))

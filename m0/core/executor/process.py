@@ -9,39 +9,11 @@ import sys
 import uuid
 from pathlib import Path
 
+from core.executor.process_identity import process_alive, start_ticks
 from core.executor.seccomp import (SECCOMP_BWRAP_MEMFD, SECCOMP_POLICY_VERSION,
                                    seccomp_policy_summary,
                                    validate_seccomp_delivery, validate_seccomp_policy)
 from core.x1.store import AppendOnlyStore
-
-
-def _stat_fields(pid: int) -> list[str]:
-    text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
-    identity, opening, remainder = text.partition("(")
-    _name, closing, fields = remainder.rpartition(")")
-    # comm is parenthesized but may itself contain spaces, newlines or ')'.
-    # The kernel's final ')' is the only reliable boundary before field 3.
-    if not opening or not closing or identity.strip() != str(pid):
-        raise ValueError("invalid process stat identity")
-    return fields.split()
-
-
-def start_ticks(pid: int) -> int | None:
-    try:
-        fields = _stat_fields(pid)
-        return int(fields[19])  # field 22; parsed fields begin at field 3 (state)
-    except (OSError, ValueError, IndexError):
-        return None
-
-
-def process_alive(pid: int, expected_start: int | None) -> bool:
-    if expected_start is None:
-        return False
-    try:
-        fields = _stat_fields(pid)
-        return int(fields[19]) == expected_start and fields[0] != "Z"
-    except (OSError, ValueError, IndexError):
-        return False
 
 
 def _read_json(path: str | Path) -> dict | None:

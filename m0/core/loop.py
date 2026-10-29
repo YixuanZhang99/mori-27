@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import math
+import tempfile
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from types import FunctionType
 
 from core.archive import ArchiveEntry, IslandArchive
 from core.budget.ledger import BudgetError, BudgetLedger
@@ -53,6 +56,37 @@ class LoopConfig:
     stop_after_generation: int | None = None  # clean cycle-boundary stop; None = run to budget/end
     batch_size: int = 1                     # >1 opts into canonical frozen-cohort M7 scheduling
     max_inflight: int = 1                   # shared global token meters remain serialized
+
+    def validate(self) -> None:
+        """Reject invalid run configuration before evidence, reservation or calls."""
+        for name, minimum in (("total_budget", 1), ("reeval_floor", 0),
+                              ("intent_cost", 1), ("baseline_every", 1),
+                              ("max_generations", 0), ("batch_size", 1),
+                              ("max_inflight", 1)):
+            value = getattr(self, name)
+            if type(value) is not int or value < minimum:
+                qualifier = "positive" if minimum else "non-negative"
+                raise ValueError(f"{name} must be a {qualifier} integer")
+        for name in ("checkpoint_enabled", "resume_from_checkpoint"):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be a boolean")
+        if self.stop_after_generation is not None and (
+                type(self.stop_after_generation) is not int or self.stop_after_generation < 0):
+            raise ValueError("stop_after_generation must be a non-negative integer or None")
+        for name in ("control_share", "noise_floor"):
+            value = getattr(self, name)
+            try:
+                finite = type(value) in (int, float) and math.isfinite(value)
+            except OverflowError:
+                finite = False
+            if not finite or (name == "noise_floor" and value < 0):
+                raise ValueError(f"{name} must be a finite non-negative number")
+        if not 0 < self.control_share < 1:
+            raise ValueError("control_share must be in (0,1)")
+        if self.reeval_floor > self.total_budget:
+            raise ValueError("reeval_floor cannot exceed total_budget")
+        if self.resume_from_checkpoint and not self.checkpoint_enabled:
+            raise ValueError("resume requires checkpoint_enabled=True")
 
 
 def _stable_id(*parts) -> str:
@@ -117,7 +151,8 @@ def _restore_result(data: dict, **bindings) -> EvalResult:
         public=data.get("public", {}), private=data.get("private", {}),
         text_feedback=data.get("text_feedback", ""),
         reliability=ReliabilityMeta(**reliability),
-        evaluator_version=data["evaluator_version"]), **bindings)
+        evaluator_version=data["evaluator_version"],
+        evaluation_context=data.get("evaluation_context", "")), **bindings)
 
 
 def _evidence_from_result(candidate_id: str, result: EvalResult) -> EvidenceRecord:
@@ -132,6 +167,24 @@ def _evidence_from_result(candidate_id: str, result: EvalResult) -> EvidenceReco
 def _extension_name(extension) -> str:
     cls = type(extension)
     return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def _copy_adapters(sources):
+    copied = copy.deepcopy(sources)
+    for key, source in sources.items():
+        if source is not None and not isinstance(source, FunctionType) \
+                and copied[key] is source:
+            raise ValueError(f"{key} deepcopy returned the live adapter")
+    return copied
+
+
+def _copy_registry(registry):
+    copied = copy.deepcopy(registry)
+    for original, clone in zip(registry.admission + registry.parent_monitors,
+                               copied.admission + copied.parent_monitors):
+        if clone is original:
+            raise ValueError("extension deepcopy returned the live extension")
+    return copied
 
 
 class Framework:
@@ -183,6 +236,10 @@ class Framework:
                 self.stamp = persisted
         self._last_result: dict | None = None
         self._last_task_desc: str | None = None
+        self._replay_seed = None
+        self._replay_sources = None
+        self._replay_seed_error = None
+        self._replay_registry = None
 
     @classmethod
     def from_profile(cls, name: str, llm, evaluator, config: LoopConfig, workdir: str,
@@ -205,22 +262,45 @@ class Framework:
     def _proposal_id(self, task_desc: str, slot: str) -> str:
         return _stable_id(self.profile_name, task_desc, slot)
 
+    def _adapter_sources(self):
+        # Copy the pair together: a task solver can share the proposing LLM.
+        return {
+            "llm": (self.llm.fallback_llm
+                    if isinstance(self.llm, ExternalCommandLLM) else self.llm),
+            "evaluator": (None if isinstance(self.evaluator, ExternalCommandEvaluator)
+                          else self.evaluator)}
+
+    def _capture_replay_seed(self):
+        if self._replay_sources is not None:
+            return
+        self._replay_sources = self._adapter_sources()
+        try:
+            self._replay_seed = _copy_adapters(self._replay_sources)
+        except Exception as error:
+            # Resource-owning adapters remain usable for normal evolution.
+            # Replay requires an explicit factory instead of sharing live state.
+            self._replay_seed_error = type(error).__name__
+        try:
+            self._replay_registry = _copy_registry(self.registry)
+        except Exception as error:
+            self._replay_seed_error = "extension registry: " + type(error).__name__
+
     def evolve(self, task_desc: str) -> dict:
         cfg = self.cfg
-        if cfg.resume_from_checkpoint and not cfg.checkpoint_enabled:
-            raise ValueError("resume requires checkpoint_enabled=True")
-        if cfg.stop_after_generation is not None and cfg.stop_after_generation < 0:
-            raise ValueError("stop_after_generation cannot be negative")
-        if isinstance(cfg.noise_floor, bool) \
-                or not isinstance(cfg.noise_floor, (int, float)) \
-                or not math.isfinite(cfg.noise_floor) or cfg.noise_floor < 0:
-            raise ValueError("noise_floor must be a finite non-negative number")
-        for name in ("batch_size", "max_inflight"):
-            value = getattr(cfg, name)
-            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-                raise ValueError(f"{name} must be a positive integer")
+        if not isinstance(cfg, LoopConfig):
+            raise ValueError("config must be a LoopConfig")
+        cfg.validate()
+        validate_context = getattr(self.evaluator, "validate_context", None)
+        if callable(validate_context):
+            validate_context()
         if not cfg.resume_from_checkpoint and any(self.store.read()):
             raise ValueError("non-resume evolution requires a fresh evidence workdir")
+        evaluation_context = getattr(self.evaluator, "evaluation_context", "")
+        if cfg.resume_from_checkpoint:
+            starts = list(self.store.read("run_start"))
+            if starts and starts[0]["payload"].get("evaluation_context", "") != evaluation_context:
+                raise ValueError("run evaluation context is incompatible with resume")
+        self._capture_replay_seed()
         checkpoint_path = Path(self.workdir) / "checkpoint.json"
         ledger = BudgetLedger(cfg.total_budget, cfg.control_share,
                               cfg.reeval_floor, self.stamp, self.store)
@@ -332,7 +412,8 @@ class Framework:
                      "score": cand["score"], "result": _restore_result(
                          cand["result"], candidate_id=cand["candidate_id"],
                          head_sha=_stable_id(cand["candidate_id"], cand["prompt"])[:8],
-                         evaluator_version=getattr(self.evaluator, "evaluator_version", None))}
+                         evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+                         evaluation_context=getattr(self.evaluator, "evaluation_context", None))}
                     for cand in payload["pool"]]
             incumbent = next(cand for cand in pool
                              if cand["candidate_id"] == payload["incumbent_id"])
@@ -693,11 +774,13 @@ class Framework:
                 self.evaluator.set_evaluation_context(context)
             failure = None
             expected_evaluator_version = getattr(self.evaluator, "evaluator_version", None)
+            expected_evaluation_context = getattr(self.evaluator, "evaluation_context", None)
             try:
                 result = validate_eval_result(
                     self.evaluator(proposal.proposal_id, head_sha, proposal.patch_text),
                     candidate_id=proposal.proposal_id, head_sha=head_sha,
-                    evaluator_version=expected_evaluator_version)
+                    evaluator_version=expected_evaluator_version,
+                    evaluation_context=expected_evaluation_context)
             except UsageError:
                 raise
             except ExternalEvaluatorError as error:
@@ -773,7 +856,8 @@ class Framework:
                     validate_eval_result(
                         adopted["result"], candidate_id=candidate_id,
                         head_sha=context["head_sha"],
-                        evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+                        evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+                        evaluation_context=getattr(self.evaluator, "evaluation_context", None))
                 token_usage = validate_usage(adopted["token_usage"])["total_tokens"]
                 actual = validate_usage({"total_tokens": context["proposer_token_cost"]})[
                     "total_tokens"] + token_usage
@@ -827,7 +911,8 @@ class Framework:
                         result = _restore_result(
                             outcome["result"], candidate_id=candidate_id,
                             head_sha=context["head_sha"],
-                            evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+                            evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+                            evaluation_context=getattr(self.evaluator, "evaluation_context", None))
                     except (KeyError, TypeError, ValueError) as error:
                         if "binding mismatch" in str(error):
                             raise RuntimeError(
@@ -948,7 +1033,8 @@ class Framework:
                     inprocess_state = inprocess_evaluation_operation_state(
                         self.store, cohort_id, start_contexts,
                         failed_ids=failed_proposals,
-                        evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+                        evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+                        evaluation_context=getattr(self.evaluator, "evaluation_context", None))
                     by_candidate = inprocess_state["operations"]
                 missing = set(start_contexts) - set(by_candidate)
                 if missing and (batch_settled or any(
@@ -1459,6 +1545,7 @@ class Framework:
             self.store.append("run_start", {"task_desc": task_desc,
                                             "config": asdict(cfg),
                                             "profile": self.profile_name,
+                                            "evaluation_context": evaluation_context,
                                             "accounting_stamp": asdict(self.stamp)})
             intent = make_intent("m0", "genesis", cfg.intent_cost, "snap-0", "explore")
             funnel = FunnelRecord("draft", 0)
@@ -1668,8 +1755,14 @@ class Framework:
                     "accepted_receipt_coverage"],
                 "accepted_candidates": len(accepted)}
 
-    def replay(self, task_desc: str | None = None) -> dict:
-        """Rerun independently and certify normalized snapshot plus Receipt chain."""
+    def replay(self, task_desc: str | None = None, *, adapter_factory=None) -> dict:
+        """Independently rerun, then certify the snapshot and Receipt chain.
+
+        Ordinary adapters are copied from their pre-run state. Plain functions
+        must be stateless (apart from last_usage); resource-owning or closure-
+        state adapters require adapter_factory(workdir, store) -> (llm, evaluator).
+        A rerun invokes the adapters again and can incur provider charges.
+        """
         if self._last_result is None:
             raise RuntimeError("evolve() must run before certified replay()")
         if not self.cfg.checkpoint_enabled:
@@ -1683,47 +1776,93 @@ class Framework:
         elif self.archive is not None:
             archive = IslandArchive(self.archive.num_islands,
                                     self.archive.migration_interval)
-        clone_workdir = f"{self.workdir}/replay"
+        if self._replay_registry is None:
+            raise RuntimeError("replay requires independently copyable extensions")
+        replay_registry = _copy_registry(self._replay_registry)
+        if adapter_factory is None:
+            if self._replay_seed is None:
+                raise RuntimeError("replay requires adapter_factory for adapters that cannot "
+                                   f"be independently copied ({self._replay_seed_error})")
+            current = self._adapter_sources()
+            sources = {key: self._replay_seed[key]
+                       if value is self._replay_sources[key] else value
+                       for key, value in current.items()}
+            try:
+                seeds = _copy_adapters(sources)
+            except Exception as error:
+                raise RuntimeError("replay requires adapter_factory for adapters that cannot "
+                                   "be independently copied") from error
+        elif not callable(adapter_factory):
+            raise ValueError("adapter_factory must be callable")
+        replay_root = Path(self.workdir) / "replays"
+        replay_root.mkdir(parents=True, exist_ok=True)
+        clone_workdir = tempfile.mkdtemp(prefix="replay-", dir=replay_root)
         clone_store = AppendOnlyStore(f"{clone_workdir}/x1.jsonl")
-        replay_evaluator = (self.evaluator.fork(clone_workdir, clone_store)
-                            if isinstance(self.evaluator, ExternalCommandEvaluator)
-                            else self.evaluator)
-        replay_llm = (self.llm.fork(clone_workdir, clone_store)
-                      if isinstance(self.llm, ExternalCommandLLM) else self.llm)
-        clone = Framework(replay_llm, replay_evaluator,
-                          replace(self.cfg, resume_from_checkpoint=False,
-                                  stop_after_generation=None),
-                          clone_workdir, profile_name=self.profile_name,
-                          archive=archive, improve_impl=self.improve_impl,
-                          accounting_stamp=self.stamp)
-        for ext in self.registry.admission + self.registry.parent_monitors:
-            clone.registry.register(ext)
         original = self._last_result
-        replayed = clone.evolve(task)
         original_snapshot = certified_snapshot_ref(Path(self.workdir) / "checkpoint.json")
-        replay_snapshot = certified_snapshot_ref(Path(clone.workdir) / "checkpoint.json")
         original_chain = receipt_chain_sha256(self.store)
-        replay_chain = receipt_chain_sha256(clone.store)
-        compared = ("best_prompt", "best_score", "self_attestation", "governance_audit",
-                    "main_scores", "baseline_scores", "accepted_candidate_ids",
-                    "generations", "ledger", "health", "archive_health", "governed_state")
-        result_match = all(replayed[key] == original[key] for key in compared)
         current_governance = audit_governance(
             self.store, original["ledger"], original["accepted_candidate_ids"])
-        certificate = {
-            "passed": False, "snapshot_ref": original_snapshot,
-            "replay_snapshot_ref": replay_snapshot,
-            "snapshot_match": original_snapshot == replay_snapshot,
-            "receipt_chain_sha256": original_chain,
-            "replay_receipt_chain_sha256": replay_chain,
-            "receipt_chain_match": original_chain == replay_chain,
-            "result_match": result_match,
-            "original_governance_pass": current_governance["passed"],
-            "replay_governance_pass": replayed["governance_audit"]["passed"]}
-        certificate["passed"] = all((
-            certificate["snapshot_match"], certificate["receipt_chain_match"],
-            result_match, current_governance["passed"],
-            replayed["governance_audit"]["passed"]))
+        replay_identity = {"replay_id": Path(clone_workdir).name,
+                           "replay_workdir": str(Path(clone_workdir).resolve()),
+                           "mode": "independent_rerun"}
+        try:
+            if adapter_factory is not None:
+                replay_llm, replay_evaluator = adapter_factory(clone_workdir, clone_store)
+                for live, replay_adapter in ((self.llm, replay_llm),
+                                             (self.evaluator, replay_evaluator)):
+                    if replay_adapter is live and not isinstance(live, FunctionType):
+                        raise ValueError("adapter_factory must return independent adapters")
+            else:
+                replay_evaluator = (self.evaluator.fork(clone_workdir, clone_store)
+                                    if isinstance(self.evaluator, ExternalCommandEvaluator)
+                                    else seeds["evaluator"])
+                if isinstance(self.llm, ExternalCommandLLM):
+                    replay_llm = self.llm.fork(clone_workdir, clone_store)
+                    replay_llm.fallback_llm = seeds["llm"]
+                else:
+                    replay_llm = seeds["llm"]
+            clone = Framework(replay_llm, replay_evaluator,
+                              replace(self.cfg, resume_from_checkpoint=False,
+                                      stop_after_generation=None),
+                              clone_workdir, profile_name=self.profile_name,
+                              archive=archive, improve_impl=self.improve_impl,
+                              accounting_stamp=self.stamp)
+            clone.registry = replay_registry
+            replayed = clone.evolve(task)
+            replay_snapshot = certified_snapshot_ref(Path(clone.workdir) / "checkpoint.json")
+            replay_chain = receipt_chain_sha256(clone.store)
+            compared = ("best_prompt", "best_score", "self_attestation", "governance_audit",
+                        "main_scores", "baseline_scores", "accepted_candidate_ids",
+                        "generations", "ledger", "health", "archive_health", "governed_state")
+            result_match = all(replayed[key] == original[key] for key in compared)
+            certificate = {
+                **replay_identity, "passed": False, "snapshot_ref": original_snapshot,
+                "replay_snapshot_ref": replay_snapshot,
+                "snapshot_match": original_snapshot == replay_snapshot,
+                "receipt_chain_sha256": original_chain,
+                "replay_receipt_chain_sha256": replay_chain,
+                "receipt_chain_match": original_chain == replay_chain,
+                "result_match": result_match,
+                "original_governance_pass": current_governance["passed"],
+                "replay_governance_pass": replayed["governance_audit"]["passed"]}
+            certificate["passed"] = all((
+                certificate["snapshot_match"], certificate["receipt_chain_match"],
+                result_match, current_governance["passed"],
+                replayed["governance_audit"]["passed"]))
+        except Exception as error:
+            certificate = {
+                **replay_identity, "passed": False, "snapshot_ref": original_snapshot,
+                "replay_snapshot_ref": None, "snapshot_match": False,
+                "receipt_chain_sha256": original_chain,
+                "replay_receipt_chain_sha256": None,
+                "receipt_chain_match": False, "result_match": False,
+                "original_governance_pass": current_governance["passed"],
+                "replay_governance_pass": False, "error_type": type(error).__name__}
+            clone_store.append("replay_certificate", certificate)
+            self.store.append("replay_certificate", certificate)
+            original["replay_certificate"] = certificate
+            raise RuntimeError("certified replay execution failed; see replay_certificate") from error
         clone.store.append("replay_certificate", certificate)
         self.store.append("replay_certificate", certificate)
         original["replay_certificate"] = certificate

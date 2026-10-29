@@ -1,6 +1,6 @@
 # Mac 开发与 Linux 自动验收
 
-本文是当前开发入口。`CODEBASE_REVIEW_2026-10-29.md` 保留导入时的独立审查结论；当前 v58 在开发环境基础上修复准入、成本、账本与 seccomp 问题；变更及兼容边界见 [修复说明](SAFETY_FIXES_V58.md)。
+本文是当前开发入口。`CODEBASE_REVIEW_2026-10-29.md` 保留导入时的独立审查结论；v58 修复准入、成本、账本与 seccomp 问题，当前 v59 继续修复数据内容绑定、进程身份写入、配置校验、回执身份及 replay。变更与兼容边界见 [v58 修复说明](SAFETY_FIXES_V58.md)和 [v59 修复说明](EVALUATION_FIXES_V59.md)。
 
 ## Mac 上开始开发
 
@@ -27,7 +27,7 @@ IDE 解释器选择 `m0/.venv/bin/python`。命令通过 `uv run` 进入环境�
 | `make check` | 上述 Mac 日常检查组合 |
 | `make build` | 构建 sdist 及 wheel 到 `artifacts/dist/` |
 | `make test-linux` | Linux 前置检查后执行完整测试，拒绝任何 skip |
-| `make accept-linux` | Linux 前置检查后，在副本中执行完整 v58 版本化验收 |
+| `make accept-linux` | Linux 前置检查后，在副本中执行完整 v59 版本化验收 |
 | `make verify-import` | 校验不可修改的初始 Git 导入快照 |
 
 单文件或单个测试可直接运行，例如：
@@ -40,7 +40,7 @@ uv run --locked python -m pytest -m 'not linux' --fail-on-skip -q
 
 ## 测试分层的含义
 
-原始测试场景继续保留；当前测试新增准入、计量、账本、seccomp 及验收流程回归。具体数量以当前提交的 pytest 收集和 Actions 日志为准，包装器的 unittest 单独计数。
+原始测试场景继续保留；当前测试覆盖准入、计量、账本、seccomp，以及数据内容、进程身份写入、配置前置校验、回执上下文、replay 隔离和验收流程回归。具体数量以当前提交的 pytest 收集和 Actions 日志为准，包装器的 unittest 单独计数。
 
 `m0/tests/conftest.py` 以显式模块/函数清单标记 `linux`，原因是依赖 Bubblewrap、x86_64 seccomp 或 Linux `/proc` 稳定进程身份。混合模块中的纯协议测试仍在 Mac 运行。清单中的文件/函数不存在时，测试收集直接失败。
 
@@ -55,7 +55,7 @@ Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不�
 1. 安装固定版本 uv、系统 Python 3.12、Bubblewrap 与 AppArmor 工具。
 2. 验证 user namespace 可用；必要时只给一份 root-owned CI 专用 bwrap 加允许 userns 的 AppArmor profile，保留全局限制。
 3. 用 lock 安装环境，检查原始导入快照，构建安装包，运行包装器回归及离线示例。
-4. 对当前解释器执行真实沙箱预检，随后在临时 `m0` 副本里运行 v58；所有内部 pytest 调用都强制 `--fail-on-skip --strict-markers`。
+4. 对当前解释器执行真实沙箱预检，随后在临时 `m0` 副本里运行 v59；所有内部 pytest 调用都强制 `--fail-on-skip --strict-markers`。
 5. 无论成功失败都保存本次结果和构建产物，保留 14 天；检查原仓库的历史 verifier 文件没有变化。
 
 Actions 使用完整 commit SHA 固定版本，权限为 `contents: read`，checkout 不持久化访问令牌。同一 ref 的新运行会取消旧运行。
@@ -91,9 +91,13 @@ make accept-linux
 
 ## 证据和历史文件
 
-v58 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。原包里的 v1–v57 历史成功/失败记录保持原样；历史 `m0/.github/workflows/axioms.yml` 也保留，作为历史证据。v58 检查根 workflow、Makefile 与包装器的实际调用链。当前真正触发 Actions 的是仓库根级 workflow。
+v59 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。v1–v58 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。新增归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)，不代表 v59 的运行结果。v59 检查根 workflow、Makefile 与包装器的实际调用链。当前真正触发 Actions 的是仓库根级 workflow。
 
 每次新结果写入独立目录 `artifacts/linux-acceptance/<UTC-run-id>/`，包含控制台日志、新证书、journal 和结构化摘要；不会把上一轮成功当成本轮结果。包装器要求本次进程退出成功、有效新证书与本次 journal 检查成立，并确认源历史未被改动。CI 的临时 VM 负责最终清理隔离环境；指定进程崩溃恢复测试仍不等价于机器断电或真实远端服务 exactly-once 保证。
+
+运行目录同样应保留历史。普通 `evolve()` 要求空证据目录；已有运行需使用有效检查点恢复，或选择新目录。缺少 v2 判定上下文的旧回执仍可读取，但新审计不会认证，涉及旧回执的中断恢复也会拒绝；不要补造上下文或删掉原证据重跑。需要新认证时，在新目录重新评估。
+
+`Framework.replay()` 是独立重新执行，会调用模型或外部命令并可能计费，不是离线 journal 播放。每次执行写入 `<原工作目录>/replays/replay-*/`，保留各次成功和失败证据。普通适配器与扩展从运行前副本恢复；不可独立复制的适配器需显式提供 `adapter_factory(workdir, store) -> (llm, evaluator)`，带可变闭包状态的函数也需使用 factory。详细接口及状态隔离限制见 [v59 replay 契约](EVALUATION_FIXES_V59.md#replay-隔离与适配器契约)。
 
 原 `MANIFEST.json` 是导入快照清单，不会因后续开发而重写：
 
@@ -118,6 +122,6 @@ make check
 make build
 ```
 
-同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v58 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成，其修复覆盖范围与尚未实现的能力见修复说明。
+同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v59 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成，其修复覆盖范围与尚未实现的能力见修复说明。
 
 相关一手文档：[uv 锁定与同步](https://docs.astral.sh/uv/concepts/projects/sync/)、[uv GitHub Actions](https://docs.astral.sh/uv/guides/integration/github/)、[Ubuntu user namespace 限制](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)。

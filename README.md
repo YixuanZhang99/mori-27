@@ -2,7 +2,7 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收版本为 **v58**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v59**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -27,10 +27,12 @@
 
 **完成度不能由测试数量代替。** 原包 v57 历史记录为 490 项通过，但证书同时明确真实外部 API 与 benchmark campaign 未执行。导入时发现的样本身份、预算账本、成本计量及 seccomp ABI 问题已纳入 v58 修复与回归测试，详见 [修复说明](docs/SAFETY_FIXES_V58.md)。
 
+v59 继续修复数据集内容绑定、进程身份写入、配置前置校验、完整判定回执与 replay 隔离。旧回执兼容边界、适配器契约及验证范围见 [v59 修复说明](docs/EVALUATION_FIXES_V59.md)。`replay()` 会重新执行适配器，可能再次产生提供方费用。
+
 ## 目录
 
 ```text
-m0/                 Python 内核、配置、回归测试、v1–v57 历史及 v58 验收入口
+m0/                 Python 内核、配置、回归测试、v1–v58 历史及 v59 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
   config/profiles/  三种 profile
   examples/         三个不需要模型 API key 的示例
@@ -56,7 +58,7 @@ make check
 
 `make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v58，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v59，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
 make test          # Mac 可移植测试
@@ -65,7 +67,7 @@ make accept-linux  # Linux x86_64：全量版本化验收
 make verify-import # 核验初始导入 Git 快照
 ```
 
-详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 修复范围和兼容行为见上述修复说明。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 

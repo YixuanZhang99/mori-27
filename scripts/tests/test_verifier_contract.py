@@ -1,0 +1,85 @@
+"""Guard the acceptance version transition without executing Linux workloads."""
+from __future__ import annotations
+
+import ast
+import hashlib
+import json
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def verifier_tree(version: str) -> ast.Module:
+    return ast.parse((ROOT / f"m0/verifier/{version}/verify.py").read_text())
+
+
+def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
+    return {
+        call.args[0].value: call
+        for call in ast.walk(tree)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name) and call.func.id == "run_command"
+        and call.args and isinstance(call.args[0], ast.Constant)
+    }
+
+
+class VerifierTransitionTests(unittest.TestCase):
+    def test_v59_keeps_every_v58_command_group_and_timeout(self):
+        previous = command_groups(verifier_tree("v58"))
+        current = command_groups(verifier_tree("v59"))
+        self.assertTrue(previous)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v59_explicitly_executes_each_new_boundary_regression(self):
+        groups = command_groups(verifier_tree("v59"))
+        expected = {
+            "dataset_content_binding_and_evaluation_context_regressions": {
+                "tests/test_evaluation_context.py"},
+            "process_identity_writer_reader_and_real_recovery_regressions": {
+                "tests/test_process_identity_writer.py"},
+            "upfront_config_validation_and_isolated_replay_regressions": {
+                "tests/test_loop_config_validation.py", "tests/test_replay_isolation.py"},
+            "decision_receipt_identity_context_and_audit_regressions": {
+                "tests/test_receipt_identity.py"},
+        }
+        for name, files in expected.items():
+            with self.subTest(group=name):
+                strings = {node.value for node in ast.walk(groups[name])
+                           if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+                self.assertTrue(files <= strings)
+                command = groups[name].args[1]
+                self.assertIsInstance(command, ast.List)
+                arguments = [node.value for node in command.elts
+                             if isinstance(node, ast.Constant)]
+                self.assertEqual(arguments[:2], ["-m", "pytest"])
+                self.assertNotIn("-m", arguments[2:])
+                self.assertNotIn("--markexpr", arguments)
+
+    def test_archived_v58_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v58/LAST_RUN.json":
+                "e11b840bd3ddae8af47e54c90cf14e9673d189800189100c03930edfc6a57794",
+            "m0/verifier/runs/v58.jsonl":
+                "8a19b059ca9a8ae5d86b943eaf8bf9ebd3529ce05b8268558d725d74d00ec552",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / "m0/verifier/v58/LAST_RUN.json").read_text())
+        entries = [json.loads(line) for line in
+                   (ROOT / "m0/verifier/runs/v58.jsonl").read_text().splitlines()]
+        self.assertIs(certificate["passed"], True)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["command"], "python3 verifier/v58/verify.py")
+        self.assertEqual(entries[0]["exit_code"], 0)
+        self.assertEqual(entries[0]["checks"], certificate["checks"])
+        self.assertTrue(all(item["passed"] is True for item in certificate["checks"]))
+
+
+if __name__ == "__main__":
+    unittest.main()

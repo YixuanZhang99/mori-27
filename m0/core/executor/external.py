@@ -11,11 +11,12 @@ import hashlib
 import json
 import math
 import os
+import re
 import time
 import uuid
 from pathlib import Path
 
-from core.eval.types import EvalResult, ItemResult, ReliabilityMeta
+from core.eval.types import EvalResult, ItemResult, ReliabilityMeta, validate_eval_result
 from core.executor.process import ProcessJournal
 from core.executor.resources import ResourcePolicy
 from core.executor.sandbox import BubblewrapSandbox
@@ -65,11 +66,16 @@ class ExternalCommandEvaluator:
     def __init__(self, command: list[str], workdir: str | Path,
                  evidence_store: AppendOnlyStore, *, time_limit: int | None = 120,
                  sandbox=_DEFAULT_SANDBOX, data_dir: str | Path | None = None,
-                 protected_paths=(), resource_policy: ResourcePolicy | None = None):
+                 protected_paths=(), resource_policy: ResourcePolicy | None = None,
+                 evaluation_context: str = ""):
         if not command or not all(isinstance(part, str) and part for part in command):
             raise ValueError("external evaluator command must be a non-empty argv list")
         if isinstance(time_limit, bool) or not isinstance(time_limit, int) or time_limit <= 0:
             raise ValueError("external evaluator time_limit must be a positive integer")
+        if not isinstance(evaluation_context, str) or (evaluation_context and
+                not re.fullmatch(r"sha256:[0-9a-f]{64}", evaluation_context)):
+            raise ValueError("evaluation_context must be empty or a canonical SHA-256 digest")
+        self._result_context = evaluation_context
         self.command = list(command)
         self.workdir = Path(workdir).resolve()
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -97,12 +103,18 @@ class ExternalCommandEvaluator:
         self.last_execution_id: str | None = None
         self._evaluation_context: dict = {}
 
+    @property
+    def evaluation_context(self) -> str:
+        """Pinned content identity; empty explicitly retains the legacy protocol."""
+        return self._result_context
+
     def fork(self, workdir: str | Path, evidence_store: AppendOnlyStore):
         """Reuse command assets while binding replay to independent evidence."""
         clone = type(self)(self.command, self.workdir, evidence_store,
                            time_limit=self.time_limit, sandbox=self.sandbox,
                            data_dir=self.data_dir, protected_paths=self.protected_paths,
-                           resource_policy=self.resource_policy)
+                           resource_policy=self.resource_policy,
+                           evaluation_context=self.evaluation_context)
         namespace = hashlib.sha256(str(Path(workdir).resolve()).encode()).hexdigest()[:16]
         clone.evaluation_root = self.workdir / "evaluations" / namespace
         return clone
@@ -128,10 +140,12 @@ class ExternalCommandEvaluator:
         return {"total_tokens": total}
 
     @staticmethod
-    def _result(payload, candidate_id: str, head_sha: str) -> EvalResult:
+    def _result(payload, candidate_id: str, head_sha: str,
+                evaluation_context: str | None = None) -> EvalResult:
         required = {"candidate_id", "head_sha", "items", "combined_score", "public",
                     "private", "text_feedback", "reliability", "evaluator_version"}
-        if not isinstance(payload, dict) or set(payload) != required:
+        if not isinstance(payload, dict) or not required <= set(payload) \
+                or not set(payload) <= required | {"evaluation_context"}:
             raise ValueError("external result must contain the complete v1 EvalResult schema")
         if payload["candidate_id"] != candidate_id or payload["head_sha"] != head_sha:
             raise ValueError("external result candidate/head binding mismatch")
@@ -172,14 +186,17 @@ class ExternalCommandEvaluator:
         noise_floor = reliability["noise_floor"]
         if noise_floor is not None and not _finite_number(noise_floor):
             raise ValueError("noise_floor must be null or finite")
-        return EvalResult(
+        return validate_eval_result(EvalResult(
             candidate_id=candidate_id, head_sha=head_sha, items=items,
             combined_score=float(payload["combined_score"]),
             public=dict(payload["public"]), private=dict(payload["private"]),
             text_feedback=payload["text_feedback"],
             reliability=ReliabilityMeta(trials, tuple(ci95) if ci95 is not None else None,
                                         noise_floor),
-            evaluator_version=payload["evaluator_version"])
+            evaluator_version=payload["evaluator_version"],
+            evaluation_context=payload.get("evaluation_context", "")),
+            candidate_id=candidate_id, head_sha=head_sha,
+            evaluation_context=evaluation_context)
 
     def _persist(self, record: dict, status: str, detail: str,
                  result: dict | None = None, usage: dict | None = None) -> None:
@@ -221,7 +238,8 @@ class ExternalCommandEvaluator:
                     or envelope["schema_version"] != 1:
                 raise ValueError("external response must be a version-1 result envelope")
             result_payload = envelope["result"]
-            result = self._result(result_payload, record["candidate_id"], record["head_sha"])
+            result = self._result(result_payload, record["candidate_id"], record["head_sha"],
+                                  evaluation_context=self.evaluation_context)
             usage = self._usage(envelope["token_usage"])
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
             detail = f"invalid external evaluator response: {error}"
@@ -241,7 +259,8 @@ class ExternalCommandEvaluator:
         payload = rows[0]
         status = payload["status"]
         if status == "ok":
-            result = self._result(payload["result"], record["candidate_id"], record["head_sha"])
+            result = self._result(payload["result"], record["candidate_id"], record["head_sha"],
+                                  evaluation_context=self.evaluation_context)
             self._usage(payload["token_usage"])
             error = None
         else:
@@ -297,6 +316,8 @@ class ExternalCommandEvaluator:
         request_path, response_path = directory / "request.json", directory / "response.json"
         request = {"schema_version": 1, "candidate_id": candidate_id,
                    "head_sha": head_sha, "prompt": prompt}
+        if self.evaluation_context:
+            request["evaluation_context"] = self.evaluation_context
         _atomic_json(request_path, request)
         args = [*self.command, str(request_path), str(response_path)]
         env = dict(os.environ)

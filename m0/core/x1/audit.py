@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 
 from core.budget.types import COST_ACCOUNTS
-from core.eval.gate import stop_action
+from core.eval.gate import stop_action, validate_receipt_evidence
 from core.x1.checkpoint import payload_digest
 
 
@@ -97,12 +97,14 @@ def _receipt_audit(store, accepted_candidate_ids: list[str]) -> dict:
     gated: dict[str, str] = {}
     receipts: dict[str, dict] = {}
     admissions: dict[str, tuple[str, bool]] = {}
+    gate_contexts: list[dict] = []
     errors: list[str] = []
     for record in store.read("gate_evidence"):
         payload = record.get("payload", {})
         if payload.get("transition") != "verdict":
             continue
         candidate_id, receipt_id = payload.get("candidate_id"), payload.get("receipt_id")
+        gate_contexts.append(payload)
         if not candidate_id or not receipt_id or (
                 candidate_id in gated and gated[candidate_id] != receipt_id):
             errors.append(f"invalid or conflicting gate evidence: {candidate_id}")
@@ -115,6 +117,15 @@ def _receipt_audit(store, accepted_candidate_ids: list[str]) -> dict:
             errors.append(f"invalid or conflicting receipt: {receipt_id}")
         else:
             receipts[receipt_id] = payload
+    referenced_receipts = set(gated.values())
+    for receipt_id in receipts:
+        if receipt_id not in referenced_receipts:
+            errors.append(f"receipt without gate evidence: {receipt_id}")
+    for evidence in gate_contexts:
+        try:
+            validate_receipt_evidence(receipts.get(evidence.get("receipt_id")), evidence)
+        except (KeyError, TypeError, ValueError, OverflowError) as error:
+            errors.append(f"unverifiable receipt decision context: {error}")
     for record in store.read("admission_receipt"):
         payload = record.get("payload", {})
         candidate_id, receipt_id = payload.get("candidate_id"), payload.get("receipt_id")

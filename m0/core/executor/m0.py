@@ -71,12 +71,14 @@ def _restore_m0_result(data: dict, **bindings) -> M0EvalResult:
         public=data.get("public", {}), private=data.get("private", {}),
         text_feedback=data.get("text_feedback", ""),
         reliability=ReliabilityMeta(**reliability),
-        evaluator_version=data["evaluator_version"]), **bindings)
+        evaluator_version=data["evaluator_version"],
+        evaluation_context=data.get("evaluation_context", "")), **bindings)
 
 
 def inprocess_evaluation_operation_state(store, cohort_id: str,
                                          contexts: dict[str, dict],
-                                         failed_ids=(), *, evaluator_version=None) -> dict:
+                                         failed_ids=(), *, evaluator_version=None,
+                                         evaluation_context=None) -> dict:
     """Validate actual batch evaluation operations separately from prepared proposals."""
     failed_ids = set(failed_ids)
     operations = [row["payload"] for row in store.read("m0_batch_evaluation_started")
@@ -118,7 +120,8 @@ def inprocess_evaluation_operation_state(store, cohort_id: str,
             try:
                 result = _restore_m0_result(
                     outcome["result"], candidate_id=candidate_id,
-                    head_sha=context["head_sha"], evaluator_version=evaluator_version)
+                    head_sha=context["head_sha"], evaluator_version=evaluator_version,
+                    evaluation_context=evaluation_context)
             except (KeyError, TypeError, ValueError) as error:
                 if "binding mismatch" in str(error):
                     raise RuntimeError(
@@ -464,7 +467,8 @@ class M0PromptExecutor:
                   for candidate_id in ids if candidate_id not in contexts}
         state = inprocess_evaluation_operation_state(
             self.store, execution_ref, contexts, failed_ids=failed,
-            evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+            evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+            evaluation_context=getattr(self.evaluator, "evaluation_context", None))
         missing = state["missing"]
         if missing and prior:
             raise RuntimeError("partially started cohort cannot have batch settlement")
@@ -475,7 +479,8 @@ class M0PromptExecutor:
                 spec, candidates[candidate_id], None, EvalRequest("dev")))
         state = inprocess_evaluation_operation_state(
             self.store, execution_ref, contexts, failed_ids=failed,
-            evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+            evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+            evaluation_context=getattr(self.evaluator, "evaluation_context", None))
         operations, outcomes = state["operations"], state["outcomes"]
         if set(operations) | set(failed) != set(ids) \
                 or len(operations) + len(failed) != len(ids) \
@@ -530,7 +535,8 @@ class M0PromptExecutor:
                 result = _restore_m0_result(
                     outcome["result"], candidate_id=candidate_id,
                     head_sha=context["head_sha"],
-                    evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+                    evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+                    evaluation_context=getattr(self.evaluator, "evaluation_context", None))
                 error = None
             else:
                 result = None
@@ -649,7 +655,8 @@ class M0PromptExecutor:
             if result is not None:
                 validate_eval_result(
                     result, candidate_id=candidate_id, head_sha=context["head_sha"],
-                    evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+                    evaluator_version=getattr(self.evaluator, "evaluator_version", None),
+                    evaluation_context=getattr(self.evaluator, "evaluation_context", None))
             token_cost = context["proposer_token_cost"] + \
                 validate_usage(adopted["token_usage"])["total_tokens"]
             if candidate_id in prior:
@@ -746,10 +753,13 @@ class M0PromptExecutor:
                         evaluator_called = True
                         expected_evaluator_version = getattr(
                             self.evaluator, "evaluator_version", None)
+                        expected_evaluation_context = getattr(
+                            self.evaluator, "evaluation_context", None)
                         result = validate_eval_result(
                             self.evaluator(candidate.id, head_sha, proposal.patch_text),
                             candidate_id=candidate.id, head_sha=head_sha,
-                            evaluator_version=expected_evaluator_version)
+                            evaluator_version=expected_evaluator_version,
+                            evaluation_context=expected_evaluation_context)
                     finally:
                         if external:
                             self.evaluator.clear_evaluation_context()

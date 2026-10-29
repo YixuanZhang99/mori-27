@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Literal, Optional
 
 
@@ -29,16 +30,20 @@ class EvalResult:
     text_feedback: str = ""              # S-4: required for reflective improve
     reliability: ReliabilityMeta = field(default_factory=ReliabilityMeta)
     evaluator_version: str = "det-v1"
+    evaluation_context: str = ""        # empty only for legacy opaque evaluators
 
 
 def validate_eval_result(result: EvalResult, *, candidate_id: str | None = None,
                          head_sha: str | None = None,
-                         evaluator_version: str | None = None) -> EvalResult:
+                         evaluator_version: str | None = None,
+                         evaluation_context: str | None = None) -> EvalResult:
     """Validate native per-item evidence at each consumption boundary.
 
     EvalResult and ItemResult remain mutable transport types, so construction-time
     checks alone cannot protect restored or subsequently modified outcomes.
     Optional expected identities bind a result to the operation that produced it.
+    Empty evaluation_context is a legacy version/item-ID contract; it does not
+    certify dataset content or undeclared configuration of an opaque evaluator.
     This function deliberately does not interpret aggregate metrics or costs.
     """
     if not isinstance(result, EvalResult):
@@ -51,6 +56,11 @@ def validate_eval_result(result: EvalResult, *, candidate_id: str | None = None,
             raise ValueError(f"evaluation {field_name} must be a non-empty string")
         if expected is not None and value != expected:
             raise ValueError(f"evaluation {field_name} binding mismatch")
+    context = result.evaluation_context
+    if not isinstance(context, str) or (context and not re.fullmatch(r"sha256:[0-9a-f]{64}", context)):
+        raise ValueError("evaluation_context must be empty or a canonical SHA-256 digest")
+    if evaluation_context is not None and context != evaluation_context:
+        raise ValueError("evaluation evaluation_context binding mismatch")
     if not isinstance(result.items, list) or not result.items:
         raise ValueError("EvalResult.items must be a non-empty list (gate-not-rank)")
     item_ids: set[str] = set()
@@ -78,6 +88,8 @@ def validate_eval_comparison(result: EvalResult, incumbent: EvalResult) -> None:
     validate_eval_result(incumbent)
     if result.evaluator_version != incumbent.evaluator_version:
         raise ValueError("evaluation comparison requires the same evaluator version")
+    if result.evaluation_context != incumbent.evaluation_context:
+        raise ValueError("evaluation comparison requires the same evaluation context")
     if {item.item_id for item in result.items} != {item.item_id for item in incumbent.items}:
         raise ValueError("evaluation comparison requires identical item ids")
 
@@ -104,3 +116,4 @@ class GateEvidenceRecord:
     transition: str                     # evaluate | verdict | invalidate:* | rollback
     rule_id: str
     signals_snapshot: dict = field(default_factory=dict)
+    decision_context: dict = field(default_factory=dict)
