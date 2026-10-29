@@ -30,7 +30,8 @@ def main() -> None:
     llm = OpenAICompatibleLLM(args.model, args.base_url, temperature=args.temperature,
                               timeout=args.timeout)
     content = llm(request["prompt"])
-    usage = {"total_tokens": int((llm.last_usage or {}).get("total_tokens", 0))}
+    from core.llm import take_usage
+    usage = {"total_tokens": take_usage(llm)}
     envelope = {"schema_version": 1, "content": content, "token_usage": usage}
     temporary = response_path.with_suffix(response_path.suffix + ".tmp")
     temporary.write_text(json.dumps(envelope, ensure_ascii=False), encoding="utf-8")

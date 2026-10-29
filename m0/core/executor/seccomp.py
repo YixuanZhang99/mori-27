@@ -2,7 +2,8 @@
 
 This is a small, explicit dangerous-syscall denylist, not an allowlist, cgroup,
 complete resource policy, or boundary against a hostile kernel.  The canonical
-classic-BPF program rejects listed syscalls with EPERM and kills on arch mismatch.
+classic-BPF program rejects listed syscalls and non-native x32 encodings with
+EPERM and kills on audit-architecture mismatch.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 
 SECCOMP_POLICY_NAME = "dangerous-syscall-denylist"
-SECCOMP_POLICY_VERSION = 1
+SECCOMP_POLICY_VERSION = 2
 SECCOMP_FD_PLACEHOLDER = "__AR_SECCOMP_FD__"
 SECCOMP_BWRAP_MEMFD = "bwrap_memfd"
 SECCOMP_DIRECT_PRCTL = "direct_prctl"
@@ -57,8 +58,15 @@ _X86_64_SYSCALLS = {
 DENIED_SYSCALLS = tuple(sorted(_X86_64_SYSCALLS))
 
 _AUDIT_ARCH_X86_64 = 0xC000003E
+# x32 shares AUDIT_ARCH_X86_64, so the audit-architecture check alone cannot
+# distinguish its syscall table. Also reject the untagged x32-only range that
+# Linux kernels before 5.4 incorrectly accepted. See seccomp(2), Filters.
+_X32_SYSCALL_BIT = 0x40000000
+_X32_LEGACY_SYSCALL_RANGE = (512, 547)
 _BPF_LD_W_ABS = 0x20
 _BPF_JMP_JEQ_K = 0x15
+_BPF_JMP_JGE_K = 0x35
+_BPF_JMP_JSET_K = 0x45
 _BPF_RET_K = 0x06
 _SECCOMP_RET_KILL_PROCESS = 0x80000000
 _SECCOMP_RET_ERRNO_EPERM = 0x00050000 | 1
@@ -75,6 +83,15 @@ def _filter_bytes() -> bytes:
         _instruction(_BPF_JMP_JEQ_K, 1, 0, _AUDIT_ARCH_X86_64),
         _instruction(_BPF_RET_K, 0, 0, _SECCOMP_RET_KILL_PROCESS),
         _instruction(_BPF_LD_W_ABS, 0, 0, 0),  # seccomp_data.nr
+        # Reject every x32-tagged number, including nominally harmless calls;
+        # this policy supports only the native x86_64 ABI.
+        _instruction(_BPF_JMP_JSET_K, 0, 1, _X32_SYSCALL_BIT),
+        _instruction(_BPF_RET_K, 0, 0, _SECCOMP_RET_ERRNO_EPERM),
+        # If nr < 512 or nr >= 548, continue to the native denylist. Otherwise
+        # reject the legacy untagged x32 range before any syscall can execute.
+        _instruction(_BPF_JMP_JGE_K, 0, 2, _X32_LEGACY_SYSCALL_RANGE[0]),
+        _instruction(_BPF_JMP_JGE_K, 1, 0, _X32_LEGACY_SYSCALL_RANGE[1] + 1),
+        _instruction(_BPF_RET_K, 0, 0, _SECCOMP_RET_ERRNO_EPERM),
     ]
     for name in DENIED_SYSCALLS:
         instructions.extend([
@@ -98,6 +115,8 @@ def build_seccomp_policy(architecture: str | None = None) -> dict:
         "policy_version": SECCOMP_POLICY_VERSION,
         "architecture": "x86_64",
         "action": "errno:EPERM",
+        "denied_syscall_bits": _X32_SYSCALL_BIT,
+        "denied_syscall_ranges": [list(_X32_LEGACY_SYSCALL_RANGE)],
         "denied_syscalls": list(DENIED_SYSCALLS),
         "filter_sha256": hashlib.sha256(encoded).hexdigest(),
         "filter_base64": base64.b64encode(encoded).decode("ascii"),
@@ -108,7 +127,9 @@ def validate_seccomp_policy(payload: dict) -> bytes:
     """Fail closed unless payload exactly denotes the canonical host policy.
 
     Rebuilding rather than trusting a digest also rejects a tampered filter whose
-    attacker-controlled SHA256 field was recomputed.
+    attacker-controlled SHA256 field was recomputed. Older policy versions are
+    not silently upgraded: a durable v1 spec must not launch under its weaker
+    ABI rules or be relabeled as having executed with v2.
     """
     if not isinstance(payload, dict):
         raise ValueError("seccomp policy must be an object")
@@ -182,7 +203,7 @@ def materialize_seccomp(args: list[str], payload: dict | None,
         raise ValueError("seccomp policy requires exactly one bwrap --seccomp fd marker")
     if not hasattr(os, "memfd_create"):
         raise RuntimeError("seccomp policy requires os.memfd_create")
-    fd = os.memfd_create("autoresearch-seccomp-v1")
+    fd = os.memfd_create(f"autoresearch-seccomp-v{SECCOMP_POLICY_VERSION}")
     try:
         view = memoryview(encoded)
         while view:

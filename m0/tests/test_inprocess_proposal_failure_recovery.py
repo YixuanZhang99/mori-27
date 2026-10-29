@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.loop import Framework
+from core.budget.ledger import BudgetError
 from core.x1.checkpoint import certified_snapshot_ref
 from core.x1.store import AppendOnlyStore
 from examples.toy_gepa import MockLLM
@@ -42,7 +43,9 @@ class FailOnceLLM:
         self.last_usage = {"total_tokens": 0}
         if call_number == 2:
             raise RuntimeError("injected in-process proposal failure")
-        return self.base(prompt)
+        content = self.base(prompt)
+        self.last_usage = dict(self.base.last_usage)
+        return content
 
 
 def reference_run(tmp_path, name, control=False):
@@ -337,7 +340,7 @@ def test_inprocess_wrong_ledger_cost_is_refused(tmp_path):
 
     rewrite_one(run_dir, predicate, transform)
     resumed = recovered_framework(run_dir, *args)
-    with pytest.raises((RuntimeError, ValueError), match="ledger|settlement|cost"):
+    with pytest.raises((BudgetError, RuntimeError, ValueError), match="ledger|settlement|cost"):
         resumed.evolve(TASK)
     assert not list(store.read("m0_batch_recovery_adopted"))
 

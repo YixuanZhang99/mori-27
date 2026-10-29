@@ -144,6 +144,7 @@ class LevelLLM:
     """Stateless draft/improve load whose prompt encodes a deterministic level."""
 
     def __call__(self, prompt):
+        self.last_usage = {"total_tokens": 1000}
         if prompt.startswith("[draft"):
             return "level=1"
         match = re.search(r"CURRENT PROMPT:\nlevel=(\d+)", prompt)
@@ -155,6 +156,7 @@ class LevelEvaluator:
     """Prompt-only scoring supports independent resume and fresh replay."""
 
     def __call__(self, candidate_id, head_sha, prompt):
+        self.last_usage = {"total_tokens": 0}
         match = re.fullmatch(r"level=(\d+)", prompt)
         assert match, prompt
         solved = min(12, int(match.group(1)))

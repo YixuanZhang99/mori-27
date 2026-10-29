@@ -45,7 +45,9 @@ class CountingLLM:
     def __call__(self, prompt):
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write("call\n")
-        return self.base(prompt)
+        response = self.base(prompt)
+        self.last_usage = dict(self.base.last_usage)
+        return response
 
 
 class CountingEvaluator:
@@ -54,6 +56,7 @@ class CountingEvaluator:
         self.fail_id = fail_id
 
     def __call__(self, candidate_id, head_sha, prompt):
+        self.last_usage = {"total_tokens": 0}
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(candidate_id + "\n")
         if candidate_id == self.fail_id:
@@ -104,8 +107,9 @@ def owner_main(run_dir, crash_point):
             mutation_count += 1
 
         if crash_point == "active":
-            crash = kind == "m0_batch_evaluation_started" \
-                and data.get("candidate_id") == first
+            # Worker scheduling does not guarantee the first candidate runs
+            # first. Kill at the first actual evaluation start, before any call.
+            crash = kind == "m0_batch_evaluation_started"
         elif crash_point == "zero":
             crash = kind == "m0_evaluation_started" \
                 and (data.get("proposal") or {}).get("proposal_id") == second

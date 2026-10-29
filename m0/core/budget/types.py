@@ -1,6 +1,7 @@
 """M3 types (M0 kernel subset). See 开发指南 M3 页 §1."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
@@ -10,6 +11,16 @@ COST_ACCOUNTS = ("explore", "exploit", "reeval", "control",
                  "repair", "handoff", "overhead")
 BudgetUnit = Literal["token", "usd", "eval_count", "node", "wallclock", "gpu_hours"]
 BUDGET_UNITS = ("token", "usd", "eval_count", "node", "wallclock", "gpu_hours")
+
+
+def finite_number(value) -> bool:
+    """Accept real ledger numbers without coercing booleans or numeric strings."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -32,8 +43,13 @@ class CurrencyAccount:
     def __post_init__(self):
         if self.unit not in BUDGET_UNITS:
             raise ValueError(f"unknown budget unit: {self.unit}")
-        if self.ceiling <= 0 or self.floor < 0 or self.floor > self.ceiling:
+        if not finite_number(self.ceiling) or not finite_number(self.floor) \
+                or self.ceiling <= 0 or self.floor < 0 or self.floor > self.ceiling:
             raise ValueError("invalid currency account bounds")
+        if self.conversion_to_progress is not None and (
+                not finite_number(self.conversion_to_progress)
+                or self.conversion_to_progress <= 0):
+            raise ValueError("conversion_to_progress must be finite and positive")
 
 
 @dataclass(frozen=True)
@@ -46,8 +62,8 @@ class ExchangeRateTable:
     def __post_init__(self):
         if not self.table_version or not self.standard_coin_anchor:
             raise ValueError("exchange table and standard-coin anchor must be versioned")
-        if any(rate <= 0 for rate in self.rates.values()):
-            raise ValueError("exchange rates must be positive")
+        if any(not finite_number(rate) or rate <= 0 for rate in self.rates.values()):
+            raise ValueError("exchange rates must be finite and positive")
 
     def convert(self, amount: float, from_unit: str, to_unit: str) -> float:
         if from_unit == to_unit:
@@ -73,6 +89,7 @@ class LedgerEntry:
     stamp: Optional[AccountingStamp] = None
     entry_kind: Literal["reserve", "settle", "reserve_released",
                         "exception_appropriation", "reconcile_delta"] = "settle"
+    intent_fingerprint: str = ""
 
 
 @dataclass
@@ -85,3 +102,5 @@ class ReserveRecord:
     amounts: dict[str, float] = field(default_factory=dict)
     settled_amounts: Optional[dict[str, float]] = None
     exchange_table_version: str = ""
+    account: str = ""
+    intent_fingerprint: str = ""

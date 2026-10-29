@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.loop import Framework, LoopConfig
+from core.budget.ledger import BudgetError
 from core.x1.checkpoint import certified_snapshot_ref
 from core.x1.store import AppendOnlyStore
 from examples.toy_gepa import MockLLM
@@ -303,7 +304,7 @@ def test_failed_candidate_wrong_ledger_cost_is_refused(tmp_path):
 
     rewrite_one(run_dir, predicate, transform)
     resumed = recovered_framework(run_dir, *args)
-    with pytest.raises((RuntimeError, ValueError), match="ledger|settlement|cost"):
+    with pytest.raises((BudgetError, RuntimeError, ValueError), match="ledger|settlement|cost"):
         resumed.evolve(TASK)
     assert not list(store.read("m0_batch_recovery_adopted"))
 

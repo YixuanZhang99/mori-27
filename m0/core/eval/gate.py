@@ -4,25 +4,29 @@ Aggregate scores, public feedback and trajectory text are unreachable here (B2/å
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import asdict
 
-from core.eval.types import (EvalResult, GateEvidenceRecord, Receipt, Verdict)
+from core.eval.types import (EvalResult, GateEvidenceRecord, Receipt, Verdict,
+                            validate_eval_comparison, validate_eval_result)
 from core.x1.store import AppendOnlyStore
 
 
 class AdmissionGate:
     def __init__(self, store: AppendOnlyStore, noise_floor: float = 0.0):
+        if isinstance(noise_floor, bool) or not isinstance(noise_floor, (int, float)) \
+                or not math.isfinite(noise_floor) or noise_floor < 0:
+            raise ValueError("noise_floor must be a finite non-negative number")
         self.store = store
         self.noise_floor = noise_floor
 
     @staticmethod
     def flip_counts(result: EvalResult, incumbent: EvalResult) -> tuple[int, int, int]:
         """F = per-item wins, B = losses, N = comparable items. Gate, not rank."""
+        validate_eval_comparison(result, incumbent)
         base = {it.item_id: it.verdict for it in incumbent.items}
         f = b = n = 0
         for it in result.items:
-            if it.item_id not in base:
-                continue
             n += 1
             d = it.verdict - base[it.item_id]
             f += d > 0
@@ -32,8 +36,9 @@ class AdmissionGate:
     def evaluate(self, result: EvalResult, incumbent: EvalResult | None,
                  forced_reject: str | None = None) -> tuple[Receipt, GateEvidenceRecord]:
         """Pure adjudication, also used to validate an interrupted durable verdict."""
-        if not result.items:
-            raise ValueError("EvalResult.items must be non-empty (gate-not-rank)")
+        validate_eval_result(result)
+        if incumbent is not None:
+            validate_eval_result(incumbent)
         if forced_reject is not None:
             verdict, f, b, n = Verdict("REJECT", rationale_ref=forced_reject), 0, 0, 0
             rule = "extension_veto"

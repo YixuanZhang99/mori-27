@@ -18,7 +18,7 @@ from core.executor.process import ProcessJournal
 from core.executor.resources import ResourcePolicy
 from core.executor.seccomp import SECCOMP_DIRECT_PRCTL, build_seccomp_policy
 from core.executor.types import EvalStatus
-from core.llm import take_usage
+from core.llm import reset_usage, take_usage
 from core.x1.store import AppendOnlyStore
 
 
@@ -72,7 +72,7 @@ class ExternalCommandLLM:
         self.processes = ProcessJournal(evidence_store)
         self.root = evidence_store.path.parent / "proposal-calls"
         self.root.mkdir(parents=True, exist_ok=True)
-        self.last_usage = {"total_tokens": 0}
+        self.last_usage = None
         self._operation_context = {}
 
     def fork(self, workdir: str | Path, evidence_store: AppendOnlyStore):
@@ -109,9 +109,10 @@ class ExternalCommandLLM:
     def _return_outcome(self, payload: dict, request_sha: str) -> str:
         if payload.get("request_sha256") != request_sha:
             raise RuntimeError("external proposal outcome differs from its operation request")
-        usage = self._usage(payload.get("token_usage") or {"total_tokens": 0})
-        self.last_usage = usage
+        usage = payload.get("token_usage")
+        self.last_usage = self._usage(usage) if usage is not None else None
         if payload.get("status") == "ok":
+            self.last_usage = self._usage(usage)
             content = payload.get("content")
             if not isinstance(content, str):
                 raise RuntimeError("successful external proposal outcome lacks text")
@@ -132,7 +133,7 @@ class ExternalCommandLLM:
                    "detail": detail[-4000:], "content": content,
                    "request_sha256": _digest(Path(record["request_path"])),
                    "response_sha256": _digest(response_path),
-                   "token_usage": usage or {"total_tokens": 0}}
+                   "token_usage": usage}
         existing = [row["payload"] for row in self.evidence_store.read(
             "external_proposer_outcome")
             if row["payload"].get("execution_id") == record["execution_id"]]
@@ -150,15 +151,24 @@ class ExternalCommandLLM:
         return payload
 
     def _complete(self, record: dict, completed: dict) -> dict:
+        # A failed adapter may still provide an explicit final usage meter. A
+        # missing/malformed meter remains unknown, including after timeouts.
+        usage = None
+        try:
+            envelope = json.loads(Path(record["response_path"]).read_text(encoding="utf-8"))
+            if isinstance(envelope, dict) and envelope.get("schema_version") == 1:
+                usage = self._usage(envelope.get("token_usage"))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+            envelope = None
         if completed["timeout"]:
-            payload = self._persist(record, "timeout", "external proposal exceeded time_limit")
+            payload = self._persist(record, "timeout", "external proposal exceeded time_limit",
+                                    usage=usage)
         elif completed["returncode"] != 0:
             detail = (completed["stderr"] or completed["stdout"]
                       or completed.get("wrapper_error") or "external proposal failed")
-            payload = self._persist(record, "failed_to_run", detail)
+            payload = self._persist(record, "failed_to_run", detail, usage=usage)
         else:
             try:
-                envelope = json.loads(Path(record["response_path"]).read_text(encoding="utf-8"))
                 if not isinstance(envelope, dict) \
                         or set(envelope) != {"schema_version", "content", "token_usage"} \
                         or envelope["schema_version"] != 1 \
@@ -169,18 +179,20 @@ class ExternalCommandLLM:
                                         content=envelope["content"], usage=usage)
             except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
                 payload = self._persist(record, "invalid",
-                                        f"invalid external proposal response: {error}")
+                                        f"invalid external proposal response: {error}", usage=usage)
         self._return_outcome(payload, _digest(Path(record["request_path"])))
         return payload
 
     def __call__(self, prompt: str) -> str:
-        self.last_usage = {"total_tokens": 0}
+        reset_usage(self)
         if not self._operation_context:
             if self.fallback_llm is None:
                 raise RuntimeError("external proposal requires an operation context")
-            content = self.fallback_llm(prompt)
-            self.last_usage = {"total_tokens": take_usage(self.fallback_llm)}
-            return content
+            reset_usage(self.fallback_llm)
+            try:
+                return self.fallback_llm(prompt)
+            finally:
+                self.last_usage = {"total_tokens": take_usage(self.fallback_llm)}
         context = self._operation_context
         operation = hashlib.sha256(
             f"{context['cohort_id']}\0{context['candidate_id']}".encode()).hexdigest()

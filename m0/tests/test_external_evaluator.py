@@ -32,9 +32,13 @@ if mode == "delayed":
 if mode == "delayed_non_genesis" and request["candidate_id"] != sys.argv[2]:
     time.sleep(2)
 if mode == "fail_non_genesis" and request["candidate_id"] != sys.argv[2]:
+    response_path.write_text(json.dumps({"schema_version": 1,
+        "token_usage": {"total_tokens": 0}}))
     print("injected external failure", file=sys.stderr)
     raise SystemExit(3)
 if mode == "fail_control" and request["candidate_id"] == sys.argv[2]:
+    response_path.write_text(json.dumps({"schema_version": 1,
+        "token_usage": {"total_tokens": 0}}))
     print("injected external control failure", file=sys.stderr)
     raise SystemExit(3)
 public = {}
@@ -258,4 +262,4 @@ def test_batch_failure_and_successful_external_replay_use_independent_evidence(t
     assert fw.inspect()["replay_certified"] is True
     assert fw.inspect()["formal_governance_pass"] is True
     assert replayed["best_score"] == first["best_score"]
-    assert first["ledger"]["spent"]["control"] == 14
+    assert first["ledger"]["spent"]["control"] == 2 * (1000 + 7)

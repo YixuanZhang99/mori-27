@@ -649,9 +649,11 @@ class BatchScheduler:
                                 for request, intent in zip(requests, intents)]
             correlated_specs = [replace(spec, execution_ref=cohort_id) for spec in specs]
             prepare = getattr(self.pool.backend, "prepare", None)
+            # Preparing an M0 batch may itself call the paid proposer. From this
+            # boundary onward, absence of an outcome cannot justify a refund.
+            submitted = True
             if prepare is not None:
                 prepare(correlated_specs, candidates, bounded_requests, intents)
-            submitted = True
             results = await self.pool.run_many(correlated_specs, candidates, workspace,
                                                bounded_requests)
             with self._lock:
@@ -686,11 +688,13 @@ class BatchScheduler:
                 "admissions": self.last_admissions})
             return results
         finally:
-            # Only unexecuted/unreturned reservations can remain here. Every returned
-            # evidence was settled above; real costs are never erased with release.
-            for intent in intents:
-                if intent.intent_id in self.ledger.reserves:
-                    self.ledger.release_for(intent)
+            # Once preparation/execution starts, an exception or malformed meter cannot
+            # prove zero cost. Keep every remaining reserve for reconciliation;
+            # only work that never reached either boundary is safe to release here.
+            if not submitted:
+                for intent in reserved:
+                    if intent.intent_id in self.ledger.reserves:
+                        self.ledger.release_for(intent)
             if not submitted and not rejected:
                 self.store.append("batch_cycle_aborted", {"cohort_id": cohort_id})
             with self._lock:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run v57 in a disposable copy with fresh evidence and bounded execution.
+"""Run v58 in a disposable copy with fresh evidence and bounded execution.
 
 Cleanup covers the verifier process group. Workers that deliberately create a
 new session are outside that scope; hosted CI's disposable VM is the final
@@ -24,14 +24,26 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-HISTORY = ("verifier/v57/LAST_RUN.json", "verifier/runs/v57.jsonl")
-VERIFIER_COMMAND = "python3 verifier/v57/verify.py"
+VERIFIER_VERSION = "v58"
+HISTORY = (f"verifier/{VERIFIER_VERSION}/LAST_RUN.json",
+           f"verifier/runs/{VERIFIER_VERSION}.jsonl")
+VERIFIER_COMMAND = f"python3 verifier/{VERIFIER_VERSION}/verify.py"
+CONTROL_FILES = (".github/workflows/ci.yml", "Makefile", "scripts/run_acceptance.py")
 MAX_LOG_BYTES = 32 * 1024 * 1024
 READ_CHUNK_BYTES = 64 * 1024
 
 
-def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def digest(path: Path) -> str | None:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+
+
+def history_snapshot() -> dict[str, str | None]:
+    """Bind existing history and the absence of a new version's first records."""
+    source = ROOT / "m0"
+    names = set(HISTORY)
+    for pattern in ("verifier/v*/LAST_RUN.json", "verifier/runs/*.jsonl"):
+        names.update(str(path.relative_to(source)) for path in source.glob(pattern))
+    return {name: digest(source / name) for name in sorted(names)}
 
 
 def _stop_process_group(process: subprocess.Popen[bytes]) -> None:
@@ -118,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     output = Path(tempfile.mkdtemp(prefix=timestamp + "-", dir=output_base))
     errors: list[str] = []
-    before: dict[str, str] = {}
+    before: dict[str, str | None] = {}
     copy: Path | None = None
     scratch = None
     process = None
@@ -131,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     if threading.current_thread() is threading.main_thread():
         original_sigterm = signal.signal(signal.SIGTERM, _signal_interrupt)
     try:
-        before = {name: digest(ROOT / "m0" / name) for name in HISTORY}
+        before = history_snapshot()
         environment = {key: value for key, value in os.environ.items()
                        if "API_KEY" not in key.upper() and not key.upper().endswith("_TOKEN")}
         environment.update(PYTHONDONTWRITEBYTECODE="1",
@@ -140,12 +152,21 @@ def main(argv: list[str] | None = None) -> int:
         copy = Path(scratch.name) / "m0"
         shutil.copytree(ROOT / "m0", copy, ignore=shutil.ignore_patterns(
             ".venv", "__pycache__", ".pytest_cache", "*.egg-info", "build", "dist"))
+        # v58 inspects the active repository workflow rather than m0's archived
+        # nested workflow. Keep that source context beside the isolated copy.
+        for name in CONTROL_FILES:
+            source = ROOT / name
+            if source.is_file():
+                destination = copy.parent / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
         # Historical success is never an output from this invocation.
-        (copy / HISTORY[0]).unlink()
-        previous_journal = (copy / HISTORY[1]).read_bytes()
+        (copy / HISTORY[0]).unlink(missing_ok=True)
+        previous_journal = ((copy / HISTORY[1]).read_bytes()
+                            if (copy / HISTORY[1]).exists() else b"")
         environment["PYTHONPATH"] = str(copy)
         with (output / "console.log").open("wb") as log:
-            process = subprocess.Popen([sys.executable, "verifier/v57/verify.py"],
+            process = subprocess.Popen([sys.executable, f"verifier/{VERIFIER_VERSION}/verify.py"],
                 cwd=copy, env=environment, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, start_new_session=True)
             returncode = _stream_process(process, log, args.timeout)
@@ -188,8 +209,7 @@ def main(argv: list[str] | None = None) -> int:
 
     unchanged = False
     try:
-        unchanged = len(before) == len(HISTORY) and all(
-            digest(ROOT / "m0" / name) == value for name, value in before.items())
+        unchanged = len(before) >= len(HISTORY) and before == history_snapshot()
         if not unchanged:
             errors.append("Source history could not be verified unchanged")
     except OSError as exc:
@@ -200,11 +220,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         certificate = json.loads((output / "LAST_RUN.json").read_text(encoding="utf-8"))
         certificate_passed = (isinstance(certificate, dict)
-                              and certificate.get("version") == "v57"
+                              and certificate.get("version") == VERIFIER_VERSION
                               and certificate.get("passed") is True
                               and _passing_checks(certificate.get("checks")))
         if not certificate_passed:
-            errors.append("Fresh v57 certificate does not contain passing checks")
+            errors.append(f"Fresh {VERIFIER_VERSION} certificate does not contain passing checks")
         elif isinstance(certificate, dict):
             certificate_checks = certificate["checks"]
     except (OSError, ValueError) as exc:
@@ -231,7 +251,8 @@ def main(argv: list[str] | None = None) -> int:
         errors.append(f"Verifier did not exit successfully: {returncode}")
     success = (returncode == 0 and certificate_passed and journal_passed
                and unchanged and not errors)
-    summary = {"run_id": output.name, "verifier_exit_code": returncode,
+    summary = {"run_id": output.name, "verifier_version": VERIFIER_VERSION,
+               "verifier_exit_code": returncode,
                "certificate_passed": certificate_passed,
                "new_journal_passed": journal_passed,
                "source_history_unchanged": unchanged,

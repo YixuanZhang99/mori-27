@@ -14,7 +14,7 @@ from core.budget.probe import M3HealthProbe
 from core.budget.types import COST_ACCOUNTS, AccountingStamp
 from core.eval.decision import AdmissionDecision
 from core.eval.gate import AdmissionGate, stop_action
-from core.eval.types import EvalResult, ItemResult, ReliabilityMeta
+from core.eval.types import EvalResult, ItemResult, ReliabilityMeta, validate_eval_result
 from core.executor.external import ExternalCommandEvaluator, ExternalEvaluatorError
 from core.executor.m0 import (M0PromptExecutor, inprocess_evaluation_operation_state,
                               proposal_operation_state)
@@ -24,7 +24,7 @@ from core.executor.types import (Candidate, EvalRequest, EvalResult as ExecutorE
                                  EvalStatus, EvidenceRecord, ExecutorSpec)
 from core.extensions import ExtensionRegistry
 from core.frontier import ResearchFrontier
-from core.llm import take_usage
+from core.llm import UsageError, reset_usage, take_usage, validate_usage
 from core.memory import ScopeContext, ScopedMemory
 from core.map_elites import MapElitesArchive
 from core.operator.ops import draft, evolve_block_improve, reflective_improve
@@ -106,18 +106,18 @@ def _result_data(result: EvalResult) -> dict:
     return asdict(result)
 
 
-def _restore_result(data: dict) -> EvalResult:
+def _restore_result(data: dict, **bindings) -> EvalResult:
     reliability = dict(data.get("reliability") or {})
     if reliability.get("ci95") is not None:
         reliability["ci95"] = tuple(reliability["ci95"])
-    return EvalResult(
+    return validate_eval_result(EvalResult(
         candidate_id=data["candidate_id"], head_sha=data["head_sha"],
         items=[ItemResult(**item) for item in data["items"]],
         combined_score=data.get("combined_score", 0.0),
-        public=dict(data.get("public") or {}), private=dict(data.get("private") or {}),
+        public=data.get("public", {}), private=data.get("private", {}),
         text_feedback=data.get("text_feedback", ""),
         reliability=ReliabilityMeta(**reliability),
-        evaluator_version=data.get("evaluator_version", "det-v1"))
+        evaluator_version=data["evaluator_version"]), **bindings)
 
 
 def _evidence_from_result(candidate_id: str, result: EvalResult) -> EvidenceRecord:
@@ -140,7 +140,8 @@ class Framework:
     def __init__(self, llm, evaluator, config: LoopConfig, workdir: str,
                  extensions: list | None = None, profile_name: str = "m0_default",
                  archive: IslandArchive | MapElitesArchive | None = None,
-                 improve_impl: str = "llm_reflective"):
+                 improve_impl: str = "llm_reflective",
+                 accounting_stamp: AccountingStamp | None = None):
         self.llm = llm
         self.evaluator = evaluator  # callable(candidate_id, head_sha, prompt) -> EvalResult
         self.cfg = config
@@ -152,14 +153,40 @@ class Framework:
         for extension in extensions or []:
             self.registry.register(extension)
         self.store = AppendOnlyStore(f"{workdir}/x1.jsonl")
-        self.stamp = AccountingStamp(supplier="mock", model_version="mock-v1",
-                                     tokenizer_version="t1",
-                                     price_table_version="p1", date="2026-10-26")
+        def metadata(name):
+            value = getattr(llm, name, None)
+            return value if isinstance(value, str) and value.strip() else "unavailable"
+
+        self.stamp = accounting_stamp or AccountingStamp(
+            supplier=metadata("supplier"), model_version=metadata("model"),
+            tokenizer_version="unavailable", price_table_version="unavailable",
+            date="unavailable")
+        if not isinstance(self.stamp, AccountingStamp) or any(
+                not isinstance(value, str) or not value.strip()
+                for value in asdict(self.stamp).values()):
+            raise ValueError("accounting_stamp requires non-empty string metadata")
+        if config.resume_from_checkpoint:
+            starts = list(self.store.read("run_start"))
+            if starts and starts[0]["payload"].get("accounting_stamp") is not None:
+                persisted = AccountingStamp(**starts[0]["payload"]["accounting_stamp"])
+                if any(not isinstance(value, str) or not value.strip()
+                       for value in asdict(persisted).values()):
+                    raise ValueError("original accounting stamp is invalid")
+                if accounting_stamp is not None and accounting_stamp != persisted:
+                    raise ValueError("accounting_stamp differs from the original run")
+                if accounting_stamp is None and any(
+                        metadata(name) != "unavailable"
+                        and getattr(persisted, field) != "unavailable"
+                        and metadata(name) != getattr(persisted, field)
+                        for name, field in (("supplier", "supplier"), ("model", "model_version"))):
+                    raise ValueError("provider metadata differs from the original accounting stamp")
+                self.stamp = persisted
         self._last_result: dict | None = None
         self._last_task_desc: str | None = None
 
     @classmethod
-    def from_profile(cls, name: str, llm, evaluator, config: LoopConfig, workdir: str):
+    def from_profile(cls, name: str, llm, evaluator, config: LoopConfig, workdir: str,
+                     *, accounting_stamp: AccountingStamp | None = None):
         from core.profiles import extensions_for, load_profile
         profile = load_profile(name)
         pool_cfg = profile["parent_pool"]
@@ -172,7 +199,8 @@ class Framework:
         return cls(llm, evaluator, config, workdir,
                    extensions=extensions_for(profile), profile_name=name,
                    archive=archive,
-                   improve_impl=profile["operators"]["improve"])
+                   improve_impl=profile["operators"]["improve"],
+                   accounting_stamp=accounting_stamp)
 
     def _proposal_id(self, task_desc: str, slot: str) -> str:
         return _stable_id(self.profile_name, task_desc, slot)
@@ -301,7 +329,10 @@ class Framework:
             memory.restore_state(payload["memory"])
             applier = StateApplier(frontier, memory, self.store)
             pool = [{"candidate_id": cand["candidate_id"], "prompt": cand["prompt"],
-                     "score": cand["score"], "result": _restore_result(cand["result"])}
+                     "score": cand["score"], "result": _restore_result(
+                         cand["result"], candidate_id=cand["candidate_id"],
+                         head_sha=_stable_id(cand["candidate_id"], cand["prompt"])[:8],
+                         evaluator_version=getattr(self.evaluator, "evaluator_version", None))}
                     for cand in payload["pool"]]
             incumbent = next(cand for cand in pool
                              if cand["candidate_id"] == payload["incumbent_id"])
@@ -627,15 +658,28 @@ class Framework:
                     intent = reissue(intent)         # R4(2): lower tier + ttl restart
                     continue
                 return None, receipt                 # conflict / invalid
-            take_usage(self.llm)                     # reset meters before execution
-            take_usage(self.evaluator)
+            reset_usage(self.llm)
+            reset_usage(self.evaluator)
             ledger.pre_call_check()                  # J4: terminate-before-call
-            proposal = op_fn()
+            try:
+                proposal = op_fn()
+            except UsageError:
+                raise
+            except Exception as error:
+                # A failed content/transport operation can still have a known
+                # provider charge. Unknown usage raises before any settlement.
+                proposer_cost = take_usage(self.llm)
+                self.store.append("m0_sequential_proposal_failure", {
+                    "intent": asdict(intent), "operator": funnel.operator,
+                    "generation": funnel.generation,
+                    "token_usage": {"total_tokens": proposer_cost},
+                    "detail": f"{type(error).__name__}: {error}"[-4000:]})
+                ledger.settle(intent, actual_cost=proposer_cost)
+                raise
             funnel.proposed += 1
             proposer_cost = take_usage(self.llm)
             if proposal.apply_result not in ("ok", "retry_ok"):
-                metered = proposer_cost + take_usage(self.evaluator)
-                ledger.settle(intent, actual_cost=metered or cfg.intent_cost)
+                ledger.settle(intent, actual_cost=proposer_cost)
                 return (proposal, None), receipt
             funnel.applicable += 1
             head_sha = _stable_id(proposal.proposal_id, proposal.patch_text)[:8]
@@ -648,11 +692,14 @@ class Framework:
             if external:
                 self.evaluator.set_evaluation_context(context)
             failure = None
+            expected_evaluator_version = getattr(self.evaluator, "evaluator_version", None)
             try:
-                result = self.evaluator(proposal.proposal_id, head_sha, proposal.patch_text)
-                if not isinstance(result, EvalResult) \
-                        or result.candidate_id != proposal.proposal_id:
-                    raise ValueError("M0 evaluator returned a mismatched result")
+                result = validate_eval_result(
+                    self.evaluator(proposal.proposal_id, head_sha, proposal.patch_text),
+                    candidate_id=proposal.proposal_id, head_sha=head_sha,
+                    evaluator_version=expected_evaluator_version)
+            except UsageError:
+                raise
             except ExternalEvaluatorError as error:
                 result = None
                 failure = (error.status, str(error), error.execution_id)
@@ -679,7 +726,7 @@ class Framework:
                     "token_usage": {"total_tokens": metered - proposer_cost}})
                 if failure is not None:
                     failure = (failure[0], failure[1], execution_id)
-            ledger.settle(intent, actual_cost=metered or cfg.intent_cost)
+            ledger.settle(intent, actual_cost=metered)
             if failure is not None:
                 status, detail, execution_id = failure
                 append_execution_failure(proposal.proposal_id, status, detail, execution_id)
@@ -722,9 +769,14 @@ class Framework:
                                 raise RuntimeError("post-evaluation evidence precedes settlement")
                 self.evaluator.recover_inflight(wait=True)
                 adopted = self.evaluator.outcome(record)
-                token_usage = (adopted["token_usage"] or {}).get("total_tokens", 0)
-                actual = context["proposer_token_cost"] + token_usage
-                actual = actual or cfg.intent_cost
+                if adopted["result"] is not None:
+                    validate_eval_result(
+                        adopted["result"], candidate_id=candidate_id,
+                        head_sha=context["head_sha"],
+                        evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+                token_usage = validate_usage(adopted["token_usage"])["total_tokens"]
+                actual = validate_usage({"total_tokens": context["proposer_token_cost"]})[
+                    "total_tokens"] + token_usage
                 if settled:
                     settlements = [row["payload"] for row in self.store.read("ledger")
                                    if row["payload"].get("intent_id") == intent.intent_id
@@ -760,10 +812,9 @@ class Framework:
                         or outcome.get("start_sha256")
                         != _evaluation_start_sha256(context)):
                     raise RuntimeError("in-process evaluation outcome binding is invalid")
-                usage = outcome.get("token_usage") or {}
-                tokens = usage.get("total_tokens")
-                if set(usage) != {"total_tokens"} or isinstance(tokens, bool) \
-                        or not isinstance(tokens, int) or tokens < 0:
+                usage = outcome.get("token_usage")
+                tokens = validate_usage(usage)["total_tokens"]
+                if set(usage) != {"total_tokens"}:
                     raise RuntimeError("in-process evaluation outcome has invalid token usage")
                 status = outcome.get("status")
                 if status not in {"ok", "failed_to_run", "timeout", "invalid"}:
@@ -773,8 +824,14 @@ class Framework:
                     raise RuntimeError("in-process evaluation outcome detail is invalid")
                 if status == "ok":
                     try:
-                        result = _restore_result(outcome["result"])
+                        result = _restore_result(
+                            outcome["result"], candidate_id=candidate_id,
+                            head_sha=context["head_sha"],
+                            evaluator_version=getattr(self.evaluator, "evaluator_version", None))
                     except (KeyError, TypeError, ValueError) as error:
+                        if "binding mismatch" in str(error):
+                            raise RuntimeError(
+                                "in-process evaluation result differs from its start") from error
                         raise RuntimeError(
                             "in-process evaluation outcome result is invalid") from error
                     if result.candidate_id != candidate_id \
@@ -806,8 +863,8 @@ class Framework:
                                                or (payload.get("evidence") or {}).get("candidate_id"))
                             if event_candidate == candidate_id:
                                 raise RuntimeError("post-evaluation evidence precedes settlement")
-                actual = context["proposer_token_cost"] + tokens
-                actual = actual or cfg.intent_cost
+                actual = validate_usage({"total_tokens": context["proposer_token_cost"]})[
+                    "total_tokens"] + tokens
                 if settled:
                     settlements = [row["payload"] for row in self.store.read("ledger")
                                    if row["payload"].get("intent_id") == intent.intent_id
@@ -890,7 +947,8 @@ class Framework:
                 if not external:
                     inprocess_state = inprocess_evaluation_operation_state(
                         self.store, cohort_id, start_contexts,
-                        failed_ids=failed_proposals)
+                        failed_ids=failed_proposals,
+                        evaluator_version=getattr(self.evaluator, "evaluator_version", None))
                     by_candidate = inprocess_state["operations"]
                 missing = set(start_contexts) - set(by_candidate)
                 if missing and (batch_settled or any(
@@ -940,12 +998,11 @@ class Framework:
                         raise RuntimeError("batch settlement evidence has the wrong intent")
                     if candidate.id in failed_proposals:
                         outcome = failed_proposals[candidate.id]
-                        usage = outcome.get("token_usage") or {}
-                        tokens = usage.get("total_tokens")
-                        if set(usage) != {"total_tokens"} or isinstance(tokens, bool) \
-                                or not isinstance(tokens, int) or tokens < 0:
+                        usage = outcome.get("token_usage")
+                        tokens = validate_usage(usage)["total_tokens"]
+                        if set(usage) != {"total_tokens"}:
                             raise RuntimeError("recovered proposal failure has invalid token usage")
-                        actual = tokens or cfg.intent_cost
+                        actual = tokens
                         if settled:
                             settlements = [row["payload"] for row in self.store.read("ledger")
                                            if row["payload"].get("intent_id") == intent.intent_id
@@ -981,7 +1038,7 @@ class Framework:
                     if settled:
                         if external:
                             adopted = self.evaluator.outcome(by_candidate[candidate.id])
-                            token_usage = adopted["token_usage"] or {}
+                            token_usage = validate_usage(adopted["token_usage"])
                         else:
                             outcome = inprocess_state["outcomes"].get(candidate.id)
                             if outcome is None:
@@ -989,8 +1046,7 @@ class Framework:
                                     "settled in-process batch candidate lacks its outcome")
                             token_usage = outcome["token_usage"]
                         actual = start_contexts[candidate.id]["proposer_token_cost"] + \
-                            token_usage.get("total_tokens", 0)
-                        actual = actual or cfg.intent_cost
+                            token_usage["total_tokens"]
                         settlements = [row["payload"] for row in self.store.read("ledger")
                                        if row["payload"].get("intent_id") == intent.intent_id
                                        and row["payload"].get("entry_kind") == "settle"]
@@ -1402,7 +1458,8 @@ class Framework:
         else:
             self.store.append("run_start", {"task_desc": task_desc,
                                             "config": asdict(cfg),
-                                            "profile": self.profile_name})
+                                            "profile": self.profile_name,
+                                            "accounting_stamp": asdict(self.stamp)})
             intent = make_intent("m0", "genesis", cfg.intent_cost, "snap-0", "explore")
             funnel = FunnelRecord("draft", 0)
             genesis_id = self._proposal_id(task_desc, "genesis")
@@ -1637,7 +1694,8 @@ class Framework:
                           replace(self.cfg, resume_from_checkpoint=False,
                                   stop_after_generation=None),
                           clone_workdir, profile_name=self.profile_name,
-                          archive=archive, improve_impl=self.improve_impl)
+                          archive=archive, improve_impl=self.improve_impl,
+                          accounting_stamp=self.stamp)
         for ext in self.registry.admission + self.registry.parent_monitors:
             clone.registry.register(ext)
         original = self._last_result

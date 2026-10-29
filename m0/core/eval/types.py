@@ -31,6 +31,57 @@ class EvalResult:
     evaluator_version: str = "det-v1"
 
 
+def validate_eval_result(result: EvalResult, *, candidate_id: str | None = None,
+                         head_sha: str | None = None,
+                         evaluator_version: str | None = None) -> EvalResult:
+    """Validate native per-item evidence at each consumption boundary.
+
+    EvalResult and ItemResult remain mutable transport types, so construction-time
+    checks alone cannot protect restored or subsequently modified outcomes.
+    Optional expected identities bind a result to the operation that produced it.
+    This function deliberately does not interpret aggregate metrics or costs.
+    """
+    if not isinstance(result, EvalResult):
+        raise ValueError("evaluation result must be an EvalResult")
+    for field_name, expected in (("candidate_id", candidate_id),
+                                 ("head_sha", head_sha),
+                                 ("evaluator_version", evaluator_version)):
+        value = getattr(result, field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"evaluation {field_name} must be a non-empty string")
+        if expected is not None and value != expected:
+            raise ValueError(f"evaluation {field_name} binding mismatch")
+    if not isinstance(result.items, list) or not result.items:
+        raise ValueError("EvalResult.items must be a non-empty list (gate-not-rank)")
+    item_ids: set[str] = set()
+    for item in result.items:
+        if not isinstance(item, ItemResult):
+            raise ValueError("evaluation items must be ItemResult records")
+        if not isinstance(item.item_id, str) or not item.item_id.strip():
+            raise ValueError("evaluation item_id must be a non-empty string")
+        if item.item_id in item_ids:
+            raise ValueError("evaluation item ids must be unique")
+        # bool and 0.0/1.0 compare equal to integers but are not binary evidence.
+        if type(item.verdict) is not int or item.verdict not in (0, 1):
+            raise ValueError("evaluation verdicts must be binary integers (0 or 1)")
+        item_ids.add(item.item_id)
+    if not isinstance(result.public, dict) or not isinstance(result.private, dict):
+        raise ValueError("evaluation public/private must be objects")
+    if "cascade_stopped" in result.private and type(result.private["cascade_stopped"]) is not bool:
+        raise ValueError("evaluation cascade_stopped must be a boolean")
+    return result
+
+
+def validate_eval_comparison(result: EvalResult, incumbent: EvalResult) -> None:
+    """Require a fixed sample universe and evaluator for final adjudication."""
+    validate_eval_result(result)
+    validate_eval_result(incumbent)
+    if result.evaluator_version != incumbent.evaluator_version:
+        raise ValueError("evaluation comparison requires the same evaluator version")
+    if {item.item_id for item in result.items} != {item.item_id for item in incumbent.items}:
+        raise ValueError("evaluation comparison requires identical item ids")
+
+
 @dataclass
 class Verdict:
     kind: Literal["ACCEPT", "REJECT"]

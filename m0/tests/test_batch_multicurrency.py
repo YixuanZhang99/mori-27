@@ -154,11 +154,14 @@ def test_malformed_later_cost_vector_prevents_any_partial_settlement(tmp_path):
     with pytest.raises(BudgetError, match="finite and non-negative"):
         run(scheduler)
     pool.close()
-    assert len(backend.calls) == 2 and not ledger.reserves
+    assert len(backend.calls) == 2 and set(ledger.reserves) == {"multi-0", "multi-1"}
     assert not ledger.settled_intents and not list(store.read("batch_execution_settled"))
     assert not list(store.read("batch_admission")) and not frontier.nodes
-    assert all(set(accounts.values()) == {0.0} for accounts in ledger.spent.values())
-    assert scheduler.checkpoint_state()["open_reserves"] == []
+    assert ledger.spent["token"]["exploit"] == 200
+    assert not [row for row in store.read("ledger")
+                if row["payload"]["entry_kind"] == "reserve_released"]
+    with pytest.raises(RuntimeError, match="fully settled"):
+        scheduler.checkpoint_state()
 
 
 def test_single_currency_ledger_refuses_basket_instead_of_dropping_units(tmp_path):
@@ -178,4 +181,4 @@ def test_single_currency_ledger_refuses_basket_instead_of_dropping_units(tmp_pat
     pool.close()
     assert backend.calls == [] and not ledger.reserves
     assert set(ledger.spent.values()) == {0.0}
-    assert scheduler.recovery_state()["status"] == "aborted"
+    assert scheduler.recovery_state()["status"] == "budget_rejected"

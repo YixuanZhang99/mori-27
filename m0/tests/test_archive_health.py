@@ -36,8 +36,9 @@ def test_evolve_block_operator_and_failed_apply_never_evaluates(tmp_path):
     assert proposal.apply_result == "ok"
     assert proposal.patch_text.startswith("HEAD")
     # A profile mismatch produces a failed proposal; the loop must not admit it.
-    mismatched_llm = (lambda p: "Solve the problem carefully."
-                      if p.startswith("[draft") else "replacement")
+    def mismatched_llm(prompt):
+        mismatched_llm.last_usage = {"total_tokens": 1000}
+        return "Solve the problem carefully." if prompt.startswith("[draft") else "replacement"
     fw = Framework.from_profile("funsearch_island", mismatched_llm, toy_evaluator,
                                 LoopConfig(max_generations=2), str(tmp_path))
     out = fw.evolve("toy")

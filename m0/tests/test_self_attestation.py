@@ -22,6 +22,7 @@ def run_case(tmp_path, main_score, control_scores, noise_floor,
     evaluator_calls = []
 
     def evaluator(candidate_id, head_sha, _prompt):
+        evaluator.last_usage = {"total_tokens": 0}
         evaluator_calls.append(candidate_id)
         score = controls.get(candidate_id, main_score)
         return EvalResult(candidate_id=candidate_id, head_sha=head_sha,

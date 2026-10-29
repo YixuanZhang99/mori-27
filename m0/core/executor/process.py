@@ -9,15 +9,27 @@ import sys
 import uuid
 from pathlib import Path
 
-from core.executor.seccomp import (SECCOMP_BWRAP_MEMFD, seccomp_policy_summary,
+from core.executor.seccomp import (SECCOMP_BWRAP_MEMFD, SECCOMP_POLICY_VERSION,
+                                   seccomp_policy_summary,
                                    validate_seccomp_delivery, validate_seccomp_policy)
 from core.x1.store import AppendOnlyStore
 
 
+def _stat_fields(pid: int) -> list[str]:
+    text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    identity, opening, remainder = text.partition("(")
+    _name, closing, fields = remainder.rpartition(")")
+    # comm is parenthesized but may itself contain spaces, newlines or ')'.
+    # The kernel's final ')' is the only reliable boundary before field 3.
+    if not opening or not closing or identity.strip() != str(pid):
+        raise ValueError("invalid process stat identity")
+    return fields.split()
+
+
 def start_ticks(pid: int) -> int | None:
     try:
-        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
-        return int(fields[21])
+        fields = _stat_fields(pid)
+        return int(fields[19])  # field 22; parsed fields begin at field 3 (state)
     except (OSError, ValueError, IndexError):
         return None
 
@@ -26,9 +38,8 @@ def process_alive(pid: int, expected_start: int | None) -> bool:
     if expected_start is None:
         return False
     try:
-        text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
-        fields = text.split()
-        return int(fields[21]) == expected_start and fields[2] != "Z"
+        fields = _stat_fields(pid)
+        return int(fields[19]) == expected_start and fields[0] != "Z"
     except (OSError, ValueError, IndexError):
         return False
 
@@ -145,7 +156,60 @@ class ProcessJournal:
             except ProcessLookupError:
                 pass
 
+    @staticmethod
+    def _validate_recovery_policy(record: dict) -> None:
+        """Bind unfinished operations to the full canonical persisted policy."""
+        spec = _read_json(record["spec_path"]) if record.get("spec_path") else None
+        policy = spec.get("seccomp_policy") if spec is not None else None
+        summary = record.get("seccomp_policy")
+        if policy is None and summary is None:
+            # Explicitly unfiltered executions keep their existing recovery contract.
+            validate_seccomp_delivery(None, record.get("seccomp_delivery"))
+            if spec is not None:
+                validate_seccomp_delivery(None, spec.get("seccomp_delivery"))
+            return
+        if spec is None:
+            raise ValueError("seccomp recovery requires its durable full policy spec")
+        validate_seccomp_policy(policy)
+        if summary != seccomp_policy_summary(policy):
+            raise ValueError("seccomp journal summary differs from its durable policy")
+        delivery = validate_seccomp_delivery(policy, spec.get("seccomp_delivery"))
+        if delivery != record.get("seccomp_delivery"):
+            raise ValueError("seccomp journal delivery differs from its durable policy")
+
+    def _block_policy_recovery(self, record: dict, error: Exception) -> None:
+        # Stop the wrapper first so it cannot deliberately launch another target.
+        # Both kills require the original OS start identity; a reused PID is never
+        # sufficient authorization to signal an unrelated process.
+        if process_alive(record["wrapper_pid"], record.get("wrapper_start_ticks")):
+            try:
+                os.kill(record["wrapper_pid"], signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        self.terminate_target(record)
+        detail = f"seccomp recovery refused; explicit reconciliation required: {error}"
+        previous = [row for row in self.store.read("executor_process_recovery_blocked")
+                    if row["payload"].get("execution_id") == record["execution_id"]]
+        if not previous:
+            self.store.append("executor_process_recovery_blocked", {
+                "execution_id": record["execution_id"],
+                "candidate_id": record["candidate_id"], "attempt": record["attempt"],
+                "required_policy_version": SECCOMP_POLICY_VERSION,
+                "recorded_seccomp_policy": record.get("seccomp_policy"),
+                "detail": detail})
+        # No terminal result is invented and no reserve can be settled or released
+        # by an ordinary lost-process fallback. Evidence remains available for review.
+        raise RuntimeError(detail) from error
+
     def recover(self, record: dict) -> dict:
+        if record["execution_id"] in self.finished_ids():
+            # Already-completed historical executions remain readable under the
+            # policy they actually used; never rewrite their record as current.
+            return {"status": "finished", **self.completed_result(record)}
+        try:
+            self._validate_recovery_policy(record)
+        except (OSError, ValueError, RuntimeError, UnicodeError) as error:
+            self._block_policy_recovery(record, error)
         if Path(record["result_path"]).exists():
             try:
                 return {"status": "finished", **self._completed(record, recovered=True)}

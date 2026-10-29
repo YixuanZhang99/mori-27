@@ -37,7 +37,7 @@ REAL_SANDBOX = pytest.mark.skipif(
 def test_canonical_policy_has_arch_guard_errno_and_allow_termination():
     policy = build_seccomp_policy("x86_64")
     encoded = validate_seccomp_policy(policy)
-    assert len(encoded) == 8 * (5 + 2 * len(DENIED_SYSCALLS))
+    assert len(encoded) == 8 * (10 + 2 * len(DENIED_SYSCALLS))
     first = struct.unpack("<HBBI", encoded[:8])
     arch_check = struct.unpack("<HBBI", encoded[8:16])
     arch_kill = struct.unpack("<HBBI", encoded[16:24])
@@ -49,6 +49,9 @@ def test_canonical_policy_has_arch_guard_errno_and_allow_termination():
     assert "ptrace" in policy["denied_syscalls"]
     assert "unshare" in policy["denied_syscalls"]
     assert policy["action"] == "errno:EPERM"
+    assert policy["policy_version"] == 2
+    assert policy["denied_syscall_bits"] == 0x40000000
+    assert policy["denied_syscall_ranges"] == [[512, 547]]
     summary = seccomp_policy_summary(policy)
     assert "filter_base64" not in summary
     assert summary["filter_sha256"] == hashlib.sha256(encoded).hexdigest()
@@ -74,7 +77,7 @@ def test_semantic_policy_tamper_is_rejected_even_with_recomputed_hash(mutation):
     elif mutation == "action":
         policy["action"] = "allow"
     elif mutation == "version":
-        policy["policy_version"] = 2
+        policy["policy_version"] = 1
     else:
         policy["attacker_controlled"] = True
     with pytest.raises(ValueError, match="canonical versioned denylist"):
@@ -110,7 +113,7 @@ def test_external_evaluator_real_eperm_fork_and_public_audit(tmp_path, monkeypat
     record = started[0]["payload"]
     policy = record["seccomp_policy"]
     assert policy["policy"] == "dangerous-syscall-denylist"
-    assert policy["policy_version"] == 1 and "filter_base64" not in policy
+    assert policy["policy_version"] == 2 and "filter_base64" not in policy
     spec = json.loads(Path(record["spec_path"]).read_text())
     assert spec["seccomp_policy"]["filter_base64"]
     assert spec["seccomp_policy"]["filter_sha256"] == policy["filter_sha256"]

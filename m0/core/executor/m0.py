@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import Callable
 
 from core.eval.types import (EvalResult as M0EvalResult, ItemResult,
-                             ReliabilityMeta)
+                             ReliabilityMeta, validate_eval_result)
 from core.executor.external import ExternalCommandEvaluator, ExternalEvaluatorError
 from core.executor.proposal import ExternalCommandLLM, ExternalProposalError
 from core.executor.types import (Candidate, CostVec, EvalRequest, EvalResult,
                                  EvalStatus, EvidenceRecord, ExecutorSpec)
-from core.llm import take_usage
+from core.llm import UsageError, reset_usage, take_usage, validate_usage
 from core.operator.types import VariationProposal
 from core.policy.types import AllocationIntent
 
@@ -60,23 +60,23 @@ def _batch_evaluation_operation(context: dict) -> dict:
             "evaluation_sha256": _marker_sha256(context)}
 
 
-def _restore_m0_result(data: dict) -> M0EvalResult:
+def _restore_m0_result(data: dict, **bindings) -> M0EvalResult:
     reliability = dict(data.get("reliability") or {})
     if reliability.get("ci95") is not None:
         reliability["ci95"] = tuple(reliability["ci95"])
-    return M0EvalResult(
+    return validate_eval_result(M0EvalResult(
         candidate_id=data["candidate_id"], head_sha=data["head_sha"],
         items=[ItemResult(**item) for item in data["items"]],
         combined_score=data.get("combined_score", 0.0),
-        public=dict(data.get("public") or {}), private=dict(data.get("private") or {}),
+        public=data.get("public", {}), private=data.get("private", {}),
         text_feedback=data.get("text_feedback", ""),
         reliability=ReliabilityMeta(**reliability),
-        evaluator_version=data.get("evaluator_version", "det-v1"))
+        evaluator_version=data["evaluator_version"]), **bindings)
 
 
 def inprocess_evaluation_operation_state(store, cohort_id: str,
                                          contexts: dict[str, dict],
-                                         failed_ids=()) -> dict:
+                                         failed_ids=(), *, evaluator_version=None) -> dict:
     """Validate actual batch evaluation operations separately from prepared proposals."""
     failed_ids = set(failed_ids)
     operations = [row["payload"] for row in store.read("m0_batch_evaluation_started")
@@ -106,10 +106,9 @@ def inprocess_evaluation_operation_state(store, cohort_id: str,
                 or outcome.get("start_sha256") != _marker_sha256(operation)
                 or outcome.get("evaluation_sha256") != _marker_sha256(context)):
             raise RuntimeError("in-process batch evaluation outcome binding is invalid")
-        usage = outcome.get("token_usage") or {}
-        tokens = usage.get("total_tokens")
-        if set(usage) != {"total_tokens"} or isinstance(tokens, bool) \
-                or not isinstance(tokens, int) or tokens < 0:
+        usage = outcome.get("token_usage")
+        validate_usage(usage)
+        if set(usage) != {"total_tokens"}:
             raise RuntimeError("in-process batch evaluation token usage is invalid")
         status = outcome.get("status")
         if status not in {"ok", "failed_to_run", "timeout", "invalid"} \
@@ -117,8 +116,13 @@ def inprocess_evaluation_operation_state(store, cohort_id: str,
             raise RuntimeError("in-process batch evaluation outcome status is invalid")
         if status == "ok":
             try:
-                result = _restore_m0_result(outcome["result"])
+                result = _restore_m0_result(
+                    outcome["result"], candidate_id=candidate_id,
+                    head_sha=context["head_sha"], evaluator_version=evaluator_version)
             except (KeyError, TypeError, ValueError) as error:
+                if "binding mismatch" in str(error):
+                    raise RuntimeError(
+                        "in-process batch evaluation result differs from its start") from error
                 raise RuntimeError("in-process batch evaluation result is invalid") from error
             if result.candidate_id != candidate_id \
                     or result.head_sha != context.get("head_sha"):
@@ -216,7 +220,7 @@ class M0PromptExecutor:
         if self.store is None:
             raise ValueError("M0 executor requires an evidence store")
         self.operations = dict(operations)
-        self.fallback_token_cost = fallback_token_cost
+        # Retained as a compatible reserve-estimate argument; never an actual cost.
         self._meter_lock = threading.Lock()
         self._outcomes: dict[str, M0NativeOutcome] = {}
         self._prepared: dict[str, dict] = {}
@@ -231,7 +235,8 @@ class M0PromptExecutor:
 
     def _persist_proposal(self, spec, candidate, intent, marker=None) -> None:
         """Journal a new boundary or reuse one certified active operation marker."""
-        take_usage(self.llm)
+        reset_usage(self.llm)
+        proposer_cost = None
         if marker is None:
             marker = self._proposal_marker(spec, candidate, intent)
             self.store.append("m0_proposal_started", marker)
@@ -253,8 +258,11 @@ class M0PromptExecutor:
                        "proposer_token_cost": proposer_cost}
             self.store.append("m0_evaluation_started", context)
             self._prepared[candidate.id] = context
+        except UsageError:
+            raise
         except Exception as error:
-            proposer_cost = take_usage(self.llm)
+            if proposer_cost is None:
+                proposer_cost = take_usage(self.llm)
             self._prepare_errors[candidate.id] = (error, proposer_cost)
             if not durable_call:
                 status = error.status if isinstance(error, ExternalProposalError) \
@@ -318,10 +326,9 @@ class M0PromptExecutor:
                 continue
             status = {"timeout": EvalStatus.TIMEOUT, "invalid": EvalStatus.INVALID}.get(
                 outcome.get("status"), EvalStatus.FAILED_TO_RUN)
-            usage = outcome.get("token_usage") or {}
-            tokens = usage.get("total_tokens")
-            if set(usage) != {"total_tokens"} or isinstance(tokens, bool) \
-                    or not isinstance(tokens, int) or tokens < 0:
+            usage = outcome.get("token_usage")
+            tokens = validate_usage(usage)["total_tokens"]
+            if set(usage) != {"total_tokens"}:
                 raise RuntimeError("recovered proposal failure has invalid token usage")
             self._prepare_errors[candidate_id] = (ExternalProposalError(
                 status, str(outcome.get("detail") or "proposal failed"),
@@ -456,7 +463,8 @@ class M0PromptExecutor:
         failed = {candidate_id: self._validate_proposal_failure(candidate_id, execution_ref)
                   for candidate_id in ids if candidate_id not in contexts}
         state = inprocess_evaluation_operation_state(
-            self.store, execution_ref, contexts, failed_ids=failed)
+            self.store, execution_ref, contexts, failed_ids=failed,
+            evaluator_version=getattr(self.evaluator, "evaluator_version", None))
         missing = state["missing"]
         if missing and prior:
             raise RuntimeError("partially started cohort cannot have batch settlement")
@@ -466,7 +474,8 @@ class M0PromptExecutor:
             asyncio.run(self.execute(
                 spec, candidates[candidate_id], None, EvalRequest("dev")))
         state = inprocess_evaluation_operation_state(
-            self.store, execution_ref, contexts, failed_ids=failed)
+            self.store, execution_ref, contexts, failed_ids=failed,
+            evaluator_version=getattr(self.evaluator, "evaluator_version", None))
         operations, outcomes = state["operations"], state["outcomes"]
         if set(operations) | set(failed) != set(ids) \
                 or len(operations) + len(failed) != len(ids) \
@@ -505,7 +514,7 @@ class M0PromptExecutor:
 
         for candidate_id, outcome in failed.items():
             error, proposer_cost = self._prepare_errors[candidate_id]
-            token_cost = proposer_cost or self.fallback_token_cost
+            token_cost = proposer_cost
             evidence = self._failure(candidate_id, error.status, str(error),
                                      token_cost, 0.0, "dev")
             persist(candidate_id, evidence, outcome["execution_id"])
@@ -518,7 +527,10 @@ class M0PromptExecutor:
             proposal = VariationProposal(**context["proposal"])
             execution_id = operations[candidate_id]["execution_id"]
             if outcome["status"] == "ok":
-                result = _restore_m0_result(outcome["result"])
+                result = _restore_m0_result(
+                    outcome["result"], candidate_id=candidate_id,
+                    head_sha=context["head_sha"],
+                    evaluator_version=getattr(self.evaluator, "evaluator_version", None))
                 error = None
             else:
                 result = None
@@ -528,7 +540,6 @@ class M0PromptExecutor:
                 error = ExternalEvaluatorError(status, outcome["detail"], execution_id)
             token_cost = context["proposer_token_cost"] + \
                 outcome["token_usage"]["total_tokens"]
-            token_cost = token_cost or self.fallback_token_cost
             if error is not None:
                 evidence = self._failure(candidate_id, error.status, str(error),
                                          token_cost, 0.0, "dev")
@@ -591,7 +602,7 @@ class M0PromptExecutor:
         recovered = []
         for candidate_id, outcome in failed.items():
             error, proposer_cost = self._prepare_errors[candidate_id]
-            token_cost = proposer_cost or self.fallback_token_cost
+            token_cost = proposer_cost
             evidence = self._failure(candidate_id, error.status, str(error),
                                      token_cost, 0.0, "dev")
             if candidate_id in prior and prior[candidate_id] != asdict(evidence):
@@ -635,9 +646,12 @@ class M0PromptExecutor:
             proposal = VariationProposal(**context["proposal"])
             result = adopted["result"]
             error = adopted["error"]
-            token_cost = context.get("proposer_token_cost", 0) + (
-                (adopted["token_usage"] or {}).get("total_tokens", 0))
-            token_cost = token_cost or self.fallback_token_cost
+            if result is not None:
+                validate_eval_result(
+                    result, candidate_id=candidate_id, head_sha=context["head_sha"],
+                    evaluator_version=getattr(self.evaluator, "evaluator_version", None))
+            token_cost = context["proposer_token_cost"] + \
+                validate_usage(adopted["token_usage"])["total_tokens"]
             if candidate_id in prior:
                 from core.orchestration import _evidence_from_payload
                 evidence = _evidence_from_payload(prior[candidate_id])
@@ -676,9 +690,12 @@ class M0PromptExecutor:
         proposal_phase = True
         proposer_cost = 0
         evaluation_operation = None
+        evaluator_called = False
         with self._meter_lock:
-            take_usage(self.llm)
-            take_usage(self.evaluator)
+            # Prepared proposals have already consumed their metered LLM usage.
+            # No proposer call runs here, but an evaluator may use the shared LLM.
+            self.llm.last_usage = {"total_tokens": 0}
+            reset_usage(self.evaluator)
             try:
                 prepared = self._prepared.get(candidate.id)
                 if prepared is not None:
@@ -689,6 +706,7 @@ class M0PromptExecutor:
                     error, proposer_cost = self._prepare_errors[candidate.id]
                     raise error
                 else:
+                    reset_usage(self.llm)
                     proposal = self.operations[candidate.id]()
                     proposer_cost = take_usage(self.llm)
                     head_sha = hashlib.sha256(
@@ -725,13 +743,18 @@ class M0PromptExecutor:
                         evaluation_operation = _batch_evaluation_operation(prepared)
                         self.store.append("m0_batch_evaluation_started", evaluation_operation)
                     try:
-                        result = self.evaluator(candidate.id, head_sha, proposal.patch_text)
+                        evaluator_called = True
+                        expected_evaluator_version = getattr(
+                            self.evaluator, "evaluator_version", None)
+                        result = validate_eval_result(
+                            self.evaluator(candidate.id, head_sha, proposal.patch_text),
+                            candidate_id=candidate.id, head_sha=head_sha,
+                            evaluator_version=expected_evaluator_version)
                     finally:
                         if external:
                             self.evaluator.clear_evaluation_context()
-                    if not isinstance(result, M0EvalResult) \
-                            or result.candidate_id != candidate.id:
-                        raise ValueError("M0 evaluator returned a mismatched result")
+            except UsageError:
+                raise
             except ExternalProposalError as error:
                 result = None
                 failure = (error.status, str(error))
@@ -744,8 +767,10 @@ class M0PromptExecutor:
                 failure = (EvalStatus.FAILED_TO_RUN,
                            f"{type(error).__name__}: {error}"[-4000:])
                 failure_from_proposal = proposal_phase
-            metered = proposer_cost + take_usage(self.llm) + take_usage(self.evaluator)
-            token_cost = metered or self.fallback_token_cost
+            metered = proposer_cost + take_usage(self.llm)
+            if evaluator_called:
+                metered += take_usage(self.evaluator)
+            token_cost = metered
             if evaluation_operation is not None:
                 status = EvalStatus.OK if failure is None else failure[0]
                 self.store.append("m0_evaluation_outcome", {

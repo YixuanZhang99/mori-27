@@ -10,6 +10,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 
+from core.eval.types import validate_eval_result
 from core.x1.store import AppendOnlyStore
 
 
@@ -101,8 +102,18 @@ class EvaluatorMetaGate:
         comparisons = []
         regressions = []
         for case in self.anchor.cases:
-            before = current_evaluator(case.candidate_id, case.head_sha, case.prompt)
-            after = challenger_evaluator(case.candidate_id, case.head_sha, case.prompt)
+            try:
+                before = validate_eval_result(
+                    current_evaluator(case.candidate_id, case.head_sha, case.prompt),
+                    candidate_id=case.candidate_id, head_sha=case.head_sha,
+                    evaluator_version=old)
+                after = validate_eval_result(
+                    challenger_evaluator(case.candidate_id, case.head_sha, case.prompt),
+                    candidate_id=case.candidate_id, head_sha=case.head_sha,
+                    evaluator_version=new)
+            except ValueError as error:
+                return self._decision(False, epoch, old, new,
+                                      f"invalid held-out anchor evaluation: {error}")
             old_items = {item.item_id: item.verdict for item in before.items}
             new_items = {item.item_id: item.verdict for item in after.items}
             if set(old_items) != set(new_items):

@@ -44,6 +44,7 @@ class CountingEvaluator:
         self.fail_id = fail_id
 
     def __call__(self, candidate_id, head_sha, prompt):
+        self.last_usage = {"total_tokens": 0}
         with self.count_path.open("a", encoding="utf-8") as handle:
             handle.write(candidate_id + "\n")
         if candidate_id == self.fail_id:

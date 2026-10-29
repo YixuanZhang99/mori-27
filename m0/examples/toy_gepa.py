@@ -23,6 +23,7 @@ ITEM_IDS = [f"item_{i}" for i in range(12)]
 
 
 def toy_evaluator(candidate_id: str, head_sha: str, prompt: str) -> EvalResult:
+    toy_evaluator.last_usage = {"total_tokens": 0}  # deterministic local scoring
     items = []
     unsolved = []
     for i, iid in enumerate(ITEM_IDS):
@@ -41,9 +42,13 @@ def toy_evaluator(candidate_id: str, head_sha: str, prompt: str) -> EvalResult:
 
 
 class MockLLM:
-    """Deterministic offline LLM. draft = base prompt; improve = append hint."""
+    """Offline simulator, explicitly charging 1,000 simulated tokens per call."""
+
+    supplier = "offline-simulation"
+    model = "toy-script-v1"
 
     def __call__(self, prompt: str) -> str:
+        self.last_usage = {"total_tokens": 1000}
         if prompt.startswith("[draft"):
             return "Solve the problem carefully."
         m = re.search(r"missing hint: (\w+)", prompt)

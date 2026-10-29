@@ -46,6 +46,7 @@ class AdversarialEvaluator:
         self.outcomes = outcomes
 
     def __call__(self, candidate_id, head_sha, prompt):
+        self.last_usage = {"total_tokens": 0}
         verdicts, score = self.outcomes[candidate_id]
         return EvalResult(candidate_id=candidate_id, head_sha=head_sha,
                           items=[ItemResult(f"i{index}", verdict)

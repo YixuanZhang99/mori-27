@@ -122,7 +122,7 @@ def test_openai_worker_real_local_http_usage_and_credential_nonpersistence(
     record = list(store.read("executor_process_started"))[0]["payload"]
     assert record["process_kind"] == "m0_external_proposer"
     assert record["seccomp_delivery"] == "direct_prctl"
-    assert record["seccomp_policy"]["policy_version"] == 1
+    assert record["seccomp_policy"]["policy_version"] == 2
     spec = json.loads(Path(record["spec_path"]).read_text())
     assert spec["seccomp_delivery"] == "direct_prctl"
     assert Path(spec["args"][0]).name != "bwrap"

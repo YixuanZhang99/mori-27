@@ -2,7 +2,7 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，当前源码基线为 **M0 / verifier v57**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收版本为 **v58**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -25,12 +25,12 @@
 - OpenEvolve 数据库、artifact、谱系和 embedding 状态互操作。
 - MLE-Bench Lite／RE-Bench 的任务与评分契约适配。
 
-**完成度不能由测试数量代替。** 原包 v57 历史记录为 490 项通过，但证书同时明确真实外部 API 与 benchmark campaign 未执行。本次独立复核还发现样本身份校验、单币账本、成本口径及 seccomp ABI 覆盖等问题，详见审查报告；生产核心源码保持原包基线，尚未修复这些业务与安全问题。
+**完成度不能由测试数量代替。** 原包 v57 历史记录为 490 项通过，但证书同时明确真实外部 API 与 benchmark campaign 未执行。导入时发现的样本身份、预算账本、成本计量及 seccomp ABI 问题已纳入 v58 修复与回归测试，详见 [修复说明](docs/SAFETY_FIXES_V58.md)。
 
 ## 目录
 
 ```text
-m0/                 Python 内核、配置、59 个测试文件、v1–v57 验收历史
+m0/                 Python 内核、配置、回归测试、v1–v57 历史及 v58 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
   config/profiles/  三种 profile
   examples/         三个不需要模型 API key 的示例
@@ -54,9 +54,9 @@ make setup
 make check
 ```
 
-`make check` 运行静态公理、342 项可移植测试、离线示例及验收包装器回归；153 项 Linux 集成测试明确排除，由 GitHub Actions 在 Ubuntu x86_64 上执行。Linux 完整验收保留全部 495 项 pytest 测试，任何 skip/xfail 都使验收失败。
+`make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v57，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v58，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
 make test          # Mac 可移植测试
@@ -65,7 +65,7 @@ make accept-linux  # Linux x86_64：全量版本化验收
 make verify-import # 核验初始导入 Git 快照
 ```
 
-详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；本次已修复其打包和 CI 配置问题，其余业务与安全发现仍待处理。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 修复范围和兼容行为见上述修复说明。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 

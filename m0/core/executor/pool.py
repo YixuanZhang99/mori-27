@@ -11,6 +11,7 @@ from typing import Callable
 from core.executor.types import (Candidate, CostVec, EvalRequest, EvalResult,
                                  EvalStatus, EvidenceRecord, ExecutorSpec)
 from core.x1.store import AppendOnlyStore
+from core.llm import UsageError
 
 ResultCallback = Callable[[Candidate, EvidenceRecord], object]
 
@@ -93,6 +94,10 @@ class ExecutorPool:
             if not isinstance(evidence, EvidenceRecord) \
                     or evidence.candidate_id != candidate.id:
                 raise TypeError("executor must return matching EvidenceRecord")
+        except UsageError:
+            # Unknown token cost must retain the reserve for reconciliation.
+            # Converting this to ordinary failed evidence would invent cost=0.
+            raise
         except Exception as exc:
             detail = f"ExecutorPool {type(exc).__name__}: {exc}"[-4000:]
             result = EvalResult(EvalStatus.FAILED_TO_RUN,
@@ -135,7 +140,13 @@ class ExecutorPool:
         self._register(candidates)
         results = await asyncio.gather(*(
             self._dispatch(spec, candidate, workspace, request)
-            for spec, candidate, request in zip(specs, candidates, requests)))
+            for spec, candidate, request in zip(specs, candidates, requests)),
+            return_exceptions=True)
+        # Drain every submitted worker before unwinding. Otherwise close() can
+        # mask an unknown-cost failure while another paid call is still running.
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
         if on_result is not None:
             async with self._callback_lock:
                 with self._state_lock:

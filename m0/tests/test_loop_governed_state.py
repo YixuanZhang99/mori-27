@@ -22,6 +22,7 @@ class StaticLLM:
     """Produces the same candidate so M9 rejects every post-genesis improvement."""
 
     def __call__(self, prompt: str) -> str:
+        self.last_usage = {"total_tokens": 1000}  # explicit simulated call
         return "Solve the problem carefully."
 
 

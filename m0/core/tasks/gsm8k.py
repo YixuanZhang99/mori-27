@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from core.eval.types import EvalResult, ItemResult, ReliabilityMeta
-from core.llm import take_usage
+from core.llm import reset_usage, take_usage
 
 _NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 
@@ -57,12 +57,18 @@ class GSM8KEvaluator:
         results: list[ItemResult] = []
         failures: list[str] = []
         total_usage = 0
+        self.last_usage = {"total_tokens": 0}
         selected_items = self.items if item_limit is None else self.items[:item_limit]
         for idx, item in enumerate(selected_items):
             solver_prompt = (f"{prompt}\n\nQuestion: {item['question']}\n"
                              "End your response with '#### <number>'.")
-            output = self.solver_llm(solver_prompt)
-            total_usage += take_usage(self.solver_llm)
+            reset_usage(self.solver_llm)
+            self.last_usage = None  # cost of this invocation is not yet known
+            try:
+                output = self.solver_llm(solver_prompt)
+            finally:
+                total_usage += take_usage(self.solver_llm)
+                self.last_usage = {"total_tokens": total_usage}
             pred = extract_number(output)
             gold = float(item["gold"])
             ok = pred is not None and abs(pred - gold) < 1e-6

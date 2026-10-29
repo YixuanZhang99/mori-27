@@ -11,6 +11,36 @@ import urllib.request
 from typing import Any
 
 
+class UsageError(ValueError):
+    """A completed operation has no trustworthy token-cost evidence."""
+
+
+def validate_usage(usage) -> dict[str, int]:
+    """Require explicit provider totals; never coerce or estimate missing usage."""
+    if not isinstance(usage, dict) or "total_tokens" not in usage:
+        raise UsageError("missing token usage: explicit total_tokens is required")
+    result = {}
+    for key in ("total_tokens", "prompt_tokens", "completion_tokens"):
+        if key not in usage:
+            continue
+        value = usage[key]
+        if type(value) is not int or value < 0:
+            raise UsageError(f"{key} must be a non-negative integer")
+        result[key] = value
+    if "prompt_tokens" in result and "completion_tokens" in result \
+            and result["prompt_tokens"] + result["completion_tokens"] != result["total_tokens"]:
+        raise UsageError("token usage components do not match total_tokens")
+    return result
+
+
+def reset_usage(obj) -> None:
+    """Mark a new invocation pending, so stale usage cannot certify its cost."""
+    try:
+        obj.last_usage = None
+    except Exception as exc:
+        raise UsageError("token meter cannot be reset before invocation") from exc
+
+
 class OpenAICompatibleLLM:
     def __init__(self, model: str, base_url: str = "https://api.openai.com/v1",
                  api_key: str | None = None, temperature: float = 0.0,
@@ -21,7 +51,7 @@ class OpenAICompatibleLLM:
         self.temperature = temperature
         self.timeout = timeout
         self.supplier = supplier
-        self.last_usage: dict[str, int] = {"total_tokens": 0}
+        self.last_usage: dict[str, int] | None = None
 
     def build_payload(self, prompt: str) -> dict[str, Any]:
         """Deterministic request construction (temperature fixed by config)."""
@@ -31,13 +61,11 @@ class OpenAICompatibleLLM:
     @staticmethod
     def parse_response(data: dict) -> tuple[str, dict[str, int]]:
         content = data["choices"][0]["message"]["content"]
-        usage_raw = data.get("usage", {})
-        usage = {"total_tokens": int(usage_raw.get("total_tokens", 0)),
-                 "prompt_tokens": int(usage_raw.get("prompt_tokens", 0)),
-                 "completion_tokens": int(usage_raw.get("completion_tokens", 0))}
+        usage = validate_usage(data.get("usage"))
         return content, usage
 
     def __call__(self, prompt: str) -> str:
+        reset_usage(self)
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY (or api_key=) is required")
         req = urllib.request.Request(
@@ -47,14 +75,17 @@ class OpenAICompatibleLLM:
                      "Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+        # A malformed content payload does not erase known provider charges.
+        self.last_usage = validate_usage(data.get("usage"))
         content, self.last_usage = self.parse_response(data)
         return content
 
 
 def take_usage(obj) -> int:
-    """Read and reset an object's total token meter; unmetered objects cost 0."""
-    usage = getattr(obj, "last_usage", None) or {}
-    total = int(usage.get("total_tokens", 0))
-    if hasattr(obj, "last_usage"):
+    """Consume known usage exactly once; unknown costs block settlement."""
+    total = validate_usage(getattr(obj, "last_usage", None))["total_tokens"]
+    try:
         obj.last_usage = {"total_tokens": 0}
+    except Exception as exc:
+        raise UsageError("token meter cannot be consumed exactly once") from exc
     return total

@@ -20,6 +20,7 @@ from core.executor.process import ProcessJournal
 from core.executor.resources import ResourcePolicy
 from core.executor.sandbox import BubblewrapSandbox
 from core.executor.types import EvalStatus
+from core.llm import reset_usage
 from core.x1.store import AppendOnlyStore
 
 
@@ -92,7 +93,7 @@ class ExternalCommandEvaluator:
         self.resource_limits = resource_policy.as_dict() if resource_policy else {}
         self.processes = ProcessJournal(evidence_store)
         self.evaluation_root = self.workdir / "evaluations"
-        self.last_usage = {"total_tokens": 0}
+        self.last_usage = None
         self.last_execution_id: str | None = None
         self._evaluation_context: dict = {}
 
@@ -195,19 +196,26 @@ class ExternalCommandEvaluator:
             **outcome, "outcome_path": str(outcome_path)})
 
     def _complete_process(self, record: dict, completed: dict) -> EvalResult:
+        reset_usage(self)
         execution_id = record["execution_id"]
+        usage = None
+        try:
+            envelope = json.loads(Path(record["response_path"]).read_text(encoding="utf-8"))
+            if isinstance(envelope, dict) and envelope.get("schema_version") == 1:
+                usage = self._usage(envelope.get("token_usage"))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+            envelope = None
+        self.last_usage = usage
         if completed["timeout"]:
             detail = "external evaluator exceeded time_limit"
-            self._persist(record, "timeout", detail)
+            self._persist(record, "timeout", detail, usage=usage)
             raise ExternalEvaluatorError(EvalStatus.TIMEOUT, detail, execution_id)
         if completed["returncode"] != 0:
             detail = (completed["stderr"] or completed["stdout"]
                       or completed.get("wrapper_error") or "external evaluator failed")
-            self._persist(record, "failed_to_run", detail)
+            self._persist(record, "failed_to_run", detail, usage=usage)
             raise ExternalEvaluatorError(EvalStatus.FAILED_TO_RUN, detail, execution_id)
         try:
-            response_path = Path(record["response_path"])
-            envelope = json.loads(response_path.read_text(encoding="utf-8"))
             if not isinstance(envelope, dict) \
                     or set(envelope) != {"schema_version", "result", "token_usage"} \
                     or envelope["schema_version"] != 1:
@@ -217,7 +225,7 @@ class ExternalCommandEvaluator:
             usage = self._usage(envelope["token_usage"])
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
             detail = f"invalid external evaluator response: {error}"
-            self._persist(record, "invalid", detail)
+            self._persist(record, "invalid", detail, usage=usage)
             raise ExternalEvaluatorError(EvalStatus.INVALID, detail, execution_id) from error
         self.last_usage = usage
         self._persist(record, "ok", "external evaluation completed", result_payload, usage)
@@ -234,6 +242,7 @@ class ExternalCommandEvaluator:
         status = payload["status"]
         if status == "ok":
             result = self._result(payload["result"], record["candidate_id"], record["head_sha"])
+            self._usage(payload["token_usage"])
             error = None
         else:
             result = None
@@ -281,7 +290,7 @@ class ExternalCommandEvaluator:
     def __call__(self, candidate_id: str, head_sha: str, prompt: str) -> EvalResult:
         if not candidate_id or not head_sha or not isinstance(prompt, str):
             raise ValueError("external evaluation requires candidate/head and string prompt")
-        self.last_usage = {"total_tokens": 0}
+        reset_usage(self)
         self.last_execution_id = None
         directory = self.evaluation_root / uuid.uuid4().hex
         directory.mkdir(parents=True)

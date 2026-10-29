@@ -137,6 +137,7 @@ class MeteredOpenAICompatibleLLM:
         self.usage_dir = usage_dir
         self.token_budget = token_budget
         self._cumulative = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._usage_known = True
 
     @property
     def model(self):
@@ -148,19 +149,22 @@ class MeteredOpenAICompatibleLLM:
 
     @property
     def last_usage(self):
-        return dict(self._cumulative)
+        return dict(self._cumulative) if self._usage_known else None
 
     @last_usage.setter
-    def last_usage(self, _value):
+    def last_usage(self, value):
         self._cumulative = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._usage_known = value is not None
 
     def __call__(self, prompt: str) -> str:
+        self._usage_known = False
         _check_token_budget(self.usage_dir, self.token_budget)
         response = self.inner(prompt)
         receipt = _write_usage_receipt(
             self.usage_dir, "openai_compatible", self.inner.model, self.inner.last_usage)
         for key in self._cumulative:
             self._cumulative[key] += receipt[key]
+        self._usage_known = True
         return response
 
 

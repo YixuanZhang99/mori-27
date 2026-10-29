@@ -86,6 +86,7 @@ def test_replay_score_drift_leaves_failed_certificate_and_raises(tmp_path):
     drift = {"enabled": False}
 
     def evaluator(candidate_id, head_sha, prompt):
+        evaluator.last_usage = {"total_tokens": 0}
         score = 0.99 if drift["enabled"] else toy_evaluator(
             candidate_id, head_sha, prompt).combined_score
         return EvalResult(candidate_id=candidate_id, head_sha=head_sha,
