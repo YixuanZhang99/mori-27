@@ -75,7 +75,7 @@ def test_default_composition_completes_real_optimization_and_accounts_every_call
     llm, evaluator = CountingLLM(), CountingEvaluator()
     fw = framework(tmp_path, llm=llm, evaluator=evaluator)
     result = fw.evolve(TASK)
-    assert result["runtime"] == "composed-v2"
+    assert result["runtime"] == "composed-v3"
     assert result["cycles"] == llm.calls == evaluator.calls == 4
     assert result["best_score"] == pytest.approx(7 / 12)
     assert "hint_4" in result["best_prompt"] and "hint_6" in result["best_prompt"]
@@ -92,7 +92,7 @@ def test_default_composition_completes_real_optimization_and_accounts_every_call
 
 def test_registered_profile_name_uses_configured_framework_entry_point(tmp_path):
     fw = framework(tmp_path, profile="composed_prompt", cfg=config(max_generations=0))
-    assert fw.evolve(TASK)["runtime"] == "composed-v2"
+    assert fw.evolve(TASK)["runtime"] == "composed-v3"
     assert fw.inspect()["assembly"]["schema_version"] == 1
 
 
@@ -254,7 +254,9 @@ def test_boundary_resume_matches_uninterrupted_and_replay_attempts_are_isolated(
     resumed = framework(tmp_path / "resume", llm=llm, evaluator=evaluator,
                         profile=profile, cfg=config(max_generations=4, resume_from_checkpoint=True))
     actual = resumed.evolve(TASK)
-    assert actual == expected
+    assert {k:v for k,v in actual.items() if k != "checkpoint_ref"} == {
+        k:v for k,v in expected.items() if k != "checkpoint_ref"}
+    assert actual["checkpoint_ref"] != expected["checkpoint_ref"]  # independent run identities
     assert evaluator.calls == 3
     assert llm.calls == (3 if policy_name == "greedy" else 6)
     initial_calls = (llm.calls, evaluator.calls)

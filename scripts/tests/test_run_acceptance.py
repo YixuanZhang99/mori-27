@@ -21,11 +21,11 @@ SPEC.loader.exec_module(runner)
 HEADER = """import json, os, sys, time
 from pathlib import Path
 checks = [{'check': 'synthetic_check', 'passed': True, 'detail': 'fixture'}]
-certificate = {'version': 'v61', 'passed': True, 'checks': checks}
-entry = {'command': 'python3 verifier/v61/verify.py', 'exit_code': 0, 'checks': checks}
+certificate = {'version': 'v62', 'passed': True, 'checks': checks}
+entry = {'command': 'python3 verifier/v62/verify.py', 'exit_code': 0, 'checks': checks}
 """
-WRITE_CERTIFICATE = "Path('verifier/v61/LAST_RUN.json').write_text(json.dumps(certificate))\n"
-APPEND_JOURNAL = "with Path('verifier/runs/v61.jsonl').open('a') as f: f.write(json.dumps(entry) + '\\n')\n"
+WRITE_CERTIFICATE = "Path('verifier/v62/LAST_RUN.json').write_text(json.dumps(certificate))\n"
+APPEND_JOURNAL = "with Path('verifier/runs/v62.jsonl').open('a') as f: f.write(json.dumps(entry) + '\\n')\n"
 
 
 class AcceptanceRunnerTests(unittest.TestCase):
@@ -33,20 +33,20 @@ class AcceptanceRunnerTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(prefix="mori27-runner-test-")
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        (self.root / "m0/verifier/v61").mkdir(parents=True)
+        (self.root / "m0/verifier/v62").mkdir(parents=True)
         (self.root / "m0/verifier/runs").mkdir()
         self.original = {
-            "verifier/v61/LAST_RUN.json": '{"version":"v61","passed":true,"checks":[{"check":"old","passed":true}]}\n',
-            "verifier/runs/v61.jsonl": '{"exit_code":0,"checks":[{"check":"old","passed":true}]}\n',
-            "verifier/v60/LAST_RUN.json": '{"version":"v60","passed":true}\n',
-            "verifier/runs/v60.jsonl": '{"exit_code":0,"checks":{"historical":true}}\n',
+            "verifier/v62/LAST_RUN.json": '{"version":"v62","passed":true,"checks":[{"check":"old","passed":true}]}\n',
+            "verifier/runs/v62.jsonl": '{"exit_code":0,"checks":[{"check":"old","passed":true}]}\n',
+            "verifier/v61/LAST_RUN.json": '{"version":"v61","passed":true}\n',
+            "verifier/runs/v61.jsonl": '{"exit_code":0,"checks":{"historical":true}}\n',
         }
         for name, text in self.original.items():
             (self.root / "m0" / name).parent.mkdir(parents=True, exist_ok=True)
             (self.root / "m0" / name).write_text(text)
 
     def run_fixture(self, body: str, *, timeout: float = 3, max_log_bytes: int | None = None):
-        (self.root / "m0/verifier/v61/verify.py").write_text(HEADER + body)
+        (self.root / "m0/verifier/v62/verify.py").write_text(HEADER + body)
         with patch.object(runner, "ROOT", self.root), \
              patch.object(runner, "MAX_LOG_BYTES", max_log_bytes or runner.MAX_LOG_BYTES), \
              contextlib.redirect_stdout(io.StringIO()):
@@ -77,11 +77,11 @@ class AcceptanceRunnerTests(unittest.TestCase):
         self.without_current_history()
         status, summary, output = self.run_fixture(WRITE_CERTIFICATE + APPEND_JOURNAL)
         self.assertEqual(status, 0)
-        self.assertEqual(summary["verifier_version"], "v61")
+        self.assertEqual(summary["verifier_version"], "v62")
         self.assertTrue(summary["source_history_unchanged"])
         self.assertTrue((output / "LAST_RUN.json").is_file())
-        self.assertTrue((output / "v61.jsonl").is_file())
-        self.assertEqual((output / "v61.jsonl").read_bytes(),
+        self.assertTrue((output / "v62.jsonl").is_file())
+        self.assertEqual((output / "v62.jsonl").read_bytes(),
                          (output / "new-runs.jsonl").read_bytes())
 
     def test_first_run_still_rejects_missing_fresh_evidence(self):
@@ -94,8 +94,8 @@ class AcceptanceRunnerTests(unittest.TestCase):
 
     def test_previous_version_outputs_cannot_certify_current_version(self):
         status, summary, _ = self.run_fixture(
-            "certificate['version'] = 'v60'\n"
-            "entry['command'] = 'python3 verifier/v60/verify.py'\n"
+            "certificate['version'] = 'v61'\n"
+            "entry['command'] = 'python3 verifier/v61/verify.py'\n"
             + WRITE_CERTIFICATE + APPEND_JOURNAL)
         self.assertEqual(status, 1)
         self.assertFalse(summary["certificate_passed"])
@@ -127,7 +127,7 @@ class AcceptanceRunnerTests(unittest.TestCase):
 
     def test_malformed_certificate_produces_failure_summary(self):
         status, summary, _ = self.run_fixture(
-            "Path('verifier/v61/LAST_RUN.json').write_text('{broken')\n" + APPEND_JOURNAL)
+            "Path('verifier/v62/LAST_RUN.json').write_text('{broken')\n" + APPEND_JOURNAL)
         self.assertEqual(status, 1)
         self.assertFalse(summary["certificate_passed"])
         self.assertTrue(any("malformed" in error for error in summary["errors"]))
@@ -154,7 +154,7 @@ class AcceptanceRunnerTests(unittest.TestCase):
 
     def test_rewritten_historical_journal_is_rejected(self):
         status, summary, _ = self.run_fixture(WRITE_CERTIFICATE
-            + "Path('verifier/runs/v61.jsonl').write_text(json.dumps(entry) + '\\n')\n")
+            + "Path('verifier/runs/v62.jsonl').write_text(json.dumps(entry) + '\\n')\n")
         self.assertEqual(status, 1)
         self.assertTrue(any("rewrote" in error for error in summary["errors"]))
 

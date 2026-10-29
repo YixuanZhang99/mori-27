@@ -48,5 +48,3 @@ class EvaluationContract:
     items: tuple[ItemOutcome, ...] | None = None
     binding_source: Literal["producer", "invocation"] = "producer"
     visibility: Literal["full", "public"] = "full"
-
-

@@ -108,7 +108,10 @@ class AssemblyConfig:
         if len({operator.name for operator in self.operators}) != len(self.operators):
             raise ValueError("assembly operator names must be unique for policy selection")
         if self.knowledge is not None:
-            raise ValueError("knowledge composition is unavailable in stage 1")
+            if not isinstance(self.knowledge, ComponentSpec):
+                raise ValueError("knowledge must be a ComponentSpec")
+            if self.mode != "research":
+                raise ValueError("knowledge requires research mode; benchmark access is disabled")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AssemblyConfig":
@@ -126,13 +129,12 @@ class AssemblyConfig:
         for key in ("operators", "skills"):
             if type(data.get(key, [])) is not list:
                 raise ValueError(f"assembly {key} must be a list")
-        if data.get("knowledge") is not None:
-            raise ValueError("knowledge composition is unavailable in stage 1")
         return cls(
             schema_version=data["schema_version"], name=data["name"],
             operators=tuple(ComponentSpec.from_dict(item) for item in data["operators"]),
             skills=tuple(ComponentSpec.from_dict(item) for item in data.get("skills", [])),
-            mode=data.get("mode", "benchmark"), knowledge=None,
+            mode=data.get("mode", "benchmark"),
+            knowledge=ComponentSpec.from_dict(data["knowledge"]) if data.get("knowledge") is not None else None,
             **{key: ComponentSpec.from_dict(data[key]) for key in _SINGLE_COMPONENTS})
 
     def to_dict(self) -> dict[str, Any]:
@@ -141,7 +143,7 @@ class AssemblyConfig:
             **{key: getattr(self, key).to_dict() for key in _SINGLE_COMPONENTS},
             "operators": [item.to_dict() for item in self.operators],
             "skills": [item.to_dict() for item in self.skills],
-            "mode": self.mode, "knowledge": None}
+            "mode": self.mode, "knowledge": self.knowledge.to_dict() if self.knowledge else None}
 
 
 @dataclass(frozen=True)
@@ -153,6 +155,7 @@ class BuildContext:
     loop_config: Any
     workdir: str | Path
     accounting_stamp: Any = None
+    mode: str = "benchmark"
 
 
 @dataclass(frozen=True)

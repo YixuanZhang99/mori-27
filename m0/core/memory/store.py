@@ -196,12 +196,24 @@ class ScopedMemory:
                 expired.append(entry.id)
         return expired
 
-    def retrieve(self, query: MemoryQuery, k: int = 5, at: float = 0) -> list[MemoryEntry]:
+    def retrieve(self, query: MemoryQuery, k: int = 5, at: float = 0, *,
+                 entry_ids: set[str] | None = None,
+                 levels: tuple[str, ...] | None = None) -> list[MemoryEntry]:
         if k < 1:
             raise ValueError("k must be positive")
+        if entry_ids is not None and (not isinstance(entry_ids, set)
+                or any(type(value) is not str for value in entry_ids)):
+            raise ValueError("memory entry_ids must be a set of strings")
+        if levels is not None and (not isinstance(levels, tuple) or not levels
+                or any(level not in {"L1", "L2", "L3"} for level in levels)):
+            raise ValueError("memory levels must be a nonempty tuple of L1/L2/L3")
         self.expire(at)
         visible = []
         for entry in self.entries.values():
+            if entry_ids is not None and entry.id not in entry_ids:
+                continue
+            if levels is not None and entry.level not in levels:
+                continue
             allowed_states = ("active", "demoted", "archived") if query.include_archived else ("active", "demoted")
             if entry.state not in allowed_states or not within_scope(entry, query):
                 continue

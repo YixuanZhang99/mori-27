@@ -1,0 +1,449 @@
+{
+  "version": "v61",
+  "passed": true,
+  "composition_stage_evidence": {
+    "stage": "S1",
+    "certified": true,
+    "executed_group": "composition_registry_defaults_and_runtime_end_to_end",
+    "scope": [
+      "registered module composition",
+      "validated default module adapters",
+      "configured Framework runtime end-to-end execution"
+    ],
+    "unified_evaluation_contract_complete": false,
+    "memory_knowledge_feedback_complete": false,
+    "three_layer_admission_complete": false,
+    "hierarchical_budget_complete": false
+  },
+  "evaluation_contract_stage_evidence": {
+    "stage": "S2",
+    "certified": true,
+    "executed_group": "canonical_evaluation_contract_and_composed_execution_end_to_end",
+    "scope": [
+      "strict canonical evaluation transport in the configured runtime",
+      "candidate artifact and evaluation-context identity binding",
+      "explicit cost and failure evidence through legacy adapters",
+      "public search projections and restricted admission comparison views",
+      "configured checkpoint and replay preserve evaluation evidence"
+    ],
+    "legacy_m0_interface_retained": true,
+    "memory_knowledge_feedback_complete": false,
+    "three_layer_admission_complete": false,
+    "hierarchical_budget_complete": false
+  },
+  "identity_and_replay_repair_evidence": {
+    "executed_groups": [
+      "dataset_content_binding_and_evaluation_context_regressions",
+      "process_identity_writer_reader_and_real_recovery_regressions",
+      "upfront_config_validation_and_isolated_replay_regressions",
+      "decision_receipt_identity_context_and_audit_regressions"
+    ],
+    "certified": true,
+    "scope": [
+      "dataset content digests bind evaluation contexts",
+      "shared process identity reader and detached target writer",
+      "reject invalid configuration before side effects",
+      "decision receipts bind complete evidence and decision context",
+      "isolated deterministic replay without original run mutation"
+    ],
+    "linux_process_identity_execution": true
+  },
+  "integrity_repair_evidence": {
+    "executed_groups": [
+      "admission_sample_identity_comparability_and_schema_regressions",
+      "physical_usage_failure_zero_and_replay_regressions",
+      "budget_finite_cost_reserve_identity_and_atomic_replay_regressions"
+    ],
+    "certified": true,
+    "scope": [
+      "typed unique comparable admission samples",
+      "physical usage includes zero and fails closed when malformed",
+      "nonnegative finite budget costs and immutable reservation identity",
+      "atomic ledger restoration and idempotent settlement"
+    ]
+  },
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "re_bench_campaign_executed": false,
+    "mle_bench_lite_campaign_executed": false,
+    "host_parity_certified": false,
+    "rubric_b2_complete": false,
+    "rubric_b3_complete": false
+  },
+  "external_provider_execution": {
+    "real_external_api_executed": false,
+    "local_openai_compatible_http_worker_executed": true,
+    "external_scores_or_cost_efficiency_produced": false
+  },
+  "supersedes": [
+    "v58 dataset identity did not bind complete task content",
+    "v58 detached process writer did not share the robust stat reader",
+    "v58 config, receipts and replay needed complete boundary validation",
+    "v57 seccomp v1 left x32 and legacy x32 syscall encodings unguarded",
+    "v57 admission, usage and budget evidence needed strict boundary validation"
+  ],
+  "acceptance_harness": {
+    "recursive_history_execution": false,
+    "prior_passing_journals_required": "v1-v60 except rejected v14 and superseded v43 recursive harness",
+    "current_behavior_reexecuted": true,
+    "legacy_failures_preserved": true,
+    "functional_assertions_reduced": false
+  },
+  "seccomp_execution_evidence": {
+    "executed": true,
+    "certified": true,
+    "architecture": "x86_64",
+    "policy": "explicit-versioned-dangerous-syscall-denylist-v2",
+    "x32_bit_and_legacy_range_rejected_on_both_delivery_paths": true,
+    "portable_bpf_boundary_and_audit_architecture_semantics": true,
+    "stale_or_relabelled_v1_specs_rejected_before_new_launch": true,
+    "unfinished_stale_policy_recovery_blocked_without_relaunch": true,
+    "real_ptrace_returned_eperm": true,
+    "ordinary_python_and_mle_host_governed_cli_executed": true,
+    "external_evaluator_and_git_worktree_executor_covered": true,
+    "detached_wrapper_and_direct_popen_share_memfd_lifecycle": true,
+    "canonical_filter_and_sha256_in_durable_spec": true,
+    "journal_contains_public_policy_summary_without_filter_bytes": true,
+    "rehashed_semantic_tamper_rejected_before_target_start": true,
+    "fork_and_owner_crash_recovery_preserve_policy_without_reexecution": true,
+    "explicit_seccomp_disable_remains_audited": true,
+    "complete_syscall_allowlist": false,
+    "non_x86_64_seccomp_certified": false,
+    "external_command_proposer_seccomp_protected": true,
+    "external_command_proposer_sandboxed": false,
+    "cgroup_or_complete_resource_limits": false,
+    "hostile_kernel_boundary": false,
+    "environment_or_credentials_persisted": false
+  },
+  "proposer_seccomp_execution_evidence": {
+    "executed": true,
+    "certified": true,
+    "architecture": "x86_64",
+    "delivery": "direct_prctl",
+    "default_enabled_for_external_command_llm": true,
+    "real_ptrace_returned_eperm": true,
+    "no_new_privs_and_seccomp_filter_status_observed": true,
+    "local_openai_http_network_and_authorization_inherited": true,
+    "environment_or_credentials_persisted": false,
+    "direct_delivery_in_durable_spec_and_public_journal": true,
+    "rehashed_semantic_tamper_rejected_before_target_start": true,
+    "invalid_delivery_rejected_before_process_launch": true,
+    "fork_and_owner_crash_recovery_preserve_policy_without_provider_retry": true,
+    "explicit_seccomp_disable_remains_audited": true,
+    "bubblewrap_filesystem_or_network_isolation": false,
+    "credential_isolation": false,
+    "fallback_or_arbitrary_inprocess_calls_seccomp_protected": false,
+    "complete_syscall_allowlist_or_hostile_kernel_boundary": false
+  },
+  "benchmark_evidence_contract": {
+    "executed": true,
+    "certified": true,
+    "explicit_selection_object_policy_and_split": true,
+    "single_run_archive_best_and_best_single_chain_distinguished": true,
+    "identical_selection_contract_required_across_matrix": true,
+    "declared_units_require_actual_measurements": true,
+    "matrix_declared_and_actual_unit_sets_must_match": true,
+    "required_physical_cost_dimensions_enforced": true,
+    "missing_cost_treated_as_zero": false,
+    "selection_or_cost_fields_enter_m9": false,
+    "external_benchmark_scores_produced": false,
+    "usd_or_admitted_per_usd_conclusion_produced": false
+  },
+  "selection_replay_evidence": {
+    "executed": true,
+    "certified": true,
+    "candidate_pool_and_evidence_refs_bound": true,
+    "receipt_sha256_binds_contract_pool_and_choice": true,
+    "archive_best_validation_max_deterministic_tie_break": true,
+    "best_single_chain_exactly_one_terminal_per_chain": true,
+    "single_run_exactly_one_candidate": true,
+    "official_test_score_enters_selection": false,
+    "rehashed_semantic_tamper_accepted": false,
+    "comparison_reports_every_receipt_digest": true,
+    "external_benchmark_scores_produced": false
+  },
+  "embedding_state_portability": {
+    "executed": true,
+    "certified": true,
+    "model_and_credential_free_api_base_roundtrip": true,
+    "finite_nonempty_consistent_dimension_vectors": true,
+    "native_save_load_and_strict_disk_reread": true,
+    "restored_vectors_drive_native_cosine_and_novelty_offline": true,
+    "live_novelty_llm_object_serialized": false,
+    "future_external_embedding_responses_reproduced_offline": false,
+    "embedding_or_novelty_enters_m9": false
+  },
+  "openevolve_database_interoperability": {
+    "executed": true,
+    "certified": true,
+    "real_vendored_program_and_database": true,
+    "program_lineage_metrics_metadata_roundtrip": true,
+    "islands_grids_elites_and_feature_stats_roundtrip": true,
+    "native_save_load_and_sampling": true,
+    "canonical_integrity_envelope": true,
+    "strict_disk_preflight_before_native_cleanup": true,
+    "single_parent_frontier_export": true,
+    "multi_parent_exported": true,
+    "first_declared_parent_is_native_primary": true,
+    "additional_parents_preserved_in_governance_metadata": true,
+    "frontier_checkpoint_exact_reverse_recovery": true,
+    "native_save_load_then_frontier_checkpoint_equivalence": true,
+    "topology_metadata_and_rehashed_tamper_refusal": true,
+    "host_cell_displaced_programs_retained_without_fake_membership": true,
+    "native_multi_parent_credit_propagation": false,
+    "frontier_and_governance_regressions": true,
+    "host_metrics_enter_m9": false,
+    "external_artifact_payload_migration": true,
+    "artifact_text_binary_empty_and_small_roundtrip": true,
+    "artifact_snapshot_hash_and_per_file_sha256": true,
+    "artifact_atomic_relocation_and_native_get_artifacts": true,
+    "artifact_path_symlink_nested_and_tamper_refusal": true,
+    "unreferenced_artifact_directories_migrated": false,
+    "novelty_llm_state_portable": false,
+    "embedding_state_portable": true
+  },
+  "uncertified_boundaries": [
+    "complete evaluation contract migration outside the configured runtime",
+    "S1 population, worktree, HITL and event-bus composition gaps",
+    "S3 memory and knowledge feedback into candidate generation",
+    "S4 three-layer admission and isolated final audit",
+    "S5 hierarchical budget and fidelity controller",
+    "native OpenEvolve multi-parent credit propagation",
+    "unreferenced or orphaned OpenEvolve artifact directory migration",
+    "live novelty LLM object portability",
+    "offline reproduction of future external embedding responses",
+    "in-process evaluator calls without a terminal outcome",
+    "legacy sequential or batch operations without durable outcomes",
+    "actual seven-task RE-Bench campaign and external scores",
+    "actual 22-task MLE-Bench Lite campaign and host parity",
+    "real external provider API campaign",
+    "machine power loss",
+    "complete syscall allowlist",
+    "seccomp on non-x86_64 architectures",
+    "ExternalCommandLLM/proposer Bubblewrap, filesystem, network or credential isolation",
+    "fallback or arbitrary in-process proposer/evaluator seccomp or sandboxing",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas",
+    "hosted CI execution"
+  ],
+  "scope": [
+    "S2 canonical evaluation codec, binding and adapter contracts in configured execution",
+    "S1 module registry, default adapters and configured Framework composition",
+    "bind dataset contents and frozen evaluation context before admission",
+    "write and recover the same stable process identity for unusual executable names",
+    "reject invalid configs before launch or persistent state creation",
+    "bind and independently audit canonical decision evidence and context",
+    "replay governed state in an isolated workspace with mismatch reporting",
+    "retain all v60 regression groups and passing historical evidence",
+    "reject malformed or non-comparable admission evidence before testing candidates",
+    "measure physical provider usage, including zero, failure and replay paths",
+    "bind finite nonnegative budget costs to immutable reserve identities and accounts",
+    "deny all x32-tagged syscall numbers and the legacy 512..547 range under v2",
+    "block unfinalized stale-policy recovery and stop only identity-verified processes",
+    "retain v57 historical evidence without rerunning its superseded policy-version assertion",
+    "install the same denylist by direct prctl in every durable ExternalCommandLLM worker by default",
+    "observe real EPERM, NoNewPrivs and Seccomp status while retaining local HTTP and Authorization inheritance",
+    "persist direct_prctl delivery and policy evidence without environment values or credentials",
+    "reject invalid delivery and rehashed semantic tampering before target start",
+    "preserve direct policy across fork and owner-crash adoption without another provider request",
+    "keep explicit disable separate from Bubblewrap, filesystem, network and credential isolation claims",
+    "exclude fallback and arbitrary in-process calls from the external-worker seccomp certificate",
+    "enforce the versioned x86_64 dangerous-syscall denylist with real EPERM probes",
+    "bind canonical filter bytes and SHA256 into durable specs and public journal summaries",
+    "share memfd/pass_fds lifecycle across detached wrapper and direct Popen execution",
+    "cover ExternalCommandEvaluator, GitWorktreeExecutor and MLE host/governed CLI",
+    "reject unsupported architectures and rehashed semantic policy tampering before target start",
+    "preserve policy across fork and owner-crash recovery without reexecution",
+    "keep the denylist distinct from allowlists, proposer filesystem/network/credential isolation, cgroups and resource quotas",
+    "preserve embedding model, credential-free API base and stored finite vectors",
+    "reject embedding credentials, malformed URLs, empty vectors and dimension forks",
+    "exercise native save/load, strict disk reads and restored-vector novelty behavior offline",
+    "keep live novelty LLM objects and future external embedding responses outside the certificate",
+    "bind selection receipts to candidate pools, validation evidence and chain terminals",
+    "replay single-run, archive-best and best-single-chain selection deterministically",
+    "reject wrong winners, ambiguous chains, missing validation evidence and receipt tampering",
+    "keep official test scores outside pre-test selection and all selection data outside M9",
+    "publish every run receipt digest in paired comparison reports",
+    "bind every measured run to an explicit selection object, policy and split",
+    "reject selection-contract forks within one paired comparison",
+    "require actual measurements for every declared budget unit",
+    "require identical declared and actual physical cost-unit sets across the full matrix",
+    "enforce caller-required physical cost dimensions in both official campaign runners",
+    "report selection and cost-unit coverage without inferring missing costs or USD efficiency",
+    "rerun all v52 interoperability, recovery and governance behavior",
+    "use the real vendored Program and ProgramDatabase implementations",
+    "roundtrip code, primary/additional-parent lineage, generation, metrics and metadata",
+    "preserve islands, feature grids, archive/best ids and feature scaling state",
+    "exercise native save/load and host parent/inspiration sampling",
+    "use a canonical schema-versioned SHA256 integrity envelope",
+    "reject malformed, duplicate, dangling, inconsistent or unsupported state",
+    "validate native disk before OpenEvolve can skip files or clean references",
+    "export only complete eligible Frontier nodes without silent parent or Program loss",
+    "map the first declared parent to native parent_id and preserve every additional parent",
+    "bind every Program to one deterministic-anchor Frontier checkpoint and restore it exactly",
+    "retain host-cell-displaced Programs without fabricating island or elite membership",
+    "reject missing metadata, parent forks, graph invariant violations and rehashed tampering",
+    "keep native OpenEvolve sampling single-primary-parent rather than claiming DAG credit propagation",
+    "bind every referenced external artifact to the exact database snapshot hash",
+    "roundtrip raw text/binary bytes with size and per-file SHA256 validation",
+    "atomically migrate database and artifacts while rewriting final directory references",
+    "reject symlink, nested, unsafe-path, duplicate, missing-directory and content forks",
+    "exercise native get_artifacts after removing the source directories",
+    "keep host metrics, feature metadata and artifacts outside M9",
+    "no orphan-artifact migration, external benchmark, parity, USD or A/B/C completion claim"
+  ],
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true,
+      "detail": "prior passing journals verified; missing=[]"
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true,
+      "detail": "v14 failed journal remains rejected; v15 is its corrected successor"
+    },
+    {
+      "check": "canonical_evaluation_contract_and_composed_execution_end_to_end",
+      "passed": true,
+      "detail": "........................................................................ [ 96%]\n...                                                                      [100%]\n75 passed in 0.27s"
+    },
+    {
+      "check": "composition_registry_defaults_and_runtime_end_to_end",
+      "passed": true,
+      "detail": "........................................................................ [ 65%]\n......................................                                   [100%]\n110 passed in 0.54s"
+    },
+    {
+      "check": "dataset_content_binding_and_evaluation_context_regressions",
+      "passed": true,
+      "detail": "...........................................                              [100%]\n43 passed in 0.38s"
+    },
+    {
+      "check": "process_identity_writer_reader_and_real_recovery_regressions",
+      "passed": true,
+      "detail": "......................                                                   [100%]\n22 passed in 0.19s"
+    },
+    {
+      "check": "upfront_config_validation_and_isolated_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 50%]\n......................................................................   [100%]\n142 passed in 0.54s"
+    },
+    {
+      "check": "decision_receipt_identity_context_and_audit_regressions",
+      "passed": true,
+      "detail": "........................................                                 [100%]\n40 passed in 0.46s"
+    },
+    {
+      "check": "admission_sample_identity_comparability_and_schema_regressions",
+      "passed": true,
+      "detail": "....................................................................     [100%]\n68 passed in 0.23s"
+    },
+    {
+      "check": "physical_usage_failure_zero_and_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 94%]\n....                                                                     [100%]\n76 passed in 0.26s"
+    },
+    {
+      "check": "budget_finite_cost_reserve_identity_and_atomic_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 74%]\n.........................                                                [100%]\n97 passed in 0.16s"
+    },
+    {
+      "check": "real_seccomp_eperm_memfd_direct_popen_and_both_executors",
+      "passed": true,
+      "detail": "........................................................................ [ 90%]\n........                                                                 [100%]\n80 passed in 12.09s"
+    },
+    {
+      "check": "direct_prctl_proposer_eperm_http_credentials_fork_and_owner_recovery",
+      "passed": true,
+      "detail": "............                                                             [100%]\n12 passed in 8.80s"
+    },
+    {
+      "check": "selection_contract_cost_coverage_and_campaign_mechanics",
+      "passed": true,
+      "detail": "......................................................................   [100%]\n70 passed in 6.78s"
+    },
+    {
+      "check": "multi_parent_lineage_native_roundtrip_artifacts_and_flip_isolation",
+      "passed": true,
+      "detail": ".....................................................                    [100%]\n53 passed in 0.91s"
+    },
+    {
+      "check": "interop_frontier_map_elites_and_governance_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 96%]\n...                                                                      [100%]\n75 passed in 1.46s"
+    },
+    {
+      "check": "map_elites_sequential_batch_and_governance_regressions",
+      "passed": true,
+      "detail": "..................................................                       [100%]\n50 passed in 2.09s"
+    },
+    {
+      "check": "inprocess_batch_terminal_real_sigkill_partial_start_and_active_guards",
+      "passed": true,
+      "detail": "............................                                             [100%]\n28 passed in 9.30s"
+    },
+    {
+      "check": "sequential_evaluation_terminal_regressions",
+      "passed": true,
+      "detail": "....................................................                     [100%]\n52 passed in 32.39s"
+    },
+    {
+      "check": "proposal_terminal_and_active_call_regressions",
+      "passed": true,
+      "detail": ".....................................................                    [100%]\n53 passed in 53.22s"
+    },
+    {
+      "check": "complete_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 22%]\n........................................................................ [ 44%]\n........................................................................ [ 66%]\n........................................................................ [ 88%]\n.....................................                                    [100%]\n325 passed in 144.70s (0:02:24)"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [  5%]\n........................................................................ [ 11%]\n........................................................................ [ 17%]\n........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n......................................................                   [100%]\n1206 passed in 163.45s (0:02:43)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "strict_benchmark_contract_wiring_and_m9_isolation",
+      "passed": true,
+      "detail": "both campaign runners require declared physical costs; comparison has no M9 or USD-efficiency adjudication"
+    },
+    {
+      "check": "embedding_state_portability_and_live_novelty_llm_isolation",
+      "passed": true,
+      "detail": "embedding config/vectors roundtrip; live judge objects and M9 remain outside snapshots"
+    },
+    {
+      "check": "real_vendored_database_and_admission_isolation",
+      "passed": true,
+      "detail": "real host classes, lossless DAG recovery and no M9 import/adjudication"
+    },
+    {
+      "check": "versioned_seccomp_policy_and_shared_memfd_wiring",
+      "passed": true,
+      "detail": "canonical arch/x32-guarded v2 EPERM denylist; detached and direct Popen share memfd lifecycle; no M9 coupling"
+    },
+    {
+      "check": "direct_prctl_proposer_policy_wiring_and_m9_isolation",
+      "passed": true,
+      "detail": "direct NO_NEW_PRIVS/SECCOMP installation, durable delivery, default proposer wiring, fork inheritance and no M9 coupling"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "active root CI runs isolated v61 with no skipped tests"
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true,
+      "detail": "exactly one v61 index entry"
+    }
+  ]
+}

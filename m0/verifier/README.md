@@ -64,3 +64,5 @@
 - v60 — S1 模块注册、默认适配和可配置 Framework 组装端到端验收；保留全部 v59 回归与历史证据。S2–S5 尚不由本阶段认证。见 [v60](v60/README.md)。
 
 - v61 — S2 配置运行时的 canonical 评估 codec、身份绑定、显式兼容适配及恢复端到端验收；保留全部 v60 回归与历史证据。S3–S5 及 S1 未接通子条款继续单列。见 [v61](v61/README.md)。
+
+- v62 — S3 配置运行时的 scoped ContextPack、local knowledge 双车道和实际生成回流验收；保留全部 v61 回归与历史证据。外部知识网络、S4/S5 及未接通子条款继续单列。见 [v62](v62/README.md)。

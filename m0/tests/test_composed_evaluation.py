@@ -64,7 +64,8 @@ def test_native_domain_metadata_and_cost_survive_framework_checkpoint_resume_rep
     partial.evolve(TASK)
     resumed = native_framework(tmp_path / 'split', cfg=config(max_generations=2, resume_from_checkpoint=True))
     actual = resumed.evolve(TASK)
-    assert actual == expected
+    assert {k:v for k,v in actual.items() if k != "checkpoint_ref"} == {
+        k:v for k,v in expected.items() if k != "checkpoint_ref"}
     for row in records(resumed, 'composed_evidence'):
         result = row['evidence']['eval_result']
         assert result['contract']['private']['data']['secret'] == 'PRIVATE_CANARY'

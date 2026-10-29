@@ -18,6 +18,7 @@ from core.composition.defaults import (InProcessExecutor, InstructionSkill, Lega
 from core.eval.types import EvalResult as LegacyResult, ItemResult
 from core.executor.types import Candidate, CostVec, EvalRequest, EvalResult, EvalStatus, EvidenceRecord
 from core.composition.provider import MeteredProvider
+from core.composition.evaluation import encode_evidence, public_projection
 from core.composition.strategies import GreedyPolicy, LLMCyclesPolicy
 from core.llm import UsageError, take_usage
 from core.loop import LoopConfig
@@ -25,6 +26,7 @@ from core.memory.types import ScopeContext
 from core.state import StateApplier
 from core.tasks.gsm8k import GSM8KEvaluator
 from core.x1.store import AppendOnlyStore
+from core.x1.checkpoint import payload_digest
 from examples.toy_gepa import MockLLM, toy_evaluator
 
 
@@ -44,6 +46,13 @@ def context(tmp_path, llm=None, evaluator=None, stamp=None):
                         LoopConfig(max_generations=1), tmp_path, stamp)
 
 
+def absorb_bound_evidence(modules, evidence, cycle=0):
+    public = public_projection(evidence)
+    proposed = asyncio.run(modules["policy"].absorb(public))
+    return modules["memory"].prepare_mutations(
+        proposed, public, "sha256:" + payload_digest(encode_evidence(evidence)), cycle=cycle)
+
+
 def test_default_components_execute_draft_absorb_then_reflective_improvement(tmp_path):
     ctx = context(tmp_path)
     modules = default_registry().build(composed_profile(), ctx)
@@ -59,7 +68,7 @@ def test_default_components_execute_draft_absorb_then_reflective_improvement(tmp
     assert first.cost.tokens_in == 1000 and evidence.eval_result.cost.tokens_in == 0
     assert evidence.eval_result.cost.eval_count == 1
     state.add(first.candidate, evidence)
-    StateApplier(state, modules["memory"], ctx.store).apply_all(asyncio.run(policy.absorb(evidence)))
+    StateApplier(state, modules["memory"], ctx.store).apply_all(absorb_bound_evidence(modules, evidence))
     state.nodes["first"].status = "merged"
     assert asyncio.run(policy.select(state, {})) == ["first"]
     assert modules["memory"].entries
@@ -287,11 +296,11 @@ def test_policy_compacts_only_working_context_and_restores_bounded_history(tmp_p
     cfg["policy"] = {"name": policy_name, "options": {"context_window": 2}}
     modules = default_registry().build(cfg, context(tmp_path, llm=raw))
     frontier, policy = modules["frontier"], modules["policy"]
-    evidence = EvidenceRecord("persisted", EvalResult(EvalStatus.OK, {"dev/score": 0.5}),
-                              executor_status="scored", result_text="durable experience")
+    evidence = asyncio.run(modules["executor"].execute(
+        Proposal(Candidate("persisted"), "durable experience"), EvalRequest("dev"), modules["domain"]))
     frontier.add(Candidate("persisted"), evidence)
     StateApplier(frontier, modules["memory"], context(tmp_path).store).apply_all(
-        asyncio.run(policy.absorb(evidence)))
+        absorb_bound_evidence(modules, evidence))
     before_memory = modules["memory"].checkpoint_state()
     for cycle in range(5):
         state = policy_state(frontier, cycle)

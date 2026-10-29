@@ -2,6 +2,8 @@
 
 本阶段将严格评估契约接入 `Framework.from_profile(...)` 的配置运行路径，运行与检查点版本为 `composed-v2`。实现保留 `core.executor.types.EvalResult` / `EvidenceRecord` 作为规范结果，不另建第二个完整评估结果类；新增 `EvalResult.contract` 保存身份、计量覆盖、公开/私有数据和逐项结果。旧 M0 路径及小型 `core.eval.types.EvalResult` 保留，通过 `legacy_prompt` 显式适配。
 
+本页保留 S2/v61 阶段说明；当前 S3/v62 已升级为 `composed-v3`，新增作用域运行身份和上下文回流，迁移限制见 [S3 指南](CONTEXT_FEEDBACK_V62.md)。
+
 本阶段范围是配置路径的评估传输、身份绑定、可见性和恢复，不等于所有旧执行器已经迁移。当前仍为 dev 单层、token 账本、串行、tree 和 inprocess。S3 检索/知识回流、S4 三层准入、S5 分层预算，以及 [清单](ABSTRACTION_ALIGNMENT.md) 中尚未接通的 S1 子条款继续保留。Mac/Linux 是否通过须以当前提交的实际记录为准。
 
 ## 规范结果与身份
@@ -81,4 +83,4 @@ uv run --locked python -m pytest \
   tests/test_composed_evaluation.py -q --fail-on-skip --strict-markers
 ```
 
-Linux `make accept-linux` 使用 [v61](../m0/verifier/v61/README.md)，保留 v60 全部命令组及全量 pytest。执行记录追加在 [对照清单](ABSTRACTION_ALIGNMENT.md)，包括尚未覆盖的条款、Mac 结果和同一 SHA 的 Linux CI 链接。历史 v60 证据必须从真实成功 artifact 归档，不能以预期结果或新环境重跑替代。
+S2 对应 [v61](../m0/verifier/v61/README.md)；当前 Linux `make accept-linux` 使用 v62，保留 S2 全部命令组及全量 pytest。执行记录追加在 [对照清单](ABSTRACTION_ALIGNMENT.md)，包括尚未覆盖的条款、Mac 结果和同一 SHA 的 Linux CI 链接。历史证据必须从真实成功 artifact 归档，不能以预期结果或新环境重跑替代。

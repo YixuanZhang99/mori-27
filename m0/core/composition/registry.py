@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 
@@ -74,6 +75,8 @@ class Registry:
             yield "operator", spec
         for spec in config.skills:
             yield "skill", spec
+        if config.knowledge is not None:
+            yield "knowledge", config.knowledge
 
     def build(self, config: AssemblyConfig | dict[str, Any],
               context: BuildContext) -> dict[str, Any]:
@@ -81,7 +84,7 @@ class Registry:
             raise ValueError("assembly requires a BuildContext")
         snapshot = self.preflight(config)
         components: dict[str, Any] = {"operators": [], "skills": []}
-        active_context = context
+        active_context = context if context.mode == snapshot.mode else replace(context, mode=snapshot.mode)
         for kind, spec in self._specs(snapshot):
             registration = self._entries[(kind, spec.name)]
             component = registration.factory(active_context, json_copy(spec.options))
@@ -100,7 +103,11 @@ class Registry:
                         raise ValueError(f"configured provider {attribute} differs from accounting_stamp")
                 active_context = replace(active_context, llm=component)
             elif kind == "domain":
-                active_context = replace(active_context, evaluator=component)
+                identity = {"name": spec.name, "version": getattr(component, "evaluator_version", None),
+                            "evaluation_context": getattr(component, "evaluation_context", "")}
+                domain_id = "sha256:" + hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+                active_context = replace(active_context, evaluator=component,
+                    scope_context=replace(active_context.scope_context, domain_id=domain_id))
             if kind == "operator":
                 components["operators"].append(component)
             elif kind == "skill":

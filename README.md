@@ -2,7 +2,7 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v61**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v62**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -11,6 +11,7 @@
 - [统一抽象](docs/AutoResearch模块化统一抽象.md)是当前开发基准；[逐项对照清单](docs/ABSTRACTION_ALIGNMENT.md)记录实现证据、五阶段边界和验收条件。
 - [S1 配置组装使用指南](docs/COMPOSED_RUNTIME.md)：推荐入口 `Framework.from_profile("composed_prompt", ...)`、组件替换、恢复与 replay 契约。
 - [S2 统一评估契约](docs/EVALUATION_CONTRACT_V61.md)：原生 domain、严格身份和计量覆盖、公开/私有视图、v2 检查点兼容边界。
+- [S3 上下文与本地知识回流](docs/CONTEXT_FEEDBACK_V62.md)：有作用域的 ContextPack、显式跨 run 导出/导入、ground/audit 隔离和 v3 运行身份。
 - [2026-10-29 代码包详细梳理与审查](docs/CODEBASE_REVIEW_2026-10-29.md)：架构、模块支持矩阵、运行验证、可复现问题及后续优先级。
 - [原始接续开发说明](接续开发说明.md)：交接时的状态声明和环境说明。
 - [M0 代码文档](m0/README.md)与[术语及契约](m0/CONTEXT.md)。
@@ -36,16 +37,18 @@ v59 继续修复数据集内容绑定、进程身份写入、配置前置校验�
 
 新开发使用 `Framework.from_profile("composed_prompt", llm, evaluator, config, workdir)`，继续通过 `evolve()`、`inspect()`、`replay()` 操作。S1 将 provider、domain、policy、operators、frontier、memory、executor、admission、budget 和 skills 接入显式注册表；默认 greedy 策略和可选 `llm_cycles` 都使用默认 8 条的有界工作历史。
 
-五阶段顺序为模块组装、统一评估契约、记忆与知识回流、三层准入、分层预算。S1 的交付范围是配置组装：旧 evaluator 通过 `legacy_prompt` 显式适配 canonical 类型；记忆写入已接入，检索和知识回流待 S3；默认只做 dev 指标准入和 token 预算，三层准入与多资源分层预算仍待后续阶段。旧 M0 的 IID 对照、二元 gate、批次与中断接管能力保留在原路径，不能视为组装路径的完成项。
+五阶段顺序为模块组装、统一评估契约、记忆与知识回流、三层准入、分层预算。S1 交付配置组装，S2 补齐配置路径的评估契约，S3 接入作用域经验和本地知识回流。默认仍只做 dev 指标准入和 token 预算，三层准入与多资源分层预算待 S4/S5。旧 M0 的 IID 对照、二元 gate、批次与中断接管能力保留在原路径，不能视为组装路径的完成项。
 
 S1 只接受 `batch_size=max_inflight=1`，支持 cycle 边界恢复；未完成的付费 cycle 会拒绝自动重调。replay 需要独立适配器和新组件实例，并对再次执行的用量记账。可直接运行的离线例子、配置选项及准确边界见 [S1 使用指南](docs/COMPOSED_RUNTIME.md)。
 
-S2 在配置路径使用带身份和计量契约的规范评估结果，保存完整私有证据，向搜索投影公开字段，向准入提供不含费用的比较视图。新的 `composed-v2` 检查点不会自动接受缺契约的 S1 检查点；原生 domain 与 legacy dev-only 适配器的接入和限制见 [S2 指南](docs/EVALUATION_CONTRACT_V61.md)。
+S2 在配置路径使用带身份和计量契约的规范评估结果，保存完整私有证据，向搜索投影公开字段，向准入提供不含费用的比较视图。原生 domain 与 legacy dev-only 适配器的接入和限制见 [S2 指南](docs/EVALUATION_CONTRACT_V61.md)。
+
+S3 使用 `composed-v3`，每个新 run 有独立记忆身份，恢复和 replay 保留该逻辑身份。经验与已打开的本地 ground 来源真正进入后续候选输入，audit 单独记录；跨 run 分享需显式导出及内容 hash 授权。当前检索按词项相关度排序，未联网或宣称向量检索质量。旧 v1/v2 检查点不自动升级，具体配置和限制见 [S3 指南](docs/CONTEXT_FEEDBACK_V62.md)。
 
 ## 目录
 
 ```text
-m0/                 Python 内核、配置、回归测试、v1–v60 历史及 v61 验收入口
+m0/                 Python 内核、配置、回归测试、v1–v61 历史及 v62 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
   config/profiles/  三种经典 profile 与 composed_prompt 组装配置
   examples/         三个不需要模型 API key 的示例
@@ -71,7 +74,7 @@ make check
 
 `make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v61，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v62，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
 make test          # Mac 可移植测试
@@ -80,7 +83,7 @@ make accept-linux  # Linux x86_64：全量版本化验收
 make verify-import # 核验初始导入 Git 快照
 ```
 
-详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60 新增 S1 注册表、默认组件与端到端测试；[v61](m0/verifier/v61/README.md)保留所有旧组并增加配置运行时的 S2 评估契约与端到端组。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60、v61 分别新增 S1 组装和 S2 评估契约组；[v62](m0/verifier/v62/README.md)保留全部旧组并增加 S3 经验与知识回流端到端组。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 

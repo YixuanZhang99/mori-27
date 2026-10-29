@@ -242,7 +242,7 @@ v60 成功证据从该 CI artifact 原样归档到 `m0/verifier/v60/LAST_RUN.jso
 
 后续仍需单独关闭本表中 S1 原定但未实现的拓扑、采样、executor、X2 和事件总线条款；不得在 S2–S5 推进时静默移除这些缺口。C-01/C-02/C-06 的严格身份、证据和预算迁移继续按阶段实施；C-03 的 LLM 软决策位于 composition 适配边界，原纯机制静态公理保留；C-04 的模式隔离尚未完成；C-05 的公开 API 已复用；C-07 仅覆盖上述明确恢复范围；C-08 保留 v1–v59 源码与历史记录。
 
-### S2 配置路径评估契约：实现记录，阶段验收待完成
+### S2 配置路径评估契约：实现与验收记录
 
 本增量的范围是 `composed-v2` 配置运行时，新增 `composition/evaluation.py`，沿用 canonical EvalResult/EvidenceRecord，并要求其携带严格契约。旧 M0 兼容路径保留；本记录不将“新增 codec”扩展为所有 domain/executor 已完成迁移。具体输入、计量和兼容规则见 [S2 指南](EVALUATION_CONTRACT_V61.md)。
 
@@ -273,7 +273,47 @@ v60 成功证据从该 CI artifact 原样归档到 `m0/verifier/v60/LAST_RUN.jso
 | Mac `make check` | 最终实现复核通过：1,048 portable、158 Linux deselected、11 axioms、3 examples，包含 reliability 元数据增量；归档 v60 后 `make tooling` 单独复核 24 项全部通过 |
 | 历史与 source 检查 | v61 的 9 项历史/source-only 检查通过，未执行 Linux 工作负载或生成 v61 运行证书 |
 | 打包与导入快照 | 最终实现的 `make build` 与 `make verify-import`（1,020 文件）通过 |
-| Linux v61 | pending：待同一 S2 提交的完整新证书、journal 与 summary |
-| 提交与 main 更新 | pending：待阶段候选 SHA 与对应 CI URL |
+| Linux v61 | [CI 40891610362](https://github.com/YixuanZhang99/mori-27/actions/runs/40891610362) 通过：1,206 pytest、30 检查、447.362 秒；新证书/journal/summary 已核实，历史未改动 |
+| 提交与 main 更新 | 阶段提交 `babe764c7b2bb83d5fdb0151316a8677d21052d7` 已通过同 SHA Linux 验收，main 已更新至该提交 |
+
+v61 成功证据已从真实 CI artifact 原样归档到 `m0/verifier/v61/LAST_RUN.json` 与 `m0/verifier/runs/v61.jsonl`，来源和字节摘要见 [v62 历史证据说明](../m0/verifier/v62/README.md#archived-v61-evidence-provenance)。该归档不代表 S3 验收通过。
 
 S2 没有关闭 S1 的 population、统一采样压力、worktree、HITL 和事件总线缺口，也没有将 S3–S5 标为完成。C-01 通过规范通道与显式旧接口适配推进；C-02 保持旧二元 gate 公理并限制新 gate 输入；C-06 先落实计量覆盖而非宣称多层预算；C-07 通过新运行版本拒绝不完整旧检查点；C-08 保留 v1–v60 verifier 源码与历史记录。
+
+### S3 作用域经验与本地知识回流：实现记录，阶段验收待完成
+
+本阶段新增 `composition/context.py` 与 `composition/knowledge.py`，运行版本为 `composed-v3`。范围是有权威来源的 M5 检索、实际 ContextPack 输入、显式跨 run 分享和本地 M6 双车道回流；不是外部联网搜索、向量检索或语义质量认证。可用配置及生命周期见 [S3 指南](CONTEXT_FEEDBACK_V62.md)。
+
+| ID | 本增量已接通行为与实现证据 | 剩余条件，不计为本次完成 |
+| --- | --- | --- |
+| A-02 | 权威证据 hash 绑定 memory 来源/作用域；skill/operator 不得原地篡改 context 或替换 context_pack_ref；不支持模式/导入在付费前拒绝 | S4 终审权限、S5 多层物理预算及受信任插件之外的隔离仍需后续机制 |
+| A-04 | 同一 assembly 显式切换 research/benchmark；research 可配置 local_files，benchmark 非空 knowledge 在 factory/读文件前拒绝 | 完整两领域生产适配与外部知识集成未认证 |
+| M1-01 | 检索后的实际 context 进入 ideate；策略获得隔离副本，状态与记忆写入仍受 driver 约束 | 默认 llm_cycles 的 observe 计划仍有界且不等于语义推理质量证明 |
+| M2-01 | OperatorRequest 获得父证据与实际 ContextPack；Candidate 保存内容 hash；测试证明经验改变非父节点 draft 的输入/产物 | 内置双父算子、完整六算子和层级预算输入仍未实现 |
+| M2-03 | 反射/起草可消费有来源的经验与 ground 知识 | comparative-reflect 及六算子研究闭环仍未接通 |
+| M3-05 | context 带明确字符长度预算，日志记录检索和最终纳入的条目 | 这是上下文长度预算，不是 proposer 的真实全局/方向/候选 used/remaining 视图；后者仍待 S5 |
+| M4-03 | frontier 的 parents/ancestors/parent_siblings/run 描述符先缩小可读 ID，M5 再检索；高相关度不能绕过范围 | 当前不沿 reference 边扩张检索；更广双层图能力与工作区 executor 投影仍未接通 |
+| M5-01 | 本轮公开 dev 证据产生受约束 L1，成功证据增量晋升 L2；可在结束时导出本 run 合格经验；暂停不执行结束导出 | 完整阶段触发规则、自动 L3 抽象和语义忠实度评测未完成 |
+| M5-02 | scoped ContextMemory 实际检索后进入候选输入；topology、scope、状态、trust、levels、negative 与字符上限均影响纳入 | 词项/效用排序不等于向量或语义检索；默认 gated 过滤失败，需显式 ungated 才可读取失败经验 |
+| M5-03 | 来源引用改为同时绑定 logical_run_id 和真实证据的 hash；相同评估在不同 run 不复用 receipt；伪造来源/信任提升拒绝，失效后下一包移除而历史保留；非 dev/私有数据不成为经验 | 不自动清洗被错误标为 public 的秘密；跨进程权限与外部签名认证不由内容 hash 提供 |
+| M5-04 | 独立新 run 有不同 logical_run_id；export_on_finish→明确 hash imports→include_imported 的 Framework E2E 改变下一 run 首次输入 | 仅授权快照传输；未实现全局共享数据库、自动假设聚类或自动 domain 晋升；legacy 空内容上下文只允许 run 范围 |
+| M6-01 | local_files 实际限长打开 UTF-8 内容并记录 URI/hash；ground 与 audit 分离 backend/query/namespace；仅 ground 注入，跨 lane 内容重叠使 audit 失效 | 未调用网络知识 provider；audit 仅 advisory，不独立准入或声称外部新颖性准确率 |
+| M6-02 | ingest_on_finish 将显式 M5 导出写入独立 M6 records；下一 run 的 knowledge.memory_imports/retrieve 经内容和作用域验证后进入 ground 包；原 M5 不被混写 | 当前只提供本地 TIER2/词项检索；完整多 tier/workflow、联网知识和高成本 retrieval 预算尚未实现 |
+| M6-03 | benchmark 的 knowledge 在读取/构造前拒绝；research 可实际打开文件并查询，公开入口负例证明模式差异；旧静态检查保留 | 任意第三方 backend 的外部资源权限需独立验证，不由 local_files 结果外推 |
+| M8-03 | domain 内容身份参与 memory/knowledge scope 与导入验证；知识 manifest 绑定已打开文件内容 | 运行中使用打开时快照；新文件更新不自动刷新，恢复/replay 必须匹配原 manifest |
+| M9-04 | audit 文本独立记录，不进入 policy/operator/default memory 或准入；保留 S2 的私有字段与受限比较视图 | 当前仍是 dev 单层；独立 final_audit 数据及其不回流保证待 S4 |
+| X1-02 | v3 checkpoint 保存 logical_run_id、memory 权威绑定/import、知识状态和结束导出；恢复/replay 核对导出 hash；完成恢复不重复导出 | v1/v2 缺作用域身份明确拒绝；仍只支持串行 cycle 边界，未完成付费操作不自动重调 |
+| X1-03 | 输入知识文件和显式快照的 hash/manifest 在启动及恢复验证；篡改导出拒绝后续付费工作 | 完整 protected-file/worktree executor 与通用 harness 完整性仍未组装 |
+| X1-05 | 新增 context_pack、composed_context、memory_receipt_binding、import/export、fetch/audit/ingest/retrieve 等可核对事件 | 仍是 AppendOnlyStore，没有订阅事件总线或独立 dashboard 完整契约 |
+
+S3 显式组为 `test_composed_context.py`、`test_composition_context.py`、`test_composition_knowledge.py`。公开入口用例包括 `test_failed_nonparent_memory_changes_next_draft_input_and_artifact`、`test_ground_sources_change_actual_candidate_but_audit_text_never_reaches_search`、`test_explicit_memory_export_import_changes_next_run_and_completed_resume_is_idempotent`、`test_export_to_knowledge_ingest_then_scoped_retrieval_is_a_separate_store`；同时覆盖错误 hash/task/dataset、benchmark 禁用、来源伪造、原地 context 篡改、导出篡改和恢复/replay。
+
+| 验证项 | 本次执行状态与证据 |
+| --- | --- |
+| Mac `make check` | 最终实现复核通过：1,094 portable、158 Linux deselected、11 axioms、3 examples，包含 run-bound receipt 与导出完整性新增回归；归档 v61 后 `make tooling` 单独复核 27 项全部通过 |
+| 历史与 source 检查 | v62 的 9 项历史/source-only 检查通过，未执行 Linux 工作负载或生成 v62 运行证书 |
+| 打包与导入快照 | `make verify-import` 校验 1,020 文件通过；最终 `make build` 通过 |
+| Linux v62 | pending：待同一 S3 提交的新证书、journal 与 summary，v61 历史成功不替代本阶段结果 |
+| 提交与 main 更新 | pending：待阶段候选 SHA 与对应 CI URL |
+
+S3 不关闭 S1 尚未实现的种群/采样压力/worktree/HITL/事件总线条款，也未实现 S4 三层准入或 S5 分层预算。C-04 已在本地知识配置路径落实 research/benchmark 的实际行为差异；C-07 升级作用域检查点并保留付费 replay 语义；C-08 继续保持旧 verifier 源码及历史失败证据。

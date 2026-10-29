@@ -44,6 +44,7 @@ class Provenance:
     source_branch: Optional[str] = None
     evidence_refs: list[str] = field(default_factory=list)
     trust_tier: Literal["verified", "gated", "ungated", "human"] = "ungated"
+    source_candidate_id: Optional[str] = None
 
     def __post_init__(self):
         if not self.source_run_id:

@@ -17,6 +17,8 @@ from core.composition.contracts import Decision, OperatorRequest, Proposal
 from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
                                         PublicEvaluationData, binding_for, validate_request)
 from core.composition.registry import Registry
+from core.composition.context import ContextMemory, context_options
+from core.composition.knowledge import LocalKnowledge, knowledge_options
 from core.composition.strategies import GreedyPolicy, LLMCyclesPolicy, policy_options
 from core.eval.types import validate_eval_result as validate_legacy_result
 from core.executor.types import Candidate, CostVec, EvalResult, EvalStatus, EvidenceRecord
@@ -158,7 +160,8 @@ class PromptOperator:
         if not isinstance(variation.patch_text, str) or not variation.patch_text.strip():
             raise OperatorFailure(CostVec(tokens_in=used), "operator returned an empty artifact")
         candidate = Candidate(request.candidate_id, list(variation.parent_ids),
-                              operator=self.kind, created_cycle=request.cycle)
+                              operator=self.kind, created_cycle=request.cycle,
+                              context_pack_ref=request.context.get("context_pack_ref"))
         return Proposal(candidate, variation.patch_text, CostVec(tokens_in=used))
 
     async def __call__(self, request):
@@ -346,7 +349,11 @@ def default_registry():
                       validate_options=_skill_options)
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(
         store=ctx.store, **opts), validate_options=_objective_options)
-    registry.register("memory", "scoped", lambda ctx, opts: ScopedMemory(ctx.store))
+    registry.register("memory", "scoped", lambda ctx, opts: ContextMemory(
+        ctx.store, ctx.scope_context, getattr(ctx.evaluator, "evaluation_context", "")),
+        validate_options=context_options)
+    registry.register("knowledge", "local_files", lambda ctx, opts: LocalKnowledge(
+        opts, ctx.store, mode=ctx.mode), validate_options=knowledge_options)
     registry.register("executor", "inprocess", lambda ctx, opts: InProcessExecutor())
     registry.register("admission", "metric", lambda ctx, opts: MetricAdmission(**opts),
                       validate_options=lambda opts: _objective_options(opts, margin=True))
