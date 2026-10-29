@@ -26,6 +26,36 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def test_v64_keeps_every_v63_command_group_and_timeout(self):
+        previous = command_groups(verifier_tree("v63"))
+        current = command_groups(verifier_tree("v64"))
+        self.assertTrue(previous)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v64_explicitly_executes_hierarchical_budget_end_to_end_without_filters(self):
+        groups = command_groups(verifier_tree("v64"))
+        command = groups["hierarchical_physical_budget_and_fidelity_end_to_end"].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments[:2], ["-m", "pytest"])
+        self.assertTrue({"tests/test_hierarchical_budget.py",
+                         "tests/test_composed_budget.py"} <= set(arguments))
+        self.assertNotIn("-m", arguments[2:])
+        self.assertNotIn("--markexpr", arguments)
+
+    def test_v64_executes_offline_research_example_and_mac_examples_target(self):
+        groups = command_groups(verifier_tree("v64"))
+        command = groups["composed_research_offline_example"].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments, ["examples/composed_research_offline.py"])
+        makefile = (ROOT / "Makefile").read_text()
+        examples = makefile.split("\nexamples:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("python examples/composed_research_offline.py", examples)
+
     def test_v63_keeps_every_v62_command_group_and_timeout(self):
         previous = command_groups(verifier_tree("v62"))
         current = command_groups(verifier_tree("v63"))
@@ -66,6 +96,31 @@ class VerifierTransitionTests(unittest.TestCase):
                          "tests/test_composition_knowledge.py"} <= set(arguments))
         self.assertNotIn("-m", arguments[2:])
         self.assertNotIn("--markexpr", arguments)
+
+    def test_archived_v63_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v63/LAST_RUN.json":
+                "04dbad2a62b140e9596a8df9a34c3e58153a446a47a749565046c0a68fa530c2",
+            "m0/verifier/runs/v63.jsonl":
+                "ba91d5b210d2e9ee2b09e85be5ea4413573150caf0168f69ea92d02340c383d1",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / "m0/verifier/v63/LAST_RUN.json").read_text())
+        entries = [json.loads(line) for line in
+                   (ROOT / "m0/verifier/runs/v63.jsonl").read_text().splitlines()]
+        self.assertIs(certificate["passed"], True)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["command"], "python3 verifier/v63/verify.py")
+        self.assertEqual(entries[0]["exit_code"], 0)
+        self.assertEqual(entries[0]["checks"], certificate["checks"])
+        self.assertEqual(len(certificate["checks"]), 32)
+        self.assertTrue(all(item["passed"] is True for item in certificate["checks"]))
+        admission = certificate["layered_admission_stage_evidence"]
+        self.assertEqual(admission["stage"], "S4")
+        self.assertIs(admission["certified"], True)
+        self.assertIs(admission["hierarchical_budget_complete"], False)
 
     def test_archived_v62_is_exact_verified_linux_evidence(self):
         expected = {

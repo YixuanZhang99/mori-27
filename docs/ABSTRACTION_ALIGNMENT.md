@@ -320,7 +320,7 @@ v62 成功证据从实际 S3 artifact 原样归档到 `m0/verifier/v62/LAST_RUN.
 
 S3 不关闭 S1 尚未实现的种群/采样压力/worktree/HITL/事件总线条款，也未实现 S4 三层准入或 S5 分层预算。C-04 已在本地知识配置路径落实 research/benchmark 的实际行为差异；C-07 升级作用域检查点并保留付费 replay 语义；C-08 继续保持旧 verifier 源码及历史失败证据。
 
-### S4 三层准入与独立终审：实现记录，阶段验收待完成
+### S4 三层准入与独立终审：实现与验收记录
 
 本增量新增 `composition/admission.py`，在 `composed-v4` 的原生 domain 配置中显式选择 `admission=layered`。默认 `composed_prompt` 继续使用 dev-only metric 兼容路径，因此本阶段不关闭 §8 L510 的“三层默认协议”全部要求。使用方式和非支持配置见 [S4 指南](LAYERED_ADMISSION_V63.md)。
 
@@ -355,7 +355,49 @@ v63 显式组是 `test_layered_admission.py` 与 `test_composed_admission.py`。
 | Mac `make check` | 最终实现复核通过：1,149 portable、158 Linux deselected、11 axioms、3 examples；归档 v62 后 `make tooling` 单独复核 30 项全部通过；Linux deselected 不计通过 |
 | 历史与 source 检查 | v63 的 9 项历史/source-only 检查通过；未执行 Linux 工作负载或生成 v63 运行证书 |
 | 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
-| Linux v63 | pending：需本阶段同一提交的新证书、journal 与 summary |
-| 提交与 main 更新 | pending：待阶段候选 SHA 与对应 CI URL |
+| Linux v63 | [CI 40898306157](https://github.com/YixuanZhang99/mori-27/actions/runs/40898306157) 通过：1,307 pytest、32 检查、592.512 秒；新证书/journal/summary 已核实，历史未改动 |
+| 提交与 main 更新 | 阶段提交 `41a8dc83340b787fdbfef73dbee2c8759751bbe2` 已通过同 SHA Linux 验收，main 已更新至该提交 |
+
+v63 成功证据从实际 S4 artifact 原样归档到 `m0/verifier/v63/LAST_RUN.json` 与 `m0/verifier/runs/v63.jsonl`，来源和摘要见 [v64 历史证据说明](../m0/verifier/v64/README.md#archived-v63-evidence-provenance)。该归档不代表 S5 验收通过。
 
 S4 推进 §7 必须的独立准入/三元组与 provenance，覆盖 paired-seed 和禁止无限 test 反馈的已实现子范围；不把连续 margin 称为统计显著性。C-02 保留旧 gate 的 cost/rank 公理且新增受限判定，C-06 仍需 S5 层级物理预算，C-07 升级调用状态与付费恢复边界，C-08 保留旧 verifier 源码与真实历史失败记录。S1 的种群、采样压力、worktree、X2 与事件总线缺口继续保留。
+
+### S5 分层物理预算与 fidelity：实现记录与验收门槛
+
+本增量新增 `composition/budget.py` 的 `HierarchicalBudget` 和 `hierarchical_runtime.py` 调用桥接，运行版本为 `composed-v5`，通过 `budget=hierarchical` 显式配置，并为完整离线 research 例子增加独立验收入口。组件契约和配置见 [S5 指南](HIERARCHICAL_BUDGET_V64.md)。以下区分已实现子范围与没有关闭的要求；测试通过本身不把所有条款变为完成。
+
+| ID | 本增量已接通行为与实现证据 | 剩余条件，不计为本次完成 |
+| --- | --- | --- |
+| A-01 | 三层预算复用规范 EvalRequest/EvidenceRecord/CostVec；Proposal 增加显式 measured_cost_units，未知零值不能作为免费操作证据 | 旧 M0 的兼容类型及外部执行器契约没有全面迁移 |
+| A-02 | 预算配置先验证完整单位覆盖；硬预扣由机制层执行，不能由 policy/operator 提供的预算文本覆盖；任一层失败不留下部分扣款 | 同进程插件不构成权限沙箱；外部资源强制限额、X2 控制及全部算子组合未认证 |
+| M1-04 | 预算事件独立按固定 intent 指纹写入只追加日志；恢复不能重新解释请求/方向或重复结算 | 仍保留既有 mutation 白名单；没有通用事件总线或多进程事务 |
+| M2-01 | operator 预算输入与配置请求来自实际账本/分配器，作用域 ContextPack 和候选身份仍受 driver 校验 | 完整六算子、双父及多样化生产策略未完成 |
+| M2-04 | 已开始失败保留实际已知用量；缺测量覆盖保持未结预扣并禁止新付费操作；已开始不能按免费释放 | 自动恢复外部未知用量和付费进程 adoption 未接入配置路径 |
+| M3-01 | global/direction/candidate 是同一操作日志的三个视图；完整单位篮子原子预扣/结算；allocate/should_continue/converged 具有明确配置与状态 | controller 内锁不等同于分布式事务；不能保证失控外部调用在预扣估计内结束 |
+| M3-02 | token/eval_count/node/wallclock/gpu_hours/usd 按物理单位分别计量，禁止混加；实际超额如实结算后阻断后续调用；未知用量不归零 | GPU/USD 等以合成计量 fixture 覆盖账本契约，未执行真实 GPU/provider 账单 campaign；没有 OS/cgroup 强制资源限制 |
+| M3-03 | fidelity_rungs 产生真实 dev EvalRequest，direction_calls/depth 阶梯明确；admission/final 请求独立且共享物理预算；配对 dev_baseline 不推进阶梯 | 固定 rung 计划不是自适应统计级联；真实 time_limit/resume_from 语义依赖 domain，不宣称外部作业续跑已接通 |
+| M3-04 | min_samples/patience/min_improvement 按有效 dev 记录和比较口径计算；纯控制器在比较口径变化时重置窗口，configured run 的数据/评估器漂移仍拒绝；方向/全局耗尽有可复算原因；选择视图过滤耗尽方向但保留持久骨架，greedy 可换分支或新 draft | 停止信号是低样本规则且 statistical=False；不证明收敛到最优或有统计显著性 |
+| M3-05 | 公开预算视图逐单位给出 used/reserved/committed/remaining，与允许请求共同进入 proposer 输入，state 在当前 operator 预扣/开始后刷新；机制层独立执行硬顶 | 不自动为模型的预算建议提供可执行权限；生产提示质量与真实资源预测误差尚未评估 |
+| M3-06 | 本轮 fidelity 请求及同口径基线为后续 anchor 提供可比较证据基础 | 周期 anchor、proxy–true 秩相关告警/降级、负反馈写回 M5 仍未完成；不能以本轮同口径补评代替此条 |
+| M4-01 | 不同 fidelity 请求不能直接混比后晋升；需要以当前请求建立可比较基线 | 默认 frontier 仍 tree，种群、统一采样压力和完整多 fidelity 排名策略未完成 |
+| M5-03 | 停止规则只使用 dev 公开证据，admission/final 不驱动搜索进展；预算事件不伪装成语义经验 | 自动 anchor 异常写回和更广阶段触发记忆规则仍未完成 |
+| M7-03 | 操作 start/reserve/settle/unresolved 身份持久化，已知失败用量保存；历史 Linux 恢复回归继续保留 | 配置运行时仍串行/inprocess，不将组件原子性测试外推为 executor 并发/中断接管已组装 |
+| M8-01 | 计量覆盖与 CostVec 数量同时校验；driver 权威记录新候选 node=1，operator/evaluation token 不能低于共享 provider 已知增量，低报留差异记录并 unresolved；业务身份无效不能逃避已知成本 | 信任 domain/provider 如实测量；声明格式不能认证外部账单真实性 |
+| M8-02 | 配置 fidelity/seed/时限/token/resume 字段作为完整 EvalRequest 传入 domain，并验证支持能力；不支持字段不静默忽略 | 当前离线示例只使用固定 dev rung；外部资源限制/作业续跑需要相应真实 domain 验收 |
+| M8-03 | 预算 intent、比较基线和停止窗口绑定完整请求、split、数据、版本与种子；口径漂移不能继续拼接进展 | 输入真实完整性仍由 domain 提供；没有通用文件工作区权限声明 |
+| M9-02 | 成本与预算仅决定能否执行，准入继续由实际公开证据复算；不同 dev fidelity 先对齐基线 | top_k 和二元规则插件组装仍未完成 |
+| M9-03 | admission/final 作为独立物理操作扣同一全局/方向/候选预算，同时保留 S4 admission call_budget 与 final 一次硬顶 | 外部执行单次实际超额只能如实记录并停止下一次，不能事后撤销消耗 |
+| X1-02 | 预算恢复重放真实追加日志并严格比对配置、stamp、序列、摘要与 checkpoint；未完成付费操作拒绝自动重调 | 不自动修补旧运行版本，仍无机器断电保证或新路径 worktree adoption；严格 replay 的完整状态比较可能因实测 wallclock/非确定性结果失败 |
+| X1-05 | 追加完整物理预算事件、公开状态和停止原因；离线例子输出三元评估/三层预算/经验导出/replay 结果 | 没有订阅事件总线或独立 dashboard 的完整协议 |
+
+v64 新增 `test_hierarchical_budget.py`、`test_composed_budget.py` 显式组，并单独执行 `examples/composed_research_offline.py`。Mac `make examples` 同时加入该例子，共四例。组件回归覆盖并发原子预扣、任一层/单位拒绝、真实超额与未知覆盖、不可重复身份、阶梯计数、比较窗口、日志回滚篡改与只读恢复；公开 Framework 用例包括 `test_framework_accounts_each_physical_charge_once_across_three_views_and_replays`、`test_new_rung_pays_for_matching_incumbent_baseline_and_updates_public_frontier_evidence`、`test_exhausted_direction_is_hidden_only_in_selection_view_and_greedy_can_start_new_direction`、`test_operator_budget_context_contains_its_own_started_reservation`，另覆盖 unknown planning、已知失败/错绑费用、真实 node 尝试、wallclock 来源、独立 M9 调用上限和恢复。示例已独立运行并核对 3 个候选、6 次本地评估、60 合成 token、1 次终审、3 条 L2 导出及 replay=True；最终全量结果仍以本表为准。
+
+| 验证项 | 本次执行状态与证据 |
+| --- | --- |
+| Mac `make check` | 最终实现复核通过：1,240 portable、158 Linux deselected（18.35 秒）、34 tooling、11 axioms、4 个离线示例；Linux deselected 不计通过 |
+| 历史与 source 检查 | v64 的 9 项历史/source-only 检查通过，未生成 v64 运行证书 |
+| 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
+| Linux v64 | 本提交完整 CI 必须通过后才推进 main；实际结果以同 SHA 的 CI 产物（新证书、journal、summary）和交付报告为准，不用历史成功替代本阶段结果 |
+| 提交与 main 更新 | 按“候选提交→同 SHA 完整 Linux 验收→推进 main”执行；最终提交、CI URL 与核验结果见交付报告，不为记录自身 SHA 循环创建提交 |
+
+C-06 通过显式物理计量与三层视图推进，仍不将缺失 measurement 当零，也不把限额账本称为资源沙箱；C-02 继续隔离费用与准入；C-07 保持严格恢复与真实付费 replay；C-08 保留 v1–v63 verifier 源码和全部真实历史证据。S1 的种群/采样/worktree/X2/事件总线，S3 外部网络知识，S4 默认三层/top_k，以及 M3-06 的 anchor 与异质代理校验仍是明确剩余项。

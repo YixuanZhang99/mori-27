@@ -68,3 +68,5 @@
 - v62 — S3 配置运行时的 scoped ContextPack、local knowledge 双车道和实际生成回流验收；保留全部 v61 回归与历史证据。外部知识网络、S4/S5 及未接通子条款继续单列。见 [v62](v62/README.md)。
 
 - v63 — S4 显式三层准入、逐次预算预扣、可复算回执与冻结终审隔离的端到端验收；保留全部 v62 回归与历史证据。兼容默认 dev-only，top_k/HITL 与 S5 继续单列。见 [v63](v63/README.md)。
+
+- v64 — S5 全局/方向/候选物理预算、原子预扣、fidelity 请求与预算输入的端到端验收；独立执行完整离线 research 示例，保留全部 v63 回归和真实历史证据。外部 GPU/模型/benchmark campaign 及既有未接通子条款不由该阶段认证。见 [v64](v64/README.md)。

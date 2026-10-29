@@ -15,6 +15,7 @@ from core.budget.ledger import BudgetLedger
 from core.budget.types import AccountingStamp
 from core.composition.contracts import Decision, OperatorRequest, Proposal
 from core.composition.admission import LayeredAdmissionController, layered_options
+from core.composition.budget import HierarchicalBudget, hierarchical_options
 from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
                                         PublicEvaluationData, binding_for, validate_request)
 from core.composition.registry import Registry
@@ -93,10 +94,11 @@ def _budget_options(options):
 
 class OperatorFailure(RuntimeError):
     """A failed proposal with known provider cost, suitable for settlement."""
-    def __init__(self, cost: CostVec, detail: str):
+    def __init__(self, cost: CostVec, detail: str, *, measured_cost_units=None):
         super().__init__(detail)
         self.cost = cost
         self.detail = detail
+        self.measured_cost_units = measured_cost_units
 
 
 class InstructionSkill:
@@ -114,6 +116,8 @@ class InstructionSkill:
 
 
 class PromptOperator:
+    measured_cost_units = ("token", "node", "eval_count")
+
     def __init__(self, llm, kind, *, prompt_version="1", metric="dev/score"):
         if not callable(llm):
             raise ValueError("provided LLM must be callable")
@@ -155,15 +159,18 @@ class PromptOperator:
             raise
         except Exception as error:
             used = take_usage(self.llm)
-            raise OperatorFailure(CostVec(tokens_in=used),
-                                  f"{type(error).__name__}: {error}") from error
+            raise OperatorFailure(CostVec(tokens_in=used, node_count=1),
+                                  f"{type(error).__name__}: {error}",
+                                  measured_cost_units=("token", "node", "eval_count")) from error
         used = take_usage(self.llm)
         if not isinstance(variation.patch_text, str) or not variation.patch_text.strip():
-            raise OperatorFailure(CostVec(tokens_in=used), "operator returned an empty artifact")
+            raise OperatorFailure(CostVec(tokens_in=used, node_count=1), "operator returned an empty artifact",
+                                  measured_cost_units=("token", "node", "eval_count"))
         candidate = Candidate(request.candidate_id, list(variation.parent_ids),
                               operator=self.kind, created_cycle=request.cycle,
                               context_pack_ref=request.context.get("context_pack_ref"))
-        return Proposal(candidate, variation.patch_text, CostVec(tokens_in=used))
+        return Proposal(candidate, variation.patch_text, CostVec(tokens_in=used, node_count=1),
+                        measured_cost_units=("token", "node", "eval_count"))
 
     async def __call__(self, request):
         return await self.propose(request)
@@ -175,6 +182,10 @@ class LegacyPromptDomain:
     Legacy evaluators own their usage contract. GSM8K consumes solver usage into
     its own meter; residual usage on a shared proposing LLM is added only once.
     """
+    # Candidate creation belongs to the operator. This adapter creates zero
+    # framework nodes and performs exactly one evaluation invocation.
+    measured_cost_units = ("token", "node", "eval_count")
+
     def __init__(self, evaluator, llm, *, metric="dev/score"):
         if not callable(evaluator):
             raise ValueError("legacy prompt evaluator must be callable")
@@ -236,7 +247,7 @@ class LegacyPromptDomain:
             detail = f"{type(error).__name__}: {error}"
             return EvalResult(EvalStatus.FAILED_TO_RUN, cost=CostVec(tokens_in=used, eval_count=1),
                               fidelity=request.fidelity, text_feedback=detail,
-                              contract=EvaluationContract(invocation, ("token", "eval_count"),
+                              contract=EvaluationContract(invocation, self.measured_cost_units,
                                   token_accounting="total_only", binding_source="invocation"))
         returned_binding = replace(invocation, candidate_id=legacy.candidate_id,
                                    artifact_sha256=legacy.head_sha,
@@ -245,7 +256,7 @@ class LegacyPromptDomain:
         return EvalResult(EvalStatus.OK, {self.metric: float(legacy.combined_score)},
                           cost=CostVec(tokens_in=used, eval_count=1),
                           fidelity=request.fidelity, text_feedback=legacy.text_feedback,
-                          contract=EvaluationContract(returned_binding, ("token", "eval_count"),
+                          contract=EvaluationContract(returned_binding, self.measured_cost_units,
                               token_accounting="total_only",
                               public=PublicEvaluationData(dict(legacy.public), metadata),
                               private=PrivateEvaluationData(data=dict(legacy.private)),
@@ -333,6 +344,13 @@ def _tokens(context, options):
                         options.get("reeval_floor", cfg.reeval_floor), stamp, context.store)
 
 
+def _hierarchical(context, options):
+    stamp = context.accounting_stamp or AccountingStamp(
+        getattr(context.llm, "supplier", "unavailable"),
+        getattr(context.llm, "model", "unavailable"), "unavailable", "unavailable", "unavailable")
+    return HierarchicalBudget(options, stamp, context.store)
+
+
 def default_registry():
     registry = Registry()
     registry.register("provider", "provided", _provided)
@@ -361,6 +379,7 @@ def default_registry():
     registry.register("admission", "layered", lambda ctx, opts: LayeredAdmissionController(
         store=ctx.store, **opts), validate_options=layered_options)
     registry.register("budget", "tokens", _tokens, validate_options=_budget_options)
+    registry.register("budget", "hierarchical", _hierarchical, validate_options=hierarchical_options)
     return registry
 
 

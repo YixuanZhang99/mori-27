@@ -66,7 +66,11 @@ def test_default_components_execute_draft_absorb_then_reflective_improvement(tmp
     assert isinstance(evidence, EvidenceRecord)
     assert isinstance(evidence.eval_result, EvalResult)
     assert first.cost.tokens_in == 1000 and evidence.eval_result.cost.tokens_in == 0
+    assert first.cost.node_count == 1 and first.cost.eval_count == 0
+    assert first.measured_cost_units == ("token", "node", "eval_count")
     assert evidence.eval_result.cost.eval_count == 1
+    assert evidence.eval_result.cost.node_count == 0
+    assert evidence.eval_result.contract.measured_cost_units == ("token", "node", "eval_count")
     state.add(first.candidate, evidence)
     StateApplier(state, modules["memory"], ctx.store).apply_all(absorb_bound_evidence(modules, evidence))
     state.nodes["first"].status = "merged"
@@ -112,6 +116,8 @@ def test_known_operator_failure_retains_exact_cost_and_unknown_usage_fails_close
     with pytest.raises(OperatorFailure) as caught:
         asyncio.run(PromptOperator(Broken(), "draft").propose(OperatorRequest("x", "id", 0)))
     assert caught.value.cost.tokens_in == 9
+    assert caught.value.cost.node_count == 1 and caught.value.cost.eval_count == 0
+    assert caught.value.measured_cost_units == ("token", "node", "eval_count")
     class Unknown:
         def __call__(self, prompt):
             raise RuntimeError("no trustworthy usage")
@@ -176,6 +182,21 @@ def test_explicit_accounting_stamp_survives_budget_factory(tmp_path):
     ctx = context(tmp_path, stamp=stamp)
     built = default_registry().build(composed_profile(), ctx)
     assert built["budget"].stamp == stamp
+
+
+def test_registered_hierarchical_budget_uses_explicit_stamp_without_constructor_writes(tmp_path):
+    from core.composition.budget import HierarchicalBudget
+    stamp = AccountingStamp("offline-simulation", "toy-script-v1", "tokenizer", "price-v1", "2026-10-29")
+    ctx = context(tmp_path, stamp=stamp)
+    profile = composed_profile()
+    profile["budget"] = {"name": "hierarchical", "options": {
+        "limits": {"global": {"token": 100}, "direction": {"token": 50}, "candidate": {"token": 20}},
+        "reservation": {"token": 10}, "fidelity_rungs": [{"fidelity": "dev"}]}}
+    built = default_registry().build(profile, ctx)
+    assert isinstance(built["budget"], HierarchicalBudget)
+    assert built["budget"].stamp is stamp
+    assert built["budget"].state()["global"]["remaining"] == {"token": 100}
+    assert not ctx.store.path.exists() and ctx.llm.prompts == []
 
 
 def test_provider_records_every_call_even_when_a_hook_consumes_only_last_usage():

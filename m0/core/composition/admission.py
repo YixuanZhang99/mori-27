@@ -20,6 +20,9 @@ from core.composition.evaluation import (ComparisonEvidence, binding_for, compar
 from core.executor.evaluation_contract import EvaluationBinding
 from core.executor.types import Candidate, EvalRequest, EvalStatus
 
+DEVELOPMENT_BASIS_FIELDS = ("evaluator_version", "evaluation_context", "split_id", "fidelity",
+                            "seed_set", "request_sha256")
+
 
 def _finite(value, name, minimum=0):
     try:
@@ -311,6 +314,7 @@ class LayeredAdmissionController:
         self._config_id = _digest(self.options)
         self._cache, self._calls, self._authorized, self._decisions, self._prepared = {}, {}, {}, {}, {}
         self._development_records = {}
+        self._development_basis = None
         self._dev_best = self._selected = None
         self._frozen = False
         self._final = None
@@ -331,6 +335,11 @@ class LayeredAdmissionController:
     @property
     def frozen(self):
         return self._frozen
+
+    @property
+    def development_basis(self):
+        """Detached identity of the current comparable development measurements."""
+        return json_copy(self._development_basis)
 
     def request_for(self, phase):
         if phase not in {"admission", "final_audit"}:
@@ -408,11 +417,80 @@ class LayeredAdmissionController:
                 or binding.split_id != split:
             raise ValueError("proposal differs from its evaluated artifact or split")
 
-    def _persist(self, event):
+    @staticmethod
+    def _basis(binding):
+        return _json({name: getattr(binding, name) for name in DEVELOPMENT_BASIS_FIELDS})
+
+    def _basis_changes(self, basis, *, explicit=False):
+        if basis == self._development_basis:
+            return False
+        if self._development_basis is not None:
+            if any(basis[name] != self._development_basis[name]
+                   for name in ("evaluator_version", "evaluation_context", "split_id")):
+                raise ValueError("development basis cannot change evaluator or dataset context")
+            if self._selected is not None and not explicit:
+                raise ValueError("development basis changed without explicitly advancing the incumbent baseline")
+        if any(call["status"] == "pending" for call in self._calls.values()):
+            raise ValueError("development basis cannot change while an evaluation is pending")
+        return True
+
+    def _remember_development(self, *records):
+        added = {}
+        for record in records:
+            if record is None:
+                continue
+            key = _digest(_binding_payload(record.eval_result.contract.binding))
+            if key in self._development_records and self._development_records[key] != record:
+                raise ValueError("development evidence changed for an existing evaluation binding")
+            if key not in self._development_records:
+                added[key] = decode_evidence(encode_evidence(record))
+        self._development_records.update(added)
+        return bool(added)
+
+    def _switch_basis(self, basis, *, baseline=None, reason):
+        previous = self._development_basis
+        self._development_basis = json_copy(basis)
+        self._dev_best = decode_evidence(encode_evidence(baseline)) if baseline is not None else None
+        # Prepared calls from the previous measurement basis must be replanned.
+        # Started calls cannot reach this path: _basis_changes rejects pending work.
+        self._authorized = {}
+        self._persist("development_basis_advanced" if previous is not None else "development_basis_initialized",
+                      details={"reason": reason, "previous": previous, "current": basis,
+                               "baseline_candidate_id": baseline.candidate_id if baseline else None})
+
+    def advance_development_basis(self, incumbent_dev):
+        """Adopt a real, paid incumbent remeasurement before comparing a new rung.
+
+        The runtime obtains and settles this dev baseline through M3. This method
+        performs no evaluation, increments no admission query counter, and never
+        rewrites historical development records or admission receipts.
+        """
+        if self._frozen or self._selected is None:
+            raise ValueError("development basis advancement requires an unfrozen gate-selected incumbent")
+        validate_evidence(incumbent_dev)
+        binding = incumbent_dev.eval_result.contract.binding
+        selected = self._selected.eval_result.contract.binding
+        if incumbent_dev.eval_result.status is not EvalStatus.OK or binding.split_id != "dev":
+            raise ValueError("development basis advancement requires successful actual dev evidence")
+        if any(getattr(binding, name) != getattr(selected, name)
+               for name in ("candidate_id", "artifact_sha256", "evaluator_version")):
+            raise ValueError("development baseline differs from the gate-selected artifact or evaluator")
+        self._score(comparison_projection(incumbent_dev))
+        basis = self._basis(binding)
+        changed = self._basis_changes(basis, explicit=True)
+        remembered = self._remember_development(incumbent_dev)
+        if changed:
+            self._switch_basis(basis, baseline=incumbent_dev,
+                               reason="actual incumbent remeasurement established a new comparable development basis")
+        elif remembered:
+            self._persist("development_recorded")
+
+    def _persist(self, event, *, details=None):
         self._sequence += 1
         if self.store is not None:
             self.store.append("layered_admission_state", {"controller": self._config_id,
-                "event": event, "state": self.checkpoint_state()})
+                "event": event, "state": self.checkpoint_state(),
+                **({"details": json_copy(details)} if details is not None else {})})
 
     def prepare(self, candidate, dev, incumbent, incumbent_dev, domain, *, source_refs=()):
         if self._frozen:
@@ -433,15 +511,13 @@ class LayeredAdmissionController:
             self._compatible(candidate_view, baseline_view)
             if baseline_view.eval_result.status is not EvalStatus.OK:
                 raise ValueError("incumbent development evidence must be successful")
-        for observed in (incumbent_dev, dev):
-            if observed is None:
-                continue
-            key = _digest(_binding_payload(observed.eval_result.contract.binding))
-            if key in self._development_records and self._development_records[key] != observed:
-                raise ValueError("development evidence changed for an existing evaluation binding")
-            if key not in self._development_records:
-                self._development_records[key] = decode_evidence(encode_evidence(observed))
-                self._persist("development_recorded")
+        basis = self._basis(candidate_view.eval_result.binding)
+        basis_changed = self._basis_changes(basis)
+        remembered = self._remember_development(incumbent_dev, dev)
+        if basis_changed:
+            self._switch_basis(basis, reason="no gate-selected incumbent; development rankings start on the candidate's basis")
+        elif remembered:
+            self._persist("development_recorded")
         for observed, view in ((incumbent_dev, baseline_view), (dev, candidate_view)):
             if observed is None or observed.eval_result.status is not EvalStatus.OK:
                 continue
@@ -497,6 +573,9 @@ class LayeredAdmissionController:
         if self._selected is not None and plan.incumbent_id != self._selected.candidate_id \
                 and plan.plan_id not in self._decisions:
             raise ValueError("admission plan uses a stale incumbent")
+        if plan.plan_id not in self._decisions \
+                and self._basis(plan.candidate_dev.eval_result.binding) != self._development_basis:
+            raise ValueError("admission plan uses a stale development basis")
 
     @staticmethod
     def _call_payload(call):
@@ -669,12 +748,14 @@ class LayeredAdmissionController:
     def report(self):
         return {"dev_best": self._view(self._dev_best), "gate_selected": self._view(self._selected),
                 "final_audit": self.final_report() if self._frozen else {"state": "not_frozen"},
-                "gate_calls": self.gate_calls, "gate_call_budget": self.options["call_budget"]}
+                "gate_calls": self.gate_calls, "gate_call_budget": self.options["call_budget"],
+                "development_basis": self.development_basis}
 
     def checkpoint_state(self):
         return {"schema_version": 1, "options": json_copy(self.options), "sequence": self._sequence,
             "calls": json_copy(self._calls), "cache": {key: encode_evidence(value) for key, value in self._cache.items()},
             "development_records": {key: encode_evidence(value) for key, value in self._development_records.items()},
+            "development_basis": self.development_basis,
             "dev_best": encode_evidence(self._dev_best) if self._dev_best else None,
             "selected": encode_evidence(self._selected) if self._selected else None,
             "frozen": self._frozen, "final": json_copy(self._final),
@@ -682,7 +763,7 @@ class LayeredAdmissionController:
 
     def restore_state(self, state):
         state = json_copy(state, label="layered admission checkpoint")
-        expected = {"schema_version", "options", "sequence", "calls", "cache", "development_records",
+        expected = {"schema_version", "options", "sequence", "calls", "cache", "development_records", "development_basis",
                     "dev_best", "selected", "frozen", "final", "decisions"}
         if type(state) is not dict or set(state) != expected or type(state["schema_version"]) is not int \
                 or state["schema_version"] != 1 or state["options"] != self.options \
@@ -696,6 +777,19 @@ class LayeredAdmissionController:
             if key != _digest(_binding_payload(record.eval_result.contract.binding)) \
                     or record.eval_result.contract.binding.split_id != "dev":
                 raise ValueError("invalid actual development record checkpoint")
+        basis = state["development_basis"]
+        if basis is None:
+            if development_records:
+                raise ValueError("checkpoint forgot its actual development measurement basis")
+        else:
+            if type(basis) is not dict or set(basis) != set(DEVELOPMENT_BASIS_FIELDS) \
+                    or not any(self._basis(record.eval_result.contract.binding) == basis
+                               for record in development_records.values()):
+                raise ValueError("development basis lacks an actual recorded evaluation")
+            if any(any(getattr(record.eval_result.contract.binding, name) != basis[name]
+                       for name in ("evaluator_version", "evaluation_context", "split_id"))
+                   for record in development_records.values()):
+                raise ValueError("historical development records changed evaluator or dataset context")
         for key, call in state["calls"].items():
             if type(call) is not dict or set(call) - {"phase", "binding", "request", "status", "failure_reason"} \
                     or not {"phase", "binding", "request", "status"} <= set(call) \
@@ -732,6 +826,7 @@ class LayeredAdmissionController:
         selected = decode_evidence(state["selected"]) if state["selected"] else None
         if dev is not None and (dev.eval_result.status is not EvalStatus.OK
                 or dev.eval_result.contract.binding.split_id != "dev"
+                or self._basis(dev.eval_result.contract.binding) != basis
                 or development_records.get(_digest(_binding_payload(dev.eval_result.contract.binding))) != dev):
             raise ValueError("invalid development best checkpoint")
         if selected is not None:
@@ -789,6 +884,7 @@ class LayeredAdmissionController:
                 raise ValueError("durable admission history differs from checkpoint; refusing reexecution")
         self._calls, self._cache, self._decisions = state["calls"], cache, decisions
         self._development_records = development_records
+        self._development_basis = basis
         self._dev_best, self._selected = dev, selected
         self._frozen, self._final, self._sequence = state["frozen"], final, state["sequence"]
         self._authorized, self._prepared = {}, {}

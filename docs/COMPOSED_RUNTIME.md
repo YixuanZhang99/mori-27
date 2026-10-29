@@ -1,6 +1,6 @@
 # 配置组装运行时：S1 使用与边界
 
-开发基准是 [AutoResearch 模块化统一抽象](AutoResearch模块化统一抽象.md)，逐项状态及后续验收条件在 [对照清单](ABSTRACTION_ALIGNMENT.md)。五个阶段依次为：S1 模块组装、S2 统一评估契约、S3 记忆与知识回流、S4 三层准入、S5 分层预算。本页保留 S1（v60）的组装说明；后续评估契约见 [S2 指南](EVALUATION_CONTRACT_V61.md)，当前 v62 的 ContextPack 与 `composed-v3` 变化见 [S3 指南](CONTEXT_FEEDBACK_V62.md)。是否通过以对应提交的 Mac 检查和 Linux Actions 新证据为准。
+开发基准是 [AutoResearch 模块化统一抽象](AutoResearch模块化统一抽象.md)，逐项状态及后续验收条件在 [对照清单](ABSTRACTION_ALIGNMENT.md)。五个阶段依次为：S1 模块组装、S2 统一评估契约、S3 记忆与知识回流、S4 三层准入、S5 分层预算。本页保留 S1（v60）的组装说明；后续评估契约见 [S2 指南](EVALUATION_CONTRACT_V61.md)，S3 的 ContextPack 变化见 [S3 指南](CONTEXT_FEEDBACK_V62.md)。当前 S5/v64 运行版本与完整离线入口见 [S5 指南](HIERARCHICAL_BUDGET_V64.md)；下文 S1 边界按历史阶段阅读。是否通过以对应提交的 Mac 检查和 Linux Actions 新证据为准。
 
 `Framework.from_profile("composed_prompt", ...)` 是新的配置开发入口，继续使用同一组 `evolve()`、`inspect()`、`replay()` 公共方法。旧 `Framework(...)` 默认 M0 路径与 GEPA、FunSearch、MAP-Elites profile 仍保留，其二元准入、IID 对照、批次调度及恢复能力有各自的历史契约；这些能力不能直接视为 S1 组装路径已经具备。
 

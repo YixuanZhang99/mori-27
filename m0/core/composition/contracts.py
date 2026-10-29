@@ -163,6 +163,9 @@ class Proposal:
     candidate: Candidate
     artifact: str
     cost: CostVec = field(default_factory=CostVec)
+    # None is the legacy unknown-coverage contract. Multi-unit accounting must
+    # require explicit measurements rather than interpreting default zeros.
+    measured_cost_units: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)

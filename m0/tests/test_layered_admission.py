@@ -460,3 +460,163 @@ def test_restore_cannot_promote_successful_but_rejected_gate_evidence():
     state["selected"] = copy.deepcopy(state["cache"][plan.candidate_key])
     with pytest.raises(ValueError, match="accepted decision"):
         LayeredAdmissionController().restore_state(state)
+
+
+def dev_rung(domain, item, score, *, fidelity="high", seeds=(3, 5)):
+    return domain.result(item, EvalRequest(fidelity, seed_set=list(seeds), split_id="dev"), score)
+
+
+def test_explicit_development_basis_advancement_uses_real_incumbent_and_preserves_old_receipts():
+    controller, domain = LayeredAdmissionController(), Domain()
+    baseline, original_dev, baseline_gate = select_first(controller, domain)
+    overfit = proposal("overfit")
+    overfit_dev = dev(domain, overfit, 0.95)
+    old_plan = controller.prepare(overfit, overfit_dev, baseline, original_dev, domain)
+    old_gate = execute(controller, old_plan, domain, {"overfit": 0.7})["overfit"]
+    old_receipt = controller.judge(old_plan)
+    assert not old_receipt.admit
+    old_state = controller.checkpoint_state()
+    new_baseline = dev_rung(domain, baseline, 0.2)
+    controller.advance_development_basis(new_baseline)
+    report = controller.report()
+    assert report["dev_best"]["candidate_id"] == "base"
+    assert report["dev_best"]["eval_result"]["metrics"]["dev/score"] == 0.2
+    assert controller.gate_calls == 2
+    state = controller.checkpoint_state()
+    assert state["decisions"] == old_state["decisions"]
+    assert set(old_state["development_records"]) < set(state["development_records"])
+    validate_layered_receipt(old_receipt, candidate_evidence=old_gate, incumbent_evidence=baseline_gate,
+                             candidate_dev=overfit_dev, incumbent_dev=original_dev)
+    improved = proposal("improved")
+    improved_dev = dev_rung(domain, improved, 0.3)
+    new_plan = controller.prepare(improved, improved_dev, baseline, new_baseline, domain)
+    assert new_plan.triggered and [call.proposal.candidate.id for call in new_plan.calls] == ["improved"]
+    execute(controller, new_plan, domain, {"improved": 0.9})
+    assert controller.judge(new_plan).admit
+    restored = LayeredAdmissionController()
+    restored.restore_state(controller.checkpoint_state())
+    assert restored.report() == controller.report()
+    assert restored.development_basis["fidelity"] == "high"
+    assert restored.development_basis["seed_set"] == [3, 5]
+    exposed = restored.development_basis
+    exposed["seed_set"].append(999)
+    assert restored.development_basis["seed_set"] == [3, 5]
+
+
+def test_new_development_rung_cannot_mix_with_old_baseline_or_skip_explicit_advancement():
+    controller, domain = LayeredAdmissionController(), Domain()
+    baseline, old_dev, _ = select_first(controller, domain)
+    item = proposal("next")
+    candidate = dev_rung(domain, item, 0.3)
+    new_baseline = dev_rung(domain, baseline, 0.2)
+    before = controller.checkpoint_state()
+    with pytest.raises(ValueError, match="identical evaluator"):
+        controller.prepare(item, candidate, baseline, old_dev, domain)
+    with pytest.raises(ValueError, match="explicitly advancing"):
+        controller.prepare(item, candidate, baseline, new_baseline, domain)
+    assert controller.checkpoint_state() == before
+    controller.advance_development_basis(new_baseline)
+    with pytest.raises(ValueError, match="identical evaluator"):
+        controller.prepare(item, candidate, baseline, old_dev, domain)
+
+
+@pytest.mark.parametrize("case", ["candidate", "artifact", "evaluator", "dataset", "failed", "admission", "unknown_cost"])
+def test_basis_advancement_rejects_unproven_or_wrong_incumbent_evidence(case):
+    controller, domain = LayeredAdmissionController(), Domain()
+    baseline, _, _ = select_first(controller, domain)
+    actual = dev_rung(domain, baseline, 0.2)
+    if case == "candidate":
+        actual = dev_rung(domain, proposal("other"), 0.2)
+    elif case == "artifact":
+        actual = dev_rung(domain, replace(baseline, artifact="different artifact"), 0.2)
+    elif case == "evaluator":
+        domain.evaluator_version = "different-version"
+        actual = dev_rung(domain, baseline, 0.2)
+    elif case == "dataset":
+        domain.dataset = "different-dev-dataset"
+        actual = dev_rung(domain, baseline, 0.2)
+    elif case == "failed":
+        actual = replace(actual, executor_status="failed_to_run",
+            eval_result=replace(actual.eval_result, status=EvalStatus.FAILED_TO_RUN, metrics={}))
+    elif case == "admission":
+        actual = domain.result(baseline, EvalRequest("admission", split_id="admission"), 0.2)
+    else:
+        actual = replace(actual, eval_result=replace(actual.eval_result, contract=None))
+    before = controller.checkpoint_state()
+    with pytest.raises(ValueError):
+        controller.advance_development_basis(actual)
+    assert controller.checkpoint_state() == before
+
+
+def test_without_gate_selection_new_basis_resets_current_ranking_and_explains_the_change(tmp_path):
+    store = AppendOnlyStore(tmp_path / "basis.jsonl")
+    controller, domain = LayeredAdmissionController(store=store), Domain()
+    old = proposal("old-high-number")
+    plan = controller.prepare(old, dev(domain, old, 0.99), None, None, domain)
+    execute(controller, plan, domain, {old.candidate.id: 0}, status=EvalStatus.FAILED_TO_RUN)
+    assert not controller.judge(plan).admit
+    old_state = controller.checkpoint_state()
+    new = proposal("new-low-number")
+    plan = controller.prepare(new, dev_rung(domain, new, 0.2), None, None, domain)
+    assert controller.report()["dev_best"]["candidate_id"] == new.candidate.id
+    assert controller.report()["development_basis"]["fidelity"] == "high"
+    assert set(old_state["development_records"]) < set(controller.checkpoint_state()["development_records"])
+    events = [row["payload"] for row in store.read("layered_admission_state")]
+    advanced = [event for event in events if event["event"] == "development_basis_advanced"]
+    assert "no gate-selected incumbent" in advanced[-1]["details"]["reason"]
+    assert advanced[-1]["details"]["previous"]["fidelity"] == "dev"
+    assert advanced[-1]["details"]["current"]["fidelity"] == "high"
+    execute(controller, plan, domain, {new.candidate.id: 0.4})
+    controller.judge(plan)
+    restored = LayeredAdmissionController(store=store)
+    restored.restore_state(controller.checkpoint_state())
+    assert restored.report() == controller.report()
+
+
+def test_basis_change_revokes_unstarted_old_plans_and_refuses_pending_or_frozen_work():
+    controller, domain = LayeredAdmissionController(), Domain()
+    baseline, old_dev, _ = select_first(controller, domain)
+    item = proposal("old-plan")
+    plan = controller.prepare(item, dev(domain, item, 0.8), baseline, old_dev, domain)
+    controller.advance_development_basis(dev_rung(domain, baseline, 0.2))
+    with pytest.raises(ValueError, match="not authorized"):
+        controller.before_call(plan.calls[0])
+    with pytest.raises(ValueError, match="stale development basis"):
+        controller.judge(plan)
+    pending = controller.prepare(item, dev_rung(domain, item, 0.3), baseline, dev_rung(domain, baseline, 0.2), domain)
+    controller.before_call(pending.calls[0])
+    with pytest.raises(ValueError, match="pending"):
+        controller.advance_development_basis(dev_rung(domain, baseline, 0.2, fidelity="highest", seeds=(3, 5, 7)))
+    controller.mark_failed(pending.calls[0])
+    controller.freeze(baseline, domain)
+    with pytest.raises(ValueError, match="unfrozen"):
+        controller.advance_development_basis(dev_rung(domain, baseline, 0.2, fidelity="highest", seeds=(3, 5, 7)))
+
+
+def test_idempotent_same_basis_does_not_reset_a_better_development_candidate():
+    controller, domain = LayeredAdmissionController(), Domain()
+    baseline, original, _ = select_first(controller, domain)
+    item = proposal("overfit")
+    plan = controller.prepare(item, dev(domain, item, 0.9), baseline, original, domain)
+    execute(controller, plan, domain, {"overfit": 0.7})
+    controller.judge(plan)
+    state = controller.checkpoint_state()
+    controller.advance_development_basis(original)
+    assert controller.checkpoint_state() == state
+
+
+def test_restore_requires_current_basis_and_best_to_match_actual_records():
+    controller, domain = LayeredAdmissionController(), Domain()
+    baseline, original, _ = select_first(controller, domain)
+    controller.advance_development_basis(dev_rung(domain, baseline, 0.2))
+    state = controller.checkpoint_state()
+    variants = []
+    changed = copy.deepcopy(state); changed["development_basis"]["fidelity"] = "unrecorded"; variants.append(changed)
+    changed = copy.deepcopy(state); changed["development_basis"] = None; variants.append(changed)
+    changed = copy.deepcopy(state)
+    changed["dev_best"] = next(record for record in changed["development_records"].values()
+                               if record["evidence"]["eval_result"]["fidelity"] == "dev")
+    variants.append(changed)
+    for value in variants:
+        with pytest.raises(ValueError):
+            LayeredAdmissionController().restore_state(value)

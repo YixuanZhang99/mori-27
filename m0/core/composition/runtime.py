@@ -22,6 +22,8 @@ from core.composition.contracts import AssemblyConfig, BuildContext, Decision, O
 from core.composition.context import ContextMemory, ContextPackBuilder
 from core.composition.knowledge import KnowledgePack
 from core.composition.admission import LayeredAdmissionController
+from core.composition.budget import HierarchicalBudget
+from core.composition.hierarchical_runtime import HierarchicalRuntime
 from core.composition.evaluation import (EvaluationContract, binding_for, comparison_projection,
     decode_evidence, encode_evidence, measured_costs, public_projection, validate_evidence,
     validate_request)
@@ -56,7 +58,8 @@ def _evidence(data):
 
 
 def _proposal(data):
-    return Proposal(Candidate(**data["candidate"]), data["artifact"], CostVec(**data["cost"]))
+    return Proposal(Candidate(**data["candidate"]), data["artifact"], CostVec(**data["cost"]),
+                    tuple(data["measured_cost_units"]) if data.get("measured_cost_units") is not None else None)
 
 
 def _copy_sources(sources):
@@ -67,7 +70,7 @@ def _copy_sources(sources):
     return copied
 
 
-class ComposedRuntime:
+class ComposedRuntime(HierarchicalRuntime):
     def __init__(self, assembly, registry, llm, evaluator, config, workdir, stamp):
         self.registry = registry
         self.assembly = registry.preflight(assembly)
@@ -88,6 +91,8 @@ class ComposedRuntime:
         self._call_cost_known = True
         self._logical_run_id = None
         self._context_export = None
+        self.eval_requests = {}
+        self._halted_reason = None
 
     def _build(self, task):
         scope = ScopeContext(self._logical_run_id, _id("task", task),
@@ -108,7 +113,7 @@ class ComposedRuntime:
                 raise ValueError("provider factory reused the live underlying adapter")
         required = {"policy": ("observe", "ideate", "select", "absorb"),
                     "domain": ("evaluate",), "executor": ("execute",),
-                    "admission": ("judge",), "budget": ("quote_reserve", "settle", "account_summary")}
+                    "admission": ("judge",), "budget": ("account_summary",)}
         for kind, methods in required.items():
             if any(not callable(getattr(self.parts[kind], name, None)) for name in methods):
                 raise ValueError(f"component {kind} does not implement its runtime contract")
@@ -128,6 +133,10 @@ class ComposedRuntime:
             raise ValueError("configured admission objective differs from exploration")
         self.applier = StateApplier(self.frontier, self.memory, self.store)
         self.budget = self.parts["budget"]
+        self.hierarchical = isinstance(self.budget, HierarchicalBudget)
+        if not self.hierarchical and any(not callable(getattr(self.budget, method, None))
+                for method in ("quote_reserve", "settle")):
+            raise ValueError("budget does not implement its runtime contract")
         self.layered = self.parts["admission"] if isinstance(self.parts["admission"], LayeredAdmissionController) else None
         preflight = getattr(self.parts["domain"], "validate_context", None)
         if callable(preflight):
@@ -144,7 +153,10 @@ class ComposedRuntime:
             if len(set(self.manifest["evaluation_contexts"].values())) != len(self.manifest["evaluation_contexts"]):
                 raise ValueError("dev, admission and final audit require distinct dataset contexts")
             self.layered.check_integrity(Proposal(Candidate("task-preflight"), task))
-        self._validate_domain(EvalRequest("dev"))
+        if self.hierarchical:
+            self._preflight_hierarchical()
+        else:
+            self._validate_domain(EvalRequest("dev"))
         self.manifest["memory_imports"] = [self.memory.validate_import_snapshot(
             spec["path"], expected_sha256=spec["sha256"])
             for spec in self.assembly.memory.options.get("imports", [])]
@@ -159,6 +171,7 @@ class ComposedRuntime:
 
     def _validate_domain(self, request):
         validate_request(request)
+        original_request = asdict(request)
         domain = self.parts["domain"]
         check = getattr(domain, "validate_context", None)
         if callable(check):
@@ -167,6 +180,8 @@ class ComposedRuntime:
         if not callable(check):
             raise ValueError("domain must explicitly validate supported evaluation requests")
         check(request)
+        if asdict(request) != original_request:
+            raise ValueError("domain validation changed the evaluation request")
         if (getattr(domain, "evaluator_version", None) != self.manifest["domain_version"]
                 or getattr(domain, "evaluation_context", "") != self.manifest["evaluation_context"]):
             raise ValueError("domain identity changed during configured execution")
@@ -194,9 +209,12 @@ class ComposedRuntime:
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        return {"runtime": "composed-v4", "manifest": self.manifest, "config": config,
+        return {"runtime": "composed-v5", "manifest": self.manifest, "config": config,
                 "logical_run_id": self._logical_run_id,
                 "context_export": self._context_export,
+                "evaluation_requests": {key: asdict(value) for key, value in self.eval_requests.items()},
+                "halted_reason": self._halted_reason,
+                "budget_checkpoint": self.budget.checkpoint_state() if self.hierarchical else None,
                 "task_desc": self.task, "next_cycle": self.next_cycle,
                 "git_state": {"kind": "configured_artifacts"}, "inflight_executor": [],
                 "messages": [{"role": "task", "content": self.task}],
@@ -208,7 +226,7 @@ class ComposedRuntime:
 
     def _save(self):
         if self.cfg.checkpoint_enabled:
-            if self.budget.reserves:
+            if (self.budget.state()["open_intents"] if self.hierarchical else self.budget.reserves):
                 raise RuntimeError("cycle checkpoint cannot contain unsettled reservations")
             checkpoint = RunCheckpoint.create(self._payload())
             checkpoint.save(self.workdir / "checkpoint.json")
@@ -220,25 +238,34 @@ class ComposedRuntime:
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        expected = {"runtime": "composed-v4", "manifest": self.manifest,
+        expected = {"runtime": "composed-v5", "manifest": self.manifest,
                     "task_desc": self.task, "config": config}
         for field in ("runtime", "manifest", "task_desc", "config"):
             if payload.get(field) != expected[field]:
                 raise ValueError(f"composed checkpoint {field} is incompatible")
-        if any(row["payload"]["cycle"] >= payload["next_cycle"]
+        aborted = {row["payload"]["cycle"] for row in self.store.read("composed_cycle_aborted")}
+        if any(row["payload"]["cycle"] >= payload["next_cycle"] and row["payload"]["cycle"] not in aborted
                for row in self.store.read("composed_cycle_started")):
             raise RuntimeError("unfinished composed cycle requires durable adoption; refusing reexecution")
         proposals = {key: _proposal(value) for key, value in payload["proposals"].items()}
         evidence_by_id = {key: _evidence(value) for key, value in payload["evidence"].items()}
+        evaluation_requests = {key: EvalRequest(**value) for key, value in payload["evaluation_requests"].items()}
         if set(proposals) != set(evidence_by_id):
             raise ValueError("checkpoint proposal and evidence identities differ")
+        if set(evaluation_requests) != set(evidence_by_id):
+            raise ValueError("checkpoint evaluation request identities differ")
         for key, evidence in evidence_by_id.items():
             if proposals[key].candidate.id != key or evidence.candidate_id != key:
                 raise ValueError("checkpoint candidate key differs from evidence identity")
-            validate_evidence(evidence, expected_binding=self._binding(proposals[key], EvalRequest("dev")))
+            self._validate_domain(evaluation_requests[key])
+            validate_evidence(evidence, expected_binding=self._binding(proposals[key], evaluation_requests[key]))
         self._verify_context_export(payload["context_export"])
-        self.budget.restore_from_journal()
-        if self.budget.reserves or self.budget.account_summary() != payload["ledger"]:
+        if self.hierarchical:
+            self.budget.restore_state(payload["budget_checkpoint"])
+        else:
+            self.budget.restore_from_journal()
+        if (self.budget.state()["open_intents"] if self.hierarchical else self.budget.reserves) \
+                or self.budget.account_summary() != payload["ledger"]:
             raise ValueError("checkpoint budget differs from durable ledger")
         restored = ResearchFrontier.restore(payload["frontier_checkpoint"].encode(), store=self.store)
         if type(self.frontier) is not ResearchFrontier:
@@ -254,6 +281,8 @@ class ComposedRuntime:
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
         self.proposals, self.evidence = proposals, evidence_by_id
+        self.eval_requests = evaluation_requests
+        self._halted_reason = payload["halted_reason"]
         self.incumbent, self.next_cycle = payload["incumbent"], payload["next_cycle"]
         self._context_export = payload["context_export"]
         self.store.append("composed_resumed", {"next_cycle": self.next_cycle})
@@ -332,6 +361,8 @@ class ComposedRuntime:
         return refs
 
     async def _execute_layered_calls(self, calls):
+        if self.hierarchical:
+            return await self._execute_hierarchical_calls(calls)
         reserved = []
         for call in calls:
             self._validate_domain(call.request)
@@ -352,8 +383,10 @@ class ComposedRuntime:
                 self.budget.pre_call_check()
                 self.layered.before_call(call)
                 started = True
+                provider_before = self.parts["provider"].usage_total
                 evidence = await self.parts["executor"].execute(
-                    copy.deepcopy(call.proposal), call.request, self.parts["domain"])
+                    copy.deepcopy(call.proposal), copy.deepcopy(call.request), self.parts["domain"])
+                self._check_provider_floor(intent, provider_before, evidence.eval_result.cost)
                 costs = measured_costs(evidence.eval_result)
                 self.budget.settle(intent, costs["token"])
                 self.layered.record(call, evidence)
@@ -407,35 +440,26 @@ class ComposedRuntime:
                        if key in mutation.fields):
                     raise ValueError("policy execution metadata differs from evidence")
 
-    async def _cycle(self, task, cycle):
-        from core.composition.defaults import OperatorFailure
-        evaluation_request = EvalRequest("dev")
-        self._validate_domain(evaluation_request)
-        candidate_id = _id(self.assembly.name, task, cycle)
-        intent = AllocationIntent(_id(candidate_id, "cycle"), "composed", candidate_id,
-                                  self.cfg.intent_cost, snapshot_ref=str(cycle),
-                                  account="explore" if cycle == 0 else "exploit")
-        reserve = self.budget.quote_reserve(intent)
-        if reserve.verdict != "granted":
-            self.store.append("composed_stopped", {"reason": reserve.reason, "cycle": cycle})
-            return False
-        self.budget.pre_call_check()
-        self.store.append("composed_cycle_started", {"cycle": cycle, "intent": asdict(intent)})
-        self._policy_tokens = 0
-        self._current_intent = intent
-        self._known_cost = 0
-        self._call_cost_known = True
+    async def _prepare_cycle(self, task, cycle, candidate_id):
         state = {"task": task, "cycle": cycle, "frontier": json.loads(self.frontier.view("json")),
                  "operators": [spec.name for spec in self.assembly.operators]}
         strategy = await self._policy("observe", state, self.budget.account_summary())
         if not isinstance(strategy, dict):
             raise ValueError("policy observe must return a strategy object")
         selection_view = ResearchFrontier.restore(self.frontier.checkpoint())
+        unavailable = set()
+        if self.hierarchical:
+            unavailable = {identifier for identifier, proposal in self.proposals.items()
+                if not self.budget.should_continue(self._candidate_scope(proposal.candidate)[0])}
+            # Keep skeleton ancestry intact while hiding exhausted branches from
+            # sampling. The policy may choose another branch or a fresh draft.
+            for identifier in unavailable:
+                selection_view.nodes[identifier].status = "pruned"
         parents = await self._policy("select", selection_view, self.budget.account_summary())
         eligible_parents = {node.id for node in self.frontier.nodes.values()
                             if node.status in {"done", "merged"}
                             and node.eval_status == EvalStatus.OK.value
-                            and node.score is not None}
+                            and node.score is not None and node.id not in unavailable}
         if not isinstance(parents, list) or len(parents) > 2 \
                 or any(type(parent) is not str for parent in parents) \
                 or len(set(parents)) != len(parents) \
@@ -468,15 +492,40 @@ class ComposedRuntime:
         if selected not in names:
             raise ValueError("policy selected an unregistered operator")
         operator = self.parts["operators"][names.index(selected)]
+        return operator, selected, parents, context, request
+
+    async def _cycle(self, task, cycle):
+        if self.hierarchical:
+            return await self._cycle_hierarchical(task, cycle)
+        from core.composition.defaults import OperatorFailure
+        evaluation_request = EvalRequest("dev")
+        self._validate_domain(evaluation_request)
+        candidate_id = _id(self.assembly.name, task, cycle)
+        intent = AllocationIntent(_id(candidate_id, "cycle"), "composed", candidate_id,
+                                  self.cfg.intent_cost, snapshot_ref=str(cycle),
+                                  account="explore" if cycle == 0 else "exploit")
+        reserve = self.budget.quote_reserve(intent)
+        if reserve.verdict != "granted":
+            self.store.append("composed_stopped", {"reason": reserve.reason, "cycle": cycle})
+            return False
+        self.budget.pre_call_check()
+        self.store.append("composed_cycle_started", {"cycle": cycle, "intent": asdict(intent)})
+        self._policy_tokens = 0
+        self._current_intent = intent
+        self._known_cost = 0
+        self._call_cost_known = True
+        operator, selected, parents, context, request = await self._prepare_cycle(task, cycle, candidate_id)
         self._call_cost_known = False
+        provider_before = self.parts["provider"].usage_total
         try:
             proposal = await operator.propose(request)
         except OperatorFailure as failure:
+            self._check_provider_floor(intent, provider_before, failure.cost)
             self._known_cost += _tokens(failure.cost)
             self._call_cost_known = True
             proposal = Proposal(Candidate(candidate_id, parents, operator=selected, created_cycle=cycle,
                                           context_pack_ref=context["context_pack_ref"]),
-                                "", failure.cost)
+                                "", failure.cost, failure.measured_cost_units)
             evidence = EvidenceRecord(candidate_id, EvalResult(
                 EvalStatus.FAILED_TO_RUN, cost=CostVec(), text_feedback=str(failure),
                 contract=EvaluationContract(self._binding(proposal, evaluation_request),
@@ -484,6 +533,7 @@ class ComposedRuntime:
                 executor_status="failed_to_run", result_text=str(failure))
         else:
             if isinstance(proposal, Proposal):
+                self._check_provider_floor(intent, provider_before, proposal.cost)
                 self._known_cost += _tokens(proposal.cost)
                 self._call_cost_known = True
             if request.context.get("retrieval") != context["retrieval"] or \
@@ -506,11 +556,16 @@ class ComposedRuntime:
                 self.store.append("composed_knowledge_audit", {"candidate_id": candidate_id,
                                                                "audit": audit.to_dict()})
             self._call_cost_known = False
+            expected_binding = self._binding(proposal, evaluation_request)
+            provider_before = self.parts["provider"].usage_total
             evidence = await self.parts["executor"].execute(
-                proposal, evaluation_request, self.parts["domain"])
+                copy.deepcopy(proposal), copy.deepcopy(evaluation_request), self.parts["domain"])
             if isinstance(evidence, EvidenceRecord):
+                self._check_provider_floor(intent, provider_before, evidence.eval_result.cost)
                 self._known_cost += measured_costs(evidence.eval_result)["token"]
                 self._call_cost_known = True
+                self._validate_domain(evaluation_request)
+                validate_evidence(evidence, expected_binding=expected_binding)
         if not isinstance(evidence, EvidenceRecord) or evidence.candidate_id != candidate_id:
             raise ValueError("executor evidence identity mismatch")
         validate_evidence(evidence, expected_binding=self._binding(proposal, evaluation_request))
@@ -536,6 +591,11 @@ class ComposedRuntime:
         if self._current_intent is not None:
             self.budget.settle(intent, total, admission_outcome=decision.admit)
         self._current_intent = None
+        return self._commit_cycle(cycle, proposal, evidence, decision, mutations, context, evidence_ref, evaluation_request)
+
+    def _commit_cycle(self, cycle, proposal, evidence, decision, mutations, context, evidence_ref, evaluation_request):
+        candidate_id = proposal.candidate.id
+        public = public_projection(evidence)
         self.store.append("composed_evidence", {"cycle": cycle, "proposal": _jsonable(proposal),
                                                 "evidence_ref": evidence_ref,
                                                 "evidence": encode_evidence(evidence)["evidence"]})
@@ -562,6 +622,7 @@ class ComposedRuntime:
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
         if decision.admit:
             self.incumbent = candidate_id
+        self.eval_requests[candidate_id] = evaluation_request
         self.next_cycle = cycle + 1
         self._save()
         return True
@@ -578,7 +639,7 @@ class ComposedRuntime:
         self.task = task
         if self.cfg.resume_from_checkpoint:
             saved = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
-            if saved.get("runtime") != "composed-v4" or not isinstance(saved.get("logical_run_id"), str) \
+            if saved.get("runtime") != "composed-v5" or not isinstance(saved.get("logical_run_id"), str) \
                     or not saved["logical_run_id"]:
                 raise ValueError("composed checkpoint runtime has no scoped run identity")
             self._logical_run_id = saved["logical_run_id"]
@@ -592,7 +653,7 @@ class ComposedRuntime:
         if self.cfg.resume_from_checkpoint:
             self._restore()
         else:
-            self.store.append("run_start", {"runtime": "composed-v4", "task_desc": task,
+            self.store.append("run_start", {"runtime": "composed-v5", "task_desc": task,
                                            "manifest": self.manifest, "accounting_stamp": asdict(self.stamp)})
             for spec in self.assembly.memory.options.get("imports", []):
                 self.memory.import_snapshot(spec["path"], expected_sha256=spec["sha256"])
@@ -602,6 +663,9 @@ class ComposedRuntime:
             self._save()
         continued = True
         for cycle in range(self.next_cycle, self.cfg.max_generations + 1):
+            if self._halted_reason is not None:
+                continued = False
+                break
             try:
                 continued = asyncio.run(self._cycle(task, cycle))
             except UsageError:
@@ -622,13 +686,14 @@ class ComposedRuntime:
         if self.next_cycle > self.cfg.max_generations or not continued:
             asyncio.run(self._finish_layered())
             self._finish_context()
-        self.result = {"runtime": "composed-v4", "profile": self.assembly.name,
+        self.result = {"runtime": "composed-v5", "profile": self.assembly.name,
                        "best_candidate_id": self.incumbent,
                        "best_prompt": self.proposals[self.incumbent].artifact if self.incumbent else None,
                        "best_score": self.frontier.nodes[self.incumbent].score if self.incumbent else None,
                        "cycles": self.next_cycle, "ledger": self.budget.account_summary(),
                        "memory_export": self._context_export,
                        "reporting": self.layered.report() if self.layered else None,
+                       "stop_reason": self._halted_reason,
                        "accepted_candidate_ids": [row["payload"]["candidate_id"] for row in
                             self.store.read("composed_decision") if row["payload"]["decision"]["admit"]],
                        "checkpoint_ref": payload_digest(self._payload())}
@@ -652,7 +717,7 @@ class ComposedRuntime:
         root.mkdir(exist_ok=True)
         path = Path(tempfile.mkdtemp(prefix="replay-", dir=root))
         store = AppendOnlyStore(path / "x1.jsonl")
-        certificate = {"passed": False, "runtime": "composed-v4", "mode": "independent_rerun",
+        certificate = {"passed": False, "runtime": "composed-v5", "mode": "independent_rerun",
                        "replay_workdir": str(path.resolve()), "replay_id": path.name}
         try:
             if adapter_factory:

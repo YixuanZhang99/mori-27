@@ -9,7 +9,7 @@ help:
 	@echo 'make check        Run axioms, portable tests, examples and workflow tests'
 	@echo 'make test         Run portable tests (Linux cases explicitly deselected)'
 	@echo 'make test-linux   Run every test; any skip fails (Linux x86_64 required)'
-	@echo 'make accept-linux Run the full v63 acceptance in a disposable copy'
+	@echo 'make accept-linux Run the full v64 acceptance in a disposable copy'
 	@echo 'make build        Build wheel and sdist into artifacts/dist'
 	@echo 'make verify-import Verify the immutable imported Git baseline'
 
@@ -30,6 +30,7 @@ examples:
 	cd m0 && $(UV) run --locked python examples/toy_gepa.py
 	cd m0 && $(UV) run --locked python examples/gsm8k_offline.py
 	cd m0 && $(UV) run --locked python examples/funsearch_offline.py
+	cd m0 && $(UV) run --locked python examples/composed_research_offline.py
 
 tooling:
 	$(UV) run --project m0 --locked python -m unittest discover -s scripts/tests -v
