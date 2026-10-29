@@ -1,6 +1,6 @@
 # S5 分层物理预算与 fidelity（v64）
 
-当前配置运行时版本为 `composed-v5`；旧 v1/v2/v3/v4 检查点缺少新的物理操作状态，明确拒绝自动升级。默认 tokens 配置和 hierarchical 配置均使用该运行版本。
+本页保留 S5/v64 的契约和边界。当前 S6/v65 的 `composed-v6` 与新增校准功能见 [S6 指南](PROXY_VALIDITY_V65.md)。S5 引入的配置运行时版本为 `composed-v5`；旧 v1/v2/v3/v4 检查点缺少新的物理操作状态，明确拒绝自动升级。默认 tokens 配置和 hierarchical 配置均使用该运行版本。
 
 S5 在同一 `Framework.from_profile()` 入口增加 `budget=hierarchical`，按全局、方向、候选三个视图约束真实物理用量，保留 [S4 三层准入](LAYERED_ADMISSION_V63.md)和 [S3 经验回流](CONTEXT_FEEDBACK_V62.md)。计量、限制与准入仍各司其职：预算决定是否能调用，公开评估证据决定是否晋升，费用不能成为准入分数。
 

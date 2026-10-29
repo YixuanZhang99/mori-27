@@ -318,6 +318,7 @@ def test_integrity_checks_block_canaries_and_explicit_sources_before_evaluation_
     {"final_audit": {"isolation": False, "runs": 1}}, {"final_audit": {"isolation": True, "runs": 2}},
     {"layers": ["dev", "final_audit"]}, {"admission_seeds": [True]}, {"final_seeds": []},
     {"integrity_hooks": ["human_approval"]}, {"blocked_patterns": [""]}, {"unknown": True},
+    {"dev_metric": ""}, {"dev_metric": None}, {"dev_direction": "descending"}, {"dev_direction": True},
 ])
 def test_unsupported_options_are_explicitly_rejected(options):
     with pytest.raises(ValueError):
@@ -620,3 +621,115 @@ def test_restore_requires_current_basis_and_best_to_match_actual_records():
     for value in variants:
         with pytest.raises(ValueError):
             LayeredAdmissionController().restore_state(value)
+
+
+class ProxyDomain(Domain):
+    """Development loss and held-out quality deliberately use opposite orderings."""
+    def result(self, proposal, request, score, **kwargs):
+        record = super().result(proposal, request, score, **kwargs)
+        metric = "proxy/loss" if request.split_id == "dev" else "quality"
+        metrics = {metric: score} if record.eval_result.status is EvalStatus.OK else {}
+        return replace(record, eval_result=replace(record.eval_result, metrics=metrics))
+
+
+def proxy_controller(**options):
+    return LayeredAdmissionController(metric="quality", direction="maximize", dev_metric="proxy/loss",
+                                      dev_direction="minimize", **options)
+
+
+def test_distinct_development_loss_and_true_quality_control_trigger_and_gate_independently():
+    domain, controller = ProxyDomain(), proxy_controller(min_dev_gain=0.1)
+    baseline = proposal("baseline")
+    baseline_dev = dev(domain, baseline, 0.8)
+    first = controller.prepare(baseline, baseline_dev, None, None, domain)
+    execute(controller, first, domain, {"baseline": 0.8})
+    assert controller.judge(first).admit
+
+    overfit = proposal("overfit")
+    overfit_dev = dev(domain, overfit, 0.2)
+    plan = controller.prepare(overfit, overfit_dev, baseline, baseline_dev, domain)
+    assert plan.triggered
+    actual = execute(controller, plan, domain, {"overfit": 0.7})
+    rejected = controller.judge(plan)
+    assert not rejected.admit
+    assert controller.report()["dev_best"]["candidate_id"] == "overfit"
+    assert controller.report()["gate_selected"]["candidate_id"] == "baseline"
+    validate_layered_receipt(rejected, candidate_evidence=actual["overfit"],
+        incumbent_evidence=controller._selected, candidate_dev=overfit_dev, incumbent_dev=baseline_dev,
+        expected_rules=controller.decision_rules)
+
+    weak = proposal("weak")
+    skipped = controller.prepare(weak, dev(domain, weak, 0.75), baseline, baseline_dev, domain)
+    assert not skipped.triggered and not skipped.calls
+    assert not controller.judge(skipped).admit
+    improved = proposal("improved")
+    plan = controller.prepare(improved, dev(domain, improved, 0.3), baseline, baseline_dev, domain)
+    execute(controller, plan, domain, {"improved": 0.9})
+    assert controller.judge(plan).admit
+    assert controller.report()["dev_best"]["candidate_id"] == "overfit"
+    assert controller.report()["gate_selected"]["candidate_id"] == "improved"
+    frozen = controller.freeze(improved, domain)
+    execute(controller, frozen, domain, {"improved": 0.05})
+    assert controller.report()["final_audit"]["evidence"]["eval_result"]["metrics"] == {"quality": 0.05}
+    assert controller.report()["gate_selected"]["candidate_id"] == "improved"
+    restored = proxy_controller(min_dev_gain=0.1)
+    restored.restore_state(controller.checkpoint_state())
+    assert restored.report() == controller.report()
+
+
+def test_development_basis_advancement_uses_proxy_loss_and_keeps_historical_true_quality_receipts():
+    domain, controller = ProxyDomain(), proxy_controller()
+    baseline = proposal("baseline")
+    first = controller.prepare(baseline, dev(domain, baseline, 0.8), None, None, domain)
+    execute(controller, first, domain, {"baseline": 0.9})
+    receipt = controller.judge(first)
+    higher = domain.result(baseline, EvalRequest("high", seed_set=[1, 2]), 0.6)
+    controller.advance_development_basis(higher)
+    assert controller.report()["dev_best"]["eval_result"]["metrics"] == {"proxy/loss": 0.6}
+    candidate = proposal("candidate")
+    measured = domain.result(candidate, EvalRequest("high", seed_set=[1, 2]), 0.4)
+    plan = controller.prepare(candidate, measured, baseline, higher, domain)
+    execute(controller, plan, domain, {"candidate": 0.85})
+    assert not controller.judge(plan).admit
+    state = controller.checkpoint_state()
+    assert any(value["receipt_id"] == receipt.receipt_id for value in state["decisions"].values())
+    restored = proxy_controller()
+    restored.restore_state(state)
+    assert restored.report() == controller.report()
+    assert restored.report()["dev_best"]["candidate_id"] == "candidate"
+    assert restored.report()["gate_selected"]["candidate_id"] == "baseline"
+
+
+@pytest.mark.parametrize("field,value", [("dev_metric", "another/loss"), ("dev_direction", "maximize"),
+                                       ("metric", "another/quality"), ("direction", "minimize")])
+def test_rehashed_receipt_cannot_rebind_either_objective_during_validation_or_restore(field, value):
+    domain, controller = ProxyDomain(), proxy_controller()
+    item = proposal("initial")
+    development = dev(domain, item, 0.8)
+    plan = controller.prepare(item, development, None, None, domain)
+    actual = execute(controller, plan, domain, {"initial": 0.9})
+    receipt = controller.judge(plan)
+    context = copy.deepcopy(receipt.decision_context)
+    context["rules"][field] = value
+    raw = json.dumps(context, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    forged = replace(receipt, decision_context=context,
+                     receipt_id="sha256:" + hashlib.sha256(raw.encode()).hexdigest())
+    with pytest.raises(ValueError, match="configured development and admission objectives"):
+        validate_layered_receipt(forged, candidate_evidence=actual["initial"], candidate_dev=development,
+                                 expected_rules=controller.decision_rules)
+    state = controller.checkpoint_state()
+    state["decisions"][plan.plan_id] = asdict(forged)
+    with pytest.raises(ValueError, match="configured development and admission objectives"):
+        proxy_controller().restore_state(state)
+    state = controller.checkpoint_state()
+    state["options"][field] = value
+    with pytest.raises(ValueError, match="incompatible layered admission checkpoint"):
+        proxy_controller().restore_state(state)
+
+
+def test_unspecified_development_objective_inherits_true_metric_and_direction():
+    controller = LayeredAdmissionController(metric="loss", direction="minimize")
+    assert controller.dev_metric == controller.metric == "loss"
+    assert controller.dev_direction == controller.direction == "minimize"
+    assert controller.decision_rules["dev_metric"] == "loss"
+    assert controller.decision_rules["dev_direction"] == "minimize"

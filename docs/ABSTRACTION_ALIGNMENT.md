@@ -362,7 +362,7 @@ v63 成功证据从实际 S4 artifact 原样归档到 `m0/verifier/v63/LAST_RUN.
 
 S4 推进 §7 必须的独立准入/三元组与 provenance，覆盖 paired-seed 和禁止无限 test 反馈的已实现子范围；不把连续 margin 称为统计显著性。C-02 保留旧 gate 的 cost/rank 公理且新增受限判定，C-06 仍需 S5 层级物理预算，C-07 升级调用状态与付费恢复边界，C-08 保留旧 verifier 源码与真实历史失败记录。S1 的种群、采样压力、worktree、X2 与事件总线缺口继续保留。
 
-### S5 分层物理预算与 fidelity：实现记录与验收门槛
+### S5 分层物理预算与 fidelity：实现与验收记录
 
 本增量新增 `composition/budget.py` 的 `HierarchicalBudget` 和 `hierarchical_runtime.py` 调用桥接，运行版本为 `composed-v5`，通过 `budget=hierarchical` 显式配置，并为完整离线 research 例子增加独立验收入口。组件契约和配置见 [S5 指南](HIERARCHICAL_BUDGET_V64.md)。以下区分已实现子范围与没有关闭的要求；测试通过本身不把所有条款变为完成。
 
@@ -397,7 +397,56 @@ v64 新增 `test_hierarchical_budget.py`、`test_composed_budget.py` 显式组�
 | Mac `make check` | 最终实现复核通过：1,240 portable、158 Linux deselected（18.35 秒）、34 tooling、11 axioms、4 个离线示例；Linux deselected 不计通过 |
 | 历史与 source 检查 | v64 的 9 项历史/source-only 检查通过，未生成 v64 运行证书 |
 | 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
-| Linux v64 | 本提交完整 CI 必须通过后才推进 main；实际结果以同 SHA 的 CI 产物（新证书、journal、summary）和交付报告为准，不用历史成功替代本阶段结果 |
-| 提交与 main 更新 | 按“候选提交→同 SHA 完整 Linux 验收→推进 main”执行；最终提交、CI URL 与核验结果见交付报告，不为记录自身 SHA 循环创建提交 |
+| Linux v64 | [CI 40904572252](https://github.com/YixuanZhang99/mori-27/actions/runs/40904572252) 通过：1,398 pytest、34 检查、644.819 秒；新证书/journal/summary 与 handoff receipt 已核实，历史未改动 |
+| 提交与 main 更新 | 阶段提交 `685fd5fffae41d693cc4f4865bd763cb64dcae15` 已通过同 SHA Linux 验收，main 已更新至该提交；本次后续开发归档其真实证据 |
 
 C-06 通过显式物理计量与三层视图推进，仍不将缺失 measurement 当零，也不把限额账本称为资源沙箱；C-02 继续隔离费用与准入；C-07 保持严格恢复与真实付费 replay；C-08 保留 v1–v63 verifier 源码和全部真实历史证据。S1 的种群/采样/worktree/X2/事件总线，S3 外部网络知识，S4 默认三层/top_k，以及 M3-06 的 anchor 与异质代理校验仍是明确剩余项。
+
+
+v64 成功证据已原样归档到 `m0/verifier/v64/LAST_RUN.json` 与 `m0/verifier/runs/v64.jsonl`，来源和摘要见 [v65 历史证据说明](../m0/verifier/v65/README.md#archived-v64-evidence-provenance)。这是 S5 的真实结果，不是 S6 的验收结果。
+
+### S6–S8 后续补齐计划
+
+以下计划承接 S1–S5 已验收增量和明确未关闭条款，保留原始清单与历史阶段记录。每阶段先完成该范围的公开入口 E2E 与 Mac 检查，候选提交在同 SHA 完整 Linux 验收通过后再推进 main；阶段封板后才切换下一 verifier，不把下一阶段代码混入当前提交。此表是计划，不是完成声明。
+
+| 阶段 / verifier | 对照 ID 与原文依据 | 计划范围 | 必须可观察的端到端验收条件 | 当前状态 |
+| --- | --- | --- | --- | --- |
+| S6 / v65 | M3-06（§4/M3 L164、§6.2 L442–444）；关联 M3-02～04、M5-03、M8-03、M9-04、X1-02 | 周期 anchor；proxy 与 true 的配对证据及秩相关有效性规则；失效时告警/降级和负反馈进入 scoped memory | 配置周期实际触发独立开发 calibration anchor 并经三层预算；请求/数据/seed 身份可核对；样本不足与无效相关明确区分；故意反向 proxy 触发预定动作并改变后续输入；admission/final 不进入搜索反馈；恢复/replay 保留调用、有效性与记忆来源 | 已接通子范围见下方 S6 实现记录；最终 Mac/Linux 按阶段证据核对 |
+| S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | 待 S6 封板后实施；尚未创建 v66 接线 |
+| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | 待 S7 封板后实施；尚未创建 v67 接线 |
+
+S6 当前验收组为 `test_proxy_validity.py`、`test_composed_proxy.py`；v65 保留 v64 的全部命令、超时与真实历史证据。接线阶段 tooling 37 项、历史/source-only 9 项通过，未生成 v65 运行证书；这些不代替 S6 公开入口功能或 Linux 验收。S7/S8 的测试文件名与精确子范围在实现前确定，不提前认证生产环境隔离、分布式并发或真实外部 benchmark。
+
+### S6 周期 anchor 与 proxy 有效性：实现记录与验收门槛
+
+本增量新增 `composition/proxy.py`、`proxy_runtime.py`，在 hierarchical budget 中显式配置 proxy_validity，运行版本为 `composed-v6`。校准使用独立开发 `calibration` split；既不使用 admission/final 反馈，也不把不同指标的绝对数值当作同量纲改善。配置、触发与限制见 [S6 指南](PROXY_VALIDITY_V65.md)。
+
+| ID | 本增量已接通行为与实现证据 | 仍保留的边界 |
+| --- | --- | --- |
+| A-02 | 配置和 calibration 内容身份前置校验；driver 掌握预算、配对来源、负反馈写入和晋升否决，policy 无权自报校准结论 | inprocess 仍不是恶意插件沙箱；工作区/进程接管待 S7 |
+| M3-02 | anchor 是独立物理操作，candidate/baseline 整组先预扣；每次成本仍计入全局/方向/候选；失败与未开始释放分开 | 不提供外部资源操作系统硬限额；未知用量不能自动推断 |
+| M3-03 | anchor_request 的 calibration split、fidelity、seed 等完整请求实际交给 domain；成功缓存要求完整请求/产物/来源匹配 | 本阶段采用显式固定周期与监控规则，未声称通用自适应最优资源分配 |
+| M3-04 | rank warmup 需至少 3 个有效候选配对；恒定分数相关未定义；比较 basis 变化重置有效窗口，既有 drift 告警保留 | statistical=False；阈值不是显著性检验或泛化保证 |
+| M3-06 | 首次/周期实际校准，平均并列秩 Spearman 监控；低于阈值/未定义/anchor 失败或明确 proxy↑true↓触发 sticky degraded；降级后每候选校准、严格 true-best 附加约束和 M5 负反馈真实接通 | 保留原探索策略和准入规则；未自动替换为独立全保真优化器，也无真实外部任务质量认证 |
+| M5-01 | 真实 proxy 改善但同口径 true 退步产生结构化 L1，并显式晋升为带 harmful_count 的 run-only L2 | 其他 rank/失败告警只记监控状态，不捏造配对退步经验；未补齐全框架所有阶段写入规则 |
+| M5-02 | driver 授权的 run_feedback 可跨非祖先拓扑进入后续 draft；ContextPack 显式列 run_feedback_ids，仍受 negative/trust/levels/top_k/chars 限制 | 普通记忆的拓扑权限不因此扩大；预算不足时经验可不纳入，不能宣称所有后续 prompt 必然包含 |
+| M5-03 | 负反馈须核对 current/baseline 四份真实 proxy/anchor 记录；可检索内容只有指标/方向/分数与来源引用；private 与原始文本不进入 ContextPack | 仍依赖 domain 如实提供实际内容与计量；hash 不是外部身份签名 |
+| M5-04 | 校准负反馈限定当前 logical_run_id，导出/import/knowledge 回流均排除该 run-only 权限 | 未将局部 drift 教训自动推广为跨任务或跨 domain 知识 |
+| M8-03 | dev 与 calibration 身份非空且不同，calibration 亦不能复用已启用 held-out 内容；pair 绑定候选/产物/请求/版本/seed/run；重复候选不能重复增加 rank 样本 | 真实数据内容与权限仍由 domain 校验，字段格式不能证明外部隔离 |
+| M9-02 | layered dev_metric/dev_direction 与 gate metric/direction 可独立，回执复算两套规则；degraded veto 在付费 admission 前执行，通过 true-best 仍需原 gate | top_k 与新的二元规则插件组装未由本阶段补齐；校准不单独授予准入 |
+| M9-03 | calibration 不占 admission call_budget，但全数使用物理预算；uncached incumbent anchor 失败时计已知费用、释放 candidate 未开始预扣并 veto | 不以失败/未测 baseline 猜测候选优势；未知付费调用仍无自动重试 |
+| M9-04 | anchor 只接收 dev proxy 和 calibration；admission/final 的 raw/private 结果不能进入配对或 M5；bounded monitor 输入不注入整个配对历史 | calibration 是明确可反馈的开发数据，不等于终审；外部 benchmark 划分需领域协议授权 |
+| X1-02 | v6 checkpoint 保存 proxy 调用/状态和 memory 权威引用；恢复重算 journal、反馈与固定内容身份，重复 replay 独立计费 | v1–v5 不自动升级；中途付费调用失败关闭，进程身份接管待 S7；实测 wallclock 可能使精确 replay 不匹配 |
+| X1-05 | 记录 proxy_validity、composed_anchor、memory_proxy_receipt_binding、预算拒绝与最终监控状态；输入只含摘要与最近 5 条告警 | 仍无可订阅事件总线或完整 dashboard |
+
+v65 显式组 `test_proxy_validity.py` / `test_composed_proxy.py` 覆盖周期切换、distinct metrics/directions、未测 incumbent 基线、反向代理、并列秩/低样本/常量、真实成本、预扣组拒绝、负反馈改变非祖先 draft、可见性/检索预算、禁止跨 run 导出，以及恢复/replay/篡改。完整重 hash 修改负反馈、复合引用和 checkpoint 仍须经 controller 原始回执复核，拒绝时新增付费调用为零且 journal 不变。测试执行结果与阶段门槛如下。
+
+| 验证项 | 本次执行状态与证据 |
+| --- | --- |
+| Mac `make check` | 最终实现复核通过：1,319 portable、158 Linux deselected（22.37 秒）、37 tooling、11 axioms、4 个离线示例；包含负反馈/引用/检查点同时重 hash 的来源篡改拒绝回归；Linux deselected 不计通过 |
+| 历史与 source 检查 | v65 的 9 项历史/source-only 检查通过；tooling 37 项通过；未生成 v65 运行证书 |
+| 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
+| Linux v65 | 本阶段同 SHA 完整 CI 必须通过后才推进 main；实际结果以新证书、journal、summary 和交付记录为准 |
+| 提交与 main 更新 | 按“候选提交→同 SHA Linux 验收→推进 main”执行，不使用 v64 历史成功替代本阶段结果 |
+
+本轮落实 M3-06 的周期校准、异质指标有效性监控与负反馈子范围；C-02 继续隔离准入与成本，C-06 保留物理计量，C-07 扩展来源与恢复，C-08 保留 v1–v64 verifier 源码。S7 worktree/接管、S8 种群，以及 HITL、通用事件总线、外部知识与真实 campaign 继续按计划单列。

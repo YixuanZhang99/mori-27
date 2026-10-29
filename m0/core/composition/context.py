@@ -16,8 +16,8 @@ from pathlib import Path
 from core.composition.contracts import json_copy
 from core.executor.types import EvalStatus
 from core.memory.store import ScopedMemory
-from core.memory.types import MemoryEntry, MemoryQuery, ScopeContext
-from core.policy.types import MutationOp
+from core.memory.types import MemoryEntry, MemoryQuery, Payload, Provenance, ScopeContext, TimeMeta
+from core.policy.types import MutationOp, StateMutation
 
 
 def _json(value):
@@ -197,6 +197,60 @@ class ContextMemory(ScopedMemory):
                 raise ValueError("policy may only promote a lesson from the current evidence")
         return prepared
 
+    def prepare_proxy_feedback(self, feedback, controller, *, cycle):
+        """Authorize one run-scoped negative lesson from actual calibration pairs.
+
+        This separate authority never accepts policy-supplied held-out evidence.
+        Full source records stay in the controller journal; only the declared
+        metrics and receipt references may enter the retrieval payload.
+        """
+        from core.composition.proxy import ProxyValidityController
+        from core.composition.evaluation import decode_evidence
+        if type(controller) is not ProxyValidityController or controller.run_id != self.context.run_id:
+            raise ValueError("proxy feedback requires this run's authoritative controller")
+        checked = controller.validate_feedback(feedback)
+        records = controller.feedback_records(checked)
+        current = decode_evidence(records["current_proxy"])
+        if current.eval_result.contract.binding.evaluation_context != self.evaluation_context:
+            raise ValueError("proxy feedback differs from the memory development context")
+        if type(cycle) is not int or cycle < 0:
+            raise ValueError("proxy feedback requires a logical cycle")
+        binding = {"role": "proxy_feedback", "candidate_id": current.candidate_id,
+            "context": asdict(self.context), "evaluation_context": self.evaluation_context,
+            "status": "ok", "cycle": cycle, "feedback": checked}
+        receipt = _hash(binding)
+        identifier = "proxy-feedback:" + checked["pair_id"][7:]
+        if receipt in self.bindings and self.bindings[receipt] != binding:
+            raise ValueError("proxy feedback receipt cannot be rebound")
+        if identifier in self.entries:
+            self._validate_entry(self.entries[identifier])
+            if self.entries[identifier].provenance.evidence_refs != [receipt]:
+                raise ValueError("proxy lesson identity cannot be rebound")
+            return []
+        self.bindings[receipt] = binding
+        self.store.append("memory_proxy_receipt_binding", {"receipt_ref": receipt, **binding})
+        entry = MemoryEntry(identifier, Payload("structured", {"observation": checked}, "proxy_feedback/v1"),
+            Provenance(self.context.run_id, evidence_refs=[receipt], trust_tier="gated",
+                       source_candidate_id=current.candidate_id),
+            TimeMeta(float(cycle)), self.context, scope="run", level="L1")
+        return [StateMutation(MutationOp.WRITE_MEMORY, identifier, {"entry": entry, "at": float(cycle)},
+                    "record calibration evidence of proxy improvement and true regression"),
+                StateMutation(MutationOp.PROMOTE_MEMORY, identifier,
+                    {"target_level": "L2", "delta": {"utility": {"harmful_count": 1}}},
+                    "retain a run-scoped negative lesson supported by two actual calibration pairs")]
+
+    def verify_proxy_feedback(self, controller):
+        for binding in self.bindings.values():
+            if binding.get("role") == "proxy_feedback":
+                if controller is None or controller.run_id != self.context.run_id:
+                    raise ValueError("proxy memory has no matching calibration authority")
+                controller.validate_feedback(binding["feedback"])
+
+    def _is_run_feedback(self, entry):
+        return entry.scope == "run" and entry.context == self.context and any(
+            self.bindings.get(ref, {}).get("role") == "proxy_feedback"
+            for ref in entry.provenance.evidence_refs)
+
     def _validate_entry(self, entry, *, imported=False):
         if not isinstance(entry, MemoryEntry) or entry.payload.kind not in {"text", "structured"}:
             raise ValueError("context memory supports data-only text or structured lessons")
@@ -218,6 +272,20 @@ class ContextMemory(ScopedMemory):
             raise ValueError("foreign memory requires explicit import authorization")
         for ref in refs:
             binding = self.bindings[ref]
+            if binding.get("role") == "proxy_feedback":
+                if imported or entry.scope != "run" or entry.context != self.context \
+                        or set(binding) != {"role", "candidate_id", "context", "evaluation_context", "status", "cycle", "feedback"} \
+                        or _hash(binding) != ref or binding["context"] != asdict(entry.context) \
+                        or binding["evaluation_context"] != self.evaluation_context \
+                        or binding["candidate_id"] != entry.provenance.source_candidate_id \
+                        or type(binding["feedback"]) is not dict \
+                        or binding["feedback"].get("candidate_id") != binding["candidate_id"] \
+                        or entry.provenance.source_run_id != self.context.run_id \
+                        or entry.provenance.trust_tier != "gated" or binding["status"] != "ok" \
+                        or entry.payload.schema_id != "proxy_feedback/v1" \
+                        or entry.payload.body != {"observation": binding["feedback"]}:
+                    raise ValueError("proxy memory differs from its authoritative run-scoped receipts")
+                continue
             if binding["role"] != "dev" or binding["evaluation_context"] != self.evaluation_context \
                     or binding["context"] != asdict(entry.context) \
                     or binding["candidate_id"] != entry.provenance.source_candidate_id \
@@ -363,14 +431,18 @@ class ContextPackBuilder:
         descriptor = describe_scope(frontier, parents, options.get("context_scope", "ancestors"))
         allowed = set(descriptor.candidate_ids)
         entry_ids = set()
+        run_feedback_ids = set()
         for entry in self.memory.entries.values():
             imported = entry.id in self.memory._imported_ids
             if imported and not options.get("include_imported", False):
                 continue
-            if not imported and entry.provenance.source_candidate_id not in allowed:
+            run_feedback = self.memory._is_run_feedback(entry)
+            if not imported and not run_feedback and entry.provenance.source_candidate_id not in allowed:
                 continue
             self.memory._validate_entry(entry, imported=imported)
             entry_ids.add(entry.id)
+            if run_feedback:
+                run_feedback_ids.add(entry.id)
         retrieved = self.memory.retrieve(
             MemoryQuery(query, self.memory.context, options.get("trust_floor", "gated"),
                         options.get("include_negative", True)),
@@ -382,6 +454,8 @@ class ContextPackBuilder:
                    "scope": {"kind": descriptor.kind,
                    "candidate_ids": list(descriptor.candidate_ids)}, "query": query[:1024],
                    "budget": {"unit": "chars", "limit": limit}, "memory": [], "grounding": []}
+        if run_feedback_ids:
+            payload["scope"]["run_feedback_ids"] = sorted(run_feedback_ids)
         if len(_json(payload)) > limit:
             raise ValueError("context budget cannot represent the selected scope descriptor")
         for entry in retrieved:

@@ -70,3 +70,5 @@
 - v63 — S4 显式三层准入、逐次预算预扣、可复算回执与冻结终审隔离的端到端验收；保留全部 v62 回归与历史证据。兼容默认 dev-only，top_k/HITL 与 S5 继续单列。见 [v63](v63/README.md)。
 
 - v64 — S5 全局/方向/候选物理预算、原子预扣、fidelity 请求与预算输入的端到端验收；独立执行完整离线 research 示例，保留全部 v63 回归和真实历史证据。外部 GPU/模型/benchmark campaign 及既有未接通子条款不由该阶段认证。见 [v64](v64/README.md)。
+
+- v65 — S6 周期 anchor、proxy 有效性秩相关规则与负反馈进入 scoped memory 的端到端验收；保留全部 v64 回归和真实历史证据。规则不等于统计保证，worktree/种群等后续组装仍单独验收。见 [v65](v65/README.md)。

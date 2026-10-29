@@ -21,7 +21,7 @@ from core.executor.types import Candidate, EvalRequest, EvalStatus
 
 UNITS = frozenset({"token", "eval_count", "node", "wallclock", "gpu_hours", "usd"})
 COUNTS = frozenset({"token", "eval_count", "node"})
-OPERATIONS = frozenset({"planning", "operator", "dev", "dev_baseline", "admission", "final"})
+OPERATIONS = frozenset({"planning", "operator", "dev", "dev_baseline", "anchor", "admission", "final"})
 JOURNAL_KIND = "hierarchical_budget"
 
 
@@ -71,7 +71,7 @@ def _request(data):
 def hierarchical_options(options):
     """Pure strict preflight suitable for Registry.register(validate_options=...)."""
     allowed = {"limits", "reservation", "operation_reservations", "fidelity_rungs",
-               "rung_by", "rung_every", "convergence"}
+               "rung_by", "rung_every", "convergence", "proxy_validity"}
     if type(options) is not dict or set(options) - allowed \
             or not {"limits", "reservation", "fidelity_rungs"}.issubset(options):
         raise BudgetError("hierarchical budget requires limits, reservation and fidelity_rungs")
@@ -96,6 +96,9 @@ def hierarchical_options(options):
         raise BudgetError("fidelity_rungs must be a nonempty list")
     for rung in rungs:
         _request(rung)
+    if "proxy_validity" in options:
+        from core.composition.proxy import proxy_options
+        proxy_options(options["proxy_validity"])
     if type(options.get("rung_by", "direction_calls")) is not str \
             or options.get("rung_by", "direction_calls") not in {"direction_calls", "depth"}:
         raise BudgetError("rung_by must be direction_calls or depth")
@@ -240,13 +243,14 @@ class HierarchicalBudget:
         candidate.validate()
         if request is not None and not isinstance(request, EvalRequest):
             raise BudgetError("operation request must be an EvalRequest")
-        if operation in {"dev", "dev_baseline", "admission", "final"} and request is None:
+        if operation in {"dev", "dev_baseline", "anchor", "admission", "final"} and request is None:
             raise BudgetError("evaluation operation requires its exact EvalRequest")
         if operation in {"planning", "operator"} and request is not None:
             raise BudgetError("non-evaluation operations cannot carry an EvalRequest")
         if request is not None:
             request.validate()
-            expected_split = {"dev": "dev", "dev_baseline": "dev", "admission": "admission", "final": "final_audit"}[operation]
+            expected_split = {"dev": "dev", "dev_baseline": "dev", "anchor": "calibration",
+                              "admission": "admission", "final": "final_audit"}[operation]
             if request.split_id != expected_split:
                 raise BudgetError("request split differs from operation authority")
         if depth is not None and (type(depth) is not int or depth < 0):

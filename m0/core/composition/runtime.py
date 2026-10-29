@@ -93,6 +93,7 @@ class ComposedRuntime(HierarchicalRuntime):
         self._context_export = None
         self.eval_requests = {}
         self._halted_reason = None
+        self.proxy = None
 
     def _build(self, task):
         scope = ScopeContext(self._logical_run_id, _id("task", task),
@@ -128,8 +129,10 @@ class ComposedRuntime(HierarchicalRuntime):
                 for operator in self.parts["operators"]):
             raise ValueError("configured objective differs across domain/frontier/operators")
         admission = self.parts["admission"]
+        admission_metric = admission.dev_metric if isinstance(admission, LayeredAdmissionController) else getattr(admission, "metric", expected_metric)
+        admission_direction = admission.dev_direction if isinstance(admission, LayeredAdmissionController) else getattr(admission, "direction", self.frontier.direction)
         if isinstance(admission, (MetricAdmission, LayeredAdmissionController)) and (
-                admission.metric != expected_metric or admission.direction != self.frontier.direction):
+                admission_metric != expected_metric or admission_direction != self.frontier.direction):
             raise ValueError("configured admission objective differs from exploration")
         self.applier = StateApplier(self.frontier, self.memory, self.store)
         self.budget = self.parts["budget"]
@@ -154,6 +157,22 @@ class ComposedRuntime(HierarchicalRuntime):
                 raise ValueError("dev, admission and final audit require distinct dataset contexts")
             self.layered.check_integrity(Proposal(Candidate("task-preflight"), task))
         if self.hierarchical:
+            proxy_options = self.budget.options.get("proxy_validity")
+            if proxy_options is not None:
+                from core.composition.proxy import ProxyValidityController
+                self.proxy = ProxyValidityController(proxy_options, self.store, run_id=self._logical_run_id)
+                if (proxy_options["proxy_metric"] != self.frontier.metric or
+                        proxy_options["proxy_direction"] != self.frontier.direction):
+                    raise ValueError("proxy monitor objective differs from development exploration")
+                context_for = getattr(self.parts["domain"], "evaluation_context_for", None)
+                if not callable(context_for):
+                    raise ValueError("proxy calibration requires explicit split content contexts")
+                calibration_context = context_for(self.proxy.anchor_request)
+                if not isinstance(calibration_context, str) or not calibration_context \
+                        or calibration_context in self.manifest["evaluation_contexts"].values():
+                    raise ValueError("calibration must use a distinct content context from dev and held-out splits")
+                self.manifest["evaluation_contexts"]["calibration"] = calibration_context
+                self._validate_domain(self.proxy.anchor_request)
             self._preflight_hierarchical()
         else:
             self._validate_domain(EvalRequest("dev"))
@@ -185,7 +204,7 @@ class ComposedRuntime(HierarchicalRuntime):
         if (getattr(domain, "evaluator_version", None) != self.manifest["domain_version"]
                 or getattr(domain, "evaluation_context", "") != self.manifest["evaluation_context"]):
             raise ValueError("domain identity changed during configured execution")
-        if self.layered and domain.evaluation_context_for(request) != self.manifest["evaluation_contexts"].get(request.split_id):
+        if (self.layered or self.proxy) and domain.evaluation_context_for(request) != self.manifest["evaluation_contexts"].get(request.split_id):
             raise ValueError("domain split context changed during configured execution")
         self._binding(Proposal(Candidate("preflight"), ""), request)
 
@@ -209,11 +228,12 @@ class ComposedRuntime(HierarchicalRuntime):
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        return {"runtime": "composed-v5", "manifest": self.manifest, "config": config,
+        return {"runtime": "composed-v6", "manifest": self.manifest, "config": config,
                 "logical_run_id": self._logical_run_id,
                 "context_export": self._context_export,
                 "evaluation_requests": {key: asdict(value) for key, value in self.eval_requests.items()},
                 "halted_reason": self._halted_reason,
+                "proxy_state": self.proxy.checkpoint_state() if self.proxy else None,
                 "budget_checkpoint": self.budget.checkpoint_state() if self.hierarchical else None,
                 "task_desc": self.task, "next_cycle": self.next_cycle,
                 "git_state": {"kind": "configured_artifacts"}, "inflight_executor": [],
@@ -238,7 +258,7 @@ class ComposedRuntime(HierarchicalRuntime):
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        expected = {"runtime": "composed-v5", "manifest": self.manifest,
+        expected = {"runtime": "composed-v6", "manifest": self.manifest,
                     "task_desc": self.task, "config": config}
         for field in ("runtime", "manifest", "task_desc", "config"):
             if payload.get(field) != expected[field]:
@@ -267,7 +287,7 @@ class ComposedRuntime(HierarchicalRuntime):
         if (self.budget.state()["open_intents"] if self.hierarchical else self.budget.reserves) \
                 or self.budget.account_summary() != payload["ledger"]:
             raise ValueError("checkpoint budget differs from durable ledger")
-        restored = ResearchFrontier.restore(payload["frontier_checkpoint"].encode(), store=self.store)
+        restored = ResearchFrontier.restore(payload["frontier_checkpoint"].encode())
         if type(self.frontier) is not ResearchFrontier:
             raise ValueError("configured frontier does not implement portable restore")
         self.frontier.__dict__.update(restored.__dict__)
@@ -280,6 +300,14 @@ class ComposedRuntime(HierarchicalRuntime):
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
+        if self.proxy:
+            self.proxy.restore_state(payload["proxy_state"])
+            self.memory.verify_proxy_feedback(self.proxy)
+        elif payload.get("proxy_state") is not None:
+            raise ValueError("checkpoint contains an unconfigured proxy monitor")
+        else:
+            self.memory.verify_proxy_feedback(None)
+        self.frontier.store = self.store
         self.proposals, self.evidence = proposals, evidence_by_id
         self.eval_requests = evaluation_requests
         self._halted_reason = payload["halted_reason"]
@@ -315,6 +343,11 @@ class ComposedRuntime(HierarchicalRuntime):
         pack = ContextPackBuilder(self.memory, self.assembly.memory.options).retrieve(
             self.frontier, parents, task, cycle, grounding=grounding)
         context = {"retrieval": pack.to_dict(), "context_pack_ref": pack.ref}
+        if self.proxy:
+            monitor = self.proxy.state()
+            context["proxy_validity"] = {key: monitor[key] for key in (
+                "mode", "rank_correlation", "valid_pairs", "requires_anchor_every_candidate", "advancement_rule")}
+            context["proxy_validity"]["recent_alerts"] = monitor["alerts"][-5:]
         self.store.append("composed_context", {"cycle": cycle, "context_ref": pack.ref,
                                                "context": pack.to_dict()})
         return context
@@ -403,11 +436,13 @@ class ComposedRuntime(HierarchicalRuntime):
                 raise
         return True
 
-    async def _admit_layered(self, proposal, evidence, context):
+    async def _admit_layered(self, proposal, evidence, context, *, rejection_reason=None):
         plan = self.layered.prepare(proposal, evidence,
             self.proposals[self.incumbent] if self.incumbent else None,
             self.evidence[self.incumbent] if self.incumbent else None,
             self.parts["domain"], source_refs=self._source_refs(context))
+        if rejection_reason:
+            return self.layered.decline(plan, rejection_reason)
         if not await self._execute_layered_calls(plan.calls):
             return self.layered.decline(plan, "global budget cannot fund the admission plan")
         return self.layered.judge(plan)
@@ -639,7 +674,7 @@ class ComposedRuntime(HierarchicalRuntime):
         self.task = task
         if self.cfg.resume_from_checkpoint:
             saved = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
-            if saved.get("runtime") != "composed-v5" or not isinstance(saved.get("logical_run_id"), str) \
+            if saved.get("runtime") != "composed-v6" or not isinstance(saved.get("logical_run_id"), str) \
                     or not saved["logical_run_id"]:
                 raise ValueError("composed checkpoint runtime has no scoped run identity")
             self._logical_run_id = saved["logical_run_id"]
@@ -653,7 +688,7 @@ class ComposedRuntime(HierarchicalRuntime):
         if self.cfg.resume_from_checkpoint:
             self._restore()
         else:
-            self.store.append("run_start", {"runtime": "composed-v5", "task_desc": task,
+            self.store.append("run_start", {"runtime": "composed-v6", "task_desc": task,
                                            "manifest": self.manifest, "accounting_stamp": asdict(self.stamp)})
             for spec in self.assembly.memory.options.get("imports", []):
                 self.memory.import_snapshot(spec["path"], expected_sha256=spec["sha256"])
@@ -686,7 +721,7 @@ class ComposedRuntime(HierarchicalRuntime):
         if self.next_cycle > self.cfg.max_generations or not continued:
             asyncio.run(self._finish_layered())
             self._finish_context()
-        self.result = {"runtime": "composed-v5", "profile": self.assembly.name,
+        self.result = {"runtime": "composed-v6", "profile": self.assembly.name,
                        "best_candidate_id": self.incumbent,
                        "best_prompt": self.proposals[self.incumbent].artifact if self.incumbent else None,
                        "best_score": self.frontier.nodes[self.incumbent].score if self.incumbent else None,
@@ -694,6 +729,7 @@ class ComposedRuntime(HierarchicalRuntime):
                        "memory_export": self._context_export,
                        "reporting": self.layered.report() if self.layered else None,
                        "stop_reason": self._halted_reason,
+                       "proxy_validity": self.proxy.state() if self.proxy else None,
                        "accepted_candidate_ids": [row["payload"]["candidate_id"] for row in
                             self.store.read("composed_decision") if row["payload"]["decision"]["admit"]],
                        "checkpoint_ref": payload_digest(self._payload())}
@@ -717,7 +753,7 @@ class ComposedRuntime(HierarchicalRuntime):
         root.mkdir(exist_ok=True)
         path = Path(tempfile.mkdtemp(prefix="replay-", dir=root))
         store = AppendOnlyStore(path / "x1.jsonl")
-        certificate = {"passed": False, "runtime": "composed-v5", "mode": "independent_rerun",
+        certificate = {"passed": False, "runtime": "composed-v6", "mode": "independent_rerun",
                        "replay_workdir": str(path.resolve()), "replay_id": path.name}
         try:
             if adapter_factory:

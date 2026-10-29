@@ -1,6 +1,6 @@
 # S4 三层准入与独立终审（v63）
 
-本页保留 S4/v63 引入的协议与当时边界；当前 S5/v64 运行版本为 `composed-v5`，多层物理预算和最新恢复限制见 [S5 指南](HIERARCHICAL_BUDGET_V64.md)。
+本页保留 S4/v63 引入的协议与当时边界；后续 S5/v64 运行版本为 `composed-v5`，多层物理预算和最新恢复限制见 [S5 指南](HIERARCHICAL_BUDGET_V64.md)。
 
 本增量在同一 `Framework.from_profile()` 配置入口增加 `admission=layered`，运行版本为 `composed-v4`。它把 dev 探索、admission 晋升与 final_audit 报告分开，保留 [S1 组装](COMPOSED_RUNTIME.md)、[S2 证据契约](EVALUATION_CONTRACT_V61.md)与 [S3 经验回流](CONTEXT_FEEDBACK_V62.md)的行为。五阶段中，分层预算仍属于 S5；[逐项清单](ABSTRACTION_ALIGNMENT.md)中的旧缺口不会因增加三层协议自动关闭。
 

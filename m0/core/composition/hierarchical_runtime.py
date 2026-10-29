@@ -13,6 +13,7 @@ import time
 from dataclasses import asdict, replace
 
 from core.composition.contracts import Decision, Proposal
+from core.composition.proxy_runtime import ProxyRuntime
 from core.composition.evaluation import (EvaluationContract, comparison_projection,
     encode_evidence, measured_costs, public_projection, validate_evidence)
 from core.executor.types import Candidate, CostVec, EvalRequest, EvalResult, EvalStatus, EvidenceRecord
@@ -38,7 +39,7 @@ def _physical(cost):
             "gpu_hours": cost.gpu_hours, "usd": cost.usd}
 
 
-class HierarchicalRuntime:
+class HierarchicalRuntime(ProxyRuntime):
     def _preflight_hierarchical(self):
         from core.composition.knowledge import LocalKnowledge
         if self.parts.get("knowledge") is not None and type(self.parts["knowledge"]) is not LocalKnowledge:
@@ -327,6 +328,9 @@ class HierarchicalRuntime:
                  "score_split": dict(refreshed.eval_result.metrics), "attempt": refreshed.attempt,
                  "cost": asdict(refreshed.eval_result.cost), "uncertainty": refreshed.eval_result.uncertainty,
                  "result": result}, "refresh incumbent from actual comparable dev baseline"))
+        continued, proxy_rejection, proxy_mutations = await self._calibrate_candidates(proposal, evidence, cycle)
+        if not continued:
+            return False
         absorb = self._reserve_physical(candidate, "planning", "absorb:" + str(cycle),
                                        direction="coordination", depth=depth)
         if not absorb.granted:
@@ -338,8 +342,11 @@ class HierarchicalRuntime:
                                                    "evidence": encode_evidence(evidence)})
         mutations = self.memory.prepare_mutations(mutations, public_projection(evidence),
                                                  evidence_ref, cycle=cycle)
+        mutations.extend(proxy_mutations)
         if self.layered:
-            decision = await self._admit_layered(proposal, evidence, context)
+            decision = await self._admit_layered(proposal, evidence, context, rejection_reason=proxy_rejection)
+        elif proxy_rejection:
+            decision = Decision(False, proxy_rejection)
         else:
             decision = self.parts["admission"].judge(comparison_projection(evidence),
                 comparison_projection(self.evidence[self.incumbent]) if self.incumbent else None)

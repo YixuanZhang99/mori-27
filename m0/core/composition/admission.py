@@ -40,7 +40,7 @@ def _texts(value, name):
 
 
 def layered_options(options):
-    allowed = {"metric", "direction", "margin", "min_dev_gain", "trigger", "call_budget", "layers",
+    allowed = {"metric", "direction", "dev_metric", "dev_direction", "margin", "min_dev_gain", "trigger", "call_budget", "layers",
                "admission_fidelity", "admission_seeds", "final_fidelity", "final_seeds", "selection",
                "monotonicity", "final_audit", "integrity_hooks", "blocked_patterns", "blocked_sources"}
     if type(options) is not dict or set(options) - allowed:
@@ -51,6 +51,11 @@ def layered_options(options):
             raise ValueError(f"{name} must be nonempty text")
     if options.get("direction", "maximize") not in ("maximize", "minimize"):
         raise ValueError("direction must be maximize or minimize")
+    if type(options.get("dev_metric", options.get("metric", "dev/score"))) is not str \
+            or not options.get("dev_metric", options.get("metric", "dev/score")).strip():
+        raise ValueError("dev_metric must be nonempty text")
+    if options.get("dev_direction", options.get("direction", "maximize")) not in ("maximize", "minimize"):
+        raise ValueError("dev_direction must be maximize or minimize")
     _finite(options.get("margin", 0.0), "margin")
     if "trigger" in options and "min_dev_gain" in options:
         raise ValueError("declare min_dev_gain once, in trigger or as a flat option")
@@ -176,23 +181,23 @@ def _comparison_payload(view, split):
 def _trigger_passed(candidate, incumbent, rules):
     if candidate.eval_result.status is not EvalStatus.OK:
         return False
-    values = [candidate.eval_result.metrics.get(rules["metric"])]
+    values = [candidate.eval_result.metrics.get(rules["dev_metric"])]
     if incumbent is not None:
         if incumbent.eval_result.status is not EvalStatus.OK:
             raise ValueError("development incumbent must be successful")
         LayeredAdmissionController._compatible(comparison_projection(candidate), comparison_projection(incumbent))
-        values.append(incumbent.eval_result.metrics.get(rules["metric"]))
+        values.append(incumbent.eval_result.metrics.get(rules["dev_metric"]))
     for value in values:
         if type(value) not in (int, float) or not math.isfinite(value):
             raise ValueError("development trigger requires a finite public objective")
     if len(values) == 1:
         return True
-    gain = values[0] - values[1] if rules["direction"] == "maximize" else values[1] - values[0]
+    gain = values[0] - values[1] if rules["dev_direction"] == "maximize" else values[1] - values[0]
     return gain > 0 and gain >= rules["min_dev_gain"]
 
 
 def validate_layered_receipt(receipt, *, candidate_evidence=None, incumbent_evidence=None,
-                             candidate_dev=None, incumbent_dev=None):
+                             candidate_dev=None, incumbent_dev=None, expected_rules=None):
     """Recompute a receipt using actual records, never a self-attested score."""
     if not isinstance(receipt, LayeredDecision):
         raise ValueError("receipt must be a LayeredDecision")
@@ -205,10 +210,14 @@ def validate_layered_receipt(receipt, *, candidate_evidence=None, incumbent_evid
             or type(context["development_trigger_passed"]) is not bool:
         raise ValueError("invalid layered receipt identity")
     rules = context["rules"]
-    if type(rules) is not dict or set(rules) != {"metric", "direction", "margin", "min_dev_gain", "monotonicity"}:
+    if type(rules) is not dict or set(rules) != {"metric", "direction", "dev_metric", "dev_direction",
+                                               "margin", "min_dev_gain", "monotonicity"}:
         raise ValueError("invalid layered receipt rules")
     layered_options({"metric": rules["metric"], "direction": rules["direction"], "margin": rules["margin"],
+                     "dev_metric": rules["dev_metric"], "dev_direction": rules["dev_direction"],
                      "min_dev_gain": rules["min_dev_gain"], "monotonicity": rules["monotonicity"]})
+    if expected_rules is not None and rules != expected_rules:
+        raise ValueError("receipt rules differ from the configured development and admission objectives")
     admission = context["admission"]
     if type(admission) is not dict or set(admission) != {"candidate", "incumbent"}:
         raise ValueError("invalid admission receipt evidence")
@@ -289,7 +298,7 @@ def validate_layered_receipt(receipt, *, candidate_evidence=None, incumbent_evid
 class LayeredAdmissionController:
     """M9 query accounting, exact-bound evidence cache and a best-only ratchet.
 
-    min_dev_gain and margin are absolute differences in the configured metric.
+    min_dev_gain uses dev_metric/dev_direction; margin uses metric/direction.
     Canary patterns and blocked source references are explicit exact strings;
     source checks do not imply a general URL or content-classification service.
     """
@@ -297,6 +306,8 @@ class LayeredAdmissionController:
         layered_options(options)
         self.options = {"metric": options.get("metric", "dev/score"),
             "direction": options.get("direction", "maximize"), "margin": options.get("margin", 0.0),
+            "dev_metric": options.get("dev_metric", options.get("metric", "dev/score")),
+            "dev_direction": options.get("dev_direction", options.get("direction", "maximize")),
             "trigger": {"min_dev_gain": options.get("trigger", {}).get("min_dev_gain", options.get("min_dev_gain", 0.0))},
             "call_budget": options.get("call_budget", 20),
             "layers": options.get("layers", ["dev", "admission", "final_audit"]),
@@ -310,6 +321,7 @@ class LayeredAdmissionController:
             "blocked_sources": options.get("blocked_sources", [])}
         self.options = json_copy(self.options)
         self.metric, self.direction = self.options["metric"], self.options["direction"]
+        self.dev_metric, self.dev_direction = self.options["dev_metric"], self.options["dev_direction"]
         self.store = store
         self._config_id = _digest(self.options)
         self._cache, self._calls, self._authorized, self._decisions, self._prepared = {}, {}, {}, {}, {}
@@ -340,6 +352,14 @@ class LayeredAdmissionController:
     def development_basis(self):
         """Detached identity of the current comparable development measurements."""
         return json_copy(self._development_basis)
+
+    @property
+    def decision_rules(self):
+        """Detached rules binding both objectives to a recomputable receipt."""
+        return {"metric": self.metric, "direction": self.direction,
+                "dev_metric": self.dev_metric, "dev_direction": self.dev_direction,
+                "margin": self.options["margin"],
+                "min_dev_gain": self.options["trigger"]["min_dev_gain"], "monotonicity": True}
 
     def request_for(self, phase):
         if phase not in {"admission", "final_audit"}:
@@ -387,19 +407,20 @@ class LayeredAdmissionController:
                               evaluation_context=context)
         return GateCall(_digest(_binding_payload(binding)), phase, proposal, request, binding)
 
-    def _score(self, evidence):
-        value = evidence.eval_result.metrics.get(self.metric)
+    def _score(self, evidence, *, development=False):
+        value = evidence.eval_result.metrics.get(self.dev_metric if development else self.metric)
         try:
             valid = type(value) in (int, float) and math.isfinite(value)
         except OverflowError:
             valid = False
         if not valid:
-            raise ValueError("admission requires a finite public objective")
+            raise ValueError(("development" if development else "admission") + " requires a finite public objective")
         return value
 
-    def _gain(self, candidate, baseline):
-        delta = self._score(candidate) - self._score(baseline)
-        return delta if self.direction == "maximize" else -delta
+    def _gain(self, candidate, baseline, *, development=False):
+        delta = self._score(candidate, development=development) - self._score(baseline, development=development)
+        direction = self.dev_direction if development else self.direction
+        return delta if direction == "maximize" else -delta
 
     @staticmethod
     def _compatible(candidate, baseline):
@@ -475,7 +496,7 @@ class LayeredAdmissionController:
         if any(getattr(binding, name) != getattr(selected, name)
                for name in ("candidate_id", "artifact_sha256", "evaluator_version")):
             raise ValueError("development baseline differs from the gate-selected artifact or evaluator")
-        self._score(comparison_projection(incumbent_dev))
+        self._score(comparison_projection(incumbent_dev), development=True)
         basis = self._basis(binding)
         changed = self._basis_changes(basis, explicit=True)
         remembered = self._remember_development(incumbent_dev)
@@ -521,17 +542,17 @@ class LayeredAdmissionController:
         for observed, view in ((incumbent_dev, baseline_view), (dev, candidate_view)):
             if observed is None or observed.eval_result.status is not EvalStatus.OK:
                 continue
-            self._score(view)
+            self._score(view, development=True)
             if self._dev_best is not None:
                 self._compatible(view, comparison_projection(self._dev_best))
-            if self._dev_best is None or self._gain(view, comparison_projection(self._dev_best)) > 0:
+            if self._dev_best is None or self._gain(view, comparison_projection(self._dev_best), development=True) > 0:
                 self._dev_best = decode_evidence(encode_evidence(observed))
                 self._persist("dev_best")
         reason, triggered = "development trigger passed", True
         if dev.eval_result.status is not EvalStatus.OK:
             reason, triggered = "development evaluation did not succeed", False
         elif baseline_view is not None:
-            gain = self._gain(candidate_view, baseline_view)
+            gain = self._gain(candidate_view, baseline_view, development=True)
             if gain <= 0 or gain < self.options["trigger"]["min_dev_gain"]:
                 reason, triggered = "development gain below trigger", False
         candidate_call = incumbent_call = None
@@ -638,8 +659,7 @@ class LayeredAdmissionController:
         candidate_dev = self._development_records[_digest(_binding_payload(plan.candidate_dev.eval_result.binding))]
         incumbent_dev = self._development_records[_digest(_binding_payload(plan.incumbent_dev.eval_result.binding))] \
             if plan.incumbent_dev else None
-        rules = {"metric": self.metric, "direction": self.direction, "margin": self.options["margin"],
-                 "min_dev_gain": self.options["trigger"]["min_dev_gain"], "monotonicity": True}
+        rules = self.decision_rules
         context = {"schema_version": 1, "candidate_id": plan.candidate_id, "incumbent_id": plan.incumbent_id,
             "rules": rules,
             "development": {"candidate": _json(asdict(plan.candidate_dev)),
@@ -650,7 +670,8 @@ class LayeredAdmissionController:
             "decision": {"admit": admit, "reason": reason}}
         receipt = LayeredDecision(admit, reason, _digest(context), context)
         validate_layered_receipt(receipt, candidate_evidence=candidate, incumbent_evidence=incumbent,
-                                 candidate_dev=candidate_dev, incumbent_dev=incumbent_dev)
+                                 candidate_dev=candidate_dev, incumbent_dev=incumbent_dev,
+                                 expected_rules=self.decision_rules)
         self._decisions[plan.plan_id] = receipt
         for call in plan.calls:
             self._authorized.pop(call.key, None)
@@ -862,7 +883,8 @@ class LayeredAdmissionController:
                            for role, view in value["decision_context"]["development"].items()}
             validate_layered_receipt(decisions[key], candidate_evidence=actual["candidate"],
                                      incumbent_evidence=actual["incumbent"],
-                                     candidate_dev=development["candidate"], incumbent_dev=development["incumbent"])
+                                     candidate_dev=development["candidate"], incumbent_dev=development["incumbent"],
+                                     expected_rules=self.decision_rules)
             if decisions[key].admit:
                 eligible_selections.append(actual["candidate"])
             if actual["incumbent"] is not None and actual["incumbent"].eval_result.status is EvalStatus.OK:
