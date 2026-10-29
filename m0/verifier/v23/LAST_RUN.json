@@ -1,0 +1,43 @@
+{
+  "version": "v23",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "reason": "local HTTP and grading fixtures validate agent mechanics only; official 22-task data/model campaign has not run"
+  },
+  "scope": [
+    "shared generator and official dev validity evaluation",
+    "real OpenEvolve host and governed Framework CLIs",
+    "real local OpenAI-compatible HTTP calls",
+    "Bubblewrap solution execution without inherited credentials",
+    "public train/test visibility and private grading isolation"
+  ],
+  "checks": [
+    {
+      "check": "v22_complete",
+      "passed": true,
+      "detail": "PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "bubblewrap_installed",
+      "passed": true,
+      "detail": "/usr/bin/bwrap"
+    },
+    {
+      "check": "real_local_openai_dual_arm_smoke",
+      "passed": true,
+      "detail": "...                                                                      [100%]\n3 passed in 3.55s"
+    },
+    {
+      "check": "public_data_and_campaign_regression",
+      "passed": true,
+      "detail": ".............                                                            [100%]\n13 passed in 1.31s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

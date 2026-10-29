@@ -1,0 +1,8 @@
+{
+  "name": "funsearch_island",
+  "operators": {"draft": "llm", "improve": "llm_evolve_block", "debug": null, "crossover": null},
+  "representation": "full_rewrite_in_m0",
+  "parent_pool": {"structure": "islands", "num_islands": 2, "migration_interval": 3},
+  "extensions": [{"type": "novelty_gate", "threshold": 0.95}],
+  "source": "M2-UNIFIED §8.5, M0 subset; island topology metadata only"
+}

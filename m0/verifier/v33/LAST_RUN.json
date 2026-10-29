@@ -1,0 +1,66 @@
+{
+  "version": "v33",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "m0_owner_crash_recovery": {
+    "executed": true,
+    "certified": true,
+    "window": "sequential external improve and IID-RS control in one unfinished cycle from control process start through baseline/failure evidence and the cycle checkpoint"
+  },
+  "previously_certified_windows": [
+    "sequential external genesis before the first checkpoint",
+    "sequential external improve from process start through admission"
+  ],
+  "uncertified_crash_windows": [
+    "batch cohorts",
+    "machine power loss",
+    "non-external in-process evaluator crashes"
+  ],
+  "scope": [
+    "control shares the unfinished generation with its preceding improve candidate",
+    "checkpoint restore admits only native-bound improve/control settlements or one open reserve",
+    "open reserves bind a journaled process even before its native outcome exists",
+    "settled intents require completed native outcomes and exact account/token costs",
+    "the same-cycle improve suffix resumes before control finalization",
+    "control uses its deterministic control:generation lineage and locked control account",
+    "successful control appends one baseline score and generation/main-score-bound evidence",
+    "failed control reuses or appends one executor failure and never creates baseline evidence",
+    "control never enters M9, frontier, memory or admission Receipt state",
+    "real SIGKILL drills cover pre-settlement, settle/delta, baseline and failure evidence",
+    "baseline mismatch and wrong control lineage fail before control adoption",
+    "three process starts and ForbiddenLLM prove no replacement execution or reproposal",
+    "completed resume does not readopt control or launch another process",
+    "recovered results, ledger, health, governed state and snapshots match controls",
+    "fresh certified replay passes after pre-settlement and baseline crash drills"
+  ],
+  "checks": [
+    {
+      "check": "v32_complete",
+      "passed": true,
+      "detail": "heckpoint_batch_and_public_api_regressions: ..................................                                       [100%]\n34 passed in 2.84s\nPASS ci_workflow_wiring: current verifier command\n......                                                                   [100%]\n6 passed in 4.13s\nPASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]\n6 passed in 4.13s\n................................                                         [100%]\n32 passed in 1.71s\nPASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]\n32 passed in 1.71s\n.........                                                                [100%]\n9 passed in 7.47s\nPASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]\n9 passed in 7.47s\nPASS ci_workflow_wiring: current verifier command\n..                                                                       [100%]\n2 passed in 6.10s\nPASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]\n2 passed in 6.10s\n.............................................                            [100%]\n45 passed in 7.00s\nPASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]\n45 passed in 7.00s\n................                                                         [100%]\n16 passed in 12.85s\nPASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.85s\nPASS ci_workflow_wiring: current verifier command\n.......                                                                  [100%]\n7 passed in 6.67s\nPASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]\n7 passed in 6.67s\n..................................................                       [100%]\n50 passed in 13.04s\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]\n50 passed in 13.04s\n................                                                         [100%]\n16 passed in 12.77s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.77s\nPASS ci_workflow_wiring: current verifier command\n............                                                             [100%]\n12 passed in 6.90s\nPASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: ............                                                             [100%]\n12 passed in 6.90s\n.........................................................                [100%]\n57 passed in 19.26s\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: .........................................................                [100%]\n57 passed in 19.26s\n................                                                         [100%]\n16 passed in 12.55s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.55s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "real_control_sigkill_pre_post_settlement_failure_and_guards",
+      "passed": true,
+      "detail": ".......                                                                  [100%]\n7 passed in 13.89s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": ".....................................................................    [100%]\n69 passed in 26.45s"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 12.56s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

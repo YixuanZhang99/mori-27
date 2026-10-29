@@ -1,0 +1,117 @@
+{
+  "version": "v47",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "re_bench_campaign_executed": false,
+    "mle_bench_lite_campaign_executed": false,
+    "host_parity_certified": false,
+    "rubric_b2_complete": false,
+    "rubric_b3_complete": false
+  },
+  "external_provider_execution": {
+    "real_external_api_executed": false,
+    "local_openai_compatible_http_worker_executed": true,
+    "external_scores_or_cost_efficiency_produced": false
+  },
+  "supersedes": [
+    "v46 sequential in-process evaluator starts without durable terminal recovery"
+  ],
+  "acceptance_harness": {
+    "recursive_history_execution": false,
+    "prior_passing_journals_required": "v1-v46 except rejected v14 and superseded v43 recursive harness",
+    "current_behavior_reexecuted": true,
+    "legacy_failures_preserved": true,
+    "functional_assertions_reduced": false
+  },
+  "inprocess_evaluation_recovery": {
+    "executed": true,
+    "certified": true,
+    "scope": "sequential genesis, improve and same-cycle IID-RS control with durable m0_evaluation_outcome",
+    "success_and_terminal_failure_certified": true,
+    "active_call_exactly_once_certified": false,
+    "active_start_without_outcome_fail_closed": true,
+    "legacy_start_without_outcome_certified": false,
+    "completion_boundary": "exact-start-hash-bound terminal outcome, never start alone",
+    "operation_identity": "deterministic candidate/start non-process execution ID",
+    "failed_or_successful_evaluator_call_reexecuted": false,
+    "executor_process_fabricated": false,
+    "native_result_and_failure_evidence_revalidated": true,
+    "ledger_cost_and_reconcile_delta_revalidated": true,
+    "post_settlement_and_control_certified": true,
+    "batch_inprocess_evaluator_certified": false
+  },
+  "uncertified_boundaries": [
+    "in-process evaluator calls without a terminal outcome",
+    "legacy sequential starts without m0_evaluation_outcome",
+    "batch cohorts using a non-external in-process evaluator",
+    "actual seven-task RE-Bench campaign and external scores",
+    "actual 22-task MLE-Bench Lite campaign and host parity",
+    "real external provider API campaign",
+    "machine power loss and whole-machine worker survival",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas",
+    "hosted CI execution"
+  ],
+  "scope": [
+    "persist sequential in-process evaluator success and failure outcomes before settlement",
+    "bind every outcome to the exact evaluation start hash and deterministic operation ID",
+    "adopt genesis, improve and same-cycle control terminal results without reexecution",
+    "resume only missing settlement, absorb, gate, admission and baseline suffixes",
+    "compare native token cost, ledger settlement and persisted failure detail",
+    "refuse active/legacy starts, duplicate outcomes and binding/cost/evidence forks",
+    "match uninterrupted results, ledger, governed state and certified snapshot",
+    "completed resume is a no-op and fresh certified replay passes",
+    "no active-call, batch in-process evaluator, external benchmark, parity, USD or A/B/C completion claim"
+  ],
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true,
+      "detail": "prior passing journals verified; missing=[]"
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true,
+      "detail": "v14 failed journal remains rejected; v15 is its corrected successor"
+    },
+    {
+      "check": "inprocess_evaluation_terminal_real_sigkill_and_active_call_guards",
+      "passed": true,
+      "detail": "....................................................                     [100%]\n52 passed in 44.34s"
+    },
+    {
+      "check": "proposal_terminal_and_active_call_regressions",
+      "passed": true,
+      "detail": ".....................................................                    [100%]\n53 passed in 78.52s (0:01:18)"
+    },
+    {
+      "check": "complete_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 37%]\n........................................................................ [ 75%]\n...............................................                          [100%]\n191 passed in 174.71s (0:02:54)"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 21%]\n........................................................................ [ 42%]\n........................................................................ [ 63%]\n........................................................................ [ 84%]\n.....................................................                    [100%]\n341 passed in 201.01s (0:03:21)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true,
+      "detail": "exactly one v47 index entry"
+    }
+  ]
+}

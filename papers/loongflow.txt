@@ -1,0 +1,913 @@
+L OONG F LOW: D IRECTED E VOLUTIONARY S EARCH VIA A
+C OGNITIVE P LAN -E XECUTE -S UMMARIZE PARADIGM
+
+Chunhui Wan∗ Xunan Dai*
+
+arXiv:2512.24077v1 [cs.AI] 30 Dec 2025
+
+Yinan Mao
+
+Zhuo Wang*
+Yu Lan
+
+Minglei Li*
+
+Yanpeng Wang*
+
+Zhiwen Xiao
+
+Baidu Inc.
+
+A BSTRACT
+The transition from static Large Language Models (LLMs) to self-improving agents is hindered
+by the lack of structured reasoning in traditional evolutionary approaches. Existing methods often
+struggle with premature convergence and inefficient exploration in high-dimensional code spaces. To
+address these challenges, we introduce LoongFlow, a self-evolving agent framework that achieves
+state-of-the-art solution quality with significantly reduced computational costs. Unlike "blind"
+mutation operators, LoongFlow integrates LLMs into a cognitive "Plan-Execute-Summarize"
+(PES) paradigm, effectively mapping the evolutionary search to a reasoning-heavy process. To
+sustain long-term architectural coherence, we incorporate a hybrid evolutionary memory system. By
+synergizing Multi-Island models with MAP-Elites and adaptive Boltzmann selection, this system
+theoretically balances the exploration-exploitation trade-off, maintaining diverse behavioral niches to
+prevent optimization stagnation. We instantiate LoongFlow with a General Agent for algorithmic
+discovery and an ML Agent for pipeline optimization. Extensive evaluations on the AlphaEvolve
+benchmark and Kaggle competitions demonstrate that LoongFlow outperforms leading baselines
+(e.g., OpenEvolve, ShinkaEvolve) by up to 60% in evolutionary efficiency while discovering superior
+solutions. LoongFlow marks a substantial step forward in autonomous scientific discovery, enabling
+the generation of expert-level solutions with reduced computational overhead.
+§ Code: https://github.com/baidu-baige/LoongFlow
+
+1
+
+Introduction
+
+The progression from static prompting—where humans manually engineer instructions—to autonomous, self-evolving
+agents marks a fundamental shift in artificial intelligence. While static approaches rely on fixed inference patterns,
+self-evolving agents utilize Large Language Models (LLMs) as mutation operators to iteratively modify their own
+code or parameters. Pioneering works have validated this paradigm in specific domains: FunSearch [1] utilizes LLMs
+to discover novel mathematical constructions, Eureka [2] optimizes reward functions via evolutionary search, and
+AlphaEvolve [3] automates the discovery of heuristic algorithms. that LLMs, building on foundational code-generation
+capabilities [4, 5], can discover novel mathematical algorithms and reward functions that surpass human baselines. This
+"Darwinian shift" has established automated scientific discovery as a vibrant research frontier.
+However, as the complexity of tasks increases, current frameworks face severe cognitive and architectural limitations.
+Leading open-source baselines, such as OpenEvolve and ShinkaEvolve [6], effectively treat the LLM as a stochastic
+black box. OpenEvolve relies on high-volume random mutations, leading to a "random walk" behavior that is
+computationally prohibitive. ShinkaEvolve improves efficiency via novelty search but operates purely at the execution
+level, lacking a mechanism to analyze why a mutation failed. Consequently, these methods hit a "cognitive ceiling,"
+∗
+
+Equal contributions. E-mail: {daixunan, wangzhuo12}@baidu.com
+
+Baidu Inc. LoongFlow
+
+struggling to maintain structural coherence over long evolutionary horizons. Specifically, they encounter three critical
+bottlenecks:
+• Inefficient Exploration (The Cost Bottleneck): Existing agents lack a strategic planning layer. They engage
+in brute-force sampling in high-dimensional code spaces, resulting in excessive token consumption and
+unstable convergence rates.
+• Diversity Collapse (The Convergence Bottleneck): Without explicit diversity management, population-based
+agents tend to converge prematurely to local optima. Traditional "Top-K" sampling fails to preserve diverse
+but potentially high-reward "stepping stone" solutions.
+• Absence of Reflexive Memory (The Feedback Bottleneck): Unlike deep learning, where backpropagation
+provides a precise gradient for improvement, most existing evolutionary agent frameworks lack a structured reflection mechanism [7]. They function as "memory-less" searchers, repeating similar errors across generations
+rather than accumulating "evolutionary wisdom" through structured summarization.
+
+Figure 1: Overview of LoongFlow.
+To overcome these barriers, we introduce LoongFlow, a framework designed to bridge the gap between reasoning
+agents and evolutionary computation. LoongFlow distinguishes itself through two core architectural innovations. First,
+we propose the "Plan-Execute-Summarize" (PES) paradigm. This cognitive loop transforms random mutation into a
+directed hypothesis-testing process (addressing Bottleneck 1 & 3), as illustrated in the Agent Loop of Figure 1. Second,
+to resolve the exploration-exploitation dilemma (Bottleneck 2), we design a Hybrid Evolutionary Memory. By
+fusing the spatial isolation of Island Models with the behavioral diversity of MAP-Elites [8] and entropy-regularized
+Boltzmann selection, LoongFlow dynamically maintains diverse behavioral niches. This ensures that the system can
+escape local optima and continuously discover novel solution architectures.
+We demonstrate the versatility of LoongFlow by instantiating two domain-specific agents: a General Agent for
+algorithmic tasks and an ML Agent for machine learning pipelines. Experimental results on the AlphaEvolve
+benchmark and Kaggle competitions confirm that LoongFlow significantly surpasses OpenEvolve and ShinkaEvolve,
+breaking theoretical performance barriers with superior sample efficiency.
+The primary contributions of this work are as follows:
+• Structured Evolutionary Paradigm: We propose the “Plan-Execute-Summarize” paradigm, which integrates
+expert-level planning and retrospective summarization to reduce generation randomness and establish a
+sustainable feedback loop.
+• Advanced Memory Architecture: We design a domain-adaptive evolutionary memory that combines multiisland parallel evolution with MAP-Elites [8] and adaptive Boltzmann selection, effectively solving the
+premature convergence and “catastrophic forgetting” problems inherent in traditional LLM agents.
+2
+
+Baidu Inc. LoongFlow
+
+• Superior Performance & Efficiency: We provide open-source, pre-built agents (GeneralAgent and MLAgent)
+that achieve state-of-the-art results on NP-hard mathematical problems and complex ML pipelines, surpassing
+existing frameworks in both stability and evolutionary speed.
+
+2
+
+Related Work
+
+The development of LoongFlow is situated at the intersection of LLM-based Evolutionary Optimization and
+Cognitive Agent Architectures. In this section, we review the progression of these fields and identify the specific gap
+that LoongFlow addresses.
+2.1
+
+LLM-Based Evolutionary Optimization
+
+The paradigm of utilizing LLMs for evolutionary optimization has shifted from simple solution generation to iterative
+refinement. Pioneering work such as FunSearch [1] demonstrated that LLMs, when coupled with an evolutionary
+evaluator, could solve open problems in mathematics (e.g., the Cap Set problem) by searching for "functions" rather
+than parameters. Similarly, AlphaEvolve [3] orchestrates an autonomous pipeline of LLMs to improve an algorithm by
+making direct changes to the program, achieving human-level performance on robot manipulation tasks. While recent
+methods like OPRO [9] and PromptBreeder [10] have explored using LLMs as optimizers, they often treat the model
+as a black-box operator to mutation. They typically treat the LLM as a stochastic operator—randomly mutating code
+without a high-level strategy—which leads to high token costs and inefficient exploration in complex search spaces.
+2.2
+
+Evolutionary Agent Frameworks
+
+To engineeringly scale LLM-based evolution, several open-source frameworks have emerged. These serve as the
+primary baselines for our work:
+• OpenEvolve: As a standard implementation of the AlphaEvolve algorithm, OpenEvolve utilizes an "Island
+Model" to maintain population diversity. However, it treats code generation as a single-step translation task.
+The mutation process is largely reactive, where the agent fixes errors or makes random local changes without
+understanding the global algorithmic structure. This often leads to a "random walk" behavior in high-difficulty
+tasks.
+• ShinkaEvolve: ShinkaEvolve [6] improves sample efficiency by integrating "code-novelty rejection" to filter
+out redundant solutions before execution. While it reduces computational waste, it still operates primarily
+at the execution level. The framework lacks a structured reflection mechanism to analyze why a specific
+architectural change failed, preventing the system from learning abstract principles over long evolutionary
+horizons.
+2.3
+
+Cognitive Architectures and The Reasoning Gap
+
+While evolutionary methods excel at population-based search, they often lack the depth of semantic reasoning found in
+autonomous agents.
+Reasoning Agents: Frameworks like ReAct [11] and Reflexion [7] have demonstrated that interleaving reasoning traces
+(Thought) with actions significantly improves problem-solving capabilities. These methods enable agents to perform
+multi-step planning and self-correction. Similarly, Voyager [12] utilizes an iterative curriculum to learn complex skills
+in embodied environments.
+The Gap: A critical gap exists in merging these two paradigms. Standard reasoning agents (like AutoGPT [13] or
+Voyager [12]) generally focus on single-instance problem solving rather than population-based evolutionary search.
+Conversely, traditional evolutionary algorithms (like MAP-Elites [8]) excel at maintaining diverse populations but lack
+the semantic reasoning capabilities of ReAct-style agents.
+LoongFlow bridges this gap by introducing the "Plan-Execute-Summarize" paradigm. This paradigm allows
+LoongFlow to maintain the diversity benefits of MAP-Elites [8] while leveraging the reasoning depth of ReAct-style
+agents [11], effectively moving the evolutionary process from "random mutation" to "directed evolution".
+3
+
+Baidu Inc. LoongFlow
+
+3
+
+Background
+
+In this section, we formally frame the open-ended evolutionary process as a sequential decision-making problem and
+establish the mathematical foundations of the LoongFlow framework. We model the self-evolution of agents as a
+Markov Decision Process (MDP [14]) over a discrete code space, guided by a parameterized Large Language Model
+(LLM).
+3.1
+
+Problem Formulation as MDP
+
+We define the problem as a tuple ⟨C, A, R, πθ ⟩:
+• State/Code Space (C): Let C be the infinite, discrete space of all valid programs in a specific language (e.g.,
+Python). A state st ∈ C represents the solution code at evolutionary generation t.
+• Action Space (A): The action space consists of semantic modification operations (e.g., rewrite, debug,
+optimize) applied to the code.
+• Reward Function (R): R : C → R is a scalar fitness function (e.g., accuracy on test cases). The environment
+is characterized by a sparse reward signal, where valid solutions are rare.
+• Policy (πθ ): The agent is an LLM parameterized by weights θ. It acts as a stochastic policy πθ (a|s), generating
+the next code state st+1 based on the current state st and context.
+Our objective is to find an optimal solution s∗ that maximizes the reward:
+s∗ = arg max R(s)
+
+(1)
+
+s∈C
+
+3.2
+
+LLM as a Composite Semantic Operator
+
+Unlike traditional Evolutionary Algorithms (EA) that use fixed, random mutation operators (denoted as Tmut ),
+LoongFlow utilizes the LLM as a learnable Semantic Operator.
+We formalize the "Plan-Execute-Summarize" (PES) paradigm as a composite transition kernel decomposing the policy
+πθ into three sub-steps. Let Mt be the evolutionary memory at generation t, and I be the set of system instructions
+(prompts). The transition from parent st to offspring st+1 proceeds as follows:
+1. Planning: The Planner generates a natural language blueprint b (an intermediate latent variable) conditioned
+on the parent code st and retrieved insights from memory Mt :
+b ∼ πθ (b | st , Mt , Iplan )
+
+(2)
+
+2. Execution: The Executor generates the executable offspring code s′ (a candidate for st+1 ) based on the
+blueprint b:
+s′ ∼ πθ (s′ | b, st , Iexec )
+(3)
+3. Summarization & Update: The Summarizer generates a reflection insight z based on the execution feedback
+r = R(s′ ), and updates the memory:
+
+3.3
+
+z ∼ πθ (z | s′ , r, b, Isum )
+
+(4)
+
+Mt+1 ← Mt ∪ {z}
+
+(5)
+
+Feature Space and Archive Management
+
+To manage population diversity beyond raw fitness, we map the high-dimensional code space C to a lower-dimensional
+Feature Space F ⊆ Rk .
+Feature Mapping. Let Φ : C → F be a mapping function that projects a solution s to a feature vector v = Φ(s). In
+this work, v consists of interpretable dimensions, for example, v = (Cyclomatic Complexity, Code Length).
+MAP-Elites Archive. We maintain a structured archive (Memory) Archive , discretized into a grid of cells in F. Each
+cell, indexed by a feature vector v, stores only the single best solution found so far for that specific behavior:
+Archive (v) = {s ∈ C | Φ(s) ∈ Cell(v) ∧ R(s) = ′ max R(s′ )}
+s ∈Cell(v)
+
+This mechanism ensures behavioral diversity, preventing the policy from collapsing into a single local optimum.
+4
+
+(6)
+
+Baidu Inc. LoongFlow
+
+Algorithm 1 LoongFlow Main Evolutionary Loop
+1: Input: Task Description T , Initial Solution s0 , Max Iterations Nmax , Islands K
+2: Output: Best Solution s∗
+3: // Initialization phase
+4: Initialize Global Memory M ← {s0 }
+5: Initialize K Islands with MAP-Elites Archives A1 , . . . , AK
+6: for iteration = 1 to Nmax do
+7:
+for k = 1 to K do
+8:
+// 1. Adaptive Selection (Sec. 4.2.3)
+9:
+Hk ← CalculateEntropy(Ak )
+10:
+τ ← τbase · (1 + αe−βHk )
+11:
+sparent ← BoltzmannSelect(Ak , τ )
+12:
+// 2. Lineage-Based Planning (Sec. 4.1.1)
+13:
+chain ← GetLineage(sparent .id)
+14:
+context ← {p.plan, p.summary | p ∈ chain}
+15:
+plan ← Planner(sparent , context, T )
+16:
+// 3. Execution & Evaluation (Sec. 4.1.2)
+17:
+code ← Executor(plan, sparent )
+18:
+if Verify(code) is False then
+19:
+continue
+20:
+end if
+21:
+score, logs ← Evaluator(code)
+22:
+// 4. Reflection & Storage (Sec. 4.1.3)
+23:
+summary ← Summarizer(plan, code, logs)
+24:
+snew ← Solution(code, score, summary, parent = sparent .id)
+25:
+UpdateMAPElites(Ak , snew )
+26:
+end for
+27:
+// 5. Migration Strategy (Sec. 4.2.1)
+28:
+if iteration mod M == 0 then
+29:
+MigrateElites(A1 , . . . , AK )
+30:
+end if
+31: end for
+32: return maxs∈∪Ak s.score
+
+3.4
+
+▷ Parallel Evolution on Islands
+▷ Dynamic Temperature
+
+▷ Fast-fail on syntax errors
+
+Adaptive Boltzmann Selection
+
+To select the parent st for the next generation from the archive Archive , we replace static greedy selection with Adaptive
+Boltzmann Selection.
+Let {s1 , s2 , . . . , sN } be the set of solutions currently stored in the archive. The probability P (si ) of selecting solution
+si as the parent is:
+exp(R(si )/τ )
+P (si ) = PN
+(7)
+j=1 exp(R(sj )/τ )
+where τ is a temperature parameter dynamically modulated by the population entropy. This allows LoongFlow to shift
+smoothly between exploration (high τ ) and exploitation (low τ ).
+
+4
+
+LoongFlow Overview
+
+Designing an evolutionary agent capable of solving high-difficulty, open-ended tasks requires overcoming two fundamental systemic contradictions: the tension between search space complexity and sampling efficiency, and the trade-off
+between population diversity and convergence speed.
+To resolve these, LoongFlow introduces a hierarchical architecture that decouples “Cognitive Reasoning” from
+“Evolutionary Dynamics”. The framework consists of two coupled subsystems: the Agent Loop, which implements
+the “Plan-Execute-Summarize” (PES) paradigm, and the Hybrid Evolutionary Memory, which governs population
+management. The overall procedure is outlined in Algorithm 1.
+5
+
+Baidu Inc. LoongFlow
+
+4.1
+
+The “Plan-Execute-Summarize” (PES) Paradigm
+
+Standard LLM-based evolutionary methods (e.g., genetic programming with LLMs) typically treat the model as a
+“black-box mutation operator”, randomly perturbing solutions in hopes of improvement. This approach suffers from
+extreme sample inefficiency and a lack of directional guidance. To address this, LoongFlow formalizes the evolutionary
+iteration as a structured cognitive process composed of three specialized stages.
+
+Figure 2: Expanded view of the LoongFlow evolutionary process. The framework iterates through a PlannerExecutor-Summarizer loop. The Planner retrieves historical insights to prune the search space; the Executor generates
+and verifies code; the Summarizer extracts causal knowledge to update the Evolutionary Memory.
+4.1.1
+
+Planner: Strategic Search Space Pruning
+
+In infinite solution spaces, navigating via stochastic mutation often devolves into a “random walk,” wasting vast
+computational resources on invalid or redundant trials. To mitigate this, the Planner functions as a strategic architect
+employing Lineage-Based Context Retrieval.
+Unlike RAG [15] systems that rely on fuzzy semantic similarity, LoongFlow utilizes the explicit genealogical links
+inherent in the evolutionary process. As defined in the Solution data structure (see Listing 1), each individual preserves
+its lineage via parent_id.
+For a given parent solution st , the Planner traverses the ID chain (retrieving ancestors st−1 , st−2 ... and potential
+descendants). It extracts the historical generate_plan (Original Intent) and summary (Retrospective Feedback) from
+this lineage.
+• Intent Tracking: By reading past plans, the Planner understands the “research trajectory” intended by previous
+generations.
+• Course Correction: By reading past summaries (which contain specific advice for the next generation), the
+Planner identifies verified pitfalls to avoid.
+This structured recall allows the Planner to construct a context-aware blueprint b, leveraging the Chain-of-Thought [16]
+reasoning capabilities of modern LLMs, ensuring that the new plan is a logical continuation and refinement of the
+parent’s strategy, rather than a random jump.
+6
+
+Baidu Inc. LoongFlow
+
+4.1.2
+
+Executor: Polymorphic Implementation & Robust Verification
+
+The translation from a high-level strategic blueprint to an executable solution is inherently non-deterministic and
+error-prone. The Executor acts as a robust translation engine that converts the Planner’s intent (b) into verified artifacts
+(r).
+Polymorphic Execution Strategies. The framework decouples the “What” (Plan) from the “How” (Execution). The
+Executor supports Pluggable Execution Flows tailored to the problem domain. For algorithmic tasks, it may instantiate
+as a logic-intensive single-pass coder; for system tasks, it may operate as a multi-stage workflow engine. This design
+ensures that LoongFlow is not limited to a single class of problems but is adaptable to any domain with a definable
+action space.
+Local Verification Loop (Fast-Fail). Before submitting to the global Evaluator, the Executor interacts with the
+Environment Interface to perform “Pre-Evaluation Checks”. This local feedback loop allows the Executor to self-correct
+minor errors (such as syntax typos or import errors) immediately, acting as a filter that prevents low-quality candidates
+from consuming expensive global evaluation resources.
+4.1.3
+
+Summary: Closing the Feedback Loop
+
+Traditional evolutionary algorithms are “memory-less” regarding causality—they know that a solution failed, but
+not why. This leads to “Cyclical Errors,” where the population repeatedly explores the same invalid dead-ends. The
+Summary module introduces a retrospective learning mechanism.
+After evaluation, the Summarizer performs Abductive Reflection [7]. It compares the Planner’s intent (b) with the
+execution result (r) to infer causal relationships and generates a structured Insight (z). These insights are stored in the
+Evolutionary Memory. This establishes a Long-Term Cognitive Memory, inspired by the memory architectures in Generative Agents [17], but adapted for evolutionary lineage.. By feeding these insights back to future Planners, LoongFlow
+achieves Meta-Learning, where the system becomes “smarter” about the domain constraints over generations.
+4.2
+
+Hybrid Evolutionary Memory System
+
+A critical failure mode in evolutionary agents is Premature Convergence. LoongFlow addresses this via a multi-layered
+memory architecture rooted in a structured data schema.
+Solution Data Structure. To support the genealogical retrieval described above, LoongFlow maintains a rigorous
+data schema for every individual in the population. As shown in Listing 1, the Solution class encapsulates not only
+the code but also the full evolutionary metadata (lineage IDs, plans, summaries, and metrics).
+Listing 1: The Solution Data Structure in Evolutionary Memory
+class Solution:
+"""Represent a solution in the memory."""
+# Solution identification
+solution: str = ""
+# The executable code
+solution_id: str = ""
+# Unique UUID
+# Evolution information
+generate_plan: str = "" # The blueprint that created this solution
+parent_id: Optional[str] = "" # Pointer to ancestor (Lineage Chain)
+island_id: Optional[int] = 0
+iteration: Optional[int] = 0
+timestamp: float = field(default_factory=time.time)
+generation: int = 0
+# Sampling Control
+sample_cnt: int = 0
+# Visit count for bandit selection
+sample_weight: float = 0.0
+# Performance metrics
+score: Optional[float] = 0.0
+evaluation: Optional[str] = "" # Raw execution logs
+summary: str = ""
+# Critical: Advice for the next generation
+
+7
+
+Baidu Inc. LoongFlow
+
+# Metadata
+metadata: Dict[str, Any] = field(default_factory=dict)
+
+This comprehensive schema transforms the memory from a simple “High Score List” into a Structured Knowledge
+Graph, enabling the Planner to query causal relationships (Why did parent X fail?) rather than just outcomes.
+4.2.1
+
+Multi-Island Distributed Topology
+
+Single-population models are prone to “dominance,” where one successful strategy outcompetes all others. LoongFlow
+employs a Multi-Island Model [18] with a Ring Topology. The population is partitioned into N isolated islands. Each
+island evolves independently, allowing distinct algorithmic “species” to cultivate. Migration occurs only when the
+diversity difference ∆D between neighbors exceeds a threshold. The top k% elites are copied to adjacent islands, acting
+as “invasive species” to shake up stagnation. This spatial isolation ensures Global Diversity Maintenance, preventing
+the system from getting stuck in local optima.
+4.2.2
+
+MAP-Elites with Feature Grids
+
+Objective-based selection often discards novel but unpolished solutions (“stepping stones”). Within each island,
+LoongFlow utilizes a MAP-Elites [8] container. Solutions are mapped to a feature grid A based on behavioral
+descriptors Φ(s) (e.g., Code Complexity × Memory Usage). The system preserves the best individual for each cell in
+the grid, not just the global best. This guarantees Niche Preservation, providing a diverse “gene pool” for the Planner
+to cross-pollinate.
+4.2.3
+
+Adaptive Boltzmann Selection
+
+The balance between Exploration and Exploitation is dynamic. LoongFlow implements Entropy-Regularized Boltzmann Selection [19]. The selection temperature τ is dynamically adjusted based on the population entropy H(P):
+τ (t) ∝ exp(−λ · H(Pt ))
+
+(8)
+
+When the population is diverse (High H), τ lowers to encourage Exploitation (Greedy). When the population converges
+(Low H), τ rises to force Exploration (Random). This achieves Self-Adaptive Control, automatically transitioning
+between “searching for new ideas” and “polishing existing ones” without human intervention.
+
+5
+
+Experiments
+
+To empirically validate the Eadfent framework, we conducted a comprehensive evaluation focusing on Effectiveness
+(Solution Quality) and Efficiency (Convergence Speed).
+5.1
+
+Experimental Setup
+
+Benchmarks: We instantiated two domain-specific agents—General Agent for algorithmic discovery and Machine
+Learning Agent for machine learning engineering—and compared them against state-of-the-art open-source baselines.
+• AlphaEvolve Suite (General Agent): A suite of challenging open-ended mathematical problems derived from
+the AlphaEvolve paper [3].
+• MLEBench [20] (ML Agent): Real-world machine learning competitions requiring end-to-end pipeline
+optimization, spanning Computer Vision, NLP, and Tabular data.
+Baselines: We compared General Agent against two primary evolutionary agent frameworks:
+• OpenEvolve: A standard implementation of the AlphaEvolve algorithm using Island Models.
+• ShinkaEvolve: A recent framework emphasizing sample efficiency via novelty search.
+Models: Experiments were conducted using both open-weights models (DeepSeek-r1-0528, etc.) and commercial
+models (Gemini-3-Pro-Preview, etc.) to ensure the results are framework-dependent rather than model-dependent.
+8
+
+Baidu Inc. LoongFlow
+
+5.2
+5.2.1
+
+Effectiveness
+Algorithmic Discovery (General Agent)
+
+We compared the best solutions found by LoongFlow against the baselines and known theoretical bounds. As shown in
+Table 1, LoongFlow achieved state-of-the-art (SOTA) results across multiple problems in the benchmark suite.
+Table 1: LoongFlow Performance on AlphaEvolve Suite (Grouped by Metric Direction)
+
+Problem
+
+Metric
+
+LLM
+
+AlphaEvolve
+
+LoongFlow
+
+Bound (↑)
+Radius (↑)
+Radius (↑)
+
+DeepSeek-R1
+DeepSeek-R1
+DeepSeek-R1
+
+0.8962
+2.6358
+2.3658321
+
+0.9027
+2.6359
+2.3658322
+
+Side Length (↓)
+Ratio (↓)
+Bound (↓)
+Bound (↓)
+
+DeepSeek-R1
+DeepSeek-R1
+DeepSeek-R1
+DeepSeek-R1
+
+3.93
+12.88926
+0.352099104422
+0.380924
+
+3.92
+12.88924
+0.352099104421
+0.380913
+
+Higher is Better (↑)
+Autocorrelation II
+Circle Packing (Square)
+Circle Packing (Rectangle)
+Lower is Better (↓)
+Hexagon Packing
+Max-to-Min Ratios
+Uncertainty Inequality
+Erdős’ problem
+
+Notably, in the Autocorrelation II problem, LoongFlow discovered a solution with a score of 0.9027, significantly
+outperforming the AlphaEvolve baseline (0.8962). This indicates that the Planner’s ability to enforce global structural
+constraints allows LoongFlow to navigate high-dimensional spaces more effectively than random mutation.
+5.2.2
+
+Machine Learning Engineering (ML Agent)
+
+In the Machine Learning domain, MLAgent demonstrated the ability to construct robust pipelines without human
+intervention. As shown in Table 2, LoongFlow achieved 14 Gold Medals.
+Table 2: LoongFlow Performance on MLE Bench
+
+5.3
+
+Problem
+
+LLM
+
+Result
+
+Predict-volcanic-eruptions-ingv-oe
+Stanford-covid-vaccine
+The-icml-2013-whale-challenge-right-whale-redux
+Aerial Cactus Identification
+Nomad2018-predict-transparent-conductors
+Denoising Dirty Documents
+Detecting-insults-in-social-commentary
+Dogs-vs-cats-redux-kernels-edition
+Histopathologic-cancer-detection
+Plant-pathology-2020-fgvc7
+Tabular-playground-series-dec-2021
+Google-quest-challenge
+Plant-pathology-2021-fgvc8
+Us-patent-phrase-to-phrase-matching
+
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+Claude-Opus-4.5
+Claude-Opus-4.5
+Gemini-3
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+Gemini-3.0-flash
+
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+Gold
+
+Efficiency and Stability Analysis
+
+To quantify efficiency, we analyzed the Circle Packing (Square) task under strict compute budgets.
+5.3.1
+
+Evolve Efficiency (DeepSeek-R1-0528)
+
+We set a time limit of 24 hours with a target score ≥ 0.99. As shown in Table 3, LoongFlow demonstrated a > 60%
+improvement in evolutionary efficiency compared to OpenEvolve.
+9
+
+Baidu Inc. LoongFlow
+
+• Convergence: LoongFlow required an average of 258 evaluations to reach the target threshold (0.99), whereas
+OpenEvolve required 783 evaluations.
+• Success Rate: Across 3 independent runs, LoongFlow achieved a 100% success rate in reaching the high-score
+region (> 0.99). In contrast, OpenEvolve only succeeded once (33% rate), and ShinkaEvolve failed to break
+the 0.99 barrier in all attempts.
+Table 3: Efficiency Comparison (Sorted by Best Score)
+
+Agent
+
+Round
+
+Best Score
+
+Iter Count
+
+Gen Count
+
+Eval Count
+
+Correctness
+
+LoongFlow
+
+2
+1
+3
+
+0.998
+0.996
+0.994
+
+51
+13
+28
+
+484
+147
+145
+
+484
+147
+145
+
+100%
+100%
+100%
+
+OpenEvolve
+
+2
+3
+1
+
+0.994
+0.962
+0.950
+
+783
+1000
+1000
+
+783
+1000
+1000
+
+783
+1000
+1000
+
+29.54%
+48.5%
+37.9%
+
+ShinkaEvolve
+
+3
+1
+2
+
+0.952
+0.856
+0.804
+
+454
+469
+300
+
+510
+568
+360
+
+454
+469
+300
+
+80.84%
+82.05%
+77%
+
+5.3.2
+
+High-Difficulty Breakthrough (Gemini-3-Pro)
+
+Under a constrained budget of 100 iterations, we evaluated the agents’ ability to break theoretical barriers. As shown in
+Table 4, LoongFlow completed the task three times consecutively.
+• LoongFlow: Successfully broke the theoretical barrier (Score > 1.0) in 3 out of 3 runs.
+• Baselines: Both OpenEvolve and ShinkaEvolve failed to reach a score of 1.0 within the budget. This confirms
+that LoongFlow’s PES paradigm not only finds solutions faster (6 vs 100 calls) but accesses solution subspaces
+that are unreachable for standard evolutionary methods under limited budgets.
+Table 4: High-Difficulty Breakthrough (Top-100 Iterations)
+
+Agent
+
+Round
+
+Best Score
+
+Iter Count
+
+Gen Count
+
+Eval Count
+
+Correctness
+
+LoongFlow
+
+1
+2
+3
+
+1.000
+1.000
+1.000
+
+6
+14
+8
+
+20
+72
+26
+
+20
+72
+26
+
+100%
+100%
+100%
+
+OpenEvolve
+ShinkaEvolve
+
+1-3
+1-3
+
+< 0.998
+< 0.999
+
+100
+100
+
+100
+116
+
+100
+100
+
+81% (Avg)
+94% (Avg)
+
+5.4
+
+Ablations
+
+To validate the necessity of the "Plan-Execute-Summarize" (PES) paradigm, we conducted an ablation study using
+General Agent—the representative instantiation of the LoongFlow framework. We evaluated the contribution of the
+Planner, Executor, and Summary modules on the Circle Packing task.
+5.4.1
+
+Planner: The Compass of Evolution
+
+The Planner provides global expert guidance. Removing it forces the agent into a "blind search" mode. As shown in
+Figure 3, the Planner-ablated agent stagnated below 0.96. The lack of search pruning increased the average time to
+reach Top-1 solutions from 9.67 hours to 14.67 hours.
+10
+
+Baidu Inc. LoongFlow
+
+Figure 4: Score Convergence over Time. Note: Faint
+lines represent individual runs (N = 3), and bold lines
+represent the average trajectory.
+
+Figure 3: Evolutionary Effect & Efficiency.
+
+5.4.2
+
+Executor: Balancing Speed and Depth
+
+The Executor employs an adaptive "Fuse Mode", switching between Chat (single-turn) and ReAct (multi-turn).
+• Chat Mode: Computationally lightweight but highly unstable.
+• ReAct Mode: Stable but inefficient.
+• Fuse Mode: By dynamically allocating compute, Fuse Mode achieved the highest asymptotic score (0.998)
+with optimal sample efficiency.
+5.4.3
+
+Summary: The Evolutionary Feedback
+
+The Summary prevents the loss of historical insights. Without it, the agent suffered from cyclical errors. One trial
+ran for 35 hours yet failed to break the 0.95 threshold (as shown in Figure 4, see the "No-Summary" trajectory). The
+absence of retrospective analysis degraded the Planner’s decision-making, confirming that the summary module is
+essential for breaking performance bottlenecks.
+
+6
+
+Conclusion
+
+In this work, we introduced LoongFlow, a cognitive evolutionary framework that fundamentally transcends the "blind
+watchmaker" limitations of traditional LLM-based optimization. By identifying the critical "cognitive ceiling" in
+existing methods—specifically their reliance on stochastic mutation and lack of historical reflection—we proposed a
+paradigm shift from random search to Directed Cognitive Evolution.
+Our core contributions, the "Plan-Execute-Summarize" (PES) paradigm and the Hybrid Evolutionary Memory,
+effectively bridge the gap between reasoning agents and evolutionary computation. Theoretical analysis and extensive
+experiments demonstrate that LoongFlow not only preserves the diversity benefits of population-based methods but also
+injects the strategic depth of reasoning agents, achieving state-of-the-art results with significantly reduced computational
+overhead. LoongFlow establishes a new standard for sample-efficient, autonomous scientific discovery.
+Future work will focus on extending LoongFlow towards fully autonomous "Meta-Agents" that can self-configure their
+evolutionary strategies and learning unsupervised diversity metrics for novel domains.
+
+References
+[1] Bernardino Romera-Paredes, Mohammadamin Barekatain, Alexander Novikov, Matej Balog, et al. Mathematical
+discoveries from program search with large language models. Nature, 625:468–475, 2024.
+[2] Yecheng Jason Ma, William Liang, Guanzhi Wang, et al. Eureka: Human-level reward design via coding large
+language models. In International Conference on Learning Representations (ICLR), 2024.
+[3] Alexander Novikov et al. Alphaevolve: A coding agent for scientific and algorithmic discovery. arXiv preprint
+arXiv:2506.13131, 2025.
+11
+
+Baidu Inc. LoongFlow
+
+[4] Mark Chen, Jerry Tworek, Heewoo Jun, et al. Evaluating large language models trained on code. arXiv preprint
+arXiv:2107.03374, 2021.
+[5] Yujia Li, David Choi, Junyoung Chung, et al. Competition-level code generation with alphacode. Science,
+378(6624):1092–1097, 2022.
+[6] AI Sakana. Shinkaevolve: Self-evolving agents via code-novelty rejection. In Proceedings of the International
+Conference on Functional Programming (ICFP), 2025.
+[7] Noah Shinn, Federico Cassano, Ashwin Gopinath, et al. Reflexion: Language agents with verbal reinforcement
+learning. In Advances in Neural Information Processing Systems (NeurIPS), volume 36, 2023.
+[8] Jean-Baptiste Mouret and Jeff Clune. Illuminating search spaces by mapping elites. arXiv preprint
+arXiv:1504.04909, 2015.
+[9] Chengrun Yang, Xuezhi Wang, Yifeng Lu, et al. Large language models as optimizers. arXiv preprint
+arXiv:2309.03409, 2023.
+[10] Chrisantha Fernando, Dylan Banarse, Henryk Michalewski, et al. Promptbreeder: Self-referential selfimprovement via prompt evolution. arXiv preprint arXiv:2309.16797, 2023.
+[11] Shunyu Yao, Jeffrey Zhao, Dian Yu, et al. React: Synergizing reasoning and acting in language models. In
+International Conference on Learning Representations (ICLR), 2023.
+[12] Guanzhi Wang, Yuqi Xie, Yunfan Jiang, et al. Voyager: An open-ended embodied agent with large language
+models. arXiv preprint arXiv:2305.16291, 2023.
+Auto-gpt:
+An autonomous gpt-4 experiment.
+https://github.com/
+[13] Toran Richards.
+Significant-Gravitas/Auto-GPT, 2023.
+[14] Richard S Sutton and Andrew G Barto. Reinforcement Learning: An Introduction. MIT press, 2018.
+[15] Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler,
+Mike Lewis, Wen-tau Yih, Tim Rocktäschel, et al. Retrieval-augmented generation for knowledge-intensive nlp
+tasks. In Advances in Neural Information Processing Systems (NeurIPS), volume 33, pages 9459–9474, 2020.
+[16] Jason Wei, Xuezhi Wang, Dale Schuurmans, et al. Chain-of-thought prompting elicits reasoning in large language
+models. In Advances in Neural Information Processing Systems (NeurIPS), 2022.
+[17] Joon Sung Park, Joseph C O’Brien, Carrie J Cai, et al. Generative agents: Interactive simulacra of human behavior.
+In Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology, 2023.
+[18] Darrell Whitley. A cellular genetic algorithm. In Proceedings of the 5th International Conference on Genetic
+Algorithms, pages 11–18, 1993.
+[19] Dirk Thierens. Scalability of simple genetic algorithms and the boltzmann distribution. In Proceedings of the
+Genetic and Evolutionary Computation Conference (GECCO), 1999.
+[20] Jun Shern Chan et al. Mle-bench: Evaluating machine learning agents on machine learning engineering. arXiv
+preprint arXiv:2410.07095, 2024.
+
+12
+
+

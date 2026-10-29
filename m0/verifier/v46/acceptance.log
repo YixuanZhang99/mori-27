@@ -1,0 +1,78 @@
+PASS historical_acceptance_evidence: prior passing journals verified; missing=[]
+PASS rejected_v14_preserved: v14 failed journal remains rejected; v15 is its corrected successor
+.....................................................                    [100%]
+53 passed in 78.82s (0:01:18)
+PASS inprocess_proposal_failure_real_sigkill_and_active_call_guards: .....................................................                    [100%]
+53 passed in 78.82s (0:01:18)
+........................................................................ [ 43%]
+........................................................................ [ 86%]
+.......................                                                  [100%]
+167 passed in 163.59s (0:02:43)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 43%]
+........................................................................ [ 86%]
+.......................                                                  [100%]
+167 passed in 163.59s (0:02:43)
+........................................................................ [ 22%]
+........................................................................ [ 45%]
+........................................................................ [ 68%]
+........................................................................ [ 90%]
+.............................                                            [100%]
+317 passed in 193.17s (0:03:13)
+PASS complete_local_regression: ........................................................................ [ 22%]
+........................................................................ [ 45%]
+........................................................................ [ 68%]
+........................................................................ [ 90%]
+.............................                                            [100%]
+317 passed in 193.17s (0:03:13)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+PASS append_only_verifier_index: exactly one v46 index entry

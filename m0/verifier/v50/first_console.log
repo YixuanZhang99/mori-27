@@ -1,0 +1,103 @@
+PASS historical_acceptance_evidence: prior passing journals verified; missing=[]
+PASS rejected_v14_preserved: v14 failed journal remains rejected; v15 is its corrected successor
+...............                                                          [100%]
+15 passed in 2.11s
+PASS real_openevolve_database_roundtrip_strict_disk_and_flip_isolation: ...............                                                          [100%]
+15 passed in 2.11s
+....................................................                     [100%]
+52 passed in 3.56s
+PASS interop_frontier_map_elites_and_governance_regressions: ....................................................                     [100%]
+52 passed in 3.56s
+..................................................                       [100%]
+50 passed in 4.49s
+PASS map_elites_sequential_batch_and_governance_regressions: ..................................................                       [100%]
+50 passed in 4.49s
+............................                                             [100%]
+28 passed in 13.49s
+PASS inprocess_batch_terminal_real_sigkill_partial_start_and_active_guards: ............................                                             [100%]
+28 passed in 13.49s
+....................................................                     [100%]
+52 passed in 41.82s
+PASS sequential_evaluation_terminal_regressions: ....................................................                     [100%]
+52 passed in 41.82s
+.....................................................                    [100%]
+53 passed in 76.40s (0:01:16)
+PASS proposal_terminal_and_active_call_regressions: .....................................................                    [100%]
+53 passed in 76.40s (0:01:16)
+........................................................................ [ 29%]
+........................................................................ [ 58%]
+........................................................................ [ 88%]
+.............................                                            [100%]
+245 passed in 186.20s (0:03:06)
+PASS complete_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 29%]
+........................................................................ [ 58%]
+........................................................................ [ 88%]
+.............................                                            [100%]
+245 passed in 186.20s (0:03:06)
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+........................................................................ [ 54%]
+........................................................................ [ 72%]
+........................................................................ [ 91%]
+...................................                                      [100%]
+395 passed in 215.62s (0:03:35)
+PASS complete_local_regression: ........................................................................ [ 18%]
+........................................................................ [ 36%]
+........................................................................ [ 54%]
+........................................................................ [ 72%]
+........................................................................ [ 91%]
+...................................                                      [100%]
+395 passed in 215.62s (0:03:35)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS real_vendored_database_and_admission_isolation: real host classes; no M9 import or host-metric adjudication
+PASS ci_workflow_wiring: current verifier command
+PASS append_only_verifier_index: exactly one v50 index entry

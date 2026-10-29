@@ -1,0 +1,43 @@
+{
+  "version": "v26",
+  "passed": true,
+  "certification_scope": {
+    "local_controlled_runs": true,
+    "external_formal_runs": false,
+    "reason": "offline runs verify reconciliation and tamper refusal; no hosted CI or external benchmark governance certification is claimed"
+  },
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "scope": [
+    "every settlement mapped through a matching reserve and intent lifecycle",
+    "seven-account settled totals exactly reconcile with the ledger summary",
+    "reconcile deltas match original reserve minus actual settlement",
+    "every gate decision binds one Receipt and one admission decision",
+    "table-driven stops replay through StopActionTable",
+    "post-run orphan or conflicting evidence makes inspect fail"
+  ],
+  "checks": [
+    {
+      "check": "v25_complete",
+      "passed": true,
+      "detail": "\n.............                                                            [100%]\n13 passed in 1.31s\nPASS public_data_and_campaign_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\nPASS v23_complete: PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS v22_complete: PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 3.55s\nPASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 3.55s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS public_data_and_campaign_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 2.78s\nPASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 2.78s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\n............                                                             [100%]\n12 passed in 0.31s\nPASS b1_threshold_tie_failure_and_missing_baseline: ............                                                             [100%]\n12 passed in 0.31s\n........................................                                 [100%]\n40 passed in 2.07s\nPASS gate_loop_checkpoint_and_replay_regression: ........................................                                 [100%]\n40 passed in 2.07s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "c1_c2_reconciliation_and_tamper_refusal",
+      "passed": true,
+      "detail": ".......                                                                  [100%]\n7 passed in 1.46s"
+    },
+    {
+      "check": "governance_checkpoint_replay_and_loop_regression",
+      "passed": true,
+      "detail": "........................................                                 [100%]\n40 passed in 1.82s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

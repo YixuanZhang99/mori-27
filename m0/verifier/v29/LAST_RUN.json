@@ -1,0 +1,51 @@
+{
+  "version": "v29",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "m0_owner_crash_recovery": {
+    "executed": false,
+    "certified": false
+  },
+  "scope": [
+    "versioned external request/result/token-usage JSON protocol",
+    "one real journaled subprocess per candidate evaluation",
+    "strict candidate/head/item/result/usage validation",
+    "atomic persistent native outcome plus append-only outcome evidence",
+    "timeout, nonzero exit and malformed response map to structured failure",
+    "sequential evaluator exceptions become settled EvidenceRecord, not loop escapes",
+    "batch external failures remain settled/pruned and outside M9",
+    "real Bubblewrap environment/file/network/private-write probes are non-skipped",
+    "replay forks external evidence into an independent run history",
+    "no Framework owner-crash exactly-once recovery is claimed in v29"
+  ],
+  "checks": [
+    {
+      "check": "v28_complete",
+      "passed": true,
+      "detail": "0}, 'available_main': 36000.0, 'available_control': 0.0}\nbest_score       = 1.000\nmain trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]\nIID-RS baseline  = [0.33, 0.33, 0.33]\nB1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}\nC1/C2 audit = True\nledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}\nPASS toy_gepa_repeatable_second: best_score       = 1.000\nmain trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]\nIID-RS baseline  = [0.33, 0.33, 0.33]\nB1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}\nC1/C2 audit = True\nledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}\nbest_prompt: Answer the question.\nShow your reasoning step by step.\nbest_score: 1.0\nmain_scores: [0.0, 1.0, 1.0, 1.0, 1.0]\nbaseline_scores: [0.0, 0.0]\nC1/C2 audit = True\nledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}\nPASS gsm8k_repeatable_governance: best_prompt: Answer the question.\nShow your reasoning step by step.\nbest_score: 1.0\nmain_scores: [0.0, 1.0, 1.0, 1.0, 1.0]\nbaseline_scores: [0.0, 0.0]\nC1/C2 audit = True\nledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}\nbest_score: 0.8333333333333334\nmain_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}\nPASS funsearch_repeatable_governance: best_score: 0.8333333333333334\nmain_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}\nPASS ci_workflow_wiring: current verifier command\n.....                                                                    [100%]\n5 passed in 0.42s\nPASS formal_residence_and_certified_replay: .....                                                                    [100%]\n5 passed in 0.42s\n..................................                                       [100%]\n34 passed in 2.84s\nPASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]\n34 passed in 2.84s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "external_process_protocol_and_real_sandbox",
+      "passed": true,
+      "detail": "......                                                                   [100%]\n6 passed in 4.13s"
+    },
+    {
+      "check": "sequential_batch_checkpoint_replay_regressions",
+      "passed": true,
+      "detail": "................................                                         [100%]\n32 passed in 1.71s"
+    },
+    {
+      "check": "detached_process_and_existing_sandbox_regressions",
+      "passed": true,
+      "detail": ".........                                                                [100%]\n9 passed in 7.47s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

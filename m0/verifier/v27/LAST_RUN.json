@@ -1,0 +1,51 @@
+{
+  "version": "v27",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "scope": [
+    "non-resume runs require a fresh evidence history",
+    "same-instance and fresh-instance reuse fail before new ledger entries",
+    "offline CLI tracers allocate independent evidence directories",
+    "repeated toy, GSM8K and FunSearch tracers report live C1/C2 pass"
+  ],
+  "checks": [
+    {
+      "check": "v26_complete",
+      "passed": true,
+      "detail": "   [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS v22_complete: PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 3.55s\nPASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 3.55s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS public_data_and_campaign_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 2.78s\nPASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 2.78s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\n............                                                             [100%]\n12 passed in 0.31s\nPASS b1_threshold_tie_failure_and_missing_baseline: ............                                                             [100%]\n12 passed in 0.31s\n........................................                                 [100%]\n40 passed in 2.07s\nPASS gate_loop_checkpoint_and_replay_regression: ........................................                                 [100%]\n40 passed in 2.07s\nPASS ci_workflow_wiring: current verifier command\n.......                                                                  [100%]\n7 passed in 1.46s\nPASS c1_c2_reconciliation_and_tamper_refusal: .......                                                                  [100%]\n7 passed in 1.46s\n........................................                                 [100%]\n40 passed in 1.82s\nPASS governance_checkpoint_replay_and_loop_regression: ........................................                                 [100%]\n40 passed in 1.82s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "mixed_run_history_fails_before_spending",
+      "passed": true,
+      "detail": ".                                                                        [100%]\n1 passed in 0.20s"
+    },
+    {
+      "check": "toy_gepa_repeatable_first",
+      "passed": true,
+      "detail": "best_score       = 1.000\nmain trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]\nIID-RS baseline  = [0.33, 0.33, 0.33]\nB1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}\nC1/C2 audit = True\nledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}"
+    },
+    {
+      "check": "toy_gepa_repeatable_second",
+      "passed": true,
+      "detail": "best_score       = 1.000\nmain trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]\nIID-RS baseline  = [0.33, 0.33, 0.33]\nB1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}\nC1/C2 audit = True\nledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}"
+    },
+    {
+      "check": "gsm8k_repeatable_governance",
+      "passed": true,
+      "detail": "best_prompt: Answer the question.\nShow your reasoning step by step.\nbest_score: 1.0\nmain_scores: [0.0, 1.0, 1.0, 1.0, 1.0]\nbaseline_scores: [0.0, 0.0]\nC1/C2 audit = True\nledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}"
+    },
+    {
+      "check": "funsearch_repeatable_governance",
+      "passed": true,
+      "detail": "best_score: 0.8333333333333334\nmain_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

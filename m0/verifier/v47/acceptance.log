@@ -1,0 +1,82 @@
+PASS historical_acceptance_evidence: prior passing journals verified; missing=[]
+PASS rejected_v14_preserved: v14 failed journal remains rejected; v15 is its corrected successor
+....................................................                     [100%]
+52 passed in 44.34s
+PASS inprocess_evaluation_terminal_real_sigkill_and_active_call_guards: ....................................................                     [100%]
+52 passed in 44.34s
+.....................................................                    [100%]
+53 passed in 78.52s (0:01:18)
+PASS proposal_terminal_and_active_call_regressions: .....................................................                    [100%]
+53 passed in 78.52s (0:01:18)
+........................................................................ [ 37%]
+........................................................................ [ 75%]
+...............................................                          [100%]
+191 passed in 174.71s (0:02:54)
+PASS complete_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 37%]
+........................................................................ [ 75%]
+...............................................                          [100%]
+191 passed in 174.71s (0:02:54)
+........................................................................ [ 21%]
+........................................................................ [ 42%]
+........................................................................ [ 63%]
+........................................................................ [ 84%]
+.....................................................                    [100%]
+341 passed in 201.01s (0:03:21)
+PASS complete_local_regression: ........................................................................ [ 21%]
+........................................................................ [ 42%]
+........................................................................ [ 63%]
+........................................................................ [ 84%]
+.....................................................                    [100%]
+341 passed in 201.01s (0:03:21)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+PASS append_only_verifier_index: exactly one v47 index entry

@@ -1,0 +1,47 @@
+{
+  "version": "v36",
+  "passed": false,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "m0_owner_crash_recovery": {
+    "executed": false,
+    "certified": false,
+    "window": "one external M0 cohort after completed finalization and required Framework admission Receipts but before checkpoint, together with its started same-cycle IID-RS control from process start through baseline or failure evidence"
+  },
+  "previously_certified_windows": [
+    "sequential external genesis before the first checkpoint",
+    "sequential external improve from process start through admission",
+    "same-cycle sequential external improve and IID-RS control",
+    "fully started external M0 cohorts from process start through finalization"
+  ],
+  "uncertified_crash_windows": [
+    "partially proposed or partially started cohorts",
+    "control started before batch finalization or required Receipts are complete",
+    "machine power loss",
+    "non-external in-process evaluator crashes"
+  ],
+  "scope": [
+    "batch recovery remains the v35 exact mutation-cursor suffix path",
+    "same-cycle control is accepted only after unique batch completion and complete gates/Receipts",
+    "control uses the locked control account, deterministic control:generation lineage and no parent",
+    "native proposer plus evaluator costs and settle/delta gaps are reconciled exactly once",
+    "successful control writes exactly one baseline and baseline evidence",
+    "failed control writes structured executor evidence and no baseline",
+    "control never enters M9, frontier, memory, admission Receipts or accepted pool",
+    "four process starts and ForbiddenLLM prove no reproposal or replacement execution",
+    "batch and control each persist exactly one recovery adoption",
+    "recovered results, ledger, health, governed state and snapshots match controls",
+    "fresh certified replay passes after pre-settlement and baseline crashes",
+    "baseline mismatch and wrong lineage fail before control adoption",
+    "completed resume neither readopts nor re-executes"
+  ],
+  "checks": [
+    {
+      "check": "verifier_exception",
+      "passed": false,
+      "detail": "TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)"
+    }
+  ]
+}

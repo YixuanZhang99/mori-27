@@ -1,0 +1,144 @@
+{
+  "version": "v50",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "re_bench_campaign_executed": false,
+    "mle_bench_lite_campaign_executed": false,
+    "host_parity_certified": false,
+    "rubric_b2_complete": false,
+    "rubric_b3_complete": false
+  },
+  "external_provider_execution": {
+    "real_external_api_executed": false,
+    "local_openai_compatible_http_worker_executed": true,
+    "external_scores_or_cost_efficiency_produced": false
+  },
+  "supersedes": [
+    "v49 lacked OpenEvolve ProgramDatabase interoperability"
+  ],
+  "acceptance_harness": {
+    "recursive_history_execution": false,
+    "prior_passing_journals_required": "v1-v49 except rejected v14 and superseded v43 recursive harness",
+    "current_behavior_reexecuted": true,
+    "legacy_failures_preserved": true,
+    "functional_assertions_reduced": false
+  },
+  "openevolve_database_interoperability": {
+    "executed": true,
+    "certified": true,
+    "real_vendored_program_and_database": true,
+    "program_lineage_metrics_metadata_roundtrip": true,
+    "islands_grids_elites_and_feature_stats_roundtrip": true,
+    "native_save_load_and_sampling": true,
+    "canonical_integrity_envelope": true,
+    "strict_disk_preflight_before_native_cleanup": true,
+    "single_parent_frontier_export": true,
+    "frontier_and_governance_regressions": true,
+    "host_metrics_enter_m9": false,
+    "external_artifact_payload_migration": false,
+    "multi_parent_exported": false,
+    "novelty_llm_or_embedding_state_portable": false
+  },
+  "uncertified_boundaries": [
+    "multi-parent Frontier export to single-parent OpenEvolve",
+    "OpenEvolve external artifact payload migration",
+    "novelty LLM and embedding-client portability",
+    "in-process evaluator calls without a terminal outcome",
+    "legacy sequential or batch operations without durable outcomes",
+    "actual seven-task RE-Bench campaign and external scores",
+    "actual 22-task MLE-Bench Lite campaign and host parity",
+    "real external provider API campaign",
+    "machine power loss",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas",
+    "hosted CI execution"
+  ],
+  "scope": [
+    "use the real vendored Program and ProgramDatabase implementations",
+    "roundtrip code, single-parent lineage, generation, metrics and metadata",
+    "preserve islands, feature grids, archive/best ids and feature scaling state",
+    "exercise native save/load and host parent/inspiration sampling",
+    "use a canonical schema-versioned SHA256 integrity envelope",
+    "reject malformed, duplicate, dangling, inconsistent or unsupported state",
+    "validate native disk before OpenEvolve can skip files or clean references",
+    "export only complete eligible single-parent Frontier nodes without silent loss",
+    "keep host metrics and feature metadata outside M9",
+    "no artifact migration, external benchmark, parity, USD or A/B/C completion claim"
+  ],
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true,
+      "detail": "prior passing journals verified; missing=[]"
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true,
+      "detail": "v14 failed journal remains rejected; v15 is its corrected successor"
+    },
+    {
+      "check": "real_openevolve_database_roundtrip_strict_disk_and_flip_isolation",
+      "passed": true,
+      "detail": "...............                                                          [100%]\n15 passed in 3.01s"
+    },
+    {
+      "check": "interop_frontier_map_elites_and_governance_regressions",
+      "passed": true,
+      "detail": "....................................................                     [100%]\n52 passed in 2.89s"
+    },
+    {
+      "check": "map_elites_sequential_batch_and_governance_regressions",
+      "passed": true,
+      "detail": "..................................................                       [100%]\n50 passed in 5.22s"
+    },
+    {
+      "check": "inprocess_batch_terminal_real_sigkill_partial_start_and_active_guards",
+      "passed": true,
+      "detail": "............................                                             [100%]\n28 passed in 12.84s"
+    },
+    {
+      "check": "sequential_evaluation_terminal_regressions",
+      "passed": true,
+      "detail": "....................................................                     [100%]\n52 passed in 41.73s"
+    },
+    {
+      "check": "proposal_terminal_and_active_call_regressions",
+      "passed": true,
+      "detail": ".....................................................                    [100%]\n53 passed in 78.29s (0:01:18)"
+    },
+    {
+      "check": "complete_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 29%]\n........................................................................ [ 58%]\n........................................................................ [ 88%]\n.............................                                            [100%]\n245 passed in 186.81s (0:03:06)"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 18%]\n........................................................................ [ 36%]\n........................................................................ [ 54%]\n........................................................................ [ 72%]\n........................................................................ [ 91%]\n...................................                                      [100%]\n395 passed in 211.84s (0:03:31)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "real_vendored_database_and_admission_isolation",
+      "passed": true,
+      "detail": "real host classes; no M9 import or host-metric adjudication"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true,
+      "detail": "exactly one v50 index entry"
+    }
+  ]
+}

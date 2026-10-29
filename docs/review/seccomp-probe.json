@@ -1,0 +1,46 @@
+{
+  "mode": "pure_python_bpf_interpreter",
+  "target_syscalls_invoked": false,
+  "kernel_filter_installed": false,
+  "real_kernel_exploit_verified": false,
+  "bubblewrap_escape_verified": false,
+  "source": "m0/core/executor/seccomp.py",
+  "cases": [
+    {
+      "case": "native_add_key",
+      "syscall_number": 248,
+      "audit_arch": "0xc000003e",
+      "decision": "ERRNO_EPERM",
+      "return_value": "0x00050001"
+    },
+    {
+      "case": "x32_add_key",
+      "syscall_number": 1073742072,
+      "audit_arch": "0xc000003e",
+      "decision": "ALLOW",
+      "return_value": "0x7fff0000"
+    },
+    {
+      "case": "native_ptrace",
+      "syscall_number": 101,
+      "audit_arch": "0xc000003e",
+      "decision": "ERRNO_EPERM",
+      "return_value": "0x00050001"
+    },
+    {
+      "case": "x32_ptrace",
+      "syscall_number": 1073742345,
+      "audit_arch": "0xc000003e",
+      "decision": "ALLOW",
+      "return_value": "0x7fff0000"
+    },
+    {
+      "case": "different_audit_arch",
+      "syscall_number": 248,
+      "audit_arch": "0x40000003",
+      "decision": "KILL_PROCESS",
+      "return_value": "0x80000000"
+    }
+  ],
+  "interpretation": "ALLOW proves only this BPF policy would allow the numbered request; actual execution depends on kernel ABI support and other isolation layers."
+}

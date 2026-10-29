@@ -1,0 +1,62 @@
+{
+  "version": "v31",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "m0_owner_crash_recovery": {
+    "executed": true,
+    "certified": true,
+    "window": "sequential single-candidate external improve after native outcome and settlement through admission before cycle checkpoint"
+  },
+  "uncertified_crash_windows": [
+    "genesis",
+    "baseline/control",
+    "batch cohorts",
+    "machine power loss",
+    "non-external in-process evaluator crashes"
+  ],
+  "scope": [
+    "journal-first ledger restore admits only one native-outcome-bound extra settlement",
+    "settlement amount and account must exactly match proposer plus native token cost",
+    "missing reserve-minus-actual delta is restored once without another settlement",
+    "checkpoint state_mutation_count binds the exact durable recovery suffix",
+    "existing canonical mutations replay only into frontier/memory without new evidence",
+    "missing absorb/admission mutations execute once and divergent suffixes fail closed",
+    "pure gate evaluation validates existing gate/Receipt payloads before reuse",
+    "admission Receipt and recovery adoption are unique and content-matched",
+    "recovery adoption is appended only after failure evidence or admission is durable",
+    "real SIGKILL drills cover settle/delta, absorb, gate, admission and failure evidence",
+    "ForbiddenLLM and two process starts prove no reproposal or replacement execution",
+    "recovered results, ledger, health, governed state and snapshots match controls",
+    "fresh certified replay passes after the final admission-receipt crash drill"
+  ],
+  "checks": [
+    {
+      "check": "v30_complete",
+      "passed": true,
+      "detail": "in_scores: [0.0, 1.0, 1.0, 1.0, 1.0]\nbaseline_scores: [0.0, 0.0]\nC1/C2 audit = True\nledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}\nPASS gsm8k_repeatable_governance: best_prompt: Answer the question.\nShow your reasoning step by step.\nbest_score: 1.0\nmain_scores: [0.0, 1.0, 1.0, 1.0, 1.0]\nbaseline_scores: [0.0, 0.0]\nC1/C2 audit = True\nledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}\nbest_score: 0.8333333333333334\nmain_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}\nPASS funsearch_repeatable_governance: best_score: 0.8333333333333334\nmain_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}\nPASS ci_workflow_wiring: current verifier command\n.....                                                                    [100%]\n5 passed in 0.42s\nPASS formal_residence_and_certified_replay: .....                                                                    [100%]\n5 passed in 0.42s\n..................................                                       [100%]\n34 passed in 2.84s\nPASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]\n34 passed in 2.84s\nPASS ci_workflow_wiring: current verifier command\n......                                                                   [100%]\n6 passed in 4.13s\nPASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]\n6 passed in 4.13s\n................................                                         [100%]\n32 passed in 1.71s\nPASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]\n32 passed in 1.71s\n.........                                                                [100%]\n9 passed in 7.47s\nPASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]\n9 passed in 7.47s\nPASS ci_workflow_wiring: current verifier command\n..                                                                       [100%]\n2 passed in 6.10s\nPASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]\n2 passed in 6.10s\n.............................................                            [100%]\n45 passed in 7.00s\nPASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]\n45 passed in 7.00s\n................                                                         [100%]\n16 passed in 12.85s\nPASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.85s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "real_post_settlement_sigkill_success_failure_and_fork_guards",
+      "passed": true,
+      "detail": ".......                                                                  [100%]\n7 passed in 6.67s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "..................................................                       [100%]\n50 passed in 13.04s"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 12.77s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

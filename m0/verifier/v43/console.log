@@ -1,0 +1,2000 @@
+FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v42/verify.py'], 1800)
+Traceback (most recent call last):
+  File "/mnt/agents/output/m0/verifier/v43/verify.py", line 38, in main
+    run_command("v42_complete", [sys.executable, "verifier/v42/verify.py"], timeout=1800)
+  File "/mnt/agents/output/m0/verifier/v43/verify.py", line 26, in run_command
+    proc = subprocess.run(command, cwd=ROOT, env=environment(), capture_output=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/usr/local/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/usr/local/bin/python3', 'verifier/v42/verify.py']' timed out after 1800 seconds
+
+FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v42/verify.py'], 1800)
+Traceback (most recent call last):
+  File "/mnt/agents/output/m0/verifier/v43/verify.py", line 38, in main
+    run_command("v42_complete", [sys.executable, "verifier/v42/verify.py"], timeout=1800)
+  File "/mnt/agents/output/m0/verifier/v43/verify.py", line 26, in run_command
+    proc = subprocess.run(command, cwd=ROOT, env=environment(), capture_output=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/usr/local/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/usr/local/bin/python3', 'verifier/v42/verify.py']' timed out after 1800 seconds
+
+FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+FAIL v36_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+......                                                                   [100%]
+6 passed in 20.01s
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]
+6 passed in 20.01s
+........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 101.25s (0:01:41)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 101.25s (0:01:41)
+................                                                         [100%]
+16 passed in 12.73s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.73s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+FAIL v37_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+FAIL v36_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+......                                                                   [100%]
+6 passed in 20.01s
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]
+6 passed in 20.01s
+........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 101.25s (0:01:41)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 101.25s (0:01:41)
+................                                                         [100%]
+16 passed in 12.73s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.73s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+..............                                                           [100%]
+14 passed in 5.51s
+PASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]
+14 passed in 5.51s
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 102.38s (0:01:42)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 102.38s (0:01:42)
+................                                                         [100%]
+16 passed in 12.79s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.79s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 151.33s (0:02:31)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 151.33s (0:02:31)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v38_complete: 01:41)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 101.25s (0:01:41)
+................                                                         [100%]
+16 passed in 12.73s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.73s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+..............                                                           [100%]
+14 passed in 5.51s
+PASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]
+14 passed in 5.51s
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 102.38s (0:01:42)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 102.38s (0:01:42)
+................                                                         [100%]
+16 passed in 12.79s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.79s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 151.33s (0:02:31)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 151.33s (0:02:31)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+........................                                                 [100%]
+24 passed in 9.53s
+PASS real_resource_limits_policy_audit_replay_and_owner_recovery: ........................                                                 [100%]
+24 passed in 9.53s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.78s (0:01:45)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.78s (0:01:45)
+................                                                         [100%]
+16 passed in 13.07s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 13.07s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 147.55s (0:02:27)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 147.55s (0:02:27)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v39_complete: tic_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+........................                                                 [100%]
+24 passed in 9.53s
+PASS real_resource_limits_policy_audit_replay_and_owner_recovery: ........................                                                 [100%]
+24 passed in 9.53s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.78s (0:01:45)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.78s (0:01:45)
+................                                                         [100%]
+16 passed in 13.07s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 13.07s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 147.55s (0:02:27)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 147.55s (0:02:27)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+....................................                                     [100%]
+36 passed in 9.96s
+PASS re_bench_protocol_real_processes_and_numeric_comparison: ....................................                                     [100%]
+36 passed in 9.96s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.99s (0:01:45)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.99s (0:01:45)
+................                                                         [100%]
+16 passed in 12.86s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.86s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.77s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.77s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v40_complete:  static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+....................................                                     [100%]
+36 passed in 9.96s
+PASS re_bench_protocol_real_processes_and_numeric_comparison: ....................................                                     [100%]
+36 passed in 9.96s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.99s (0:01:45)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 105.99s (0:01:45)
+................                                                         [100%]
+16 passed in 12.86s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.86s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.77s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.77s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+.........                                                                [100%]
+9 passed in 22.89s
+PASS proposal_boundary_real_sigkill_and_ambiguity_guards: .........                                                                [100%]
+9 passed in 22.89s
+........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.62s (0:01:47)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.62s (0:01:47)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.66s (0:02:26)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.66s (0:02:26)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v41_complete: : true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+.........                                                                [100%]
+9 passed in 22.89s
+PASS proposal_boundary_real_sigkill_and_ambiguity_guards: .........                                                                [100%]
+9 passed in 22.89s
+........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.62s (0:01:47)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.62s (0:01:47)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.66s (0:02:26)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.66s (0:02:26)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+................                                                         [100%]
+16 passed in 31.39s
+PASS active_external_proposal_sigkill_protocol_and_ambiguity_guards: ................                                                         [100%]
+16 passed in 31.39s
+........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.77s (0:01:55)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.77s (0:01:55)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.79s (0:02:26)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.79s (0:02:26)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v42_complete: D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+................                                                         [100%]
+16 passed in 31.39s
+PASS active_external_proposal_sigkill_protocol_and_ambiguity_guards: ................                                                         [100%]
+16 passed in 31.39s
+........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.77s (0:01:55)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.77s (0:01:55)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.79s (0:02:26)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.79s (0:02:26)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+..................                                                       [100%]
+18 passed in 34.85s
+PASS failed_proposal_real_sigkill_and_historical_proposal_guards: ..................                                                       [100%]
+18 passed in 34.85s
+........................................................................ [ 54%]
+............................................................             [100%]
+132 passed in 120.05s (0:02:00)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 54%]
+............................................................             [100%]
+132 passed in 120.05s (0:02:00)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.48s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.48s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+FAIL v36_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+......                                                                   [100%]
+6 passed in 20.17s
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]
+6 passed in 20.17s
+........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 99.47s (0:01:39)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 99.47s (0:01:39)
+................                                                         [100%]
+16 passed in 12.65s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.65s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+FAIL v37_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+FAIL v36_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)
+......                                                                   [100%]
+6 passed in 20.17s
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]
+6 passed in 20.17s
+........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 99.47s (0:01:39)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 99.47s (0:01:39)
+................                                                         [100%]
+16 passed in 12.65s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.65s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+..............                                                           [100%]
+14 passed in 5.43s
+PASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]
+14 passed in 5.43s
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 101.12s (0:01:41)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 101.12s (0:01:41)
+................                                                         [100%]
+16 passed in 12.63s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.63s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 148.22s (0:02:28)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 148.22s (0:02:28)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v38_complete: :01:39)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 99.47s (0:01:39)
+................                                                         [100%]
+16 passed in 12.65s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.65s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+..............                                                           [100%]
+14 passed in 5.43s
+PASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]
+14 passed in 5.43s
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 101.12s (0:01:41)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 101.12s (0:01:41)
+................                                                         [100%]
+16 passed in 12.63s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.63s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 148.22s (0:02:28)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 148.22s (0:02:28)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+........................                                                 [100%]
+24 passed in 9.00s
+PASS real_resource_limits_policy_audit_replay_and_owner_recovery: ........................                                                 [100%]
+24 passed in 9.00s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 106.52s (0:01:46)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 106.52s (0:01:46)
+................                                                         [100%]
+16 passed in 13.12s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 13.12s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.25s (0:02:26)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.25s (0:02:26)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v39_complete: tic_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+........................                                                 [100%]
+24 passed in 9.00s
+PASS real_resource_limits_policy_audit_replay_and_owner_recovery: ........................                                                 [100%]
+24 passed in 9.00s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 106.52s (0:01:46)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 106.52s (0:01:46)
+................                                                         [100%]
+16 passed in 13.12s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 13.12s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.25s (0:02:26)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 146.25s (0:02:26)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+....................................                                     [100%]
+36 passed in 9.75s
+PASS re_bench_protocol_real_processes_and_numeric_comparison: ....................................                                     [100%]
+36 passed in 9.75s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 103.92s (0:01:43)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 103.92s (0:01:43)
+................                                                         [100%]
+16 passed in 13.11s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 13.11s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 144.63s (0:02:24)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 144.63s (0:02:24)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v40_complete:  static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+....................................                                     [100%]
+36 passed in 9.75s
+PASS re_bench_protocol_real_processes_and_numeric_comparison: ....................................                                     [100%]
+36 passed in 9.75s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 103.92s (0:01:43)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 103.92s (0:01:43)
+................                                                         [100%]
+16 passed in 13.11s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 13.11s
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 144.63s (0:02:24)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 144.63s (0:02:24)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+.........                                                                [100%]
+9 passed in 22.65s
+PASS proposal_boundary_real_sigkill_and_ambiguity_guards: .........                                                                [100%]
+9 passed in 22.65s
+........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.06s (0:01:47)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.06s (0:01:47)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.94s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.94s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v41_complete: : true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+.........                                                                [100%]
+9 passed in 22.65s
+PASS proposal_boundary_real_sigkill_and_ambiguity_guards: .........                                                                [100%]
+9 passed in 22.65s
+........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.06s (0:01:47)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 107.06s (0:01:47)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.94s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.94s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+................                                                         [100%]
+16 passed in 30.45s
+PASS active_external_proposal_sigkill_protocol_and_ambiguity_guards: ................                                                         [100%]
+16 passed in 30.45s
+........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.21s (0:01:55)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.21s (0:01:55)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.95s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.95s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+FAIL v42_complete: D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+................                                                         [100%]
+16 passed in 30.45s
+PASS active_external_proposal_sigkill_protocol_and_ambiguity_guards: ................                                                         [100%]
+16 passed in 30.45s
+........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.21s (0:01:55)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 55%]
+..........................................................               [100%]
+130 passed in 115.21s (0:01:55)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.95s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.95s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+..................                                                       [100%]
+18 passed in 34.55s
+PASS failed_proposal_real_sigkill_and_historical_proposal_guards: ..................                                                       [100%]
+18 passed in 34.55s
+........................................................................ [ 54%]
+............................................................             [100%]
+132 passed in 118.47s (0:01:58)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 54%]
+............................................................             [100%]
+132 passed in 118.47s (0:01:58)
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.17s (0:02:25)
+PASS complete_local_regression: ........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 76%]
+..................................................................       [100%]
+282 passed in 145.17s (0:02:25)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command

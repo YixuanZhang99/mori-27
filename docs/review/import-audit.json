@@ -1,0 +1,153 @@
+{
+  "review_date": "2026-10-29",
+  "source_archive": "AutoResearch-接续开发完整包.zip",
+  "archive_sha256": "216b8f153291cb0f23879eb51fd63a30a539c488724230dc4d3d644c8d5b89e1",
+  "source_payload_entries": 1047,
+  "source_payload_all_sha256_verified": true,
+  "source_baseline": "m0/verifier/v57",
+  "excluded_git_metadata": [
+    {
+      "path": "m0/vendor/openevolve/.git/HEAD",
+      "size_bytes": 21,
+      "sha256": "28d25bf82af4c0e2b72f50959b2beb859e3e60b9630a5e8c603dad4ddb2b6e80"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/config",
+      "size_bytes": 288,
+      "sha256": "0074148b76ee0270933b60f4a8350ec5d10e92321e6020ba255943a4b33b7e27"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/description",
+      "size_bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/applypatch-msg.sample",
+      "size_bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/commit-msg.sample",
+      "size_bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/fsmonitor-watchman.sample",
+      "size_bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/post-update.sample",
+      "size_bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/pre-applypatch.sample",
+      "size_bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/pre-commit.sample",
+      "size_bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/pre-merge-commit.sample",
+      "size_bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/pre-push.sample",
+      "size_bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/pre-rebase.sample",
+      "size_bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/pre-receive.sample",
+      "size_bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/prepare-commit-msg.sample",
+      "size_bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/push-to-checkout.sample",
+      "size_bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/hooks/update.sample",
+      "size_bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/index",
+      "size_bytes": 67027,
+      "sha256": "41a7c5efd0da932fe8debeaf8abeeed95e76a846f859609983d0c8dc5d54d46d"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/info/exclude",
+      "size_bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/logs/HEAD",
+      "size_bytes": 180,
+      "sha256": "da91c8e6ee979c51491b753baa56927f44e6e364b6f5550d92932d449361dcb1"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/logs/refs/heads/main",
+      "size_bytes": 180,
+      "sha256": "da91c8e6ee979c51491b753baa56927f44e6e364b6f5550d92932d449361dcb1"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/logs/refs/remotes/origin/HEAD",
+      "size_bytes": 180,
+      "sha256": "da91c8e6ee979c51491b753baa56927f44e6e364b6f5550d92932d449361dcb1"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/objects/pack/pack-3e7b330ee868b8801c255808f3a536284c4bb320.idx",
+      "size_bytes": 19048,
+      "sha256": "ad50e4fc2c2efa6383be9f25eafa6affbc904b78792ba6fb772834606703e5d4"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/objects/pack/pack-3e7b330ee868b8801c255808f3a536284c4bb320.pack",
+      "size_bytes": 3290045,
+      "sha256": "d0d26891999bf7bc837c6c9541438d4abb490f6d3be90b07152e71d35208665b"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/packed-refs",
+      "size_bytes": 112,
+      "sha256": "f1386117bfabffc4baf0f1525ae04202e442d09e4a00c474b7b887606218e1b1"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/refs/heads/main",
+      "size_bytes": 41,
+      "sha256": "de3c3199a4f33aaeb4ccd32cdb57923f84ecd8e213485c39b48da57865f6bc6a"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/refs/remotes/origin/HEAD",
+      "size_bytes": 30,
+      "sha256": "2bb6a24aa0fc6c484100f5d51a29bbad841cd2c755f5d93faa204e5dbb4eb2b4"
+    },
+    {
+      "path": "m0/vendor/openevolve/.git/shallow",
+      "size_bytes": 41,
+      "sha256": "de3c3199a4f33aaeb4ccd32cdb57923f84ecd8e213485c39b48da57865f6bc6a"
+    }
+  ],
+  "path_mapping": {
+    "README.md": "docs/review/README.original.md"
+  },
+  "notes": [
+    "MANIFEST.json is the immutable original archive manifest, not an inventory of repository additions.",
+    "All original payload entries except nested Git metadata are retained. Original README is preserved at the mapped path.",
+    "No production source, test, configuration, historic verifier certificate or journal changed during import."
+  ]
+}

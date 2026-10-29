@@ -1,0 +1,14 @@
+{
+  "name": "map_elites_grid",
+  "operators": {"draft": "llm", "improve": "llm_reflective", "debug": null, "crossover": null},
+  "representation": "full_rewrite_in_m0",
+  "parent_pool": {
+    "structure": "map_elites",
+    "dimensions": [
+      {"name": "novelty", "lower": 0.0, "upper": 1.0, "bins": 2},
+      {"name": "complexity", "lower": 0.0, "upper": 10.0, "bins": 3}
+    ]
+  },
+  "extensions": [],
+  "source": "M4/M1 MAP-Elites extension; public evaluation features affect parent selection only"
+}

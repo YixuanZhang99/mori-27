@@ -1,0 +1,69 @@
+{
+  "version": "v37",
+  "passed": false,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "supersedes": [
+    "v34-v36 refusal of every partially started external M0 cohort",
+    "incomplete proposal journals and settlement/finalization gaps remain fail-closed"
+  ],
+  "m0_owner_crash_recovery": {
+    "executed": true,
+    "certified": false,
+    "window": "one reserved external M0 cohort with every proposal durably journaled before execution, zero or more candidate processes started, and no settlement or finalization"
+  },
+  "previously_certified_windows": [
+    "sequential external genesis, improve and same-cycle control",
+    "fully started external cohorts through finalization",
+    "completed external batch plus same-cycle control before checkpoint"
+  ],
+  "uncertified_crash_windows": [
+    "incomplete proposal journals",
+    "missing processes combined with settlement or finalization evidence",
+    "machine power loss",
+    "non-external in-process evaluator crashes"
+  ],
+  "scope": [
+    "external cohort proposals are persisted after atomic reservation and before any process launch",
+    "recovery requires exactly one valid durable proposal and intent per frozen candidate",
+    "existing processes must form a unique subset with exact evaluation contexts",
+    "started candidates adopt only their original native outcomes",
+    "never-started candidates continue once from their original proposals without reproposal",
+    "partial starts with settlement evidence fail before any new process",
+    "executor evidence, settlement, serial M9 and Receipts remain exactly once",
+    "adoption records distinguish adopted and continued processes without calling continuation reexecution",
+    "three total process starts and ForbiddenLLM prove no reproposal or replacement execution",
+    "recovered results, ledger, health, governed state and snapshots match controls",
+    "fresh certified replay passes after one-started recovery",
+    "completed resume neither readopts nor re-executes"
+  ],
+  "checks": [
+    {
+      "check": "v36_complete",
+      "passed": false,
+      "detail": "FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)"
+    },
+    {
+      "check": "real_prepared_partial_start_sigkill_and_fail_closed_guards",
+      "passed": true,
+      "detail": "......                                                                   [100%]\n6 passed in 20.17s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 70%]\n..............................                                           [100%]\n102 passed in 99.47s (0:01:39)"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 12.65s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command; v36 partial-start refusal is superseded"
+    }
+  ]
+}

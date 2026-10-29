@@ -1,0 +1,25 @@
+# Local environments and generated caches; preserve historical verifier logs.
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*.egg-info/
+/build/
+/dist/
+
+# Local credentials and experiment outputs.
+.env
+.env.*
+!.env.example
+/runs/
+/outputs/
+/artifacts/
+/m0/runs/
+/m0/outputs/
+/m0/artifacts/

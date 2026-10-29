@@ -1,0 +1,87 @@
+{
+  "version": "v39",
+  "passed": false,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "supersedes": [
+    "v38 absence of explicit external evaluator resource limits"
+  ],
+  "external_resource_policy": {
+    "executed": true,
+    "certified": false,
+    "limits": [
+      "RLIMIT_AS",
+      "RLIMIT_FSIZE",
+      "RLIMIT_NPROC"
+    ],
+    "default": {},
+    "recovery": "original native outcome adopted exactly once"
+  },
+  "previously_certified_windows": [
+    "default Bubblewrap with explicit audited disable",
+    "sequential external genesis, improve and same-cycle control",
+    "prepared external cohorts from zero/partial starts through finalization",
+    "completed external batch plus same-cycle control before checkpoint"
+  ],
+  "uncertified_boundaries": [
+    "incomplete proposal journals",
+    "missing processes combined with settlement or finalization evidence",
+    "machine power loss",
+    "non-external in-process evaluator crashes",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas"
+  ],
+  "scope": [
+    "ResourcePolicy validates optional positive memory/file/process limits",
+    "detached wrapper applies hard limits before executing bwrap or a disabled-sandbox command",
+    "real probes prove excess allocation, file writes and candidate forks are refused",
+    "UID-wide RLIMIT_NPROC tests account for existing threads and bwrap startup",
+    "an unstartable process limit produces structured failed_to_run evidence",
+    "process spec and start evidence record only configured numeric limits",
+    "unconfigured policy remains an explicit empty object",
+    "fork/replay inherits policy with independent process/outcome histories",
+    "resource-policy owner SIGKILL adopts one original outcome without reexecution",
+    "no cgroup, complete-resource, seccomp or machine-power-loss claim"
+  ],
+  "checks": [
+    {
+      "check": "v38_complete",
+      "passed": false,
+      "detail": ":01:39)\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]\n..............................                                           [100%]\n102 passed in 99.47s (0:01:39)\n................                                                         [100%]\n16 passed in 12.65s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.65s\nPASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded\n..............                                                           [100%]\n14 passed in 5.43s\nPASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]\n14 passed in 5.43s\n........................................................................ [ 65%]\n......................................                                   [100%]\n110 passed in 101.12s (0:01:41)\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]\n......................................                                   [100%]\n110 passed in 101.12s (0:01:41)\n................                                                         [100%]\n16 passed in 12.63s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.63s\n........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 76%]\n..................................................................       [100%]\n282 passed in 148.22s (0:02:28)\nPASS complete_local_regression: ........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 76%]\n..................................................................       [100%]\n282 passed in 148.22s (0:02:28)\n{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}\nPASS static_axioms: {\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "real_resource_limits_policy_audit_replay_and_owner_recovery",
+      "passed": true,
+      "detail": "........................                                                 [100%]\n24 passed in 9.00s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 60%]\n................................................                         [100%]\n120 passed in 106.52s (0:01:46)"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 13.12s"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 76%]\n..................................................................       [100%]\n282 passed in 146.25s (0:02:26)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

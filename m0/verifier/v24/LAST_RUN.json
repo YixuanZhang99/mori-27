@@ -1,0 +1,44 @@
+{
+  "version": "v24",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "reason": "local HTTP and grading fixtures validate complete token accounting and agent mechanics only; the official 22-task data/model campaign has not run"
+  },
+  "scope": [
+    "one immutable receipt per real LLM call",
+    "cumulative governed proposer plus solution metering between resets",
+    "metered OpenEvolve host-evolution calls",
+    "independent campaign receipt recomputation and actual backbone evidence",
+    "missing, inconsistent, tampered and over-budget usage fail closed",
+    "token costs never enter M9 and no USD conversion is invented"
+  ],
+  "checks": [
+    {
+      "check": "v23_complete",
+      "passed": true,
+      "detail": "PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS v22_complete: PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 3.55s\nPASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 3.55s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS public_data_and_campaign_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "bubblewrap_installed",
+      "passed": true,
+      "detail": "/usr/bin/bwrap"
+    },
+    {
+      "check": "per_call_metering_and_real_dual_arm_smoke",
+      "passed": true,
+      "detail": "...                                                                      [100%]\n3 passed in 2.78s"
+    },
+    {
+      "check": "campaign_cost_evidence_and_adversarial_regression",
+      "passed": true,
+      "detail": ".............                                                            [100%]\n13 passed in 1.31s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

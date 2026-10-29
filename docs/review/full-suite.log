@@ -1,0 +1,1933 @@
+................F.......................F............................... [ 14%]
+....................FFFF..F..FFF.F.FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF [ 29%]
+FFF.FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.. [ 44%]
+..............................................................FFFFFFFFFF [ 58%]
+FFFFFFFF................................................................ [ 73%]
+................................................sss.s................... [ 88%]
+.................sss..........ssssssss............FFF.....               [100%]
+=================================== FAILURES ===================================
+_____ test_real_batch_owner_crash_recovers_settles_and_admits_exactly_once _____
+tests/test_batch_execution_recovery.py:129: in test_real_batch_owner_crash_recovers_settles_and_admits_exactly_once
+    assert len(started) == 2
+E   assert 0 == 2
+E    +  where 0 = len([])
+__ test_real_host_and_governed_clis_with_local_openai_and_isolated_execution ___
+tests/test_benchmark_agents.py:165: in test_real_host_and_governed_clis_with_local_openai_and_isolated_execution
+    assert result["officially_graded_runs"] == 2, result["failures"]
+E   AssertionError: [{'task_id': 'aerial-cactus-identification', 'seed': 7, 'arm': 'host', 'error': 'ValueError: token usage evidence is m...identification', 'seed': 7, 'arm': 'governed', 'error': 'ValueError: token usage evidence is missing: agent_run.json'}]
+E   assert 0 == 2
+_________ test_executor_success_commits_artifact_and_checks_protection _________
+tests/test_executor_hitl.py:73: in test_executor_success_commits_artifact_and_checks_protection
+    assert evidence.executor_status == "scored"
+E   AssertionError: assert 'failed_to_run' == 'scored'
+E     
+E     - scored
+E     + failed_to_run
+_______ test_executor_encodes_timeout_crash_missing_output_and_tampering _______
+tests/test_executor_hitl.py:92: in test_executor_encodes_timeout_crash_missing_output_and_tampering
+    assert (timeout.executor_status, timeout.eval_result.status) == ("timeout", EvalStatus.TIMEOUT)
+E   AssertionError: assert ('failed_to_r...iled_to_run'>) == ('timeout', <...T: 'timeout'>)
+E     
+E     At index 0 diff: 'failed_to_run' != 'timeout'
+E     Use -v to get more diff
+_______ test_executor_rejects_frozen_hypothesis_mismatch_and_base_tamper _______
+tests/test_executor_hitl.py:110: in test_executor_rejects_frozen_hypothesis_mismatch_and_base_tamper
+    assert execute(executor, workspace, "ok", hypothesis="candidate").executor_status == "scored"
+E   AssertionError: assert 'failed_to_run' == 'scored'
+E     
+E     - scored
+E     + failed_to_run
+__ test_review_approval_is_bound_single_use_and_pause_resume_survives_restore __
+tests/test_executor_hitl.py:140: in test_review_approval_is_bound_single_use_and_pause_resume_survives_restore
+    assert second.executor_status == "scored" and second.attempt == 3
+E   AssertionError: assert ('failed_to_run' == 'scored'
+E     
+E     - scored
+E     + failed_to_run)
+_________ test_real_parallel_quota_failure_isolation_and_serial_absorb _________
+tests/test_executor_pool.py:133: in test_real_parallel_quota_failure_isolation_and_serial_absorb
+    assert [evidence.eval_result.status for evidence in results] == [
+E   AssertionError: assert [<EvalStatus....iled_to_run'>] == [<EvalStatus....D: 'invalid'>]
+E     
+E     At index 0 diff: <EvalStatus.FAILED_TO_RUN: 'failed_to_run'> != <EvalStatus.OK: 'ok'>
+E     Use -v to get more diff
+___________ test_real_owner_crash_pending_then_recovers_exactly_once ___________
+tests/test_executor_recovery.py:97: in test_real_owner_crash_pending_then_recovers_exactly_once
+    record = wait_for_started(store)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_executor_recovery.py:78: in wait_for_started
+    raise AssertionError("owner did not launch the detached evaluation")
+E   AssertionError: owner did not launch the detached evaluation
+__________ test_lost_wrapper_kills_registered_orphan_and_fails_closed __________
+tests/test_executor_recovery.py:129: in test_lost_wrapper_kills_registered_orphan_and_fails_closed
+    record = wait_for_started(store)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_executor_recovery.py:78: in wait_for_started
+    raise AssertionError("owner did not launch the detached evaluation")
+E   AssertionError: owner did not launch the detached evaluation
+______ test_finished_process_without_executor_evidence_is_finalized_once _______
+tests/test_executor_recovery.py:171: in test_finished_process_without_executor_evidence_is_finalized_once
+    completed = executor._run_command(root, request, candidate, spec, 1, ref, protected)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+core/executor/service.py:134: in _run_command
+    proc, record = self.processes.launch(
+core/executor/process.py:94: in launch
+    raise RuntimeError("process recovery requires a stable OS start identity")
+E   RuntimeError: process recovery requires a stable OS start identity
+_____________ test_pid_start_mismatch_never_adopts_reused_process ______________
+tests/test_executor_recovery.py:208: in test_pid_start_mismatch_never_adopts_reused_process
+    "pid": child.pid, "start_ticks": start_ticks(child.pid) + 1}))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'
+___ test_real_batch_control_pre_settlement_crash_adopts_without_reexecution ____
+tests/test_external_batch_control_recovery.py:135: in test_real_batch_control_pre_settlement_crash_adopts_without_reexecution
+    expected, reference_dir = reference_run(tmp_path, "reference-pre-settlement")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_batch_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_batch_control_post_settlement_crashes_resume_exactly_once[settle] __
+tests/test_external_batch_control_recovery.py:165: in test_real_batch_control_post_settlement_crashes_resume_exactly_once
+    expected, reference_dir = reference_run(
+tests/test_external_batch_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_batch_control_post_settlement_crashes_resume_exactly_once[baseline] _
+tests/test_external_batch_control_recovery.py:165: in test_real_batch_control_post_settlement_crashes_resume_exactly_once
+    expected, reference_dir = reference_run(
+tests/test_external_batch_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_batch_control_post_settlement_crashes_resume_exactly_once[failure_evidence] _
+tests/test_external_batch_control_recovery.py:165: in test_real_batch_control_post_settlement_crashes_resume_exactly_once
+    expected, reference_dir = reference_run(
+tests/test_external_batch_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_batch_control_baseline_mismatch_fails_before_control_adoption ______
+tests/test_external_batch_control_recovery.py:192: in test_batch_control_baseline_mismatch_fails_before_control_adoption
+    crash_owner(run_dir, root, script, "baseline")
+tests/test_external_batch_control_recovery.py:74: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+____________ test_batch_control_wrong_candidate_lineage_is_refused _____________
+tests/test_external_batch_control_recovery.py:209: in test_batch_control_wrong_candidate_lineage_is_refused
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_batch_control_recovery.py:74: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+______ test_completed_batch_control_resume_does_not_readopt_or_reexecute _______
+tests/test_external_batch_control_recovery.py:221: in test_completed_batch_control_resume_does_not_readopt_or_reexecute
+    _, run_dir = reference_run(tmp_path, "completed-control")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_batch_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_partially_started_cohort_continues_only_missing_original_evaluation _
+tests/test_external_batch_partial_start_recovery.py:51: in test_real_partially_started_cohort_continues_only_missing_original_evaluation
+    expected, reference_dir = reference_run(tmp_path, "reference-partial")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_batch_partial_start_recovery.py:30: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_fully_proposed_zero_started_cohort_continues_original_evaluations __
+tests/test_external_batch_partial_start_recovery.py:113: in test_real_fully_proposed_zero_started_cohort_continues_original_evaluations
+    expected, reference_dir = reference_run(tmp_path, "reference-zero")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_batch_partial_start_recovery.py:30: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_marker_only_proposal_fails_closed_without_reproposal_or_execution ____
+tests/test_external_batch_partial_start_recovery.py:136: in test_marker_only_proposal_fails_closed_without_reproposal_or_execution
+    crash_after_proposals(run_dir, root, script, 1)
+tests/test_external_batch_partial_start_recovery.py:109: in crash_after_proposals
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+__________ test_partial_start_with_settlement_fails_before_continuing __________
+tests/test_external_batch_partial_start_recovery.py:159: in test_partial_start_with_settlement_fails_before_continuing
+    kill_at_process_count(owner, store, 2)
+tests/test_external_batch_recovery.py:68: in kill_at_process_count
+    raise AssertionError(f"owner exited early: {stdout}\n{stderr}")
+E   AssertionError: owner exited early: 
+E   Traceback (most recent call last):
+E     File "SOURCE_ROOT/m0/tests/test_external_batch_recovery.py", line 122, in <module>
+E       owner_main(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5])
+E     File "SOURCE_ROOT/m0/tests/test_external_batch_recovery.py", line 46, in owner_main
+E       Framework(MockLLM(), evaluator(root, script, store, mode), config(), str(run_dir)).evolve(TASK)
+E                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/tests/test_external_evaluator.py", line 137, in evaluator
+E       return ExternalCommandEvaluator(
+E              ^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/external.py", line 78, in __init__
+E       sandbox = BubblewrapSandbox()
+E                 ^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/sandbox.py", line 24, in __init__
+E       raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___________ test_partial_start_context_fork_fails_before_continuing ____________
+tests/test_external_batch_partial_start_recovery.py:177: in test_partial_start_context_fork_fails_before_continuing
+    kill_at_process_count(owner, store, 2)
+tests/test_external_batch_recovery.py:68: in kill_at_process_count
+    raise AssertionError(f"owner exited early: {stdout}\n{stderr}")
+E   AssertionError: owner exited early: 
+E   Traceback (most recent call last):
+E     File "SOURCE_ROOT/m0/tests/test_external_batch_recovery.py", line 122, in <module>
+E       owner_main(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5])
+E     File "SOURCE_ROOT/m0/tests/test_external_batch_recovery.py", line 46, in owner_main
+E       Framework(MockLLM(), evaluator(root, script, store, mode), config(), str(run_dir)).evolve(TASK)
+E                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/tests/test_external_evaluator.py", line 137, in evaluator
+E       return ExternalCommandEvaluator(
+E              ^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/external.py", line 78, in __init__
+E       sandbox = BubblewrapSandbox()
+E                 ^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/sandbox.py", line 24, in __init__
+E       raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________________ test_completed_partial_start_resume_is_a_noop _________________
+tests/test_external_batch_partial_start_recovery.py:210: in test_completed_partial_start_resume_is_a_noop
+    kill_at_process_count(owner, store, 2)
+tests/test_external_batch_recovery.py:68: in kill_at_process_count
+    raise AssertionError(f"owner exited early: {stdout}\n{stderr}")
+E   AssertionError: owner exited early: 
+E   Traceback (most recent call last):
+E     File "SOURCE_ROOT/m0/tests/test_external_batch_recovery.py", line 122, in <module>
+E       owner_main(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5])
+E     File "SOURCE_ROOT/m0/tests/test_external_batch_recovery.py", line 46, in owner_main
+E       Framework(MockLLM(), evaluator(root, script, store, mode), config(), str(run_dir)).evolve(TASK)
+E                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/tests/test_external_evaluator.py", line 137, in evaluator
+E       return ExternalCommandEvaluator(
+E              ^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/external.py", line 78, in __init__
+E       sandbox = BubblewrapSandbox()
+E                 ^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/sandbox.py", line 24, in __init__
+E       raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_real_batch_post_settlement_crashes_resume_exact_suffix[settle] ______
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_batch_post_settlement_crashes_resume_exact_suffix[settled_evidence] _
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_real_batch_post_settlement_crashes_resume_exact_suffix[absorb] ______
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_real_batch_post_settlement_crashes_resume_exact_suffix[gate] _______
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_real_batch_post_settlement_crashes_resume_exact_suffix[decision] _____
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_batch_post_settlement_crashes_resume_exact_suffix[admission_mutation] _
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_real_batch_post_settlement_crashes_resume_exact_suffix[admission] ____
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+__ test_real_batch_post_settlement_crashes_resume_exact_suffix[second_absorb] __
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_real_batch_post_settlement_crashes_resume_exact_suffix[completed] ____
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_batch_post_settlement_crashes_resume_exact_suffix[admission_receipt] _
+tests/test_external_batch_post_settlement_recovery.py:108: in test_real_batch_post_settlement_crashes_resume_exact_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____________ test_batch_mutation_fork_fails_closed_without_adoption ____________
+tests/test_external_batch_post_settlement_recovery.py:150: in test_batch_mutation_fork_fails_closed_without_adoption
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_batch_post_settlement_recovery.py:100: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+___________ test_batch_admission_marker_before_mutation_fails_closed ___________
+tests/test_external_batch_post_settlement_recovery.py:165: in test_batch_admission_marker_before_mutation_fails_closed
+    crash_owner(run_dir, root, script, "decision")
+tests/test_external_batch_post_settlement_recovery.py:100: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_______ test_real_safe_proposal_gap_continues_only_missing_llm_operation _______
+tests/test_external_batch_proposal_recovery.py:31: in test_real_safe_proposal_gap_continues_only_missing_llm_operation
+    expected, reference_dir = reference_run(tmp_path, "reference-proposal-gap")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_batch_partial_start_recovery.py:30: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_incomplete_proposals_with_settlement_fail_before_llm_or_process _____
+tests/test_external_batch_proposal_recovery.py:100: in test_incomplete_proposals_with_settlement_fail_before_llm_or_process
+    crash_after_proposals(run_dir, root, script, 1)
+tests/test_external_batch_partial_start_recovery.py:109: in crash_after_proposals
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+________ test_legacy_incomplete_proposals_without_boundary_fail_closed _________
+tests/test_external_batch_proposal_recovery.py:119: in test_legacy_incomplete_proposals_without_boundary_fail_closed
+    crash_after_proposals(run_dir, root, script, 1)
+tests/test_external_batch_partial_start_recovery.py:109: in crash_after_proposals
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_ test_real_fully_started_batch_crash_recovers_without_reproposal_or_reexecution _
+tests/test_external_batch_recovery.py:85: in test_real_fully_started_batch_crash_recovers_without_reproposal_or_reexecution
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_real_control_pre_settlement_crash_adopts_without_reexecution _______
+tests/test_external_control_recovery.py:132: in test_real_control_pre_settlement_crash_adopts_without_reexecution
+    expected, reference_dir = reference_run(tmp_path, "reference-pre-settlement")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_real_control_post_settlement_crashes_resume_exactly_once[settle] _____
+tests/test_external_control_recovery.py:162: in test_real_control_post_settlement_crashes_resume_exactly_once
+    expected, reference_dir = reference_run(
+tests/test_external_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___ test_real_control_post_settlement_crashes_resume_exactly_once[baseline] ____
+tests/test_external_control_recovery.py:162: in test_real_control_post_settlement_crashes_resume_exactly_once
+    expected, reference_dir = reference_run(
+tests/test_external_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_control_post_settlement_crashes_resume_exactly_once[failure_evidence] _
+tests/test_external_control_recovery.py:162: in test_real_control_post_settlement_crashes_resume_exactly_once
+    expected, reference_dir = reference_run(
+tests/test_external_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_control_baseline_mismatch_fails_before_recovery_adoption _________
+tests/test_external_control_recovery.py:189: in test_control_baseline_mismatch_fails_before_recovery_adoption
+    crash_owner(run_dir, root, script, "baseline")
+tests/test_external_control_recovery.py:74: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_______________ test_control_wrong_candidate_lineage_is_refused ________________
+tests/test_external_control_recovery.py:205: in test_control_wrong_candidate_lineage_is_refused
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_control_recovery.py:74: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_________ test_completed_control_resume_does_not_readopt_or_reexecute __________
+tests/test_external_control_recovery.py:216: in test_completed_control_resume_does_not_readopt_or_reexecute
+    _, run_dir = reference_run(tmp_path, "completed-control")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_control_recovery.py:107: in reference_run
+    external = evaluator(root, script, store, "fail_control" if failing else "ok", control_id)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______________ test_default_bubblewrap_is_real_and_audited[False] ______________
+tests/test_external_default_sandbox.py:30: in test_default_bubblewrap_is_real_and_audited
+    external = evaluator(root, script, store, "sandbox", secret, escape,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______________ test_default_bubblewrap_is_real_and_audited[True] _______________
+tests/test_external_default_sandbox.py:30: in test_default_bubblewrap_is_real_and_audited
+    external = evaluator(root, script, store, "sandbox", secret, escape,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___________ test_only_explicit_disable_runs_without_isolation[None] ____________
+tests/test_external_default_sandbox.py:65: in test_only_explicit_disable_runs_without_isolation
+    result = external("candidate", "head1234", "prompt")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+core/executor/external.py:302: in __call__
+    proc, record = self.processes.launch(
+core/executor/process.py:94: in launch
+    raise RuntimeError("process recovery requires a stable OS start identity")
+E   RuntimeError: process recovery requires a stable OS start identity
+___________ test_only_explicit_disable_runs_without_isolation[False] ___________
+tests/test_external_default_sandbox.py:65: in test_only_explicit_disable_runs_without_isolation
+    result = external("candidate", "head1234", "prompt")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+core/executor/external.py:302: in __call__
+    proc, record = self.processes.launch(
+core/executor/process.py:94: in launch
+    raise RuntimeError("process recovery requires a stable OS start identity")
+E   RuntimeError: process recovery requires a stable OS start identity
+____ test_fork_inherits_policy_and_keeps_independent_process_history[None] _____
+tests/test_external_default_sandbox.py:97: in test_fork_inherits_policy_and_keeps_independent_process_history
+    external("original", "head1234", "prompt")
+core/executor/external.py:302: in __call__
+    proc, record = self.processes.launch(
+core/executor/process.py:94: in launch
+    raise RuntimeError("process recovery requires a stable OS start identity")
+E   RuntimeError: process recovery requires a stable OS start identity
+____ test_fork_inherits_policy_and_keeps_independent_process_history[False] ____
+tests/test_external_default_sandbox.py:97: in test_fork_inherits_policy_and_keeps_independent_process_history
+    external("original", "head1234", "prompt")
+core/executor/external.py:302: in __call__
+    proc, record = self.processes.launch(
+core/executor/process.py:94: in launch
+    raise RuntimeError("process recovery requires a stable OS start identity")
+E   RuntimeError: process recovery requires a stable OS start identity
+___ test_fork_inherits_policy_and_keeps_independent_process_history[default] ___
+tests/test_external_default_sandbox.py:96: in test_fork_inherits_policy_and_keeps_independent_process_history
+    external = evaluator(root, script, store, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_______ test_real_subprocess_result_usage_and_persistent_native_outcome ________
+tests/test_external_evaluator.py:145: in test_real_subprocess_result_usage_and_persistent_native_outcome
+    external = evaluator(root, script, store)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_invalid_and_timeout_are_structured_failures[malformed-invalid] ______
+tests/test_external_evaluator.py:167: in test_invalid_and_timeout_are_structured_failures
+    external = evaluator(root, script, store, mode, time_limit=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_invalid_and_timeout_are_structured_failures[timeout-timeout] _______
+tests/test_external_evaluator.py:167: in test_invalid_and_timeout_are_structured_failures
+    external = evaluator(root, script, store, mode, time_limit=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_sandbox_clears_environment_and_blocks_host_file_network_and_escape _
+tests/test_external_evaluator.py:189: in test_real_sandbox_clears_environment_and_blocks_host_file_network_and_escape
+    server.getsockname()[1], sandbox=BubblewrapSandbox(),
+                                     ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_______ test_sequential_failure_is_settled_evidence_not_a_loop_exception _______
+tests/test_external_evaluator.py:213: in test_sequential_failure_is_settled_evidence_not_a_loop_exception
+    external = evaluator(root, script, store, "fail_non_genesis", genesis)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+__ test_batch_failure_and_successful_external_replay_use_independent_evidence __
+tests/test_external_evaluator.py:236: in test_batch_failure_and_successful_external_replay_use_independent_evidence
+    failed_external = evaluator(root, script, failed_store, "fail_non_genesis", genesis)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+__ test_real_genesis_pre_settlement_crash_adopts_native_outcome_exactly_once ___
+tests/test_external_genesis_recovery.py:145: in test_real_genesis_pre_settlement_crash_adopts_native_outcome_exactly_once
+    expected, reference_dir = reference_run(tmp_path, "reference-pre-settlement")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[settle] _
+tests/test_external_genesis_recovery.py:173: in test_real_genesis_post_settlement_crashes_resume_only_missing_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[absorb] _
+tests/test_external_genesis_recovery.py:173: in test_real_genesis_post_settlement_crashes_resume_only_missing_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+__ test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[gate] __
+tests/test_external_genesis_recovery.py:173: in test_real_genesis_post_settlement_crashes_resume_only_missing_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[admission_mutation] _
+tests/test_external_genesis_recovery.py:173: in test_real_genesis_post_settlement_crashes_resume_only_missing_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[admission_receipt] _
+tests/test_external_genesis_recovery.py:173: in test_real_genesis_post_settlement_crashes_resume_only_missing_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____________ test_genesis_mutation_fork_is_refused_before_adoption _____________
+tests/test_external_genesis_recovery.py:198: in test_genesis_mutation_fork_is_refused_before_adoption
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_genesis_recovery.py:89: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+__________ test_genesis_recovery_refuses_existing_checkpoint_evidence __________
+tests/test_external_genesis_recovery.py:211: in test_genesis_recovery_refuses_existing_checkpoint_evidence
+    _, run_dir = reference_run(tmp_path, "complete")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_genesis_recovery.py:121: in reference_run
+    framework = Framework(MockLLM(), evaluator(root, script, store), config(), str(run_dir))
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___________ test_genesis_recovery_refuses_unrelated_budget_activity ____________
+tests/test_external_genesis_recovery.py:222: in test_genesis_recovery_refuses_unrelated_budget_activity
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_genesis_recovery.py:89: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+______________ test_genesis_recovery_refuses_multiple_run_starts _______________
+tests/test_external_genesis_recovery.py:241: in test_genesis_recovery_refuses_multiple_run_starts
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_genesis_recovery.py:89: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+____________ test_genesis_recovery_refuses_wrong_candidate_lineage _____________
+tests/test_external_genesis_recovery.py:253: in test_genesis_recovery_refuses_wrong_candidate_lineage
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_genesis_recovery.py:89: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_______________ test_genesis_recovery_requires_run_start_anchor ________________
+tests/test_external_genesis_recovery.py:265: in test_genesis_recovery_requires_run_start_anchor
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_genesis_recovery.py:89: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_____ test_real_post_settlement_crashes_resume_only_missing_suffix[settle] _____
+tests/test_external_post_settlement_recovery.py:93: in test_real_post_settlement_crashes_resume_only_missing_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_real_post_settlement_crashes_resume_only_missing_suffix[absorb] _____
+tests/test_external_post_settlement_recovery.py:93: in test_real_post_settlement_crashes_resume_only_missing_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_real_post_settlement_crashes_resume_only_missing_suffix[gate] ______
+tests/test_external_post_settlement_recovery.py:93: in test_real_post_settlement_crashes_resume_only_missing_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_post_settlement_crashes_resume_only_missing_suffix[admission_mutation] _
+tests/test_external_post_settlement_recovery.py:93: in test_real_post_settlement_crashes_resume_only_missing_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_real_post_settlement_crashes_resume_only_missing_suffix[admission_receipt] _
+tests/test_external_post_settlement_recovery.py:93: in test_real_post_settlement_crashes_resume_only_missing_suffix
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_real_post_settlement_failure_evidence_is_adopted_exactly_once ______
+tests/test_external_post_settlement_recovery.py:143: in test_real_post_settlement_failure_evidence_is_adopted_exactly_once
+    reference = Framework(MockLLM(), failing_external(
+tests/test_external_post_settlement_recovery.py:138: in failing_external
+    return evaluator(root, script, store, "fail_non_genesis", genesis)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_ test_post_checkpoint_mutation_fork_is_refused_without_duplicate_finalization _
+tests/test_external_post_settlement_recovery.py:171: in test_post_checkpoint_mutation_fork_is_refused_without_duplicate_finalization
+    crash_owner(run_dir, root, script, "settle")
+tests/test_external_post_settlement_recovery.py:80: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+___ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[settle] ___
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[settled_evidence] _
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+___ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[absorb] ___
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+____ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[gate] ____
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+__ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[decision] __
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[admission_mutation] _
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[admission] __
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[second_absorb] _
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[completed] __
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_post_settlement_crashes_resume_exact_suffix[admission_receipt] _
+tests/test_external_proposal_failure_post_settlement_recovery.py:199: in test_failed_proposal_post_settlement_crashes_resume_exact_suffix
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_batch_then_control_recovers_exactly_once[control_settle] _
+tests/test_external_proposal_failure_post_settlement_recovery.py:231: in test_failed_proposal_batch_then_control_recovers_exactly_once
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}", control=True)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_proposal_batch_then_control_recovers_exactly_once[control_baseline] _
+tests/test_external_proposal_failure_post_settlement_recovery.py:231: in test_failed_proposal_batch_then_control_recovers_exactly_once
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}", control=True)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:41: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+________________ test_failed_settled_evidence_tamper_is_refused ________________
+tests/test_external_proposal_failure_post_settlement_recovery.py:273: in test_failed_settled_evidence_tamper_is_refused
+    run_dir, store, cohort, args = crashed_run(tmp_path, "failed-evidence-fork")
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:267: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, prop_root, prop_script, count, crash_point)
+tests/test_external_proposal_failure_post_settlement_recovery.py:130: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ne 92, in build_seccomp_policy
+E         raise RuntimeError(
+E     RuntimeError: seccomp policy v1 requires x86_64; got arm64
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+______________ test_failed_candidate_wrong_ledger_cost_is_refused ______________
+tests/test_external_proposal_failure_post_settlement_recovery.py:292: in test_failed_candidate_wrong_ledger_cost_is_refused
+    run_dir, store, cohort, args = crashed_run(
+tests/test_external_proposal_failure_post_settlement_recovery.py:267: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, prop_root, prop_script, count, crash_point)
+tests/test_external_proposal_failure_post_settlement_recovery.py:130: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ne 92, in build_seccomp_policy
+E         raise RuntimeError(
+E     RuntimeError: seccomp policy v1 requires x86_64; got arm64
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+__________________ test_failed_batch_mutation_fork_is_refused __________________
+tests/test_external_proposal_failure_post_settlement_recovery.py:312: in test_failed_batch_mutation_fork_is_refused
+    run_dir, store, cohort, args = crashed_run(
+tests/test_external_proposal_failure_post_settlement_recovery.py:267: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, prop_root, prop_script, count, crash_point)
+tests/test_external_proposal_failure_post_settlement_recovery.py:130: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ne 92, in build_seccomp_policy
+E         raise RuntimeError(
+E     RuntimeError: seccomp policy v1 requires x86_64; got arm64
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+__________ test_failed_candidate_forged_evaluator_process_is_refused ___________
+tests/test_external_proposal_failure_post_settlement_recovery.py:324: in test_failed_candidate_forged_evaluator_process_is_refused
+    run_dir, store, cohort, args = crashed_run(
+tests/test_external_proposal_failure_post_settlement_recovery.py:267: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, prop_root, prop_script, count, crash_point)
+tests/test_external_proposal_failure_post_settlement_recovery.py:130: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ne 92, in build_seccomp_policy
+E         raise RuntimeError(
+E     RuntimeError: seccomp policy v1 requires x86_64; got arm64
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_____ test_failed_settlement_without_original_proposer_outcome_is_refused ______
+tests/test_external_proposal_failure_post_settlement_recovery.py:337: in test_failed_settlement_without_original_proposer_outcome_is_refused
+    run_dir, store, cohort, args = crashed_run(tmp_path, "missing-failure-outcome")
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_post_settlement_recovery.py:267: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, prop_root, prop_script, count, crash_point)
+tests/test_external_proposal_failure_post_settlement_recovery.py:130: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ne 92, in build_seccomp_policy
+E         raise RuntimeError(
+E     RuntimeError: seccomp policy v1 requires x86_64; got arm64
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_ test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process[process] _
+tests/test_external_proposal_failure_recovery.py:71: in test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process
+    expected, reference_dir = reference_run(tmp_path)
+                              ^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_recovery.py:30: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process[outcome] _
+tests/test_external_proposal_failure_recovery.py:71: in test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process
+    expected, reference_dir = reference_run(tmp_path)
+                              ^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_failure_recovery.py:30: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM(), "invalid_once")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_______ test_real_active_proposal_call_is_adopted_without_provider_retry _______
+tests/test_external_proposal_recovery.py:131: in test_real_active_proposal_call_is_adopted_without_provider_retry
+    expected, reference_dir, reference_count = reference_run(tmp_path)
+                                               ^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:98: in reference_run
+    llm = proposer(prop_root, prop_script, count, store, MockLLM())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+______ test_active_proposal_with_evaluator_process_fails_before_adoption _______
+tests/test_external_proposal_recovery.py:224: in test_active_proposal_with_evaluator_process_fails_before_adoption
+    resumed, store, cohort, count = active_marker_fixture(tmp_path, "active-with-process")
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:210: in active_marker_fixture
+    crash_after_proposals(run_dir, eval_root, eval_script, 1)
+tests/test_external_batch_partial_start_recovery.py:109: in crash_after_proposals
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+__________ test_active_proposal_with_settlement_fails_before_adoption __________
+tests/test_external_proposal_recovery.py:238: in test_active_proposal_with_settlement_fails_before_adoption
+    resumed, store, cohort, count = active_marker_fixture(tmp_path, "active-with-settlement")
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:210: in active_marker_fixture
+    crash_after_proposals(run_dir, eval_root, eval_script, 1)
+tests/test_external_batch_partial_start_recovery.py:109: in crash_after_proposals
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_______ test_real_call_is_persistent_and_adopted_without_another_process _______
+tests/test_external_proposer.py:33: in test_real_call_is_persistent_and_adopted_without_another_process
+    llm = proposer(root, script, count, store, MockLLM())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_____ test_terminal_failure_is_durable_and_not_retried[malformed-invalid] ______
+tests/test_external_proposer.py:57: in test_terminal_failure_is_durable_and_not_retried
+    llm = proposer(root, script, count, store, MockLLM(), mode, time_limit=1)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+______ test_terminal_failure_is_durable_and_not_retried[timeout-timeout] _______
+tests/test_external_proposer.py:57: in test_terminal_failure_is_durable_and_not_retried
+    llm = proposer(root, script, count, store, MockLLM(), mode, time_limit=1)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_proposal_recovery.py:88: in proposer
+    return ExternalCommandLLM(
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+____ test_openai_worker_real_local_http_usage_and_credential_nonpersistence ____
+tests/test_external_proposer.py:104: in test_openai_worker_real_local_http_usage_and_credential_nonpersistence
+    llm = ExternalCommandLLM(command, tmp_path / "openai-work", store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+core/executor/proposal.py:71: in __init__
+    self.seccomp_policy = build_seccomp_policy() if seccomp else None
+                          ^^^^^^^^^^^^^^^^^^^^^^
+core/executor/seccomp.py:92: in build_seccomp_policy
+    raise RuntimeError(
+E   RuntimeError: seccomp policy v1 requires x86_64; got arm64
+_ test_real_owner_crash_adopts_without_reproposal_reexecution_or_duplicate_receipt _
+tests/test_external_recovery.py:69: in test_real_owner_crash_adopts_without_reproposal_reexecution_or_duplicate_receipt
+    reference = Framework(MockLLM(), evaluator(reference_root, reference_script,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_post_checkpoint_settlement_is_refused_instead_of_settling_twice _____
+tests/test_external_recovery.py:116: in test_post_checkpoint_settlement_is_refused_instead_of_settling_twice
+    started = kill_after_improve_started(owner, store, run_dir)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_recovery.py:58: in kill_after_improve_started
+    raise AssertionError(f"owner exited early: {stdout}\n{stderr}")
+E   AssertionError: owner exited early: 
+E   Traceback (most recent call last):
+E     File "SOURCE_ROOT/m0/tests/test_external_recovery.py", line 140, in <module>
+E       owner_main(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]))
+E     File "SOURCE_ROOT/m0/tests/test_external_recovery.py", line 135, in owner_main
+E       external = evaluator(root, script, store, "delayed_non_genesis", genesis)
+E                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/tests/test_external_evaluator.py", line 137, in evaluator
+E       return ExternalCommandEvaluator(
+E              ^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/external.py", line 78, in __init__
+E       sandbox = BubblewrapSandbox()
+E                 ^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/sandbox.py", line 24, in __init__
+E       raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+__ test_kernel_enforces_real_limits_and_fork_inherits_policy[memory-policy0] ___
+tests/test_external_resource_policy.py:38: in test_kernel_enforces_real_limits_and_fork_inherits_policy
+    external = evaluator(root, script, store, "resource", probe,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___ test_kernel_enforces_real_limits_and_fork_inherits_policy[file-policy1] ____
+tests/test_external_resource_policy.py:38: in test_kernel_enforces_real_limits_and_fork_inherits_policy
+    external = evaluator(root, script, store, "resource", probe,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___ test_kernel_enforces_real_limits_and_fork_inherits_policy[process-None] ____
+tests/test_external_resource_policy.py:38: in test_kernel_enforces_real_limits_and_fork_inherits_policy
+    external = evaluator(root, script, store, "resource", probe,
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_unstartable_process_limit_is_structured_failure_not_fail_open ______
+tests/test_external_resource_policy.py:68: in test_unstartable_process_limit_is_structured_failure_not_fail_open
+    external = evaluator(root, script, store, resource_policy=policy)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_invalid_resource_limits_fail_before_any_process[kwargs0] _________
+tests/test_external_resource_policy.py:89: in test_invalid_resource_limits_fail_before_any_process
+    evaluator(root, script, store, resource_policy={})
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_invalid_resource_limits_fail_before_any_process[kwargs1] _________
+tests/test_external_resource_policy.py:89: in test_invalid_resource_limits_fail_before_any_process
+    evaluator(root, script, store, resource_policy={})
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_invalid_resource_limits_fail_before_any_process[kwargs2] _________
+tests/test_external_resource_policy.py:89: in test_invalid_resource_limits_fail_before_any_process
+    evaluator(root, script, store, resource_policy={})
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_invalid_resource_limits_fail_before_any_process[kwargs3] _________
+tests/test_external_resource_policy.py:89: in test_invalid_resource_limits_fail_before_any_process
+    evaluator(root, script, store, resource_policy={})
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_________________ test_unconfigured_policy_is_explicitly_empty _________________
+tests/test_external_resource_policy.py:97: in test_unconfigured_policy_is_explicitly_empty
+    external = evaluator(root, script, store)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___________ test_resource_policy_owner_crash_adopts_original_outcome ___________
+tests/test_external_resource_policy.py:120: in test_resource_policy_owner_crash_adopts_original_outcome
+    raise AssertionError(f"owner exited {owner.returncode}: {stdout}{stderr}")
+E   AssertionError: owner exited 1: Traceback (most recent call last):
+E     File "SOURCE_ROOT/m0/tests/test_external_resource_policy.py", line 148, in <module>
+E       owner_main(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]))
+E     File "SOURCE_ROOT/m0/tests/test_external_resource_policy.py", line 141, in owner_main
+E       external = evaluator(root, script, store, "delayed",
+E                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/tests/test_external_evaluator.py", line 137, in evaluator
+E       return ExternalCommandEvaluator(
+E              ^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/external.py", line 78, in __init__
+E       sandbox = BubblewrapSandbox()
+E                 ^^^^^^^^^^^^^^^^^^^
+E     File "SOURCE_ROOT/m0/core/executor/sandbox.py", line 24, in __init__
+E       raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_________ test_inprocess_failure_crashes_resume_without_retry[outcome] _________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_________ test_inprocess_failure_crashes_resume_without_retry[settle] __________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_inprocess_failure_crashes_resume_without_retry[settled_evidence] _____
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_________ test_inprocess_failure_crashes_resume_without_retry[absorb] __________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+__________ test_inprocess_failure_crashes_resume_without_retry[gate] ___________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_inprocess_failure_crashes_resume_without_retry[decision] _________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+___ test_inprocess_failure_crashes_resume_without_retry[admission_mutation] ____
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_inprocess_failure_crashes_resume_without_retry[admission] ________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_inprocess_failure_crashes_resume_without_retry[second_absorb] ______
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+________ test_inprocess_failure_crashes_resume_without_retry[completed] ________
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+____ test_inprocess_failure_crashes_resume_without_retry[admission_receipt] ____
+tests/test_inprocess_proposal_failure_recovery.py:209: in test_inprocess_failure_crashes_resume_without_retry
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}")
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+______ test_inprocess_failure_batch_then_control_recovers[control_settle] ______
+tests/test_inprocess_proposal_failure_recovery.py:241: in test_inprocess_failure_batch_then_control_recovers
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}", control=True)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_____ test_inprocess_failure_batch_then_control_recovers[control_baseline] _____
+tests/test_inprocess_proposal_failure_recovery.py:241: in test_inprocess_failure_batch_then_control_recovers
+    expected, reference_dir = reference_run(tmp_path, f"reference-{crash_point}", control=True)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:54: in reference_run
+    result = Framework(FailOnceLLM(count), evaluator(eval_root, eval_script, store),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_external_evaluator.py:137: in evaluator
+    return ExternalCommandEvaluator(
+core/executor/external.py:78: in __init__
+    sandbox = BubblewrapSandbox()
+              ^^^^^^^^^^^^^^^^^^^
+core/executor/sandbox.py:24: in __init__
+    raise RuntimeError("BubblewrapSandbox requires an installed bwrap executable")
+E   RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+_______________ test_inprocess_active_marker_remains_fail_closed _______________
+tests/test_inprocess_proposal_failure_recovery.py:273: in test_inprocess_active_marker_remains_fail_closed
+    run_dir, store, cohort, args = crashed_run(
+tests/test_inprocess_proposal_failure_recovery.py:266: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, count, crash_point)
+tests/test_inprocess_proposal_failure_recovery.py:142: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_______________ test_inprocess_outcome_marker_tamper_is_refused ________________
+tests/test_inprocess_proposal_failure_recovery.py:286: in test_inprocess_outcome_marker_tamper_is_refused
+    run_dir, store, cohort, args = crashed_run(
+tests/test_inprocess_proposal_failure_recovery.py:266: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, count, crash_point)
+tests/test_inprocess_proposal_failure_recovery.py:142: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+______________ test_inprocess_settled_evidence_tamper_is_refused _______________
+tests/test_inprocess_proposal_failure_recovery.py:307: in test_inprocess_settled_evidence_tamper_is_refused
+    run_dir, store, cohort, args = crashed_run(tmp_path, "inprocess-evidence-fork")
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:266: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, count, crash_point)
+tests/test_inprocess_proposal_failure_recovery.py:142: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_________________ test_inprocess_wrong_ledger_cost_is_refused __________________
+tests/test_inprocess_proposal_failure_recovery.py:326: in test_inprocess_wrong_ledger_cost_is_refused
+    run_dir, store, cohort, args = crashed_run(
+tests/test_inprocess_proposal_failure_recovery.py:266: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, count, crash_point)
+tests/test_inprocess_proposal_failure_recovery.py:142: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+_____________ test_inprocess_settlement_without_outcome_is_refused _____________
+tests/test_inprocess_proposal_failure_recovery.py:346: in test_inprocess_settlement_without_outcome_is_refused
+    run_dir, store, cohort, args = crashed_run(tmp_path, "inprocess-missing-outcome")
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_inprocess_proposal_failure_recovery.py:266: in crashed_run
+    crash_owner(run_dir, eval_root, eval_script, count, crash_point)
+tests/test_inprocess_proposal_failure_recovery.py:142: in crash_owner
+    assert owner.returncode == -signal.SIGKILL, (stdout, stderr)
+E   AssertionError: ('', 'Traceback (most recent call last):
+E       File "LOCAL_HOME/Documents/ChatGPT/autoresearch/AutoResearch-han...ox requires an installed bwrap executable")
+E     RuntimeError: BubblewrapSandbox requires an installed bwrap executable
+E     ')
+E   assert 1 == -<Signals.SIGKILL: 9>
+E    +  where 1 = <Popen: returncode: 1 args: ['/tmp/autoresearch-audit-venv/bin/python', '/Us...>.returncode
+E    +  and   <Signals.SIGKILL: 9> = signal.SIGKILL
+____ test_real_crash_after_token_settle_only_appends_missing_batch_evidence ____
+tests/test_settlement_crash_recovery.py:179: in test_real_crash_after_token_settle_only_appends_missing_batch_evidence
+    results = asyncio.run(scheduler.resume(admission, workspace))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+core/orchestration.py:542: in resume
+    self._recover_execution(cohort_id, workspace)
+core/orchestration.py:312: in _recover_execution
+    raise RuntimeError("execution journal is incomplete for the active cohort")
+E   RuntimeError: execution journal is incomplete for the active cohort
+___ test_journaled_cost_mismatch_fails_before_batch_settlement_or_admission ____
+tests/test_settlement_crash_recovery.py:196: in test_journaled_cost_mismatch_fails_before_batch_settlement_or_admission
+    asyncio.run(scheduler.resume(admission, GitWorktree(repo, worktrees)))
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+core/orchestration.py:542: in resume
+    self._recover_execution(cohort_id, workspace)
+core/orchestration.py:312: in _recover_execution
+    raise RuntimeError("execution journal is incomplete for the active cohort")
+E   RuntimeError: execution journal is incomplete for the active cohort
+_____ test_real_crash_inside_multi_unit_basket_settles_only_missing_units ______
+tests/test_settlement_crash_recovery.py:216: in test_real_crash_inside_multi_unit_basket_settles_only_missing_units
+    results = asyncio.run(scheduler.resume(admission, workspace))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../../.local/share/uv/python/cpython-3.12.9-macos-aarch64-none/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+core/orchestration.py:542: in resume
+    self._recover_execution(cohort_id, workspace)
+core/orchestration.py:312: in _recover_execution
+    raise RuntimeError("execution journal is incomplete for the active cohort")
+E   RuntimeError: execution journal is incomplete for the active cohort
+=========================== short test summary info ============================
+FAILED tests/test_batch_execution_recovery.py::test_real_batch_owner_crash_recovers_settles_and_admits_exactly_once
+FAILED tests/test_benchmark_agents.py::test_real_host_and_governed_clis_with_local_openai_and_isolated_execution
+FAILED tests/test_executor_hitl.py::test_executor_success_commits_artifact_and_checks_protection
+FAILED tests/test_executor_hitl.py::test_executor_encodes_timeout_crash_missing_output_and_tampering
+FAILED tests/test_executor_hitl.py::test_executor_rejects_frozen_hypothesis_mismatch_and_base_tamper
+FAILED tests/test_executor_hitl.py::test_review_approval_is_bound_single_use_and_pause_resume_survives_restore
+FAILED tests/test_executor_pool.py::test_real_parallel_quota_failure_isolation_and_serial_absorb
+FAILED tests/test_executor_recovery.py::test_real_owner_crash_pending_then_recovers_exactly_once
+FAILED tests/test_executor_recovery.py::test_lost_wrapper_kills_registered_orphan_and_fails_closed
+FAILED tests/test_executor_recovery.py::test_finished_process_without_executor_evidence_is_finalized_once
+FAILED tests/test_executor_recovery.py::test_pid_start_mismatch_never_adopts_reused_process
+FAILED tests/test_external_batch_control_recovery.py::test_real_batch_control_pre_settlement_crash_adopts_without_reexecution
+FAILED tests/test_external_batch_control_recovery.py::test_real_batch_control_post_settlement_crashes_resume_exactly_once[settle]
+FAILED tests/test_external_batch_control_recovery.py::test_real_batch_control_post_settlement_crashes_resume_exactly_once[baseline]
+FAILED tests/test_external_batch_control_recovery.py::test_real_batch_control_post_settlement_crashes_resume_exactly_once[failure_evidence]
+FAILED tests/test_external_batch_control_recovery.py::test_batch_control_baseline_mismatch_fails_before_control_adoption
+FAILED tests/test_external_batch_control_recovery.py::test_batch_control_wrong_candidate_lineage_is_refused
+FAILED tests/test_external_batch_control_recovery.py::test_completed_batch_control_resume_does_not_readopt_or_reexecute
+FAILED tests/test_external_batch_partial_start_recovery.py::test_real_partially_started_cohort_continues_only_missing_original_evaluation
+FAILED tests/test_external_batch_partial_start_recovery.py::test_real_fully_proposed_zero_started_cohort_continues_original_evaluations
+FAILED tests/test_external_batch_partial_start_recovery.py::test_marker_only_proposal_fails_closed_without_reproposal_or_execution
+FAILED tests/test_external_batch_partial_start_recovery.py::test_partial_start_with_settlement_fails_before_continuing
+FAILED tests/test_external_batch_partial_start_recovery.py::test_partial_start_context_fork_fails_before_continuing
+FAILED tests/test_external_batch_partial_start_recovery.py::test_completed_partial_start_resume_is_a_noop
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[settle]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[settled_evidence]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[absorb]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[gate]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[decision]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[admission_mutation]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[admission]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[second_absorb]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[completed]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_real_batch_post_settlement_crashes_resume_exact_suffix[admission_receipt]
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_batch_mutation_fork_fails_closed_without_adoption
+FAILED tests/test_external_batch_post_settlement_recovery.py::test_batch_admission_marker_before_mutation_fails_closed
+FAILED tests/test_external_batch_proposal_recovery.py::test_real_safe_proposal_gap_continues_only_missing_llm_operation
+FAILED tests/test_external_batch_proposal_recovery.py::test_incomplete_proposals_with_settlement_fail_before_llm_or_process
+FAILED tests/test_external_batch_proposal_recovery.py::test_legacy_incomplete_proposals_without_boundary_fail_closed
+FAILED tests/test_external_batch_recovery.py::test_real_fully_started_batch_crash_recovers_without_reproposal_or_reexecution
+FAILED tests/test_external_control_recovery.py::test_real_control_pre_settlement_crash_adopts_without_reexecution
+FAILED tests/test_external_control_recovery.py::test_real_control_post_settlement_crashes_resume_exactly_once[settle]
+FAILED tests/test_external_control_recovery.py::test_real_control_post_settlement_crashes_resume_exactly_once[baseline]
+FAILED tests/test_external_control_recovery.py::test_real_control_post_settlement_crashes_resume_exactly_once[failure_evidence]
+FAILED tests/test_external_control_recovery.py::test_control_baseline_mismatch_fails_before_recovery_adoption
+FAILED tests/test_external_control_recovery.py::test_control_wrong_candidate_lineage_is_refused
+FAILED tests/test_external_control_recovery.py::test_completed_control_resume_does_not_readopt_or_reexecute
+FAILED tests/test_external_default_sandbox.py::test_default_bubblewrap_is_real_and_audited[False]
+FAILED tests/test_external_default_sandbox.py::test_default_bubblewrap_is_real_and_audited[True]
+FAILED tests/test_external_default_sandbox.py::test_only_explicit_disable_runs_without_isolation[None]
+FAILED tests/test_external_default_sandbox.py::test_only_explicit_disable_runs_without_isolation[False]
+FAILED tests/test_external_default_sandbox.py::test_fork_inherits_policy_and_keeps_independent_process_history[None]
+FAILED tests/test_external_default_sandbox.py::test_fork_inherits_policy_and_keeps_independent_process_history[False]
+FAILED tests/test_external_default_sandbox.py::test_fork_inherits_policy_and_keeps_independent_process_history[default]
+FAILED tests/test_external_evaluator.py::test_real_subprocess_result_usage_and_persistent_native_outcome
+FAILED tests/test_external_evaluator.py::test_invalid_and_timeout_are_structured_failures[malformed-invalid]
+FAILED tests/test_external_evaluator.py::test_invalid_and_timeout_are_structured_failures[timeout-timeout]
+FAILED tests/test_external_evaluator.py::test_real_sandbox_clears_environment_and_blocks_host_file_network_and_escape
+FAILED tests/test_external_evaluator.py::test_sequential_failure_is_settled_evidence_not_a_loop_exception
+FAILED tests/test_external_evaluator.py::test_batch_failure_and_successful_external_replay_use_independent_evidence
+FAILED tests/test_external_genesis_recovery.py::test_real_genesis_pre_settlement_crash_adopts_native_outcome_exactly_once
+FAILED tests/test_external_genesis_recovery.py::test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[settle]
+FAILED tests/test_external_genesis_recovery.py::test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[absorb]
+FAILED tests/test_external_genesis_recovery.py::test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[gate]
+FAILED tests/test_external_genesis_recovery.py::test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[admission_mutation]
+FAILED tests/test_external_genesis_recovery.py::test_real_genesis_post_settlement_crashes_resume_only_missing_suffix[admission_receipt]
+FAILED tests/test_external_genesis_recovery.py::test_genesis_mutation_fork_is_refused_before_adoption
+FAILED tests/test_external_genesis_recovery.py::test_genesis_recovery_refuses_existing_checkpoint_evidence
+FAILED tests/test_external_genesis_recovery.py::test_genesis_recovery_refuses_unrelated_budget_activity
+FAILED tests/test_external_genesis_recovery.py::test_genesis_recovery_refuses_multiple_run_starts
+FAILED tests/test_external_genesis_recovery.py::test_genesis_recovery_refuses_wrong_candidate_lineage
+FAILED tests/test_external_genesis_recovery.py::test_genesis_recovery_requires_run_start_anchor
+FAILED tests/test_external_post_settlement_recovery.py::test_real_post_settlement_crashes_resume_only_missing_suffix[settle]
+FAILED tests/test_external_post_settlement_recovery.py::test_real_post_settlement_crashes_resume_only_missing_suffix[absorb]
+FAILED tests/test_external_post_settlement_recovery.py::test_real_post_settlement_crashes_resume_only_missing_suffix[gate]
+FAILED tests/test_external_post_settlement_recovery.py::test_real_post_settlement_crashes_resume_only_missing_suffix[admission_mutation]
+FAILED tests/test_external_post_settlement_recovery.py::test_real_post_settlement_crashes_resume_only_missing_suffix[admission_receipt]
+FAILED tests/test_external_post_settlement_recovery.py::test_real_post_settlement_failure_evidence_is_adopted_exactly_once
+FAILED tests/test_external_post_settlement_recovery.py::test_post_checkpoint_mutation_fork_is_refused_without_duplicate_finalization
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[settle]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[settled_evidence]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[absorb]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[gate]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[decision]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[admission_mutation]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[admission]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[second_absorb]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[completed]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_post_settlement_crashes_resume_exact_suffix[admission_receipt]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_batch_then_control_recovers_exactly_once[control_settle]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_proposal_batch_then_control_recovers_exactly_once[control_baseline]
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_settled_evidence_tamper_is_refused
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_candidate_wrong_ledger_cost_is_refused
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_batch_mutation_fork_is_refused
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_candidate_forged_evaluator_process_is_refused
+FAILED tests/test_external_proposal_failure_post_settlement_recovery.py::test_failed_settlement_without_original_proposer_outcome_is_refused
+FAILED tests/test_external_proposal_failure_recovery.py::test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process[process]
+FAILED tests/test_external_proposal_failure_recovery.py::test_failed_active_proposal_recovers_without_retry_or_fake_evaluator_process[outcome]
+FAILED tests/test_external_proposal_recovery.py::test_real_active_proposal_call_is_adopted_without_provider_retry
+FAILED tests/test_external_proposal_recovery.py::test_active_proposal_with_evaluator_process_fails_before_adoption
+FAILED tests/test_external_proposal_recovery.py::test_active_proposal_with_settlement_fails_before_adoption
+FAILED tests/test_external_proposer.py::test_real_call_is_persistent_and_adopted_without_another_process
+FAILED tests/test_external_proposer.py::test_terminal_failure_is_durable_and_not_retried[malformed-invalid]
+FAILED tests/test_external_proposer.py::test_terminal_failure_is_durable_and_not_retried[timeout-timeout]
+FAILED tests/test_external_proposer.py::test_openai_worker_real_local_http_usage_and_credential_nonpersistence
+FAILED tests/test_external_recovery.py::test_real_owner_crash_adopts_without_reproposal_reexecution_or_duplicate_receipt
+FAILED tests/test_external_recovery.py::test_post_checkpoint_settlement_is_refused_instead_of_settling_twice
+FAILED tests/test_external_resource_policy.py::test_kernel_enforces_real_limits_and_fork_inherits_policy[memory-policy0]
+FAILED tests/test_external_resource_policy.py::test_kernel_enforces_real_limits_and_fork_inherits_policy[file-policy1]
+FAILED tests/test_external_resource_policy.py::test_kernel_enforces_real_limits_and_fork_inherits_policy[process-None]
+FAILED tests/test_external_resource_policy.py::test_unstartable_process_limit_is_structured_failure_not_fail_open
+FAILED tests/test_external_resource_policy.py::test_invalid_resource_limits_fail_before_any_process[kwargs0]
+FAILED tests/test_external_resource_policy.py::test_invalid_resource_limits_fail_before_any_process[kwargs1]
+FAILED tests/test_external_resource_policy.py::test_invalid_resource_limits_fail_before_any_process[kwargs2]
+FAILED tests/test_external_resource_policy.py::test_invalid_resource_limits_fail_before_any_process[kwargs3]
+FAILED tests/test_external_resource_policy.py::test_unconfigured_policy_is_explicitly_empty
+FAILED tests/test_external_resource_policy.py::test_resource_policy_owner_crash_adopts_original_outcome
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[outcome]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[settle]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[settled_evidence]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[absorb]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[gate]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[decision]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[admission_mutation]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[admission]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[second_absorb]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[completed]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_crashes_resume_without_retry[admission_receipt]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_batch_then_control_recovers[control_settle]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_failure_batch_then_control_recovers[control_baseline]
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_active_marker_remains_fail_closed
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_outcome_marker_tamper_is_refused
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_settled_evidence_tamper_is_refused
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_wrong_ledger_cost_is_refused
+FAILED tests/test_inprocess_proposal_failure_recovery.py::test_inprocess_settlement_without_outcome_is_refused
+FAILED tests/test_settlement_crash_recovery.py::test_real_crash_after_token_settle_only_appends_missing_batch_evidence
+FAILED tests/test_settlement_crash_recovery.py::test_journaled_cost_mismatch_fails_before_batch_settlement_or_admission
+FAILED tests/test_settlement_crash_recovery.py::test_real_crash_inside_multi_unit_basket_settles_only_missing_units
+138 failed, 337 passed, 15 skipped in 71.55s (0:01:11)

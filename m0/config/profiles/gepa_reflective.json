@@ -1,0 +1,8 @@
+{
+  "name": "gepa_reflective",
+  "operators": {"draft": "llm", "improve": "llm_reflective", "debug": null, "crossover": null},
+  "representation": "full_rewrite",
+  "parent_pool": {"structure": "greedy_accepted_pool"},
+  "extensions": [],
+  "source": "M2-UNIFIED §8.2, M0 subset"
+}

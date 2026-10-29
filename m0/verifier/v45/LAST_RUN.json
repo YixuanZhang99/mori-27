@@ -1,0 +1,130 @@
+{
+  "version": "v45",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "re_bench_campaign_executed": false,
+    "mle_bench_lite_campaign_executed": false,
+    "host_parity_certified": false,
+    "rubric_b2_complete": false,
+    "rubric_b3_complete": false
+  },
+  "external_provider_execution": {
+    "real_external_api_executed": false,
+    "local_openai_compatible_http_worker_executed": true,
+    "external_scores_or_cost_efficiency_produced": false
+  },
+  "supersedes": [
+    "v44 refusal to recover a terminal proposal failure once any batch settlement exists"
+  ],
+  "acceptance_harness": {
+    "recursive_history_execution": false,
+    "prior_passing_journals_required": "v1-v44 except rejected v14 and superseded v43 recursive harness",
+    "current_behavior_reexecuted": true,
+    "legacy_failures_preserved": true,
+    "functional_assertions_reduced": false
+  },
+  "proposal_recovery": {
+    "executed": true,
+    "certified": true,
+    "scope": "terminal ExternalCommandLLM failure from proposal through batch finalization and same-cycle control",
+    "pre_settlement_crash_windows": [
+      "proposer process started",
+      "failure outcome persisted"
+    ],
+    "post_settlement_crash_windows": [
+      "ledger settle",
+      "settled evidence",
+      "failed absorb",
+      "successful gate",
+      "failed decision",
+      "failed admission mutation",
+      "failed admission",
+      "successful absorb",
+      "batch completed",
+      "successful admission receipt",
+      "control settle",
+      "control baseline"
+    ],
+    "provider_request_retried": false,
+    "failed_candidate_evaluator_process_created": false,
+    "failure_evidence_uses_original_proposer_execution_id": true,
+    "settled_failure_evidence_field_comparison": true,
+    "original_proposer_request_hash_revalidated": true,
+    "ledger_cost_and_reconcile_delta_revalidated": true,
+    "non_ok_candidate_pruned_without_m9_receipt": true,
+    "post_settlement_failure_gap_certified": true,
+    "ordinary_in_process_failure_certified": false,
+    "legacy_incomplete_journal_certified": false
+  },
+  "uncertified_boundaries": [
+    "actual seven-task RE-Bench campaign and external scores",
+    "actual 22-task MLE-Bench Lite campaign and host parity",
+    "real external provider API campaign",
+    "ordinary in-process LLM proposal failures",
+    "legacy incomplete proposals without operation-boundary evidence",
+    "machine power loss and whole-machine worker survival",
+    "non-external in-process evaluator crashes",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas",
+    "hosted CI execution"
+  ],
+  "scope": [
+    "treat durable non-OK proposer outcomes as native settled-intent evidence",
+    "do not mistake the failed candidate's absent evaluator process for a missing execution",
+    "bind every recovered failure to its original proposer process and request hash",
+    "compare reconstructed non-OK evidence and token cost with settled evidence",
+    "revalidate settlement account, actual cost and reserve-minus-actual delta",
+    "resume the exact checkpoint mutation and admission suffix without provider retry",
+    "continue into same-cycle control settlement and baseline recovery",
+    "refuse evidence, ledger, mutation, process and missing-outcome forks",
+    "match uninterrupted results, ledger, governed state and certified snapshot",
+    "completed resume is a no-op and fresh certified replay passes",
+    "no external benchmark score, parity, USD efficiency or A/B/C completion claim"
+  ],
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true,
+      "detail": "prior passing journals verified; missing=[]"
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true,
+      "detail": "v14 failed journal remains rejected; v15 is its corrected successor"
+    },
+    {
+      "check": "failed_proposal_post_settlement_real_sigkill_and_adversarial_guards",
+      "passed": true,
+      "detail": "...................................                                      [100%]\n35 passed in 62.78s (0:01:02)"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 48%]\n........................................................................ [ 96%]\n.....                                                                    [100%]\n149 passed in 147.99s (0:02:27)"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n...........                                                              [100%]\n299 passed in 175.60s (0:02:55)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true,
+      "detail": "exactly one v45 index entry"
+    }
+  ]
+}

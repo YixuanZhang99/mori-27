@@ -1,0 +1,81 @@
+{
+  "version": "v38",
+  "passed": false,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "supersedes": [
+    "v29-v37 opt-in Bubblewrap for ExternalCommandEvaluator"
+  ],
+  "external_sandbox_policy": {
+    "executed": true,
+    "certified": false,
+    "default": "BubblewrapSandbox",
+    "explicit_disable": "sandbox=None or sandbox=False",
+    "missing_bwrap": "constructor fails closed before process launch"
+  },
+  "previously_certified_windows": [
+    "sequential external genesis, improve and same-cycle control",
+    "prepared external cohorts from zero/partial starts through finalization",
+    "completed external batch plus same-cycle control before checkpoint"
+  ],
+  "uncertified_boundaries": [
+    "incomplete proposal journals",
+    "missing processes combined with settlement or finalization evidence",
+    "machine power loss",
+    "non-external in-process evaluator crashes",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary"
+  ],
+  "scope": [
+    "omitting sandbox or passing True constructs real BubblewrapSandbox",
+    "missing bwrap fails construction without a process or native outcome",
+    "only explicit None or False disables isolation and records disabled policy",
+    "real default probes clear environment and block host file/network access",
+    "private escape writes do not reach the host under the default policy",
+    "explicit disable probes prove host environment/file/network/write access",
+    "every process start records sandbox_policy without environment values",
+    "fork/replay inherits policy and keeps independent process/outcome histories",
+    "all v30-v37 owner-crash recovery tests execute with default Bubblewrap",
+    "no seccomp, complete resource-limit or machine-power-loss claim"
+  ],
+  "checks": [
+    {
+      "check": "v37_complete",
+      "passed": false,
+      "detail": "FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)\nFAIL v36_complete: FAIL verifier_exception: TimeoutExpired(['/usr/local/bin/python3', 'verifier/v35/verify.py'], 300)\n......                                                                   [100%]\n6 passed in 20.17s\nPASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]\n6 passed in 20.17s\n........................................................................ [ 70%]\n..............................                                           [100%]\n102 passed in 99.47s (0:01:39)\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]\n..............................                                           [100%]\n102 passed in 99.47s (0:01:39)\n................                                                         [100%]\n16 passed in 12.65s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.65s\nPASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded"
+    },
+    {
+      "check": "default_sandbox_isolation_disable_fail_closed_and_fork",
+      "passed": true,
+      "detail": "..............                                                           [100%]\n14 passed in 5.43s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 65%]\n......................................                                   [100%]\n110 passed in 101.12s (0:01:41)"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 12.63s"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 76%]\n..................................................................       [100%]\n282 passed in 148.22s (0:02:28)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

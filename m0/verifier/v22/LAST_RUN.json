@@ -1,0 +1,43 @@
+{
+  "version": "v22",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "reason": "official package, prepared data and model runs are unavailable"
+  },
+  "scope": [
+    "production paired-arm CLI",
+    "all-task preflight",
+    "real process-group timeout",
+    "official-report-only measured records",
+    "strict 22-task/3-seed comparison"
+  ],
+  "checks": [
+    {
+      "check": "v21_complete",
+      "passed": true,
+      "detail": "0"
+    },
+    {
+      "check": "campaign_process_and_evidence_contracts",
+      "passed": true,
+      "detail": "........                                                                 [100%]\n8 passed in 1.70s"
+    },
+    {
+      "check": "adapter_and_comparison_regression",
+      "passed": true,
+      "detail": ".....                                                                    [100%]\n5 passed in 0.26s"
+    },
+    {
+      "check": "real_cli_preflight_fails_closed",
+      "passed": true,
+      "detail": "{'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

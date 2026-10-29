@@ -1,0 +1,1185 @@
+PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 4.08s
+PASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 4.08s
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS v23_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 4.08s
+PASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 4.08s
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 3.08s
+PASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 3.08s
+.............                                                            [100%]
+13 passed in 1.14s
+PASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]
+13 passed in 1.14s
+PASS ci_workflow_wiring: current verifier command
+PASS v24_complete:            [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 4.08s
+PASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 4.08s
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS v23_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 4.08s
+PASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 4.08s
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 3.08s
+PASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 3.08s
+.............                                                            [100%]
+13 passed in 1.14s
+PASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]
+13 passed in 1.14s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 0.29s
+PASS b1_threshold_tie_failure_and_missing_baseline: ............                                                             [100%]
+12 passed in 0.29s
+........................................                                 [100%]
+40 passed in 1.88s
+PASS gate_loop_checkpoint_and_replay_regression: ........................................                                 [100%]
+40 passed in 1.88s
+PASS ci_workflow_wiring: current verifier command
+PASS v25_complete: 
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS v23_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 4.08s
+PASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 4.08s
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 3.08s
+PASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 3.08s
+.............                                                            [100%]
+13 passed in 1.14s
+PASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]
+13 passed in 1.14s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 0.29s
+PASS b1_threshold_tie_failure_and_missing_baseline: ............                                                             [100%]
+12 passed in 0.29s
+........................................                                 [100%]
+40 passed in 1.88s
+PASS gate_loop_checkpoint_and_replay_regression: ........................................                                 [100%]
+40 passed in 1.88s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 1.38s
+PASS c1_c2_reconciliation_and_tamper_refusal: .......                                                                  [100%]
+7 passed in 1.38s
+........................................                                 [100%]
+40 passed in 1.76s
+PASS governance_checkpoint_replay_and_loop_regression: ........................................                                 [100%]
+40 passed in 1.76s
+PASS ci_workflow_wiring: current verifier command
+PASS v26_complete:    [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+........                                                                 [100%]
+8 passed in 1.28s
+PASS campaign_process_and_evidence_contracts: ........                                                                 [100%]
+8 passed in 1.28s
+.....                                                                    [100%]
+5 passed in 0.23s
+PASS adapter_and_comparison_regression: .....                                                                    [100%]
+5 passed in 0.23s
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 4.08s
+PASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 4.08s
+.............                                                            [100%]
+13 passed in 1.16s
+PASS public_data_and_campaign_regression: .............                                                            [100%]
+13 passed in 1.16s
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+...                                                                      [100%]
+3 passed in 3.08s
+PASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]
+3 passed in 3.08s
+.............                                                            [100%]
+13 passed in 1.14s
+PASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]
+13 passed in 1.14s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 0.29s
+PASS b1_threshold_tie_failure_and_missing_baseline: ............                                                             [100%]
+12 passed in 0.29s
+........................................                                 [100%]
+40 passed in 1.88s
+PASS gate_loop_checkpoint_and_replay_regression: ........................................                                 [100%]
+40 passed in 1.88s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 1.38s
+PASS c1_c2_reconciliation_and_tamper_refusal: .......                                                                  [100%]
+7 passed in 1.38s
+........................................                                 [100%]
+40 passed in 1.76s
+PASS governance_checkpoint_replay_and_loop_regression: ........................................                                 [100%]
+40 passed in 1.76s
+PASS ci_workflow_wiring: current verifier command
+.                                                                        [100%]
+1 passed in 1.43s
+PASS mixed_run_history_fails_before_spending: .                                                                        [100%]
+1 passed in 1.43s
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_first: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_second: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+PASS v27_complete: .0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_second: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+.....                                                                    [100%]
+5 passed in 0.36s
+PASS formal_residence_and_certified_replay: .....                                                                    [100%]
+5 passed in 0.36s
+..................................                                       [100%]
+34 passed in 2.74s
+PASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]
+34 passed in 2.74s
+PASS ci_workflow_wiring: current verifier command
+PASS v28_complete: 0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_second: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+.....                                                                    [100%]
+5 passed in 0.36s
+PASS formal_residence_and_certified_replay: .....                                                                    [100%]
+5 passed in 0.36s
+..................................                                       [100%]
+34 passed in 2.74s
+PASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]
+34 passed in 2.74s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 4.16s
+PASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]
+6 passed in 4.16s
+................................                                         [100%]
+32 passed in 2.57s
+PASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]
+32 passed in 2.57s
+.........                                                                [100%]
+9 passed in 7.12s
+PASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]
+9 passed in 7.12s
+PASS ci_workflow_wiring: current verifier command
+PASS v29_complete: eatable_second: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+.....                                                                    [100%]
+5 passed in 0.36s
+PASS formal_residence_and_certified_replay: .....                                                                    [100%]
+5 passed in 0.36s
+..................................                                       [100%]
+34 passed in 2.74s
+PASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]
+34 passed in 2.74s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 4.16s
+PASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]
+6 passed in 4.16s
+................................                                         [100%]
+32 passed in 2.57s
+PASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]
+32 passed in 2.57s
+.........                                                                [100%]
+9 passed in 7.12s
+PASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]
+9 passed in 7.12s
+PASS ci_workflow_wiring: current verifier command
+..                                                                       [100%]
+2 passed in 5.90s
+PASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]
+2 passed in 5.90s
+.............................................                            [100%]
+45 passed in 6.90s
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]
+45 passed in 6.90s
+................                                                         [100%]
+16 passed in 12.49s
+PASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.49s
+PASS ci_workflow_wiring: current verifier command
+PASS v30_complete: in_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+.....                                                                    [100%]
+5 passed in 0.36s
+PASS formal_residence_and_certified_replay: .....                                                                    [100%]
+5 passed in 0.36s
+..................................                                       [100%]
+34 passed in 2.74s
+PASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]
+34 passed in 2.74s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 4.16s
+PASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]
+6 passed in 4.16s
+................................                                         [100%]
+32 passed in 2.57s
+PASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]
+32 passed in 2.57s
+.........                                                                [100%]
+9 passed in 7.12s
+PASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]
+9 passed in 7.12s
+PASS ci_workflow_wiring: current verifier command
+..                                                                       [100%]
+2 passed in 5.90s
+PASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]
+2 passed in 5.90s
+.............................................                            [100%]
+45 passed in 6.90s
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]
+45 passed in 6.90s
+................                                                         [100%]
+16 passed in 12.49s
+PASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.49s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 6.43s
+PASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]
+7 passed in 6.43s
+..................................................                       [100%]
+50 passed in 13.05s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]
+50 passed in 13.05s
+................                                                         [100%]
+16 passed in 12.53s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.53s
+PASS ci_workflow_wiring: current verifier command
+PASS v31_complete: 5, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+.....                                                                    [100%]
+5 passed in 0.36s
+PASS formal_residence_and_certified_replay: .....                                                                    [100%]
+5 passed in 0.36s
+..................................                                       [100%]
+34 passed in 2.74s
+PASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]
+34 passed in 2.74s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 4.16s
+PASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]
+6 passed in 4.16s
+................................                                         [100%]
+32 passed in 2.57s
+PASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]
+32 passed in 2.57s
+.........                                                                [100%]
+9 passed in 7.12s
+PASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]
+9 passed in 7.12s
+PASS ci_workflow_wiring: current verifier command
+..                                                                       [100%]
+2 passed in 5.90s
+PASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]
+2 passed in 5.90s
+.............................................                            [100%]
+45 passed in 6.90s
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]
+45 passed in 6.90s
+................                                                         [100%]
+16 passed in 12.49s
+PASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.49s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 6.43s
+PASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]
+7 passed in 6.43s
+..................................................                       [100%]
+50 passed in 13.05s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]
+50 passed in 13.05s
+................                                                         [100%]
+16 passed in 12.53s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.53s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 6.81s
+PASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: ............                                                             [100%]
+12 passed in 6.81s
+.........................................................                [100%]
+57 passed in 19.07s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .........................................................                [100%]
+57 passed in 19.07s
+................                                                         [100%]
+16 passed in 12.39s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.39s
+PASS ci_workflow_wiring: current verifier command
+PASS v32_complete: heckpoint_batch_and_public_api_regressions: ..................................                                       [100%]
+34 passed in 2.74s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 4.16s
+PASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]
+6 passed in 4.16s
+................................                                         [100%]
+32 passed in 2.57s
+PASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]
+32 passed in 2.57s
+.........                                                                [100%]
+9 passed in 7.12s
+PASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]
+9 passed in 7.12s
+PASS ci_workflow_wiring: current verifier command
+..                                                                       [100%]
+2 passed in 5.90s
+PASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]
+2 passed in 5.90s
+.............................................                            [100%]
+45 passed in 6.90s
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]
+45 passed in 6.90s
+................                                                         [100%]
+16 passed in 12.49s
+PASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.49s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 6.43s
+PASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]
+7 passed in 6.43s
+..................................................                       [100%]
+50 passed in 13.05s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]
+50 passed in 13.05s
+................                                                         [100%]
+16 passed in 12.53s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.53s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 6.81s
+PASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: ............                                                             [100%]
+12 passed in 6.81s
+.........................................................                [100%]
+57 passed in 19.07s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .........................................................                [100%]
+57 passed in 19.07s
+................                                                         [100%]
+16 passed in 12.39s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.39s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 13.54s
+PASS real_control_sigkill_pre_post_settlement_failure_and_guards: .......                                                                  [100%]
+7 passed in 13.54s
+.....................................................................    [100%]
+69 passed in 25.99s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .....................................................................    [100%]
+69 passed in 25.99s
+................                                                         [100%]
+16 passed in 12.33s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.33s
+PASS ci_workflow_wiring: current verifier command
+PASS v33_complete: .........                                                                [100%]
+9 passed in 7.12s
+PASS ci_workflow_wiring: current verifier command
+..                                                                       [100%]
+2 passed in 5.90s
+PASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]
+2 passed in 5.90s
+.............................................                            [100%]
+45 passed in 6.90s
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]
+45 passed in 6.90s
+................                                                         [100%]
+16 passed in 12.49s
+PASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.49s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 6.43s
+PASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]
+7 passed in 6.43s
+..................................................                       [100%]
+50 passed in 13.05s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]
+50 passed in 13.05s
+................                                                         [100%]
+16 passed in 12.53s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.53s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 6.81s
+PASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: ............                                                             [100%]
+12 passed in 6.81s
+.........................................................                [100%]
+57 passed in 19.07s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .........................................................                [100%]
+57 passed in 19.07s
+................                                                         [100%]
+16 passed in 12.39s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.39s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 13.54s
+PASS real_control_sigkill_pre_post_settlement_failure_and_guards: .......                                                                  [100%]
+7 passed in 13.54s
+.....................................................................    [100%]
+69 passed in 25.99s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .....................................................................    [100%]
+69 passed in 25.99s
+................                                                         [100%]
+16 passed in 12.33s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.33s
+PASS ci_workflow_wiring: current verifier command
+.                                                                        [100%]
+1 passed in 7.88s
+PASS v34_surviving_pre_settlement_and_partial_start_guards: .                                                                        [100%]
+1 passed in 7.88s
+............                                                             [100%]
+12 passed in 14.39s
+PASS real_post_settlement_batch_sigkill_suffix_and_fork_guards: ............                                                             [100%]
+12 passed in 14.39s
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+................                                                         [100%]
+16 passed in 12.47s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.47s
+PASS ci_workflow_wiring: current verifier command; historical v34 negative guard is superseded
+PASS v35_complete: ed in 13.05s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]
+50 passed in 13.05s
+................                                                         [100%]
+16 passed in 12.53s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.53s
+PASS ci_workflow_wiring: current verifier command
+............                                                             [100%]
+12 passed in 6.81s
+PASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: ............                                                             [100%]
+12 passed in 6.81s
+.........................................................                [100%]
+57 passed in 19.07s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .........................................................                [100%]
+57 passed in 19.07s
+................                                                         [100%]
+16 passed in 12.39s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.39s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 13.54s
+PASS real_control_sigkill_pre_post_settlement_failure_and_guards: .......                                                                  [100%]
+7 passed in 13.54s
+.....................................................................    [100%]
+69 passed in 25.99s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .....................................................................    [100%]
+69 passed in 25.99s
+................                                                         [100%]
+16 passed in 12.33s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.33s
+PASS ci_workflow_wiring: current verifier command
+.                                                                        [100%]
+1 passed in 7.88s
+PASS v34_surviving_pre_settlement_and_partial_start_guards: .                                                                        [100%]
+1 passed in 7.88s
+............                                                             [100%]
+12 passed in 14.39s
+PASS real_post_settlement_batch_sigkill_suffix_and_fork_guards: ............                                                             [100%]
+12 passed in 14.39s
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+................                                                         [100%]
+16 passed in 12.47s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.47s
+PASS ci_workflow_wiring: current verifier command; historical v34 negative guard is superseded
+.......                                                                  [100%]
+7 passed in 17.61s
+PASS real_completed_batch_control_sigkill_and_lineage_guards: .......                                                                  [100%]
+7 passed in 17.61s
+........................................................................ [ 75%]
+........................                                                 [100%]
+96 passed in 79.50s (0:01:19)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 75%]
+........................                                                 [100%]
+96 passed in 79.50s (0:01:19)
+................                                                         [100%]
+16 passed in 12.50s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.50s
+PASS ci_workflow_wiring: current verifier command
+PASS v36_complete: 19.07s
+................                                                         [100%]
+16 passed in 12.39s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.39s
+PASS ci_workflow_wiring: current verifier command
+.......                                                                  [100%]
+7 passed in 13.54s
+PASS real_control_sigkill_pre_post_settlement_failure_and_guards: .......                                                                  [100%]
+7 passed in 13.54s
+.....................................................................    [100%]
+69 passed in 25.99s
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: .....................................................................    [100%]
+69 passed in 25.99s
+................                                                         [100%]
+16 passed in 12.33s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.33s
+PASS ci_workflow_wiring: current verifier command
+.                                                                        [100%]
+1 passed in 7.88s
+PASS v34_surviving_pre_settlement_and_partial_start_guards: .                                                                        [100%]
+1 passed in 7.88s
+............                                                             [100%]
+12 passed in 14.39s
+PASS real_post_settlement_batch_sigkill_suffix_and_fork_guards: ............                                                             [100%]
+12 passed in 14.39s
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+................                                                         [100%]
+16 passed in 12.47s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.47s
+PASS ci_workflow_wiring: current verifier command; historical v34 negative guard is superseded
+.......                                                                  [100%]
+7 passed in 17.61s
+PASS real_completed_batch_control_sigkill_and_lineage_guards: .......                                                                  [100%]
+7 passed in 17.61s
+........................................................................ [ 75%]
+........................                                                 [100%]
+96 passed in 79.50s (0:01:19)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 75%]
+........................                                                 [100%]
+96 passed in 79.50s (0:01:19)
+................                                                         [100%]
+16 passed in 12.50s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.50s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 19.82s
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]
+6 passed in 19.82s
+........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 98.97s (0:01:38)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 98.97s (0:01:38)
+................                                                         [100%]
+16 passed in 12.45s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.45s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+PASS v37_complete:                 [100%]
+16 passed in 12.33s
+PASS ci_workflow_wiring: current verifier command
+.                                                                        [100%]
+1 passed in 7.88s
+PASS v34_surviving_pre_settlement_and_partial_start_guards: .                                                                        [100%]
+1 passed in 7.88s
+............                                                             [100%]
+12 passed in 14.39s
+PASS real_post_settlement_batch_sigkill_suffix_and_fork_guards: ............                                                             [100%]
+12 passed in 14.39s
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 61.41s (0:01:01)
+................                                                         [100%]
+16 passed in 12.47s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.47s
+PASS ci_workflow_wiring: current verifier command; historical v34 negative guard is superseded
+.......                                                                  [100%]
+7 passed in 17.61s
+PASS real_completed_batch_control_sigkill_and_lineage_guards: .......                                                                  [100%]
+7 passed in 17.61s
+........................................................................ [ 75%]
+........................                                                 [100%]
+96 passed in 79.50s (0:01:19)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 75%]
+........................                                                 [100%]
+96 passed in 79.50s (0:01:19)
+................                                                         [100%]
+16 passed in 12.50s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.50s
+PASS ci_workflow_wiring: current verifier command
+......                                                                   [100%]
+6 passed in 19.82s
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: ......                                                                   [100%]
+6 passed in 19.82s
+........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 98.97s (0:01:38)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 98.97s (0:01:38)
+................                                                         [100%]
+16 passed in 12.45s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.45s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+..............                                                           [100%]
+14 passed in 5.35s
+PASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]
+14 passed in 5.35s
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 99.94s (0:01:39)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 99.94s (0:01:39)
+................                                                         [100%]
+16 passed in 12.37s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.37s
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed in 125.88s (0:02:05)
+PASS complete_local_regression: ........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed in 125.88s (0:02:05)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+PASS v38_complete: (0:01:38)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 70%]
+..............................                                           [100%]
+102 passed in 98.97s (0:01:38)
+................                                                         [100%]
+16 passed in 12.45s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.45s
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded
+..............                                                           [100%]
+14 passed in 5.35s
+PASS default_sandbox_isolation_disable_fail_closed_and_fork: ..............                                                           [100%]
+14 passed in 5.35s
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 99.94s (0:01:39)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 99.94s (0:01:39)
+................                                                         [100%]
+16 passed in 12.37s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.37s
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed in 125.88s (0:02:05)
+PASS complete_local_regression: ........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed in 125.88s (0:02:05)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command
+........................                                                 [100%]
+24 passed in 8.92s
+PASS real_resource_limits_policy_audit_replay_and_owner_recovery: ........................                                                 [100%]
+24 passed in 8.92s
+........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 104.17s (0:01:44)
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: ........................................................................ [ 60%]
+................................................                         [100%]
+120 passed in 104.17s (0:01:44)
+................                                                         [100%]
+16 passed in 12.76s
+PASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]
+16 passed in 12.76s
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed in 124.90s (0:02:04)
+PASS complete_local_regression: ........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed in 124.90s (0:02:04)
+{
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS static_axioms: {
+  "command": "python3 ci/check_axioms.py",
+  "checks": {
+    "T_channel": true,
+    "T_no_clock_network_llm": true,
+    "T_no_policy_gate_import": true,
+    "T_gate_not_rank": true,
+    "T_stop_table": true,
+    "A1_public_api": true,
+    "S5_append_only": true,
+    "A5_no_dependency_cycles": true,
+    "D10_benchmark_isolated": true,
+    "A6_context_terms": true,
+    "D2_no_audit_veto": true
+  },
+  "values": {
+    "public_instance_api": [
+      "evolve",
+      "inspect",
+      "replay"
+    ],
+    "dependency_cycles": []
+  },
+  "exit_code": 0
+}
+PASS ci_workflow_wiring: current verifier command

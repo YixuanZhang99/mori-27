@@ -1,0 +1,64 @@
+{
+  "version": "v32",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "m0_owner_crash_recovery": {
+    "executed": true,
+    "certified": true,
+    "window": "sequential single-candidate external genesis from process start through settlement and admission before the first checkpoint"
+  },
+  "previously_certified_windows": [
+    "sequential external improve before settlement",
+    "sequential external improve after settlement through admission before checkpoint"
+  ],
+  "uncertified_crash_windows": [
+    "baseline/control",
+    "batch cohorts",
+    "machine power loss",
+    "non-external in-process evaluator crashes"
+  ],
+  "scope": [
+    "genesis recovery requires no checkpoint and exactly one compatible run_start",
+    "the unique generation-zero draft evaluation anchor binds deterministic lineage",
+    "journal-first ledger restore rejects unrelated reserves or settlements",
+    "one matching external process and native outcome are adopted without reproposal",
+    "open reserves settle once; existing settlements are reconciled without duplication",
+    "the five canonical genesis mutations resume by exact durable suffix",
+    "existing gate, Receipt, admission and adoption payloads must match exactly",
+    "real SIGKILL drills cover pre-settlement, settle/delta, absorb, gate and admission",
+    "missing or duplicate run anchors, wrong lineage and mutation forks fail closed",
+    "ForbiddenLLM and one process start prove no reproposal or replacement execution",
+    "recovered results, ledger, health, governed state and snapshots match controls",
+    "fresh certified replay passes after pre-settlement and final admission crashes"
+  ],
+  "checks": [
+    {
+      "check": "v31_complete",
+      "passed": true,
+      "detail": "5, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}\nPASS funsearch_repeatable_governance: best_score: 0.8333333333333334\nmain_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]\nC1/C2 audit = True\narchive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}\nPASS ci_workflow_wiring: current verifier command\n.....                                                                    [100%]\n5 passed in 0.42s\nPASS formal_residence_and_certified_replay: .....                                                                    [100%]\n5 passed in 0.42s\n..................................                                       [100%]\n34 passed in 2.84s\nPASS governance_checkpoint_batch_and_public_api_regressions: ..................................                                       [100%]\n34 passed in 2.84s\nPASS ci_workflow_wiring: current verifier command\n......                                                                   [100%]\n6 passed in 4.13s\nPASS external_process_protocol_and_real_sandbox: ......                                                                   [100%]\n6 passed in 4.13s\n................................                                         [100%]\n32 passed in 1.71s\nPASS sequential_batch_checkpoint_replay_regressions: ................................                                         [100%]\n32 passed in 1.71s\n.........                                                                [100%]\n9 passed in 7.47s\nPASS detached_process_and_existing_sandbox_regressions: .........                                                                [100%]\n9 passed in 7.47s\nPASS ci_workflow_wiring: current verifier command\n..                                                                       [100%]\n2 passed in 6.10s\nPASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]\n2 passed in 6.10s\n.............................................                            [100%]\n45 passed in 7.00s\nPASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]\n45 passed in 7.00s\n................                                                         [100%]\n16 passed in 12.85s\nPASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.85s\nPASS ci_workflow_wiring: current verifier command\n.......                                                                  [100%]\n7 passed in 6.67s\nPASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]\n7 passed in 6.67s\n..................................................                       [100%]\n50 passed in 13.04s\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]\n50 passed in 13.04s\n................                                                         [100%]\n16 passed in 12.77s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.77s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "real_genesis_sigkill_pre_post_settlement_and_anchor_guards",
+      "passed": true,
+      "detail": "............                                                             [100%]\n12 passed in 6.90s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": ".........................................................                [100%]\n57 passed in 19.26s"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 12.55s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

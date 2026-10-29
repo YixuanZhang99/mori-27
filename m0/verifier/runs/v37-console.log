@@ -1,0 +1,567 @@
+PASS v21_complete: 0
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+PASS campaign_process_and_evidence_contracts: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS adapter_and_comparison_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+PASS campaign_process_and_evidence_contracts: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS adapter_and_comparison_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+[32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+PASS real_local_openai_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS public_data_and_campaign_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v23_complete: PASS v21_complete: 0
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+PASS campaign_process_and_evidence_contracts: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS adapter_and_comparison_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+PASS campaign_process_and_evidence_contracts: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS adapter_and_comparison_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+[32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+PASS real_local_openai_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS public_data_and_campaign_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+[32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 2.68s[0m[0m
+PASS per_call_metering_and_real_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 2.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS campaign_cost_evidence_and_adversarial_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v24_complete:       [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS v22_complete: PASS v21_complete: 0
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+PASS campaign_process_and_evidence_contracts: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                 [100%][0m
+[32m[32m[1m8 passed[0m[32m in 1.62s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS adapter_and_comparison_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.25s[0m[0m
+PASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{"preflight_or_campaign_error": "ModuleNotFoundError: No module named \'mlebench\'", "comparison_complete": false}\n'}
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+[32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+PASS real_local_openai_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS public_data_and_campaign_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+[32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 2.68s[0m[0m
+PASS per_call_metering_and_real_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 2.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS campaign_cost_evidence_and_adversarial_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 0.30s[0m[0m
+PASS b1_threshold_tie_failure_and_missing_baseline: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 0.30s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.89s[0m[0m
+PASS gate_loop_checkpoint_and_replay_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.89s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v25_complete: 68s[0m[0m
+PASS real_local_openai_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 4.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS public_data_and_campaign_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.15s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS bubblewrap_installed: /usr/bin/bwrap
+[32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 2.68s[0m[0m
+PASS per_call_metering_and_real_dual_arm_smoke: [32m.[0m[32m.[0m[32m.[0m[32m                                                                      [100%][0m
+[32m[32m[1m3 passed[0m[32m in 2.68s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS campaign_cost_evidence_and_adversarial_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 0.30s[0m[0m
+PASS b1_threshold_tie_failure_and_missing_baseline: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 0.30s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.89s[0m[0m
+PASS gate_loop_checkpoint_and_replay_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.89s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 1.40s[0m[0m
+PASS c1_c2_reconciliation_and_tamper_refusal: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 1.40s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.78s[0m[0m
+PASS governance_checkpoint_replay_and_loop_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.78s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v26_complete:  [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                            [100%][0m
+[32m[32m[1m13 passed[0m[32m in 1.25s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 0.30s[0m[0m
+PASS b1_threshold_tie_failure_and_missing_baseline: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 0.30s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.89s[0m[0m
+PASS gate_loop_checkpoint_and_replay_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.89s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 1.40s[0m[0m
+PASS c1_c2_reconciliation_and_tamper_refusal: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 1.40s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.78s[0m[0m
+PASS governance_checkpoint_replay_and_loop_regression: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                 [100%][0m
+[32m[32m[1m40 passed[0m[32m in 1.78s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m                                                                        [100%][0m
+[32m[32m[1m1 passed[0m[32m in 0.17s[0m[0m
+PASS mixed_run_history_fails_before_spending: [32m.[0m[32m                                                                        [100%][0m
+[32m[32m[1m1 passed[0m[32m in 0.17s[0m[0m
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_first: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_second: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+PASS v27_complete: .0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+PASS toy_gepa_repeatable_second: best_score       = 1.000
+main trajectory  = [0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.38s[0m[0m
+PASS formal_residence_and_certified_replay: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.38s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[32m[32m[1m34 passed[0m[32m in 2.68s[0m[0m
+PASS governance_checkpoint_batch_and_public_api_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[32m[32m[1m34 passed[0m[32m in 2.68s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v28_complete: 3, 0.42, 0.5, 0.58, 0.67, 0.75, 0.83, 0.92, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+IID-RS baseline  = [0.33, 0.33, 0.33]
+B1 self-proof    = {'comparison': 'best_score_minus_iid_rs_mean', 'best_score': 1.0, 'baseline_count': 3, 'baseline_mean': 0.3333333333333333, 'increment': 0.6666666666666667, 'noise_floor': 0.0, 'noise_floor_source': 'LoopConfig.noise_floor', 'verdict': 'PASS'}
+C1/C2 audit = True
+ledger           = {'total': 60000, 'locked_control': 3000.0, 'spent': {'explore': 1000.0, 'exploit': 20000.0, 'reeval': 0.0, 'control': 3000.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 36000.0, 'available_control': 0.0}
+best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+PASS gsm8k_repeatable_governance: best_prompt: Answer the question.
+Show your reasoning step by step.
+best_score: 1.0
+main_scores: [0.0, 1.0, 1.0, 1.0, 1.0]
+baseline_scores: [0.0, 0.0]
+C1/C2 audit = True
+ledger: {'total': 5000, 'locked_control': 250.0, 'spent': {'explore': 60.0, 'exploit': 240.0, 'reeval': 0.0, 'control': 120.0, 'repair': 0.0, 'handoff': 0.0, 'overhead': 0.0}, 'available_main': 4450.0, 'available_control': 130.0}
+best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS funsearch_repeatable_governance: best_score: 0.8333333333333334
+main_scores: [0.33, 0.42, 0.5, 0.5, 0.58, 0.58, 0.67, 0.67, 0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.38s[0m[0m
+PASS formal_residence_and_certified_replay: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.38s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[32m[32m[1m34 passed[0m[32m in 2.68s[0m[0m
+PASS governance_checkpoint_batch_and_public_api_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[32m[32m[1m34 passed[0m[32m in 2.68s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                   [100%][0m
+[32m[32m[1m6 passed[0m[32m in 3.98s[0m[0m
+PASS external_process_protocol_and_real_sandbox: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                   [100%][0m
+[32m[32m[1m6 passed[0m[32m in 3.98s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                         [100%][0m
+[32m[32m[1m32 passed[0m[32m in 1.74s[0m[0m
+PASS sequential_batch_checkpoint_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                         [100%][0m
+[32m[32m[1m32 passed[0m[32m in 1.74s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                [100%][0m
+[32m[32m[1m9 passed[0m[32m in 7.23s[0m[0m
+PASS detached_process_and_existing_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                [100%][0m
+[32m[32m[1m9 passed[0m[32m in 7.23s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v29_complete:  0.75, 0.75, 0.83]
+C1/C2 audit = True
+archive: {'entries': 7, 'active': 7, 'soft_deleted': 0, 'island_populations': {'0': 7, '1': 6}, 'migration_count': 6}
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.38s[0m[0m
+PASS formal_residence_and_certified_replay: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                    [100%][0m
+[32m[32m[1m5 passed[0m[32m in 0.38s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[32m[32m[1m34 passed[0m[32m in 2.68s[0m[0m
+PASS governance_checkpoint_batch_and_public_api_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[32m[32m[1m34 passed[0m[32m in 2.68s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                   [100%][0m
+[32m[32m[1m6 passed[0m[32m in 3.98s[0m[0m
+PASS external_process_protocol_and_real_sandbox: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                   [100%][0m
+[32m[32m[1m6 passed[0m[32m in 3.98s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                         [100%][0m
+[32m[32m[1m32 passed[0m[32m in 1.74s[0m[0m
+PASS sequential_batch_checkpoint_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                         [100%][0m
+[32m[32m[1m32 passed[0m[32m in 1.74s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                [100%][0m
+[32m[32m[1m9 passed[0m[32m in 7.23s[0m[0m
+PASS detached_process_and_existing_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                [100%][0m
+[32m[32m[1m9 passed[0m[32m in 7.23s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m                                                                       [100%][0m
+[32m[32m[1m2 passed[0m[32m in 5.95s[0m[0m
+PASS real_owner_sigkill_sequential_improve_recovery: [32m.[0m[32m.[0m[32m                                                                       [100%][0m
+[32m[32m[1m2 passed[0m[32m in 5.95s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                            [100%][0m
+[32m[32m[1m45 passed[0m[32m in 6.89s[0m[0m
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                            [100%][0m
+[32m[32m[1m45 passed[0m[32m in 6.89s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.75s[0m[0m
+PASS detached_process_settlement_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.75s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v30_complete: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                         [100%][0m
+[32m[32m[1m32 passed[0m[32m in 1.74s[0m[0m
+PASS sequential_batch_checkpoint_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                         [100%][0m
+[32m[32m[1m32 passed[0m[32m in 1.74s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                [100%][0m
+[32m[32m[1m9 passed[0m[32m in 7.23s[0m[0m
+PASS detached_process_and_existing_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                [100%][0m
+[32m[32m[1m9 passed[0m[32m in 7.23s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m                                                                       [100%][0m
+[32m[32m[1m2 passed[0m[32m in 5.95s[0m[0m
+PASS real_owner_sigkill_sequential_improve_recovery: [32m.[0m[32m.[0m[32m                                                                       [100%][0m
+[32m[32m[1m2 passed[0m[32m in 5.95s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                            [100%][0m
+[32m[32m[1m45 passed[0m[32m in 6.89s[0m[0m
+PASS external_protocol_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                            [100%][0m
+[32m[32m[1m45 passed[0m[32m in 6.89s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.75s[0m[0m
+PASS detached_process_settlement_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.75s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 6.32s[0m[0m
+PASS real_post_settlement_sigkill_success_failure_and_fork_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 6.32s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                       [100%][0m
+[32m[32m[1m50 passed[0m[32m in 12.91s[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                       [100%][0m
+[32m[32m[1m50 passed[0m[32m in 12.91s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.39s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.39s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v31_complete: .[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                            [100%][0m
+[32m[32m[1m45 passed[0m[32m in 6.89s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.75s[0m[0m
+PASS detached_process_settlement_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.75s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 6.32s[0m[0m
+PASS real_post_settlement_sigkill_success_failure_and_fork_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 6.32s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                       [100%][0m
+[32m[32m[1m50 passed[0m[32m in 12.91s[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                       [100%][0m
+[32m[32m[1m50 passed[0m[32m in 12.91s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.39s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.39s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 6.71s[0m[0m
+PASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 6.71s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                [100%][0m
+[32m[32m[1m57 passed[0m[32m in 18.98s[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                [100%][0m
+[32m[32m[1m57 passed[0m[32m in 18.98s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.31s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.31s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v32_complete: [0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                       [100%][0m
+[32m[32m[1m50 passed[0m[32m in 12.91s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.39s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.39s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 6.71s[0m[0m
+PASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 6.71s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                [100%][0m
+[32m[32m[1m57 passed[0m[32m in 18.98s[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                [100%][0m
+[32m[32m[1m57 passed[0m[32m in 18.98s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.31s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.31s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 13.47s[0m[0m
+PASS real_control_sigkill_pre_post_settlement_failure_and_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 13.47s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m    [100%][0m
+[32m[32m[1m69 passed[0m[32m in 25.74s[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m    [100%][0m
+[32m[32m[1m69 passed[0m[32m in 25.74s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.41s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.41s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v33_complete: [0m[32m                [100%][0m
+[32m[32m[1m57 passed[0m[32m in 18.98s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.31s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.31s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 13.47s[0m[0m
+PASS real_control_sigkill_pre_post_settlement_failure_and_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 13.47s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m    [100%][0m
+[32m[32m[1m69 passed[0m[32m in 25.74s[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m    [100%][0m
+[32m[32m[1m69 passed[0m[32m in 25.74s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.41s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.41s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m                                                                        [100%][0m
+[32m[32m[1m1 passed[0m[32m in 7.87s[0m[0m
+PASS v34_surviving_pre_settlement_and_partial_start_guards: [32m.[0m[32m                                                                        [100%][0m
+[32m[32m[1m1 passed[0m[32m in 7.87s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 14.11s[0m[0m
+PASS real_post_settlement_batch_sigkill_suffix_and_fork_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 14.11s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 80%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                        [100%][0m
+[32m[32m[1m89 passed[0m[32m in 60.17s (0:01:00)[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 80%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                        [100%][0m
+[32m[32m[1m89 passed[0m[32m in 60.17s (0:01:00)[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.18s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.18s[0m[0m
+PASS ci_workflow_wiring: current verifier command; historical v34 negative guard is superseded
+PASS v35_complete:          [100%][0m
+[32m[32m[1m1 passed[0m[32m in 7.87s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 14.11s[0m[0m
+PASS real_post_settlement_batch_sigkill_suffix_and_fork_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                             [100%][0m
+[32m[32m[1m12 passed[0m[32m in 14.11s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 80%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                        [100%][0m
+[32m[32m[1m89 passed[0m[32m in 60.17s (0:01:00)[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 80%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                        [100%][0m
+[32m[32m[1m89 passed[0m[32m in 60.17s (0:01:00)[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.18s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.18s[0m[0m
+PASS ci_workflow_wiring: current verifier command; historical v34 negative guard is superseded
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 17.35s[0m[0m
+PASS real_completed_batch_control_sigkill_and_lineage_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 17.35s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 75%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                 [100%][0m
+[32m[32m[1m96 passed[0m[32m in 77.80s (0:01:17)[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 75%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                 [100%][0m
+[32m[32m[1m96 passed[0m[32m in 77.80s (0:01:17)[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.40s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.40s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+PASS v36_complete: low_wiring: current verifier command; historical v34 negative guard is superseded
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 17.35s[0m[0m
+PASS real_completed_batch_control_sigkill_and_lineage_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                  [100%][0m
+[32m[32m[1m7 passed[0m[32m in 17.35s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 75%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                 [100%][0m
+[32m[32m[1m96 passed[0m[32m in 77.80s (0:01:17)[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 75%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                 [100%][0m
+[32m[32m[1m96 passed[0m[32m in 77.80s (0:01:17)[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.40s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.40s[0m[0m
+PASS ci_workflow_wiring: current verifier command
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                   [100%][0m
+[32m[32m[1m6 passed[0m[32m in 19.67s[0m[0m
+PASS real_prepared_partial_start_sigkill_and_fail_closed_guards: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                                   [100%][0m
+[32m[32m[1m6 passed[0m[32m in 19.67s[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 70%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                           [100%][0m
+[32m[32m[1m102 passed[0m[32m in 97.22s (0:01:37)[0m[0m
+PASS external_recovery_checkpoint_batch_governance_replay_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m [ 70%]
+[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                           [100%][0m
+[32m[32m[1m102 passed[0m[32m in 97.22s (0:01:37)[0m[0m
+[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.41s[0m[0m
+PASS detached_settlement_process_and_sandbox_regressions: [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                                         [100%][0m
+[32m[32m[1m16 passed[0m[32m in 12.41s[0m[0m
+PASS ci_workflow_wiring: current verifier command; v36 partial-start refusal is superseded

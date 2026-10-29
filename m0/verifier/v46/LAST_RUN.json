@@ -1,0 +1,113 @@
+{
+  "version": "v46",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "re_bench_campaign_executed": false,
+    "mle_bench_lite_campaign_executed": false,
+    "host_parity_certified": false,
+    "rubric_b2_complete": false,
+    "rubric_b3_complete": false
+  },
+  "external_provider_execution": {
+    "real_external_api_executed": false,
+    "local_openai_compatible_http_worker_executed": true,
+    "external_scores_or_cost_efficiency_produced": false
+  },
+  "supersedes": [
+    "v45 in-process proposal exceptions existing only in owner memory"
+  ],
+  "acceptance_harness": {
+    "recursive_history_execution": false,
+    "prior_passing_journals_required": "v1-v45 except rejected v14 and superseded v43 recursive harness",
+    "current_behavior_reexecuted": true,
+    "legacy_failures_preserved": true,
+    "functional_assertions_reduced": false
+  },
+  "inprocess_proposal_recovery": {
+    "executed": true,
+    "certified": true,
+    "scope": "ordinary in-process proposal exceptions with a durable m0_proposal_outcome",
+    "active_call_exactly_once_certified": false,
+    "active_marker_still_fail_closed": true,
+    "completion_boundary": "marker-hash-bound terminal outcome, never marker alone",
+    "operation_identity": "deterministic cohort/candidate non-process execution ID",
+    "failed_provider_or_llm_call_retried": false,
+    "successful_missing_sibling_proposed_once": true,
+    "failed_candidate_evaluator_process_created": false,
+    "settled_failure_evidence_field_comparison": true,
+    "ledger_cost_and_reconcile_delta_revalidated": true,
+    "post_settlement_and_control_certified": true,
+    "legacy_failure_without_outcome_certified": false
+  },
+  "uncertified_boundaries": [
+    "ordinary in-process active LLM calls without a terminal outcome",
+    "legacy in-process failures without m0_proposal_outcome",
+    "actual seven-task RE-Bench campaign and external scores",
+    "actual 22-task MLE-Bench Lite campaign and host parity",
+    "real external provider API campaign",
+    "machine power loss and whole-machine worker survival",
+    "non-external in-process evaluator crashes",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas",
+    "hosted CI execution"
+  ],
+  "scope": [
+    "persist a separate non-OK m0_proposal_outcome for ordinary in-process exceptions",
+    "bind the outcome to the exact proposal marker hash and deterministic operation ID",
+    "treat only that durable outcome as a proposal completion, never an active marker",
+    "restore the failure without recalling the LLM and continue only the missing suffix",
+    "expose the terminal operation as non-process evidence rather than a fake process",
+    "compare reconstructed evidence and token cost with settled evidence",
+    "resume settlement, mutation, admission and same-cycle control exactly once",
+    "refuse marker, evidence, ledger, missing-outcome and active-call ambiguity",
+    "match uninterrupted results, ledger, governed state and certified snapshot",
+    "completed resume is a no-op and fresh certified replay passes",
+    "no active-call, external benchmark, parity, USD or A/B/C completion claim"
+  ],
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true,
+      "detail": "prior passing journals verified; missing=[]"
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true,
+      "detail": "v14 failed journal remains rejected; v15 is its corrected successor"
+    },
+    {
+      "check": "inprocess_proposal_failure_real_sigkill_and_active_call_guards",
+      "passed": true,
+      "detail": ".....................................................                    [100%]\n53 passed in 78.82s (0:01:18)"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 43%]\n........................................................................ [ 86%]\n.......................                                                  [100%]\n167 passed in 163.59s (0:02:43)"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 22%]\n........................................................................ [ 45%]\n........................................................................ [ 68%]\n........................................................................ [ 90%]\n.............................                                            [100%]\n317 passed in 193.17s (0:03:13)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true,
+      "detail": "exactly one v46 index entry"
+    }
+  ]
+}

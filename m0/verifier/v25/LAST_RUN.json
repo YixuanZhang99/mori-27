@@ -1,0 +1,42 @@
+{
+  "version": "v25",
+  "passed": true,
+  "b1_external_gepa_attestation": {
+    "executed": false,
+    "passed": null,
+    "reason": "controlled offline fixtures verify the terminal decision rule only; no external GEPA campaign or measured noise-floor claim is produced"
+  },
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "scope": [
+    "best score minus IID-RS mean compared strictly with declared noise floor",
+    "PASS, INADJUDICABLE, FAIL and INSUFFICIENT_EVIDENCE terminal verdicts",
+    "append-only self-attestation evidence",
+    "finite non-negative noise-floor validation",
+    "M9 remains per-item flip-only and unchanged"
+  ],
+  "checks": [
+    {
+      "check": "v24_complete",
+      "passed": true,
+      "detail": "           [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 3.55s\nPASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 3.55s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS public_data_and_campaign_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\nPASS v23_complete: PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS v22_complete: PASS v21_complete: 0\n........                                                                 [100%]\n8 passed in 1.70s\nPASS campaign_process_and_evidence_contracts: ........                                                                 [100%]\n8 passed in 1.70s\n.....                                                                    [100%]\n5 passed in 0.26s\nPASS adapter_and_comparison_regression: .....                                                                    [100%]\n5 passed in 0.26s\nPASS real_cli_preflight_fails_closed: {'exit_code': 2, 'stdout': '{\"preflight_or_campaign_error\": \"ModuleNotFoundError: No module named \\'mlebench\\'\", \"comparison_complete\": false}\\n'}\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 3.55s\nPASS real_local_openai_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 3.55s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS public_data_and_campaign_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command\nPASS bubblewrap_installed: /usr/bin/bwrap\n...                                                                      [100%]\n3 passed in 2.78s\nPASS per_call_metering_and_real_dual_arm_smoke: ...                                                                      [100%]\n3 passed in 2.78s\n.............                                                            [100%]\n13 passed in 1.31s\nPASS campaign_cost_evidence_and_adversarial_regression: .............                                                            [100%]\n13 passed in 1.31s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "b1_threshold_tie_failure_and_missing_baseline",
+      "passed": true,
+      "detail": "............                                                             [100%]\n12 passed in 0.31s"
+    },
+    {
+      "check": "gate_loop_checkpoint_and_replay_regression",
+      "passed": true,
+      "detail": "........................................                                 [100%]\n40 passed in 2.07s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    }
+  ]
+}

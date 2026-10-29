@@ -1,0 +1,78 @@
+{
+  "version": "v35",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false
+  },
+  "supersedes": [
+    "v34 refusal of every post-settlement external M0 cohort",
+    "generic BatchScheduler decision-without-admission recovery remains unchanged"
+  ],
+  "m0_owner_crash_recovery": {
+    "executed": true,
+    "certified": true,
+    "window": "one fully started external M0 cohort from its first settlement through absorb, M9, admission, batch completion and Framework admission Receipts before the cycle checkpoint"
+  },
+  "previously_certified_windows": [
+    "sequential external genesis before the first checkpoint",
+    "sequential external improve from process start through admission",
+    "same-cycle sequential external improve and IID-RS control",
+    "fully started pre-settlement external M0 cohorts"
+  ],
+  "uncertified_crash_windows": [
+    "partially proposed or partially started cohorts",
+    "batch plus same-cycle control interruption",
+    "machine power loss",
+    "non-external in-process evaluator crashes"
+  ],
+  "scope": [
+    "recovery reconstructs candidates and intents from the original frozen cohort",
+    "remaining budget never shrinks or replaces a recovered cohort",
+    "every settled intent matches original native proposer plus evaluator token cost",
+    "settle/delta gaps append only the missing reserve-minus-actual delta",
+    "a checkpoint mutation cursor drives exact apply-or-replay suffix recovery",
+    "durable mutations replay only into frontier and memory without duplicate evidence",
+    "absorb, decision, admission and completion markers must agree with mutation boundaries",
+    "existing gates and Receipts are regenerated deterministically and compared exactly",
+    "decision-without-admission is recoverable only with the Framework checkpoint cursor",
+    "generic BatchScheduler resume retains its v16 ambiguous-status refusal",
+    "batch completion and Framework admission Receipts are idempotent on recovery",
+    "three process starts and ForbiddenLLM prove no reproposal or replacement execution",
+    "recovered results, ledger, health, governed state and snapshots match controls",
+    "fresh certified replay passes after the final admission-Receipt crash",
+    "mutation forks and premature admission markers fail before recovery adoption"
+  ],
+  "checks": [
+    {
+      "check": "v33_complete",
+      "passed": true,
+      "detail": ".........                                                                [100%]\n9 passed in 7.21s\nPASS ci_workflow_wiring: current verifier command\n..                                                                       [100%]\n2 passed in 5.95s\nPASS real_owner_sigkill_sequential_improve_recovery: ..                                                                       [100%]\n2 passed in 5.95s\n.............................................                            [100%]\n45 passed in 6.89s\nPASS external_protocol_checkpoint_batch_governance_replay_regressions: .............................................                            [100%]\n45 passed in 6.89s\n................                                                         [100%]\n16 passed in 12.74s\nPASS detached_process_settlement_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.74s\nPASS ci_workflow_wiring: current verifier command\n.......                                                                  [100%]\n7 passed in 6.42s\nPASS real_post_settlement_sigkill_success_failure_and_fork_guards: .......                                                                  [100%]\n7 passed in 6.42s\n..................................................                       [100%]\n50 passed in 13.37s\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: ..................................................                       [100%]\n50 passed in 13.37s\n................                                                         [100%]\n16 passed in 12.58s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.58s\nPASS ci_workflow_wiring: current verifier command\n............                                                             [100%]\n12 passed in 7.21s\nPASS real_genesis_sigkill_pre_post_settlement_and_anchor_guards: ............                                                             [100%]\n12 passed in 7.21s\n.........................................................                [100%]\n57 passed in 19.41s\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: .........................................................                [100%]\n57 passed in 19.41s\n................                                                         [100%]\n16 passed in 12.40s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.40s\nPASS ci_workflow_wiring: current verifier command\n.......                                                                  [100%]\n7 passed in 13.65s\nPASS real_control_sigkill_pre_post_settlement_failure_and_guards: .......                                                                  [100%]\n7 passed in 13.65s\n.....................................................................    [100%]\n69 passed in 26.07s\nPASS external_recovery_checkpoint_batch_governance_replay_regressions: .....................................................................    [100%]\n69 passed in 26.07s\n................                                                         [100%]\n16 passed in 12.47s\nPASS detached_settlement_process_and_sandbox_regressions: ................                                                         [100%]\n16 passed in 12.47s\nPASS ci_workflow_wiring: current verifier command"
+    },
+    {
+      "check": "v34_surviving_pre_settlement_and_partial_start_guards",
+      "passed": true,
+      "detail": ".                                                                        [100%]\n1 passed in 7.88s"
+    },
+    {
+      "check": "real_post_settlement_batch_sigkill_suffix_and_fork_guards",
+      "passed": true,
+      "detail": "............                                                             [100%]\n12 passed in 14.88s"
+    },
+    {
+      "check": "external_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 80%]\n.................                                                        [100%]\n89 passed in 61.88s (0:01:01)"
+    },
+    {
+      "check": "detached_settlement_process_and_sandbox_regressions",
+      "passed": true,
+      "detail": "................                                                         [100%]\n16 passed in 12.50s"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command; historical v34 negative guard is superseded"
+    }
+  ]
+}

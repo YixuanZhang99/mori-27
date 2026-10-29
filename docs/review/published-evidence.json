@@ -1,0 +1,41 @@
+{
+  "note": "Source workspace, home and transient pytest paths in published evidence were replaced with neutral tokens. Test results and error text were preserved. Original raw evidence remains locally in /tmp.",
+  "files": [
+    {
+      "source_file": "autoresearch-audit-architecture-findings.md",
+      "source_sha256": "83c4d5ba594fe7e48046ebb77aa4e042cea7488c3a8d299fe5cf78a86c0659a9",
+      "published_file": "architecture-findings.md",
+      "published_sha256": "3876a054353737b23936082e5540213a57c54a4b41903b530311acd0870dcac5"
+    },
+    {
+      "source_file": "autoresearch-audit-validation.md",
+      "source_sha256": "ac304f6767611b13752ac539f220cc1fd105a3d498a3b996d009dc5516d850ac",
+      "published_file": "validation-findings.md",
+      "published_sha256": "ac304f6767611b13752ac539f220cc1fd105a3d498a3b996d009dc5516d850ac"
+    },
+    {
+      "source_file": "autoresearch-audit-full.log",
+      "source_sha256": "3e851c20a942ae6db51ad9289cfcb48849efebc00d5440d5740a7c84cfb5d3d2",
+      "published_file": "full-suite.log",
+      "published_sha256": "f7b97e44dffe5f0354d1984b664261fc058ad0362d7fc739a8ba288dd2309b6e"
+    },
+    {
+      "source_file": "autoresearch-audit-full.xml",
+      "source_sha256": "9821baa7f746ce902037f720f216b8b7fedcbea59fb75dd36e1bec2574ee9f56",
+      "published_file": "full-suite.xml",
+      "published_sha256": "e3336a1126e259a00837d00c618377c3f78ce70b0474e5561a6d2d2330e80a0e"
+    },
+    {
+      "source_file": "autoresearch-audit-full.json",
+      "source_sha256": "000af8889909bfc849e2cf711fc35aa092d1e595151f52c9a5be039d772b606f",
+      "published_file": "validation-environment.json",
+      "published_sha256": "000af8889909bfc849e2cf711fc35aa092d1e595151f52c9a5be039d772b606f"
+    },
+    {
+      "source_file": "autoresearch-audit-install.log",
+      "source_sha256": "4cd228ec3c43a4044164b099fbded5cacd6f559584d89cc77dbb083e6aeed1d1",
+      "published_file": "install.log",
+      "published_sha256": "d8e40084f558629410f1e39d5713ff74b4c0474fb2750e3340346542d48f4677"
+    }
+  ]
+}

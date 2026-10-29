@@ -1,0 +1,8 @@
+[project]
+name = "autoresearch-m0"
+version = "0.1.0"
+description = "M0 kernel: an evolution loop with a ledger, receipts, and a resident baseline"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

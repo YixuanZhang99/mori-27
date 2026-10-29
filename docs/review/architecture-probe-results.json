@@ -1,0 +1,104 @@
+{
+  "duplicate_item_gate": {
+    "verdict": "ACCEPT",
+    "signals": {
+      "F": 2,
+      "B": 1,
+      "N": 3,
+      "noise_floor": 0.0
+    }
+  },
+  "duplicate_items_through_framework": {
+    "run_returned": true,
+    "accepted_count": 2,
+    "governance_pass": true,
+    "ledger_audit_errors": [],
+    "settled_costs": [
+      10,
+      10
+    ],
+    "accounting_stamp": {
+      "supplier": "mock",
+      "model_version": "mock-v1",
+      "tokenizer_version": "t1",
+      "price_table_version": "p1",
+      "date": "2026-10-26"
+    },
+    "improve_gate_signals": [
+      {
+        "F": 2,
+        "B": 1,
+        "N": 3,
+        "noise_floor": 0.0
+      }
+    ]
+  },
+  "duplicate_reserve_public_ledger_api": {
+    "verdicts": [
+      "granted",
+      "granted"
+    ],
+    "actual_settlement": 10,
+    "spent_after_settlement": 110.0
+  },
+  "negative_settlement_public_ledger_api": -20.0,
+  "negative_usage_through_framework": {
+    "run_returned": true,
+    "accepted_count": 1,
+    "governance_pass": false,
+    "ledger_audit_errors": [
+      "invalid settlement amount: g0-genesis-explore",
+      "invalid or duplicate reconcile delta: g0-genesis-explore"
+    ],
+    "settled_costs": [
+      -5
+    ],
+    "accounting_stamp": {
+      "supplier": "mock",
+      "model_version": "mock-v1",
+      "tokenizer_version": "t1",
+      "price_table_version": "p1",
+      "date": "2026-10-26"
+    },
+    "improve_gate_signals": []
+  },
+  "missing_provider_usage_parse": {
+    "total_tokens": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0
+  },
+  "both_usage_missing_framework": {
+    "run_returned": true,
+    "accepted_count": 1,
+    "governance_pass": true,
+    "ledger_audit_errors": [],
+    "settled_costs": [
+      100
+    ],
+    "accounting_stamp": {
+      "supplier": "mock",
+      "model_version": "mock-v1",
+      "tokenizer_version": "t1",
+      "price_table_version": "p1",
+      "date": "2026-10-26"
+    },
+    "improve_gate_signals": []
+  },
+  "proposer_usage_missing_framework": {
+    "run_returned": true,
+    "accepted_count": 1,
+    "governance_pass": true,
+    "ledger_audit_errors": [],
+    "settled_costs": [
+      5
+    ],
+    "accounting_stamp": {
+      "supplier": "mock",
+      "model_version": "mock-v1",
+      "tokenizer_version": "t1",
+      "price_table_version": "p1",
+      "date": "2026-10-26"
+    },
+    "improve_gate_signals": []
+  }
+}

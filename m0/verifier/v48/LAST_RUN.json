@@ -1,0 +1,125 @@
+{
+  "version": "v48",
+  "passed": true,
+  "external_benchmark_execution": {
+    "executed": false,
+    "scores_produced": false,
+    "re_bench_campaign_executed": false,
+    "mle_bench_lite_campaign_executed": false,
+    "host_parity_certified": false,
+    "rubric_b2_complete": false,
+    "rubric_b3_complete": false
+  },
+  "external_provider_execution": {
+    "real_external_api_executed": false,
+    "local_openai_compatible_http_worker_executed": true,
+    "external_scores_or_cost_efficiency_produced": false
+  },
+  "supersedes": [
+    "v47 batch in-process evaluators lacked durable terminal recovery"
+  ],
+  "acceptance_harness": {
+    "recursive_history_execution": false,
+    "prior_passing_journals_required": "v1-v47 except rejected v14 and superseded v43 recursive harness",
+    "current_behavior_reexecuted": true,
+    "legacy_failures_preserved": true,
+    "functional_assertions_reduced": false
+  },
+  "inprocess_batch_evaluation_recovery": {
+    "executed": true,
+    "certified": true,
+    "scope": "frozen improve cohorts and same-cycle IID-RS control with separate actual-operation starts and durable outcomes",
+    "success_and_terminal_failure_certified": true,
+    "zero_and_partial_start_certified": true,
+    "active_call_exactly_once_certified": false,
+    "active_operation_without_outcome_fail_closed": true,
+    "legacy_operation_without_outcome_certified": false,
+    "completion_boundary": "outcome bound to exact actual-operation hash and prepared evaluation context hash",
+    "operation_identity": "deterministic candidate/context non-process execution ID",
+    "terminal_evaluator_call_reexecuted": false,
+    "never_started_candidate_executed_at_most_once": true,
+    "executor_process_fabricated": false,
+    "native_result_failure_evidence_and_settled_evidence_revalidated": true,
+    "ledger_cost_and_reconcile_delta_revalidated": true,
+    "post_settlement_finalization_and_control_certified": true,
+    "sequential_inprocess_evaluator_certified": true
+  },
+  "uncertified_boundaries": [
+    "in-process evaluator calls without a terminal outcome",
+    "legacy sequential or batch operations without durable outcomes",
+    "actual seven-task RE-Bench campaign and external scores",
+    "actual 22-task MLE-Bench Lite campaign and host parity",
+    "real external provider API campaign",
+    "machine power loss and whole-machine worker survival",
+    "seccomp",
+    "complete resource limits",
+    "hostile-kernel boundary",
+    "cgroup aggregate CPU/memory/disk/GPU quotas",
+    "hosted CI execution"
+  ],
+  "scope": [
+    "separate prepared proposal contexts from actual in-process batch evaluation starts",
+    "persist batch evaluator success and failure outcomes before settlement",
+    "bind outcomes to both operation and prepared-context hashes",
+    "adopt terminal evaluations without reexecution and execute only never-started candidates",
+    "recover zero/partial starts, settlement, absorb, gate, admission and completion suffixes",
+    "recover the same-cycle native control after completed batch finalization",
+    "compare native token cost, ledger settlement and persisted evidence",
+    "refuse active/legacy operations, duplicates and hash/cost/evidence/mutation forks",
+    "match uninterrupted results, ledger, governed state and certified snapshot",
+    "completed resume is a no-op and fresh certified replay passes",
+    "no active-call, external benchmark, parity, USD or A/B/C completion claim"
+  ],
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true,
+      "detail": "prior passing journals verified; missing=[]"
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true,
+      "detail": "v14 failed journal remains rejected; v15 is its corrected successor"
+    },
+    {
+      "check": "inprocess_batch_terminal_real_sigkill_partial_start_and_active_guards",
+      "passed": true,
+      "detail": "............................                                             [100%]\n28 passed in 16.03s"
+    },
+    {
+      "check": "sequential_evaluation_terminal_regressions",
+      "passed": true,
+      "detail": "....................................................                     [100%]\n52 passed in 43.81s"
+    },
+    {
+      "check": "proposal_terminal_and_active_call_regressions",
+      "passed": true,
+      "detail": ".....................................................                    [100%]\n53 passed in 78.51s (0:01:18)"
+    },
+    {
+      "check": "complete_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true,
+      "detail": "........................................................................ [ 32%]\n........................................................................ [ 65%]\n........................................................................ [ 98%]\n...                                                                      [100%]\n219 passed in 184.71s (0:03:04)"
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true,
+      "detail": "........................................................................ [ 19%]\n........................................................................ [ 39%]\n........................................................................ [ 58%]\n........................................................................ [ 78%]\n........................................................................ [ 97%]\n.........                                                                [100%]\n369 passed in 213.03s (0:03:33)"
+    },
+    {
+      "check": "static_axioms",
+      "passed": true,
+      "detail": "{\n  \"command\": \"python3 ci/check_axioms.py\",\n  \"checks\": {\n    \"T_channel\": true,\n    \"T_no_clock_network_llm\": true,\n    \"T_no_policy_gate_import\": true,\n    \"T_gate_not_rank\": true,\n    \"T_stop_table\": true,\n    \"A1_public_api\": true,\n    \"S5_append_only\": true,\n    \"A5_no_dependency_cycles\": true,\n    \"D10_benchmark_isolated\": true,\n    \"A6_context_terms\": true,\n    \"D2_no_audit_veto\": true\n  },\n  \"values\": {\n    \"public_instance_api\": [\n      \"evolve\",\n      \"inspect\",\n      \"replay\"\n    ],\n    \"dependency_cycles\": []\n  },\n  \"exit_code\": 0\n}"
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true,
+      "detail": "current verifier command"
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true,
+      "detail": "exactly one v48 index entry"
+    }
+  ]
+}
