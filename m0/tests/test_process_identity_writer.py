@@ -30,6 +30,7 @@ def load_wrapper():
                                   "worker\nwith\ttabs )"])
 @pytest.mark.parametrize("state", ["S", "Z"])
 def test_writer_persists_the_same_identity_the_reader_observes(tmp_path, monkeypatch, name, state):
+    monkeypatch.setattr(process_identity.sys, "platform", "linux")
     wrapper = load_wrapper()
     raw = f"101 ({name}) {state} " + " ".join(["0"] * 18 + ["12345"] + ["0"] * 10)
     original_read = Path.read_text
@@ -50,6 +51,7 @@ def test_writer_persists_the_same_identity_the_reader_observes(tmp_path, monkeyp
                                  "101 (worker) S 0", "102 (foreign) S 0",
                                  "101 (name) S " + " ".join(["0"] * 18 + ["-1"])])
 def test_invalid_stat_is_rejected_by_both_paths(monkeypatch, raw):
+    monkeypatch.setattr(process_identity.sys, "platform", "linux")
     wrapper = load_wrapper()
     monkeypatch.setattr(Path, "read_text", lambda *args, **kwargs: raw)
     assert process.start_ticks(101) is None
@@ -92,6 +94,7 @@ def test_missing_identity_of_already_reaped_child_never_signals_reused_pid(tmp_p
 
 @pytest.mark.parametrize("identity", [None, True, -1, "12345"])
 def test_recovery_requires_a_nonnegative_integer_start_identity(monkeypatch, identity):
+    monkeypatch.setattr(process_identity.sys, "platform", "linux")
     raw = "101 (normal) S " + " ".join(["0"] * 18 + ["12345"])
     monkeypatch.setattr(Path, "read_text", lambda *args, **kwargs: raw)
     assert not process.process_alive(101, identity)

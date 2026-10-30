@@ -39,6 +39,12 @@ class MeteredProvider:
         return getattr(provider, name)
 
     def __call__(self, *args, **kwargs):
+        durable = self.__dict__.get("durable_store")
+        if durable is not None:
+            return durable.provider_call(self, self._invoke, args, kwargs)
+        return self._invoke(*args, **kwargs)
+
+    def _invoke(self, *args, **kwargs):
         if self._unresolved_usage:
             raise UsageError("provider has unresolved invocation usage")
         self.last_usage = None

@@ -141,6 +141,24 @@ class ComposedRuntime(HierarchicalRuntime):
                 for method in ("quote_reserve", "settle")):
             raise ValueError("budget does not implement its runtime contract")
         self.layered = self.parts["admission"] if isinstance(self.parts["admission"], LayeredAdmissionController) else None
+        self.durable_executor = bool(getattr(self.parts["executor"], "durable_operation_recovery", False))
+        required_executor = getattr(self.parts["domain"], "required_executor", None)
+        if required_executor is not None and required_executor != self.assembly.executor.name:
+            raise ValueError("domain requires its bound worktree executor")
+        if self.durable_executor:
+            from core.composition.recovery import ContinuationStore
+            from core.composition.strategies import GreedyPolicy, LLMCyclesPolicy
+            from core.composition.defaults import PromptOperator, InstructionSkill
+            if not self.hierarchical or not self.cfg.checkpoint_enabled:
+                raise ValueError("worktree recovery requires hierarchical budgets and checkpoints")
+            if type(self.parts["policy"]) not in {GreedyPolicy, LLMCyclesPolicy} or any(
+                    type(item) is not PromptOperator for item in self.parts["operators"]) or any(
+                    type(item) is not InstructionSkill for item in self.parts["skills"]):
+                raise ValueError("worktree continuation requires supported deterministic local decision components")
+            if not isinstance(self.store, ContinuationStore):
+                raise ValueError("worktree recovery requires a continuation journal")
+            self.parts["executor"].validate_domain(self.parts["domain"])
+            self.parts["provider"].durable_store = self.store
         preflight = getattr(self.parts["domain"], "validate_context", None)
         if callable(preflight):
             preflight()
@@ -149,6 +167,9 @@ class ComposedRuntime(HierarchicalRuntime):
                          "domain_version": getattr(self.parts["domain"], "evaluator_version", None),
                          "evaluation_context": getattr(self.parts["domain"], "evaluation_context", ""),
                          "knowledge": getattr(self.parts.get("knowledge"), "manifest_binding", None)}
+        if self.durable_executor:
+            self.manifest["command_domain"] = self.parts["domain"].manifest_binding
+            self.manifest["executor"] = self.parts["executor"].manifest_binding
         self.manifest["evaluation_contexts"] = {"dev": self.manifest["evaluation_context"]}
         if self.layered:
             contexts = self.layered.validate_domain(self.parts["domain"])
@@ -199,6 +220,11 @@ class ComposedRuntime(HierarchicalRuntime):
         if not callable(check):
             raise ValueError("domain must explicitly validate supported evaluation requests")
         check(request)
+        if getattr(self, "durable_executor", False):
+            self.parts["executor"].validate_domain(domain)
+            if domain.manifest_binding != self.manifest["command_domain"] or \
+                    self.parts["executor"].manifest_binding != self.manifest["executor"]:
+                raise ValueError("worktree execution manifest changed")
         if asdict(request) != original_request:
             raise ValueError("domain validation changed the evaluation request")
         if (getattr(domain, "evaluator_version", None) != self.manifest["domain_version"]
@@ -246,9 +272,15 @@ class ComposedRuntime(HierarchicalRuntime):
 
     def _save(self):
         if self.cfg.checkpoint_enabled:
+            if getattr(self, "durable_executor", False) and self.store.peek() is not None:
+                raise ValueError("cannot checkpoint before consuming the durable continuation")
             if (self.budget.state()["open_intents"] if self.hierarchical else self.budget.reserves):
                 raise RuntimeError("cycle checkpoint cannot contain unsettled reservations")
             checkpoint = RunCheckpoint.create(self._payload())
+            if getattr(self, "durable_executor", False):
+                from core.composition.recovery import save_checkpoint
+                save_checkpoint(checkpoint, self.workdir, self.store)
+                return
             checkpoint.save(self.workdir / "checkpoint.json")
             self.store.append("composed_checkpoint", {"next_cycle": self.next_cycle,
                                                        "sha256": checkpoint.payload_sha256})
@@ -530,6 +562,7 @@ class ComposedRuntime(HierarchicalRuntime):
         return operator, selected, parents, context, request
 
     async def _cycle(self, task, cycle):
+        self._active_cycle = cycle
         if self.hierarchical:
             return await self._cycle_hierarchical(task, cycle)
         from core.composition.defaults import OperatorFailure
@@ -663,6 +696,15 @@ class ComposedRuntime(HierarchicalRuntime):
         return True
 
     def run(self, task):
+        from core.composition.recovery import ContinuationStore, coordinator_lock, recover_checkpoint
+        if self.assembly.executor.name != "git_worktree":
+            return self._run(task)
+        with coordinator_lock(self.workdir):
+            checkpoint = recover_checkpoint(self.workdir) if self.cfg.resume_from_checkpoint else None
+            self.store = ContinuationStore(self.workdir / "x1.jsonl", checkpoint)
+            return self._run(task)
+
+    def _run(self, task):
         self.cfg.validate()
         if self.cfg.batch_size != 1 or self.cfg.max_inflight != 1:
             raise ValueError("configured runtime currently requires serial cycles")
@@ -687,6 +729,8 @@ class ComposedRuntime(HierarchicalRuntime):
         self._build(task)
         if self.cfg.resume_from_checkpoint:
             self._restore()
+            if self.durable_executor:
+                self.store.resume()
         else:
             self.store.append("run_start", {"runtime": "composed-v6", "task_desc": task,
                                            "manifest": self.manifest, "accounting_stamp": asdict(self.stamp)})
@@ -719,6 +763,7 @@ class ComposedRuntime(HierarchicalRuntime):
             if self.cfg.stop_after_generation == cycle:
                 break
         if self.next_cycle > self.cfg.max_generations or not continued:
+            self._active_cycle = self.next_cycle
             asyncio.run(self._finish_layered())
             self._finish_context()
         self.result = {"runtime": "composed-v6", "profile": self.assembly.name,
@@ -733,6 +778,8 @@ class ComposedRuntime(HierarchicalRuntime):
                        "accepted_candidate_ids": [row["payload"]["candidate_id"] for row in
                             self.store.read("composed_decision") if row["payload"]["decision"]["admit"]],
                        "checkpoint_ref": payload_digest(self._payload())}
+        if self.durable_executor:
+            self.result["execution"] = self.manifest["executor"]
         return self.result
 
     def inspect(self):

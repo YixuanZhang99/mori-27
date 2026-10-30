@@ -2,19 +2,20 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v65**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v66**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
 ## 先读这里
 
-- [统一抽象](docs/AutoResearch模块化统一抽象.md)是当前开发基准；[逐项对照清单](docs/ABSTRACTION_ALIGNMENT.md)记录实现证据、五阶段边界和验收条件。
+- [统一抽象](docs/AutoResearch模块化统一抽象.md)是当前开发基准；[逐项对照清单](docs/ABSTRACTION_ALIGNMENT.md)记录实现证据、各阶段边界和验收条件。
 - [S1 配置组装使用指南](docs/COMPOSED_RUNTIME.md)：推荐入口 `Framework.from_profile("composed_prompt", ...)`、组件替换、恢复与 replay 契约。
 - [S2 统一评估契约](docs/EVALUATION_CONTRACT_V61.md)：原生 domain、严格身份和计量覆盖、公开/私有视图、v2 检查点兼容边界。
 - [S3 上下文与本地知识回流](docs/CONTEXT_FEEDBACK_V62.md)：有作用域的 ContextPack、显式跨 run 导出/导入、ground/audit 隔离和 v3 运行身份。
 - [S4 三层准入与独立终审](docs/LAYERED_ADMISSION_V63.md)：显式 native 三层配置、调用硬顶、可复算回执和冻结候选终审。
 - [S5 分层物理预算与 fidelity](docs/HIERARCHICAL_BUDGET_V64.md)：全局/方向/候选独立限额、实际请求、预算输入和低样本停止规则。
 - [S6 周期 anchor 与代理有效性](docs/PROXY_VALIDITY_V65.md)：独立 calibration 配对、秩相关规则和仅当前 run 的负反馈。
+- [S7 worktree 与进程接管](docs/WORKTREE_RECOVERY_V66.md)：真实命令执行、保护输入、持久进程身份和主循环恢复边界。
 - [2026-10-29 代码包详细梳理与审查](docs/CODEBASE_REVIEW_2026-10-29.md)：架构、模块支持矩阵、运行验证、可复现问题及后续优先级。
 - [原始接续开发说明](接续开发说明.md)：交接时的状态声明和环境说明。
 - [M0 代码文档](m0/README.md)与[术语及契约](m0/CONTEXT.md)。
@@ -52,12 +53,12 @@ S4 引入 `composed-v4`，原生 domain 可选 `admission=layered`；dev、admis
 
 S5 引入 `composed-v5`，不自动接收旧 v1–v4 检查点。`budget=hierarchical` 让 global、direction、candidate 成为同一物理操作账本的三个视图，按单位分别预扣/结算，实际超额如实记录后停止新调用。fidelity 由配置生成真实请求，低样本停止规则不宣称统计显著。详见 [S5 指南](docs/HIERARCHICAL_BUDGET_V64.md)；完整离线 research 示例纳入 Mac 与 Linux 验收。
 
-后续按 S6 周期 anchor/代理有效性回流、S7 worktree 与进程接管、S8 种群组装推进；逐项范围和阶段门槛见 [后续计划](docs/ABSTRACTION_ALIGNMENT.md)。S6 当前运行版本为 `composed-v6`，旧 v1–v5 检查点不自动升级。配置与边界见 [S6 指南](docs/PROXY_VALIDITY_V65.md)，实现与验收范围以阶段记录和同 SHA CI 证据为准。
+S6 周期 anchor/代理有效性回流已按同 SHA CI 封板。S7 新增 `command` domain 与 `git_worktree` executor 的配置组合，使用 hierarchical 预算和 checkpoint 进行真实命令执行与进程接管；Mac 必须显式选择可信本地 `sandbox="none"`，Linux 默认使用 bubblewrap。S8 种群组装独立验收。逐项范围和阶段门槛见 [对照清单](docs/ABSTRACTION_ALIGNMENT.md)，配置和平台限制见 [S7 指南](docs/WORKTREE_RECOVERY_V66.md)。实现与验收范围以阶段记录和同 SHA CI 证据为准。
 
 ## 目录
 
 ```text
-m0/                 Python 内核、配置、回归测试、v1–v64 历史及 v65 验收入口
+m0/                 Python 内核、配置、回归测试、v1–v65 历史及 v66 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
   config/profiles/  三种经典 profile 与 composed_prompt 组装配置
   examples/         四个不需要模型 API key 的示例
@@ -83,7 +84,7 @@ make check
 
 `make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v65，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v66，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
 make test          # Mac 可移植测试
@@ -92,7 +93,7 @@ make accept-linux  # Linux x86_64：全量版本化验收
 make verify-import # 核验初始导入 Git 快照
 ```
 
-详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60、v61 分别新增 S1 组装和 S2 评估契约组；v62 增加 S3 经验与知识回流端到端组；v63 增加 S4 三层准入与终审组；v64 增加 S5 分层预算组及完整离线 research 示例；[v65](m0/verifier/v65/README.md)保留全部旧组并增加 S6 proxy 有效性回流组。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60、v61 分别新增 S1 组装和 S2 评估契约组；v62 增加 S3 经验与知识回流端到端组；v63 增加 S4 三层准入与终审组；v64 增加 S5 分层预算组及完整离线 research 示例；v65 增加 S6 proxy 有效性回流组；[v66](m0/verifier/v66/README.md)保留全部旧组并增加 S7 worktree 与公开 Framework 接管组。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 

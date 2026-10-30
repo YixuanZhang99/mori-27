@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   linux-acceptance:
-    name: Linux x86_64 / Python 3.12 / full v65
+    name: Linux x86_64 / Python 3.12 / full v66
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:

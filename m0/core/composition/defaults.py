@@ -353,6 +353,8 @@ def _hierarchical(context, options):
 
 def default_registry():
     registry = Registry()
+    from core.composition.recovery import register_worktree
+    register_worktree(registry)
     registry.register("provider", "provided", _provided)
     registry.register("domain", "legacy_prompt", lambda ctx, opts: LegacyPromptDomain(
         ctx.evaluator, ctx.llm, **opts), validate_options=_domain_options)

@@ -88,6 +88,13 @@ class HierarchicalRuntime(ProxyRuntime):
             direction, operation, request=request, depth=depth)
 
     def _settle_physical(self, receipt, cost, coverage, elapsed, *, evaluation=False, operator=False):
+        if getattr(self, "durable_executor", False):
+            if not evaluation and "wallclock" in self.budget.units \
+                    and receipt.intent_id in self.store.replayed_starts and self.store.peek() is None:
+                raise UsageError("interrupted local operation has no durable wall-time measurement")
+            elapsed = self.store.measurement({"intent_id": receipt.intent_id,
+                "fingerprint": receipt.fingerprint, "cost": asdict(cost),
+                "coverage": list(coverage), "evaluation": evaluation, "operator": operator}, elapsed)
         values = _physical(cost)
         if type(coverage) not in (tuple, list) or any(type(unit) is not str for unit in coverage):
             raise UsageError("physical usage coverage is missing")
@@ -100,6 +107,11 @@ class HierarchicalRuntime(ProxyRuntime):
             # A native batch may report more than one experiment, but an actual
             # domain invocation cannot consume fewer than one evaluation.
             values["eval_count"] = max(1, values["eval_count"])
+            if getattr(self, "durable_executor", False):
+                # The supervisor measures the actual process lifetime. A
+                # producer's zero/shorter wall meter cannot make it free.
+                values["wallclock"] = max(values["wallclock"], elapsed)
+                covered.add("wallclock")
         if operator:
             # The driver knows that this invocation attempted exactly one
             # candidate. An omitted node meter cannot turn that attempt free.
@@ -169,14 +181,33 @@ class HierarchicalRuntime(ProxyRuntime):
         started, settled = time.monotonic(), False
         before = self.parts["provider"].usage_total
         try:
-            evidence = await self.parts["executor"].execute(
-                copy.deepcopy(proposal), copy.deepcopy(request), self.parts["domain"])
+            elapsed = None
+            if getattr(self, "durable_executor", False):
+                from core.composition.worktree import MeasuredCommandError
+                operation = {"run_id": self._logical_run_id, "cycle": self._active_cycle,
+                    "phase": request.split_id, "intent_id": receipt.intent_id,
+                    "fingerprint": receipt.fingerprint,
+                    "manifest_sha256": "sha256:" + payload_digest(self.manifest)}
+                try:
+                    evidence = await self.parts["executor"].execute_bound(
+                        copy.deepcopy(proposal), copy.deepcopy(request), self.parts["domain"], operation)
+                except MeasuredCommandError as error:
+                    self._check_provider_floor(receipt, before, error.cost)
+                    self._settle_physical(receipt, error.cost, error.measured_cost_units,
+                                          error.wall_seconds, evaluation=True)
+                    settled = True
+                    raise
+                elapsed = self.parts["executor"].operation_metadata(operation)["wall_seconds"]
+            else:
+                evidence = await self.parts["executor"].execute(
+                    copy.deepcopy(proposal), copy.deepcopy(request), self.parts["domain"])
             if not isinstance(evidence, EvidenceRecord):
                 raise UsageError("executor returned no measurable canonical evidence")
             self._check_provider_floor(receipt, before, evidence.eval_result.cost)
             measured_costs(evidence.eval_result)
             self._settle_physical(receipt, evidence.eval_result.cost,
-                evidence.eval_result.contract.measured_cost_units, time.monotonic() - started,
+                evidence.eval_result.contract.measured_cost_units,
+                elapsed if elapsed is not None else time.monotonic() - started,
                 evaluation=True)
             settled = True
             if evidence.eval_result.cost.eval_count < 1:

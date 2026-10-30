@@ -412,7 +412,7 @@ v64 成功证据已原样归档到 `m0/verifier/v64/LAST_RUN.json` 与 `m0/verif
 | 阶段 / verifier | 对照 ID 与原文依据 | 计划范围 | 必须可观察的端到端验收条件 | 当前状态 |
 | --- | --- | --- | --- | --- |
 | S6 / v65 | M3-06（§4/M3 L164、§6.2 L442–444）；关联 M3-02～04、M5-03、M8-03、M9-04、X1-02 | 周期 anchor；proxy 与 true 的配对证据及秩相关有效性规则；失效时告警/降级和负反馈进入 scoped memory | 配置周期实际触发独立开发 calibration anchor 并经三层预算；请求/数据/seed 身份可核对；样本不足与无效相关明确区分；故意反向 proxy 触发预定动作并改变后续输入；admission/final 不进入搜索反馈；恢复/replay 保留调用、有效性与记忆来源 | 已接通子范围见下方 S6 实现记录；最终 Mac/Linux 按阶段证据核对 |
-| S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | 待 S6 封板后实施；尚未创建 v66 接线 |
+| S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | S6 已封板；v66 四文件显式组已接线，主循环集成及实际验收按下方 S7 记录推进 |
 | S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | 待 S7 封板后实施；尚未创建 v67 接线 |
 
 S6 当前验收组为 `test_proxy_validity.py`、`test_composed_proxy.py`；v65 保留 v64 的全部命令、超时与真实历史证据。接线阶段 tooling 37 项、历史/source-only 9 项通过，未生成 v65 运行证书；这些不代替 S6 公开入口功能或 Linux 验收。S7/S8 的测试文件名与精确子范围在实现前确定，不提前认证生产环境隔离、分布式并发或真实外部 benchmark。
@@ -446,7 +446,43 @@ v65 显式组 `test_proxy_validity.py` / `test_composed_proxy.py` 覆盖周期�
 | Mac `make check` | 最终实现复核通过：1,319 portable、158 Linux deselected（22.37 秒）、37 tooling、11 axioms、4 个离线示例；包含负反馈/引用/检查点同时重 hash 的来源篡改拒绝回归；Linux deselected 不计通过 |
 | 历史与 source 检查 | v65 的 9 项历史/source-only 检查通过；tooling 37 项通过；未生成 v65 运行证书 |
 | 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
-| Linux v65 | 本阶段同 SHA 完整 CI 必须通过后才推进 main；实际结果以新证书、journal、summary 和交付记录为准 |
-| 提交与 main 更新 | 按“候选提交→同 SHA Linux 验收→推进 main”执行，不使用 v64 历史成功替代本阶段结果 |
+| Linux v65 | [CI 40911722972](https://github.com/YixuanZhang99/mori-27/actions/runs/40911722972) 通过：1,477 pytest、35 检查、529.923 秒；exact SHA、artifact 摘要及新证书/journal/summary 已独立核实，历史未改动 |
+| 提交与 main 更新 | 候选 `62a73631800bdf17eff0e5342fda0212a5303a50` 在同 SHA Linux 通过后，以非 force 快进 main，并重新读取远端确认 |
 
 本轮落实 M3-06 的周期校准、异质指标有效性监控与负反馈子范围；C-02 继续隔离准入与成本，C-06 保留物理计量，C-07 扩展来源与恢复，C-08 保留 v1–v64 verifier 源码。S7 worktree/接管、S8 种群，以及 HITL、通用事件总线、外部知识与真实 campaign 继续按计划单列。
+
+S6 成功证据已原样归档到 `m0/verifier/v65/LAST_RUN.json` 与 `m0/verifier/runs/v65.jsonl`，来源和 SHA-256 见 [v66 历史证据说明](../m0/verifier/v66/README.md#archived-v65-evidence-provenance)。该归档不认证 S7。
+
+### S7 worktree 与进程接管：集成和验收记录
+
+v66 显式执行 `test_composed_worktree_executor.py`、`test_process_identity_writer.py`、`test_composed_worktree_framework.py`、`test_composed_recovery.py`，保留 v65 全部命令、超时和真实历史。执行器组件与公开 Framework 中断接管分别验收；单独执行器通过不能代替实际主循环接管。当前实现已完成 Mac 检查，待同 SHA Linux 验收；精确用法和限制见 [S7 指南](WORKTREE_RECOVERY_V66.md)。本提交完整 CI 必须通过后才推进 main；最终证据见该提交 CI 产物和交付记录。
+
+本阶段保留 `composed-v6` 结构，通过新增 command-domain/executor manifest 区分原任务与新 executor。以下为已落盘实现的子范围；功能测试及最终平台验收按后表核实，不把某一子范围接通等同于整项抽象完成。
+
+| 条款 ID | S7 实现子范围与证据 | 剩余范围或明确限制 |
+| --- | --- | --- |
+| A-02 | `recovery.register_worktree` 注册 command/git_worktree；配置能力、hierarchical 预算和 checkpoint 前置检查；coordinator/operation 非阻塞 lease；driver 掌握预扣、来源核对与 mutation | 仅内置 Greedy/LLMCycles、PromptOperator、InstructionSkill 的可恢复组合；不允许任意有副作用插件借恢复重执行 |
+| M2-04 | `MeasuredCommandError` 保存完整真实计量与原始响应，已知失败/错绑先计费再停止；缺响应或缺 meter 保留未结预扣 | provider started 无正常文本 completion 不自动重试；未知费用不补零，不承诺外部服务支持幂等 |
+| M3-02 | worktree dev、校准、admission/final 操作仍逐次使用 S5 原子预扣；恢复使用原物理账本及 worker 的持久执行时间；结算 wallclock 不低于 worker 实测，即使 producer 自报零/更短也不低扣 | 本地 planning/operator 的 wallclock 若未持久化则未知；不把 coordinator 离线等待作为费用，不猜测未测资源 |
+| M7-01 | 配置选定 command executor；完整请求、候选、产物、内容/版本和安全 manifest 进入冻结 operation；身份漂移在启动或接管时拒绝 | 通用 ExecutorSpec role/frozen hypothesis/context projection 尚未作为独立模块组装；command 绑定不能替代该抽象全部语义 |
+| M7-02 | 真实 Git worktree/命令/branch_ref 接入同一 Framework；Linux bubblewrap/seccomp 与当前 split 只读挂载；Darwin/Linux 稳定出生身份、启动授权和原进程接管 | Mac `none` 是可信本地模式，没有主机/网络/held-out 隔离；未认证其它容器、集群或 GPU 环境 |
+| M7-03 | 规范终态、attempt、branch_ref、known cost/unknown reserve 和可选 rlimit、wall timeout 接入；已持久化结果接管不重新付费；提交前后中断保留 commit 计划 | 新配置路径仍串行；未统一旧 ExecutorPool/BatchScheduler，不宣称新路径并发部分失败或分布式 exactly-once |
+| M8-02 | command 收到完整 EvalRequest 和 split 路径；fidelity/split 能力先验证；time_limit 真正约束进程；显式支持的 resume_from 为不可变 Git commit | budget_token/seed 的实验含义由受信任评估器消费并在回执绑定；不以传参证明任意外部程序已遵守预算或实验语义 |
+| M8-03 | 可执行文件、受保护脚本、真实 split 内容及 evaluator_version 冻结；改名不制造独立数据；原始响应 hash/完整 producer binding 恢复重核 | 摘要不是外部签名；评估器本身仍须可信；跨平台运行中进程迁移不在范围内 |
+| X1-01 | 每次 worktree evidence 的真实 commit 写入 branch_ref，driver 投影到 frontier code_ref；原始 Git object 快照不执行 clean filters/hooks，内部请求/响应不进入 artifact commit | checkpoint 顶层仍标 configured_artifacts，真实执行来源另见 manifest/evidence；未生成伪造全局 GitState，也未统一所有域的代码管理接口 |
+| X1-02 | `ContinuationStore` 从 checkpoint 边界严格消费持久事件；pending 文件 fsync→持久 boundary→原子替换指针，恢复仅在内容/周期匹配最新边界时前滚；provider 文本/用量/状态 completion 缓存；完成恢复零新调用；进程运行中或完成后的接管按原 operation 身份核对 | 只有 started 或启动意图无稳定身份时失败关闭；磁盘丢写/断电不保证；独立 replay 真计费，执行来源/墙钟不一致仍可判失败 |
+| X1-03 | 保护文件、请求、安全策略和数据运行前后校验；Linux 当前 split 单独挂载且拒绝数据放在候选基础仓库内；安全策略改写只清理身份绑定的进程 | `sandbox=none` 没有 OS 保护，只是完整性检查；不认证评估器自行把私有内容写入其它输出的行为 |
+| X1-04 | Linux 回归实际尝试读取其他 split 和主机秘密，验证执行边界；原 canary/来源拦截继续保持 | 未扩展语义泄漏检测、所有输出扫描或通用 URL 防火墙 |
+| X1-05 | 新增 worktree launch/process/commit/evidence/rejection 和 provider started/completed、operation measurement 事件；持久 suffix 不允许静默删除或改写后续接管 | 仍无可订阅事件总线和完整 dashboard 协议 |
+
+公开 Framework 回归覆盖 dev/admission/final_audit 与 calibration 的运行中和已完成未结算 SIGKILL、第二协调器接管中再次崩溃、StateApplier 实际变更与 journal 前后边界、持久后缀不匹配零新增付费调用，以及 checkpoint pending 写完但 boundary 未写、boundary 已持久化但指针未替换两种窗口。executor 回归另覆盖命令安全规格/身份/结果/commit 的篡改、启动意图无可验证进程时拒绝替代、Git filters/hooks 隔离和受保护输入。Linux 两项真实 bubblewrap/seccomp 与跨 split 文件权限测试必须在 CI 执行，Mac 结果不替代其证据。
+
+| 验证项 | 执行状态与阶段门槛 |
+| --- | --- |
+| Mac `make check` | 最终实现通过：1,392 portable、160 Linux deselected（104.22 秒）、40 tooling、11 axioms、4 个离线示例；包含检查点双提交间隙及 producer 墙钟低报回归，Linux deselected 不计通过 |
+| 工具与历史/source 检查 | 40 tooling、9 历史/source-only 检查通过；v65 原始证据 SHA-256 受保护；未生成 v66 运行证书 |
+| 打包与导入快照 | `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
+| Linux v66 | 本提交完整 CI 必须通过后才推进 main；新证书必须含 S7 组及全部 36 检查，实际 pytest 数以同 SHA artifact 为准 |
+| 提交与 main 更新 | 候选提交→核对同 SHA 的新 summary/certificate/journal→非 force 推进 main；最终证据见 CI 产物和交付记录 |
+
+本阶段对 C-07 增加公开入口进程接管，同时保留未知付费操作失败关闭；C-08 保留 v1–v65 原 verifier 源码。M7-01 的通用执行角色/冻结假设、M7-03 新路径并发、S8 种群、X2 HITL、事件订阅和真实外部 campaign 继续单列。

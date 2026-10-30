@@ -24,6 +24,7 @@ from core.x1.store import AppendOnlyStore
                                   "worker\nwith\ttabs )"])
 @pytest.mark.parametrize("state", ["S", "Z"])
 def test_process_identity_parses_whitespace_and_parentheses_inside_comm(monkeypatch, name, state):
+    monkeypatch.setattr(sys, "platform", "linux")
     raw = f"101 ({name}) {state} " + " ".join(["0"] * 18 + ["12345"] + ["0"] * 10)
     monkeypatch.setattr(process.Path, "read_text", lambda *args, **kwargs: raw)
     assert process.start_ticks(101) == 12345
@@ -34,6 +35,7 @@ def test_process_identity_parses_whitespace_and_parentheses_inside_comm(monkeypa
 @pytest.mark.parametrize("raw", ["101 no parentheses S 0", "101 (worker S 0",
                                  "101 (worker) S 0", "102 (foreign) S 0"])
 def test_invalid_process_stat_does_not_establish_identity(monkeypatch, raw):
+    monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(process.Path, "read_text", lambda *args, **kwargs: raw)
     assert process.start_ticks(101) is None
     assert process.process_alive(101, 12345) is False
