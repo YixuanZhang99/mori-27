@@ -13,7 +13,7 @@ from dataclasses import asdict, replace
 
 from core.budget.ledger import BudgetLedger
 from core.budget.types import AccountingStamp
-from core.composition.contracts import Decision, OperatorRequest, Proposal
+from core.composition.contracts import Decision, OperatorFailure, OperatorRequest, Proposal
 from core.composition.admission import LayeredAdmissionController, layered_options
 from core.composition.budget import HierarchicalBudget, hierarchical_options
 from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
@@ -22,9 +22,12 @@ from core.composition.registry import Registry
 from core.composition.context import ContextMemory, context_options
 from core.composition.knowledge import LocalKnowledge, knowledge_options
 from core.composition.strategies import GreedyPolicy, LLMCyclesPolicy, policy_options
+from core.composition.population import (CrossoverOperator, PopulationPolicy, crossover_options,
+                                         population_policy_options)
 from core.eval.types import validate_eval_result as validate_legacy_result
 from core.executor.types import Candidate, CostVec, EvalResult, EvalStatus, EvidenceRecord
 from core.frontier import ResearchFrontier
+from core.frontier.population import PopulationFrontier, population_options
 from core.llm import UsageError, reset_usage, take_usage
 from core.memory import ScopedMemory
 from core.operator.ops import draft, reflective_improve
@@ -90,15 +93,6 @@ def _budget_options(options):
     if "total_budget" in options and "reeval_floor" in options \
             and options["reeval_floor"] > options["total_budget"]:
         raise ValueError("reeval_floor cannot exceed total_budget")
-
-
-class OperatorFailure(RuntimeError):
-    """A failed proposal with known provider cost, suitable for settlement."""
-    def __init__(self, cost: CostVec, detail: str, *, measured_cost_units=None):
-        super().__init__(detail)
-        self.cost = cost
-        self.detail = detail
-        self.measured_cost_units = measured_cost_units
 
 
 class InstructionSkill:
@@ -363,13 +357,19 @@ def default_registry():
                       validate_options=policy_options)
     registry.register("policy", "llm_cycles", lambda ctx, opts: LLMCyclesPolicy(
         ctx.scope_context, ctx.llm, **opts), validate_options=policy_options)
+    registry.register("policy", "population", lambda ctx, opts: PopulationPolicy(
+        ctx.scope_context, **opts), validate_options=population_policy_options)
     for name in ("draft", "reflective"):
         registry.register("operator", name, lambda ctx, opts, kind=name:
                           PromptOperator(ctx.llm, kind, **opts), validate_options=_operator_options)
+    registry.register("operator", "crossover", lambda ctx, opts: CrossoverOperator(ctx.llm, **opts),
+                      validate_options=crossover_options)
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),
                       validate_options=_skill_options)
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(
         store=ctx.store, **opts), validate_options=_objective_options)
+    registry.register("frontier", "population", lambda ctx, opts: PopulationFrontier(
+        store=ctx.store, **opts), validate_options=population_options)
     registry.register("memory", "scoped", lambda ctx, opts: ContextMemory(
         ctx.store, ctx.scope_context, getattr(ctx.evaluator, "evaluation_context", "")),
         validate_options=context_options)
@@ -394,3 +394,17 @@ def composed_profile(name="composed-greedy", mode="benchmark"):
             "frontier": {"name": "tree"}, "memory": {"name": "scoped"},
             "executor": {"name": "inprocess"}, "admission": {"name": "metric"},
             "budget": {"name": "tokens"}, "skills": []}
+
+
+def population_profile(name="composed-population", mode="benchmark", *, capacity=8,
+                       selection="tournament", sample_seed=0):
+    """Opt-in two-parent assembly; the default tree profile remains unchanged."""
+    frontier_options = {"capacity": capacity, "selection": selection, "sample_seed": sample_seed}
+    population_options(frontier_options)
+    if capacity < 2:
+        raise ValueError("two-parent population profile requires capacity >= 2")
+    profile = composed_profile(name, mode)
+    profile.update(policy={"name": "population"},
+                   operators=[{"name": "draft"}, {"name": "crossover"}],
+                   frontier={"name": "population", "options": frontier_options})
+    return profile

@@ -11,6 +11,7 @@ class MutationOp(str, Enum):
     UPDATE_NODE = "update_node"
     PRUNE = "prune"
     MERGE = "merge"
+    POPULATION_FINALIZE = "population_finalize"
     WRITE_MEMORY = "write_memory"
     PROMOTE_MEMORY = "promote_memory"
 

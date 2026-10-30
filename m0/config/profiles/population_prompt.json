@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "name": "population_prompt",
+  "mode": "benchmark",
+  "provider": {
+    "name": "provided"
+  },
+  "domain": {
+    "name": "legacy_prompt"
+  },
+  "policy": {
+    "name": "population"
+  },
+  "operators": [
+    {
+      "name": "draft"
+    },
+    {
+      "name": "crossover"
+    }
+  ],
+  "frontier": {
+    "name": "population",
+    "options": {
+      "capacity": 8,
+      "selection": "tournament",
+      "sample_seed": 0
+    }
+  },
+  "memory": {
+    "name": "scoped"
+  },
+  "executor": {
+    "name": "inprocess"
+  },
+  "admission": {
+    "name": "metric"
+  },
+  "budget": {
+    "name": "tokens"
+  },
+  "skills": []
+}

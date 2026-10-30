@@ -74,3 +74,5 @@
 - v65 — S6 周期 anchor、proxy 有效性秩相关规则与负反馈进入 scoped memory 的端到端验收；保留全部 v64 回归和真实历史证据。规则不等于统计保证，worktree/种群等后续组装仍单独验收。见 [v65](v65/README.md)。
 
 - v66 — S7 配置运行时的真实 worktree 命令、进程身份、主循环中断接管与 journal 续接验收；保留全部 v65 命令与真实历史证据。Mac 可信本地模式不代表 Linux 沙箱等价，种群与真实外部 campaign 单独验收。见 [v66](v66/README.md)。
+
+- v67 — S8 有界种群成员、可复算抽样、双亲文本 crossover 与公开 Framework 恢复验收；保留全部 v66 命令、超时及真实历史证据。elite 保留不等于 novelty/MAP-Elites，代码签名证明与真实外部 campaign 不由本阶段认证。见 [v67](v67/README.md)。

@@ -54,8 +54,9 @@ class HierarchicalRuntime(ProxyRuntime):
             # No currency/GPU meter exists for arbitrary policy or skill hooks.
             # These built-ins are pure local work, with a provable zero charge.
             from core.composition.strategies import GreedyPolicy
+            from core.composition.population import PopulationPolicy
             from core.composition.defaults import InstructionSkill
-            if type(self.parts["policy"]) is not GreedyPolicy or any(
+            if type(self.parts["policy"]) not in {GreedyPolicy, PopulationPolicy} or any(
                     type(skill) is not InstructionSkill for skill in self.parts["skills"]):
                 raise ValueError("policy/skill physical coverage requires a supported local adapter")
         convergence = self.budget.options.get("convergence")

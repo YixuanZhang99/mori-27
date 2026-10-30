@@ -93,9 +93,19 @@ class StateApplier:
             if not fields or not set(fields).issubset(MUTABLE_FIELDS):
                 raise MutationError("UPDATE_NODE fields violate the mutable-field whitelist")
             node = self.frontier._node(mutation.target)
+            from core.frontier.population import PopulationFrontier
+            if isinstance(self.frontier, PopulationFrontier):
+                self.frontier.update_node(mutation.target, fields)
+                return {"node": node.id, "updated": sorted(fields)}
             for key, value in fields.items():
                 setattr(node, key, value)
             return {"node": node.id, "updated": sorted(fields)}
+        if op is MutationOp.POPULATION_FINALIZE:
+            from core.frontier.population import PopulationFrontier
+            if not isinstance(self.frontier, PopulationFrontier) or set(mutation.fields) != {
+                    "admitted", "reason", "selected_id", "decision_ref"}:
+                raise MutationError("POPULATION_FINALIZE requires the complete driver admission outcome")
+            return self.frontier.finalize(mutation.target, **mutation.fields)
         if op is MutationOp.PRUNE:
             if set(mutation.fields) - {"reason"}:
                 raise MutationError("PRUNE only accepts a reason field")

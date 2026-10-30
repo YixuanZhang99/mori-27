@@ -158,6 +158,16 @@ class BuildContext:
     mode: str = "benchmark"
 
 
+class OperatorFailure(RuntimeError):
+    """A failed proposal with known provider cost, suitable for settlement."""
+    def __init__(self, cost: CostVec, detail: str, *, measured_cost_units=None):
+        super().__init__(detail)
+        self.cost = cost
+        self.detail = detail
+        self.measured_cost_units = measured_cost_units
+
+
+
 @dataclass(frozen=True)
 class Proposal:
     candidate: Candidate

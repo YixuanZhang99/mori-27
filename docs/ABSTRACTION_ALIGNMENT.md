@@ -412,8 +412,8 @@ v64 成功证据已原样归档到 `m0/verifier/v64/LAST_RUN.json` 与 `m0/verif
 | 阶段 / verifier | 对照 ID 与原文依据 | 计划范围 | 必须可观察的端到端验收条件 | 当前状态 |
 | --- | --- | --- | --- | --- |
 | S6 / v65 | M3-06（§4/M3 L164、§6.2 L442–444）；关联 M3-02～04、M5-03、M8-03、M9-04、X1-02 | 周期 anchor；proxy 与 true 的配对证据及秩相关有效性规则；失效时告警/降级和负反馈进入 scoped memory | 配置周期实际触发独立开发 calibration anchor 并经三层预算；请求/数据/seed 身份可核对；样本不足与无效相关明确区分；故意反向 proxy 触发预定动作并改变后续输入；admission/final 不进入搜索反馈；恢复/replay 保留调用、有效性与记忆来源 | 已接通子范围见下方 S6 实现记录；最终 Mac/Linux 按阶段证据核对 |
-| S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | S6 已封板；v66 四文件显式组已接线，主循环集成及实际验收按下方 S7 记录推进 |
-| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | 待 S7 封板后实施；尚未创建 v67 接线 |
+| S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | S7 已按同 SHA Linux 验收封板；已接通子范围及保留限制见下方 S7 记录 |
+| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | S7 已封板；S8 三文件组和 Mac 检查完成，同 SHA Linux 门槛见下方 S8 记录 |
 
 S6 当前验收组为 `test_proxy_validity.py`、`test_composed_proxy.py`；v65 保留 v64 的全部命令、超时与真实历史证据。接线阶段 tooling 37 项、历史/source-only 9 项通过，未生成 v65 运行证书；这些不代替 S6 公开入口功能或 Linux 验收。S7/S8 的测试文件名与精确子范围在实现前确定，不提前认证生产环境隔离、分布式并发或真实外部 benchmark。
 
@@ -455,7 +455,7 @@ S6 成功证据已原样归档到 `m0/verifier/v65/LAST_RUN.json` 与 `m0/verifi
 
 ### S7 worktree 与进程接管：集成和验收记录
 
-v66 显式执行 `test_composed_worktree_executor.py`、`test_process_identity_writer.py`、`test_composed_worktree_framework.py`、`test_composed_recovery.py`，保留 v65 全部命令、超时和真实历史。执行器组件与公开 Framework 中断接管分别验收；单独执行器通过不能代替实际主循环接管。当前实现已完成 Mac 检查，待同 SHA Linux 验收；精确用法和限制见 [S7 指南](WORKTREE_RECOVERY_V66.md)。本提交完整 CI 必须通过后才推进 main；最终证据见该提交 CI 产物和交付记录。
+v66 显式执行 `test_composed_worktree_executor.py`、`test_process_identity_writer.py`、`test_composed_worktree_framework.py`、`test_composed_recovery.py`，保留 v65 全部命令、超时和真实历史。执行器组件与公开 Framework 中断接管分别验收；单独执行器通过不能代替实际主循环接管。本阶段已通过 Mac 和同 SHA Linux 验收；精确用法和限制见 [S7 指南](WORKTREE_RECOVERY_V66.md)。本提交完整 CI 必须通过后才推进 main；最终证据见该提交 CI 产物和交付记录。
 
 本阶段保留 `composed-v6` 结构，通过新增 command-domain/executor manifest 区分原任务与新 executor。以下为已落盘实现的子范围；功能测试及最终平台验收按后表核实，不把某一子范围接通等同于整项抽象完成。
 
@@ -482,7 +482,42 @@ v66 显式执行 `test_composed_worktree_executor.py`、`test_process_identity_w
 | Mac `make check` | 最终实现通过：1,392 portable、160 Linux deselected（104.22 秒）、40 tooling、11 axioms、4 个离线示例；包含检查点双提交间隙及 producer 墙钟低报回归，Linux deselected 不计通过 |
 | 工具与历史/source 检查 | 40 tooling、9 历史/source-only 检查通过；v65 原始证据 SHA-256 受保护；未生成 v66 运行证书 |
 | 打包与导入快照 | `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
-| Linux v66 | 本提交完整 CI 必须通过后才推进 main；新证书必须含 S7 组及全部 36 检查，实际 pytest 数以同 SHA artifact 为准 |
-| 提交与 main 更新 | 候选提交→核对同 SHA 的新 summary/certificate/journal→非 force 推进 main；最终证据见 CI 产物和交付记录 |
+| Linux v66 | [CI 40992561406](https://github.com/YixuanZhang99/mori-27/actions/runs/40992561406) 通过：1,552 pytest、36 检查、815.844 秒；exact SHA、ZIP 摘要及新 summary/certificate/journal 已核实，历史未改动 |
+| 提交与 main 更新 | 候选 `fb8a0f7e703c2300b95149536837cd2569e3f1e7` 在同 SHA Linux 成功核验后，非 force 快进 main，重新读取远端确认 |
 
 本阶段对 C-07 增加公开入口进程接管，同时保留未知付费操作失败关闭；C-08 保留 v1–v65 原 verifier 源码。M7-01 的通用执行角色/冻结假设、M7-03 新路径并发、S8 种群、X2 HITL、事件订阅和真实外部 campaign 继续单列。
+
+S7 成功证据已原样归档到 `m0/verifier/v66/LAST_RUN.json` 与 `m0/verifier/runs/v66.jsonl`；来源和摘要见 [v67 历史证据说明](../m0/verifier/v67/README.md#archived-v66-evidence-provenance)。这不代替 S8 验收。
+
+### S8 种群与双亲 crossover：实现记录与验收门槛
+
+新增 `frontier/population.py`、`composition/population.py`、`population_runtime.py` 与命名配置 `population_prompt`，仍通过同一 Framework 入口执行。`composed-v6` 保持不变；frontier checkpoint 自带 population 配置和状态，不把 tree 检查点伪装成种群。配置、机制与边界见 [S8 指南](POPULATION_RUNTIME_V67.md)。下表记录实际子范围，平台验收以随后真实执行记录为准。
+
+| 条款 ID | S8 实现子范围与证据 | 剩余范围或明确限制 |
+| --- | --- | --- |
+| A-02、M1-04 | driver 重新计算 detached selection view 的采样 receipt；仅原 M9 decision/receipt 经 `POPULATION_FINALIZE` 改成员和 protected incumbent；无资格父代/伪造 mutation 拒绝 | 不把 policy 的整份状态覆盖到权威 frontier；任意外部有副作用策略不由本阶段授权 |
+| M1-02 | PopulationPolicy 前两根 draft，之后真实委托 `sample(2)`；四种 selection 实际改变父序列；固定 seed 和接受的 receipt 决定 RNG 推进 | 无 LLM 人口管理或自适应最优选择器质量认证；retention 只支持 elite |
+| M2-01、M2-03 | CrossoverOperator 走同一 OperatorRequest，接收两个不同父代、公开 dev evidence、真实 ContextPack/预算；核对父代 artifact hash，输出两个有序骨架父边 | 普通文本交叉不提供代码签名/类型/行为保持证明；未补齐所有六类算子或 comparative-reflect 算法效果 |
+| M2-02 | 配置注册 `crossover` 与 population policy，执行域仍可替换 native/inprocess 或 command/worktree | 内置 population policy 明确要求 `[draft,crossover]` 顺序，不宣称任意算子集合都与该策略兼容 |
+| M2-04 | 生成/评估失败保存已知成本，失败或无效 dev 不成为成员/父代；未计量费用继续失败关闭 | 不把 M9 拒绝等同于执行失败；未知外部费用仍不自动重试 |
+| M3-02、M3-05 | 真实全局/方向/候选成本仍只扣一次；有序双亲以第 1 父根方向归属，depth=max(双亲深度)+1；operator 收到已预扣预算视图 | 纯本地 PopulationPolicy 不给 crossover/Prompt 补造 GPU/USD meter；额外单位缺覆盖前置拒绝 |
+| M3-03、M8-03 | population+hierarchical 前置要求全部 dev rung 规范化为同一完整 EvalRequest，防止 elite 混比；三层评估和 calibration 继续独立身份 | 种群不支持变化 fidelity/seed/time_limit 排名；tree 的变化 rung 能力保持，未认证异质种群多保真策略 |
+| M4-01、M4-02 | 同一配置可选择 ResearchFrontier 或 PopulationFrontier；一份完整 DAG 与有界成员视图；容量含 M9 incumbent，eviction 保留节点/两亲骨架/后代/证据，不级联删谱系 | 未统一 island/MAP-Elites 成员策略；不是额外平行 archive 或通用生存算法集合 |
+| M4-03、M5-02 | 两亲骨架用于原有父/祖先权限，真实公开 evidence 和 scoped memory 到达 crossover；淘汰不删除祖先记忆；S6 run-only 负反馈仍可影响后续候选 | 普通 memory 继续受 trust/level/negative/长度限制；引用边不自动扩大检索，也无通用 ExecutorSpec projection |
+| M4-04 | greedy/uniform/tournament/softmax；receipt 绑定配置、eligible、score/attempt、k、strategy、RNG 和最后选择；权威 eligible 含预算资格，driver 复算后才推进 RNG | 不把抽样多样性称为 novelty/MAP-Elites 保留；M9 拒绝但有效 dev 可作探索父代，不代表准入晋升 |
+| M5-03、M9-04 | 两亲只能使用公开 dev 字段；合成组合用例证明 private、raw anchor、held-out 不经 crossover 回流，run-only 负反馈有原四回执来源 | 没有跨 run 自动推广 proxy 负反馈或语义泄漏的通用保证 |
+| M9-01～03 | 种群 retention 与 gate_selected 分离；M9 selected 受容量内保护；dev-best/gate/final、调用硬顶和物理预算保持；失效 proxy 在 gate 前 veto | top_k/HITL 仍未接入；种群成员不是准入集合 |
+| X1-02 | checkpoint 完整 Proposal/Evidence 对原 composed_evidence；从 StateMutation+M9 重建节点/成员/有序双亲，每次抽样按当时预算池重算 receipt/父代/RNG；合法预算拒绝终态可恢复；周期恢复/独立 inprocess replay 与 worktree 三窗口接管保持原调用/RNG | serial 仍必需；worktree 独立 replay 的真实执行来源/墙钟可能不匹配，未知付费操作和断电限制沿用 S7 |
+| X1-05 | 持久化 population_sample、sampling_committed、finalized/pruned 等记录，成员变更和随机状态可审查 | 仍不是可订阅事件总线，未完成独立 dashboard |
+
+v67 三文件显式组为 `test_population_frontier.py`、`test_population_components.py`、`test_composed_population.py`，保留全部 v66 命令和超时。公开组合用例同时启用种群、真实 worktree、proxy 校准、记忆、M9 和三层物理预算：4 dev + 4 calibration + 3 gate + 1 final、4 次离线 provider 调用、2 次 committed draw，真实本地调用数 12、候选数 4、明示合成 token 104。第 3 候选 proxy↑true↓被否决，其来源受限的负反馈改变第 4 次 crossover 产物并再次通过 gate；完成 resume 不产生新调用。该用例验证机制，不代表外部模型或 benchmark 成绩。恢复回归还覆盖非 protected 节点状态+成员重算、checkpoint/journal RNG 双改和有序父代在 node/proposal 双改，均要求零新增付费调用且原 journal 字节不变。
+
+| 验证项 | 执行状态与阶段门槛 |
+| --- | --- |
+| Mac `make check` | 最终实现通过：1,472 portable、160 Linux deselected（135.73 秒）、11 axioms、4 个离线示例；全量时 42 tooling，新增真实归档保护后 43 tooling 单独复核通过；Linux deselected 不计通过 |
+| 工具与 source 检查 | v67 接线 43 tooling、9 历史/source-only 检查通过；v66 真实成功证据原字节归档并以 SHA-256 保护，不生成 v67 初始证书 |
+| 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
+| Linux v67 | 本提交完整 CI 必须通过后才推进 main；新证书需包含 S8 组及全部 37 检查，实际 pytest 数以同 SHA artifact 为准 |
+| 提交与 main 更新 | 候选提交→核对同 SHA 新 summary/certificate/journal→非 force 推进 main；最终阶段证据保存在 CI 产物和交付报告，不为补自引用 SHA 重造一个未验收提交 |
+
+S8 接通配置种群、压力抽样和双亲文本交叉的具体闭环；novelty/MAP-Elites、代码签名、通用执行角色、配置并行池、HITL、事件订阅、网络知识和真实外部 campaign 保持明确未完成或后置。原始抽象文档及基线对照不改写为事后“全部完成”。

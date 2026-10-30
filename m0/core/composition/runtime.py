@@ -24,6 +24,8 @@ from core.composition.knowledge import KnowledgePack
 from core.composition.admission import LayeredAdmissionController
 from core.composition.budget import HierarchicalBudget
 from core.composition.hierarchical_runtime import HierarchicalRuntime
+from core.composition.population_runtime import PopulationRuntime
+from core.composition.population import PopulationPolicy, CrossoverOperator
 from core.composition.evaluation import (EvaluationContract, binding_for, comparison_projection,
     decode_evidence, encode_evidence, measured_costs, public_projection, validate_evidence,
     validate_request)
@@ -70,7 +72,7 @@ def _copy_sources(sources):
     return copied
 
 
-class ComposedRuntime(HierarchicalRuntime):
+class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
     def __init__(self, assembly, registry, llm, evaluator, config, workdir, stamp):
         self.registry = registry
         self.assembly = registry.preflight(assembly)
@@ -141,6 +143,7 @@ class ComposedRuntime(HierarchicalRuntime):
                 for method in ("quote_reserve", "settle")):
             raise ValueError("budget does not implement its runtime contract")
         self.layered = self.parts["admission"] if isinstance(self.parts["admission"], LayeredAdmissionController) else None
+        self._preflight_population()
         self.durable_executor = bool(getattr(self.parts["executor"], "durable_operation_recovery", False))
         required_executor = getattr(self.parts["domain"], "required_executor", None)
         if required_executor is not None and required_executor != self.assembly.executor.name:
@@ -151,8 +154,8 @@ class ComposedRuntime(HierarchicalRuntime):
             from core.composition.defaults import PromptOperator, InstructionSkill
             if not self.hierarchical or not self.cfg.checkpoint_enabled:
                 raise ValueError("worktree recovery requires hierarchical budgets and checkpoints")
-            if type(self.parts["policy"]) not in {GreedyPolicy, LLMCyclesPolicy} or any(
-                    type(item) is not PromptOperator for item in self.parts["operators"]) or any(
+            if type(self.parts["policy"]) not in {GreedyPolicy, LLMCyclesPolicy, PopulationPolicy} or any(
+                    type(item) not in {PromptOperator, CrossoverOperator} for item in self.parts["operators"]) or any(
                     type(item) is not InstructionSkill for item in self.parts["skills"]):
                 raise ValueError("worktree continuation requires supported deterministic local decision components")
             if not isinstance(self.store, ContinuationStore):
@@ -319,9 +322,8 @@ class ComposedRuntime(HierarchicalRuntime):
         if (self.budget.state()["open_intents"] if self.hierarchical else self.budget.reserves) \
                 or self.budget.account_summary() != payload["ledger"]:
             raise ValueError("checkpoint budget differs from durable ledger")
-        restored = ResearchFrontier.restore(payload["frontier_checkpoint"].encode())
-        if type(self.frontier) is not ResearchFrontier:
-            raise ValueError("configured frontier does not implement portable restore")
+        restored = self._restore_frontier_snapshot(payload["frontier_checkpoint"].encode(),
+            incumbent=payload["incumbent"], proposals=proposals, evidence=evidence_by_id)
         self.frontier.__dict__.update(restored.__dict__)
         self.memory.restore_state(payload["memory"])
         for key, state in payload["module_states"].items():
@@ -513,7 +515,7 @@ class ComposedRuntime(HierarchicalRuntime):
         strategy = await self._policy("observe", state, self.budget.account_summary())
         if not isinstance(strategy, dict):
             raise ValueError("policy observe must return a strategy object")
-        selection_view = ResearchFrontier.restore(self.frontier.checkpoint())
+        selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
         unavailable = set()
         if self.hierarchical:
             unavailable = {identifier for identifier, proposal in self.proposals.items()
@@ -533,6 +535,7 @@ class ComposedRuntime(HierarchicalRuntime):
                 or any(parent not in self.proposals or parent not in eligible_parents
                        for parent in parents):
             raise ValueError("policy selected invalid parents")
+        self._commit_population_selection(selection_view, parents, eligible_parents)
         context = self._context(task, cycle, parents)
         if self.layered:
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
@@ -685,8 +688,8 @@ class ComposedRuntime(HierarchicalRuntime):
         self.applier.apply(StateMutation(MutationOp.UPDATE_NODE, candidate_id,
             {"result": node_result, "insight": "\n".join(str(entry.payload.body) for entry in lessons)[:2048] or None},
             "materialize insight from evidence-bound memory"))
-        self.applier.apply(StateMutation(MutationOp.MERGE if decision.admit else MutationOp.PRUNE,
-                           candidate_id, {} if decision.admit else {"reason": decision.reason}, decision.reason))
+        self._finalize_frontier_admission(candidate_id, decision,
+            decision.receipt_id if self.layered else event_id)
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
         if decision.admit:
             self.incumbent = candidate_id
@@ -778,6 +781,8 @@ class ComposedRuntime(HierarchicalRuntime):
                        "accepted_candidate_ids": [row["payload"]["candidate_id"] for row in
                             self.store.read("composed_decision") if row["payload"]["decision"]["admit"]],
                        "checkpoint_ref": payload_digest(self._payload())}
+        if self._population_state() is not None:
+            self.result["population"] = self._population_state()
         if self.durable_executor:
             self.result["execution"] = self.manifest["executor"]
         return self.result

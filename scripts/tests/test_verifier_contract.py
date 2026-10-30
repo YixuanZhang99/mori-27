@@ -26,6 +26,52 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def test_archived_v66_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v66/LAST_RUN.json":
+                "bd5db5f0038dc326b33f5ff6fef9a70142b76580a5ceb9569344164a647d35e6",
+            "m0/verifier/runs/v66.jsonl":
+                "cdcbc1a420d1899b23c8d4d1b0f8843747de76da925515e9e47ae7e5f90f778d",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / "m0/verifier/v66/LAST_RUN.json").read_text())
+        entries = [json.loads(line) for line in
+                   (ROOT / "m0/verifier/runs/v66.jsonl").read_text().splitlines()]
+        self.assertIs(certificate["passed"], True)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["command"], "python3 verifier/v66/verify.py")
+        self.assertEqual(entries[0]["exit_code"], 0)
+        self.assertEqual(entries[0]["checks"], certificate["checks"])
+        self.assertEqual(len(certificate["checks"]), 36)
+        self.assertTrue(all(item["passed"] is True for item in certificate["checks"]))
+        worktree = certificate["worktree_recovery_stage_evidence"]
+        self.assertEqual(worktree["stage"], "S7")
+        self.assertIs(worktree["certified"], True)
+        self.assertIs(worktree["mac_linux_security_equivalence_claimed"], False)
+
+    def test_v67_keeps_every_v66_command_group_and_timeout(self):
+        previous = command_groups(verifier_tree("v66"))
+        current = command_groups(verifier_tree("v67"))
+        self.assertTrue(previous)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v67_explicitly_executes_population_end_to_end_without_filters(self):
+        groups = command_groups(verifier_tree("v67"))
+        command = groups["configured_population_selection_crossover_and_recovery_end_to_end"].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments[:2], ["-m", "pytest"])
+        self.assertTrue({"tests/test_population_frontier.py",
+                         "tests/test_population_components.py",
+                         "tests/test_composed_population.py"} <= set(arguments))
+        self.assertNotIn("-m", arguments[2:])
+        self.assertNotIn("--markexpr", arguments)
+
     def test_v66_keeps_every_v65_command_group_and_timeout(self):
         previous = command_groups(verifier_tree("v65"))
         current = command_groups(verifier_tree("v66"))
