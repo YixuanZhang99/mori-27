@@ -413,7 +413,7 @@ v64 成功证据已原样归档到 `m0/verifier/v64/LAST_RUN.json` 与 `m0/verif
 | --- | --- | --- | --- | --- |
 | S6 / v65 | M3-06（§4/M3 L164、§6.2 L442–444）；关联 M3-02～04、M5-03、M8-03、M9-04、X1-02 | 周期 anchor；proxy 与 true 的配对证据及秩相关有效性规则；失效时告警/降级和负反馈进入 scoped memory | 配置周期实际触发独立开发 calibration anchor 并经三层预算；请求/数据/seed 身份可核对；样本不足与无效相关明确区分；故意反向 proxy 触发预定动作并改变后续输入；admission/final 不进入搜索反馈；恢复/replay 保留调用、有效性与记忆来源 | 已接通子范围见下方 S6 实现记录；最终 Mac/Linux 按阶段证据核对 |
 | S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | S7 已按同 SHA Linux 验收封板；已接通子范围及保留限制见下方 S7 记录 |
-| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | S7 已封板；S8 三文件组和 Mac 检查完成，同 SHA Linux 门槛见下方 S8 记录 |
+| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | S8 已按同 SHA Linux 验收封板；已接通子范围及保留限制见下方 S8 记录 |
 
 S6 当前验收组为 `test_proxy_validity.py`、`test_composed_proxy.py`；v65 保留 v64 的全部命令、超时与真实历史证据。接线阶段 tooling 37 项、历史/source-only 9 项通过，未生成 v65 运行证书；这些不代替 S6 公开入口功能或 Linux 验收。S7/S8 的测试文件名与精确子范围在实现前确定，不提前认证生产环境隔离、分布式并发或真实外部 benchmark。
 
@@ -517,7 +517,37 @@ v67 三文件显式组为 `test_population_frontier.py`、`test_population_compo
 | Mac `make check` | 最终实现通过：1,472 portable、160 Linux deselected（135.73 秒）、11 axioms、4 个离线示例；全量时 42 tooling，新增真实归档保护后 43 tooling 单独复核通过；Linux deselected 不计通过 |
 | 工具与 source 检查 | v67 接线 43 tooling、9 历史/source-only 检查通过；v66 真实成功证据原字节归档并以 SHA-256 保护，不生成 v67 初始证书 |
 | 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
-| Linux v67 | 本提交完整 CI 必须通过后才推进 main；新证书需包含 S8 组及全部 37 检查，实际 pytest 数以同 SHA artifact 为准 |
-| 提交与 main 更新 | 候选提交→核对同 SHA 新 summary/certificate/journal→非 force 推进 main；最终阶段证据保存在 CI 产物和交付报告，不为补自引用 SHA 重造一个未验收提交 |
+| Linux v67 | [CI 40994318799](https://github.com/YixuanZhang99/mori-27/actions/runs/40994318799) 通过：1,632 pytest、37 检查、868.971 秒；exact SHA、ZIP 摘要及新 summary/certificate/journal 已核实，历史未改动 |
+| 提交与 main 更新 | `49be71ec079f1412a4a8e74086064c4db121c363` 已在同 SHA Linux 验收通过后非 force 推进 main；本地 handoff 和 CI 产物保留独立复核记录 |
 
 S8 接通配置种群、压力抽样和双亲文本交叉的具体闭环；novelty/MAP-Elites、代码签名、通用执行角色、配置并行池、HITL、事件订阅、网络知识和真实外部 campaign 保持明确未完成或后置。原始抽象文档及基线对照不改写为事后“全部完成”。
+
+
+S8 成功证据已原样归档到 `m0/verifier/v67/LAST_RUN.json` 与 `m0/verifier/runs/v67.jsonl`；来源和摘要见 [v68 历史证据说明](../m0/verifier/v68/README.md#archived-v67-evidence-provenance)。这不代替 S9 验收。
+
+### S9 MLE-Bench Lite 配置评估与同预算试跑：实现记录与验收门槛
+
+本阶段将 S6/S8 能力接到真实任务数据协议，新增 `zoo.mle_bench_lite.composed_agent` 与显式子集 `pilot`；旧 `governed_agent` 的 M0 路径保留。机制验收与外部模型试跑分别记录。精确接口、任务输入范围及评分边界见 [S9 指南](MLE_COMPOSED_V68.md)。
+
+| 条款 ID | S9 接入子范围与验收要求 | 剩余范围或明确限制 |
+| --- | --- | --- |
+| A-03、A-04、M8-01～04 | 三个公开 CSV 任务经同一配置 Framework/domain 产生规范 Evidence；训练/dev/calibration/admission/final 的实际内容身份绑定；每候选固定生成程序与预测后再分别评分 | 不是完整 22 题或全部任务模态；leaf 图像和 nomad 几何数据未接入；旧 M0 benchmark 入口不自动升级 |
+| M3-02、M3-03、M3-06 | full 真实启用层级预算、周期 anchor、秩相关；分类 accuracy 对负 log loss、回归绝对对数误差对负 RMSLE；每个附加操作计入该组资源消耗 | 阈值是预设规则，不宣称显著性；无真实价格表时不推导美元成本，未知费用不补零 |
+| M4-01～04、M2-03 | full 的种群抽样与双亲 crossover 进入实际任务候选生成；baseline 使用同一任务实现的 greedy 搜索 | 两组只测整个组合增益，不能直接归因单个模块；elite 不等于 novelty/MAP-Elites |
+| M5-02、M5-03、M9-04 | 独立公开开发 calibration 触发的有来源负反馈可以影响后续候选；admission/final 与外部官方 private 分数不反馈 | 实验内反思不代表跨任务知识迁移；fixture 中的确定性负反馈链路不代表真实模型必然出现同样行为 |
+| M7-01～03、M8-03 | Linux 使用受限执行环境运行生成程序；受信评分器独占验证标签；冻结后的固定预测供各 split 评分 | Mac 可移植检查不认证 Linux 沙箱；不得由任务执行成功推定未知付费调用可安全重试 |
+| X1-01～03、M9-01～03 | pilot 先冻结完整任务/种子/组/预算/model spec，所有组提交冻结后官方评分；独立 token 回执和实际模型复核；失败矩阵保留 | 子集结果明确 `subset_only`，不触发完整 22 题比较/host parity；正式 runner 的完整矩阵要求不放松 |
+
+v68 显式执行 `test_mle_composed.py`、`test_mle_provider.py` 与 `test_mle_pilot.py`，保留全部 v67 命令和超时、完整 pytest、真实 Linux 安全/恢复组与历史证据。新组必须证明原始数据与评估结果确实驱动候选、校准和回流，不能只检查 profile 字段存在。
+
+| 验证项 | 执行状态与阶段门槛 |
+| --- | --- |
+| Mac `make check` | 最终实现通过：1,577 portable、163 Linux deselected（176.69 秒）、11 axioms、4 个离线示例和 52 tooling；Linux deselected 不计通过 |
+| 工具与历史 | 最终 52 tooling 通过；v68 保留全部 v67 命令与超时，v67 原始证据以 SHA-256 保护；不生成 v68 初始证书 |
+| 官方 CPU 环境冒烟 | Mac 独立环境安装同一 hash lock，真实官方三任务 registry/preparer/protected snapshot/grade_csv 合成测试通过；Linux 由独立 `mle-cloud-runtime` CI job 验证，不计真实 benchmark 分数 |
+| 打包与导入快照 | `make build` 通过；`make verify-import` 核对原始导入快照 1,020 文件通过 |
+| Linux v68 | 同一候选提交的全量 CI 必须通过，证书包含 S9 组及全部 38 检查；实际 pytest 数以同 SHA artifact 为准 |
+| 提交与 main 更新 | 候选提交→核对同 SHA 新 summary/certificate/journal→非 force 推进 main；不为补自引用 SHA 制造未验收提交 |
+| 真实外部试跑 | 未执行；数据、规则授权、模型凭据和资源预算须先完整，实际结果与 fixture 验收分开归档 |
+
+S9 接入真实任务协议不改变其余条款边界：通用执行角色、配置并行池、HITL、事件订阅、外部网络知识、更多模态与全量 benchmark 效果仍须独立实现和验收。原始统一抽象和历史阶段证据保持不变。

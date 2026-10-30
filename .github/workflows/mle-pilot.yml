@@ -1,0 +1,109 @@
+name: Manual MLE Lite paired pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [preflight, run]
+        default: preflight
+        description: Preflight does not call the model
+      model:
+        type: string
+        required: true
+        description: Explicit model; returned snapshot must remain identical across all arms
+      token_budget:
+        type: string
+        required: true
+        description: Per-arm physical token cap, 1000–100000; input tokens can cause one-call overshoot
+      time_limit:
+        type: string
+        default: '600'
+        description: Per-arm seconds, 60–1800, excluding official final grading
+      iterations:
+        type: string
+        default: '4'
+        description: Same candidate cycle limit, 3–20
+      seeds:
+        type: string
+        default: '1'
+        description: One to three space-separated local split/search seeds
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mle-pilot-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  cpu-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PILOT_MODE: ${{ inputs.mode }}
+      PILOT_MODEL: ${{ inputs.model }}
+      PILOT_TOKEN_BUDGET: ${{ inputs.token_budget }}
+      PILOT_TIME_LIMIT: ${{ inputs.time_limit }}
+      PILOT_ITERATIONS: ${{ inputs.iterations }}
+      PILOT_SEEDS: ${{ inputs.seeds }}
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate explicit pilot limits
+        run: python3 scripts/run_mle_cloud.py validate
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: openai/mle-bench
+          ref: 507f92e1138bb6e40dac5c6ee7a6758e6424bf97
+          path: artifacts/mle-official
+          lfs: true
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.6.8'
+      - name: Prepare sandbox and locked CPU environment
+        run: |
+          bash scripts/setup_linux_ci.sh
+          uv venv --python /usr/bin/python3.12 /usr/local/share/mori27-venv
+          uv pip install --python /usr/local/share/mori27-venv/bin/python --require-hashes -r scripts/requirements-mle-pilot.lock
+          echo "PYTHONPATH=$GITHUB_WORKSPACE/m0:$GITHUB_WORKSPACE/artifacts/mle-official" >> "$GITHUB_ENV"
+      - name: Verify official source and scoring before accessing credentials
+        run: |
+          /usr/local/share/mori27-venv/bin/python scripts/verify_mle_cloud_runtime.py \
+            --official-root artifacts/mle-official --report artifacts/public-pilot/runtime.json
+      - name: Download and verify only the selected official datasets
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          /usr/local/share/mori27-venv/bin/python scripts/run_mle_cloud.py prepare \
+            --data-root "$RUNNER_TEMP/mle-data" --output-root "$RUNNER_TEMP/mle-evidence"
+      - name: Validate or run the paired pilot
+        env:
+          OPENAI_API_KEY: ${{ secrets.MLE_MODEL_API_KEY }}
+          OPENAI_API_BASE: ${{ vars.MLE_API_BASE || 'https://api.openai.com/v1' }}
+        run: |
+          /usr/local/share/mori27-venv/bin/python scripts/run_mle_cloud.py execute \
+            --official-root "$GITHUB_WORKSPACE/artifacts/mle-official" \
+            --data-root "$RUNNER_TEMP/mle-data" --output-root "$RUNNER_TEMP/mle-evidence" \
+            --public-report "$GITHUB_WORKSPACE/artifacts/public-pilot"
+      - name: Export allowlisted report without datasets or private evidence
+        if: always()
+        run: |
+          python3 scripts/run_mle_cloud.py export \
+            --output-root "$RUNNER_TEMP/mle-evidence/campaign" \
+            --public-report "$GITHUB_WORKSPACE/artifacts/public-pilot"
+      - name: Upload numeric pilot report only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mle-pilot-summary-${{ github.run_id }}
+          path: artifacts/public-pilot/*.json
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,0 +1,16 @@
+# CPU-only dependencies for the three supported CSV tasks at the locked MLE
+# revision. Other MLE tasks (image/audio/deep learning) are not supported here.
+# The official source is imported from its pinned checkout, not installed as a
+# misleading partial installation of its full all-task distribution.
+dacite>=1.9,<2
+numpy>=2,<3
+openai>=1,<4
+PyYAML>=6,<7
+appdirs>=1.4.4,<2
+pandas>=2.2,<3
+scikit-learn>=1.5,<2
+kaggle>=1.6,<1.7
+py7zr>=0.21,<1
+diskcache>=5.6.3,<6
+tqdm>=4.66,<5
+tenacity>=8.5,<10

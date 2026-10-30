@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run v67 in a disposable copy with fresh evidence and bounded execution.
+"""Run v68 in a disposable copy with fresh evidence and bounded execution.
 
 Cleanup covers the verifier process group. Workers that deliberately create a
 new session are outside that scope; hosted CI's disposable VM is the final
@@ -24,7 +24,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-VERIFIER_VERSION = "v67"
+VERIFIER_VERSION = "v68"
 HISTORY = (f"verifier/{VERIFIER_VERSION}/LAST_RUN.json",
            f"verifier/runs/{VERIFIER_VERSION}.jsonl")
 VERIFIER_COMMAND = f"python3 verifier/{VERIFIER_VERSION}/verify.py"
@@ -152,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         copy = Path(scratch.name) / "m0"
         shutil.copytree(ROOT / "m0", copy, ignore=shutil.ignore_patterns(
             ".venv", "__pycache__", ".pytest_cache", "*.egg-info", "build", "dist"))
-        # v67 inspects the active repository workflow rather than m0's archived
+        # v68 inspects the active repository workflow rather than m0's archived
         # nested workflow. Keep that source context beside the isolated copy.
         for name in CONTROL_FILES:
             source = ROOT / name
