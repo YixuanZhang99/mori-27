@@ -3,6 +3,27 @@ import hashlib
 import json
 
 
+def score_instance(instance, priority):
+    """Return negative used-bin count; execute priority only in a caller's sandbox."""
+    import numpy as np
+    if (not callable(priority) or type(instance) is not dict or
+            set(instance) != {'capacity', 'num_items', 'items'} or
+            type(instance['capacity']) is not int or instance['capacity'] <= 0 or
+            type(instance['num_items']) is not int or type(instance['items']) is not list or
+            instance['num_items'] < 1 or len(instance['items']) != instance['num_items'] or any(
+                type(item) is not int or not 0 < item <= instance['capacity'] for item in instance['items'])):
+        raise ValueError('invalid OR3 instance or priority')
+    bins = np.full(instance['num_items'], instance['capacity'], dtype=np.int64)
+    for item in instance['items']:
+        eligible = np.flatnonzero(bins >= item)
+        scores = np.asarray(priority(item, bins[eligible].copy()))
+        if (scores.shape != eligible.shape or scores.dtype.kind not in 'fiu' or
+                not np.isfinite(scores).all()):
+            raise ValueError('priority must return one finite numeric score per eligible bin')
+        bins[eligible[int(np.argmax(scores))]] -= item
+    return -int(np.count_nonzero(bins != instance['capacity']))
+
+
 def split_instances(instances):
     if type(instances) is not dict or len(instances) != 20 or any(
             type(key) is not str or not key.strip() for key in instances):

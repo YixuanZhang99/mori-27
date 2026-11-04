@@ -37,3 +37,11 @@ directory during search, freeze the selected candidate, and separately mount
 the held-out directory for final evaluation. This command does not establish a
 sandbox or perform a model run.
 
+The separate `core.tasks.funsearch_binpacking.score_instance` function scores
+one case as the negative number of bins used, and rejects priority outputs with
+the wrong shape or non-finite/non-numeric values. The built-in best-fit
+priority was checked on all 20 pinned OR3 instances and matches the upstream
+average of 212.0 bins. The priority callback is executable code: this function
+does not isolate it. Generated candidates must run in the existing restricted
+sandbox with only the chosen split mounted before this is used for model work.
+
