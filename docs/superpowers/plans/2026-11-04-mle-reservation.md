@@ -37,16 +37,16 @@ Interface: add optional JSON `reservation_modes={"operator":{"token":"remaining"
 - [x] Add unit regressions for quotes 60000 then 46606, mixed units, competing scopes and open operations, numeric minimum rejection, exact restoration and rehashed quote tampering; observe failures.
 - [x] Implement strict option validation and resolution inside the reservation lock; recompute amounts from the event-prefix state during restore.
 - [x] Enable the policy in both MLE arms; run focused tests and confirm prior fixed-policy tests remain green.
-- [ ] Run full Linux tests/examples/axioms/tooling/build/import checks; obtain one independent whole-change review, fix confirmed issues with failing regressions, commit and preserve a verified local bundle.
+- [x] Run full Linux tests/examples/axioms/tooling/build/import checks; obtain one independent whole-change review, fix confirmed issues with failing regressions, commit and preserve a verified local bundle.
 
 ### Task 2: Versioned validation and real evidence
 
 Files: new `m0/verifier/v70/`, acceptance wrapper and transition tests; continuation/alignment/experiment reports.
 
 - [x] Preserve authentic v69 certificate/journal with provenance from clean `5fa85d3`; retain all v69 command groups/timeouts and add explicit remaining-reservation coverage in v70.
-- [ ] Run v70 from a clean committed source, verify matching fresh certificate/journal and unchanged history.
+- [x] Run v70 from a clean committed source, verify matching fresh certificate/journal and unchanged history.
 - [x] Analyze the completed original six-run pilot, retain every failure and official score, export only whitelisted metadata.
-- [ ] If the repair is fully verified, prepare a new frozen six-run attempt using the SAME existing campaign ledger and CNY authorization; preserve attempt identities and all cumulative costs.
+- [x] If the repair is fully verified, prepare a new frozen six-run attempt using the SAME existing campaign ledger and CNY authorization; preserve attempt identities and all cumulative costs.
 
 Validation record: both actual-usage reproductions failed before the repair; ten policy behavior cases failed before implementation. The first focused group passed 75 tests. Independent whole-change review found one Important fractional rounding defect and no Critical findings. Three wallclock/GPU/USD regressions reproduced it; downward-only quote conversion repaired it. The initial expected float literal also rounded upward and was corrected to its actual representable predecessor. Fresh budget/MLE/recovery verification then passed 129 tests (16.85 seconds). The full suite launched before this final repair is intermediate evidence only; final-source full validation remains pending. No new external model request was made during this repair.
 
@@ -57,3 +57,5 @@ Ruling: stage v70 wiring before the next full pipeline so that its tooling check
 Transition verification: 53 wrapper/contract tests and 315 subtests passed. The new v70 retains all 30 prior command groups and adds two unfiltered groups (41 total checks). Full final-source validation and clean-SHA acceptance remain pending.
 
 Final candidate pipeline passed: 1,821 pytest in 371.48 seconds; 60 tooling tests, 11 axioms, four offline examples, wheel/sdist and 1,020-file import verification. Total 374.25 seconds with identical before/after source fingerprints. Official three-task CPU synthetic grading also passed without provider calls. Afterwards only documentation was corrected/updated (one relative link and this evidence/alignment record). Commit, verified bundle and clean-SHA v70 remain the next gates.
+
+Clean-SHA v70 passed on aedede3: 41 checks, 1821 full pytest, 901.868 seconds. Certificate/journal/provenance matched and source remained clean. The complete-history aedede3 bundle was verified. Attempt 2 passed production preflight and started at 2026-11-04 08:39:18 UTC from the frozen source, same parameters and same cumulative CNY ledger. Terminal results and independent usage audit remain pending; do not restart the live attempt.

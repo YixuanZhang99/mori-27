@@ -1,0 +1,218 @@
+{
+  "source_commit": "aedede3c2b78a5c2b57074c70d510af710f5af4e",
+  "source_clean_before": true,
+  "source_clean_after": true,
+  "version": "v70",
+  "passed": true,
+  "checks": [
+    {
+      "check": "historical_acceptance_evidence",
+      "passed": true
+    },
+    {
+      "check": "rejected_v14_preserved",
+      "passed": true
+    },
+    {
+      "check": "remaining_physical_reservation_and_mle_usage_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "cooperating_process_journal_snapshot_consistency",
+      "passed": true
+    },
+    {
+      "check": "mle_private_order_and_shared_currency_campaign_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "configured_mle_anchor_feedback_population_and_pilot_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "configured_population_selection_crossover_and_recovery_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "configured_worktree_process_identity_and_framework_recovery_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "periodic_anchor_proxy_validity_and_memory_feedback_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "hierarchical_physical_budget_and_fidelity_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "composed_research_offline_example",
+      "passed": true
+    },
+    {
+      "check": "layered_admission_and_isolated_final_audit_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "scoped_context_and_local_knowledge_feedback_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "canonical_evaluation_contract_and_composed_execution_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "composition_registry_defaults_and_runtime_end_to_end",
+      "passed": true
+    },
+    {
+      "check": "dataset_content_binding_and_evaluation_context_regressions",
+      "passed": true
+    },
+    {
+      "check": "process_identity_writer_reader_and_real_recovery_regressions",
+      "passed": true
+    },
+    {
+      "check": "upfront_config_validation_and_isolated_replay_regressions",
+      "passed": true
+    },
+    {
+      "check": "decision_receipt_identity_context_and_audit_regressions",
+      "passed": true
+    },
+    {
+      "check": "admission_sample_identity_comparability_and_schema_regressions",
+      "passed": true
+    },
+    {
+      "check": "physical_usage_failure_zero_and_replay_regressions",
+      "passed": true
+    },
+    {
+      "check": "budget_finite_cost_reserve_identity_and_atomic_replay_regressions",
+      "passed": true
+    },
+    {
+      "check": "real_seccomp_eperm_memfd_direct_popen_and_both_executors",
+      "passed": true
+    },
+    {
+      "check": "direct_prctl_proposer_eperm_http_credentials_fork_and_owner_recovery",
+      "passed": true
+    },
+    {
+      "check": "selection_contract_cost_coverage_and_campaign_mechanics",
+      "passed": true
+    },
+    {
+      "check": "multi_parent_lineage_native_roundtrip_artifacts_and_flip_isolation",
+      "passed": true
+    },
+    {
+      "check": "interop_frontier_map_elites_and_governance_regressions",
+      "passed": true
+    },
+    {
+      "check": "map_elites_sequential_batch_and_governance_regressions",
+      "passed": true
+    },
+    {
+      "check": "inprocess_batch_terminal_real_sigkill_partial_start_and_active_guards",
+      "passed": true
+    },
+    {
+      "check": "sequential_evaluation_terminal_regressions",
+      "passed": true
+    },
+    {
+      "check": "proposal_terminal_and_active_call_regressions",
+      "passed": true
+    },
+    {
+      "check": "complete_recovery_checkpoint_batch_governance_replay_regressions",
+      "passed": true
+    },
+    {
+      "check": "complete_local_regression",
+      "passed": true
+    },
+    {
+      "check": "static_axioms",
+      "passed": true
+    },
+    {
+      "check": "strict_benchmark_contract_wiring_and_m9_isolation",
+      "passed": true
+    },
+    {
+      "check": "embedding_state_portability_and_live_novelty_llm_isolation",
+      "passed": true
+    },
+    {
+      "check": "real_vendored_database_and_admission_isolation",
+      "passed": true
+    },
+    {
+      "check": "versioned_seccomp_policy_and_shared_memfd_wiring",
+      "passed": true
+    },
+    {
+      "check": "direct_prctl_proposer_policy_wiring_and_m9_isolation",
+      "passed": true
+    },
+    {
+      "check": "ci_workflow_wiring",
+      "passed": true
+    },
+    {
+      "check": "append_only_verifier_index",
+      "passed": true
+    }
+  ],
+  "elapsed_seconds": 901.868,
+  "external_provider_requests_during_acceptance": 0,
+  "files": {
+    "new-runs.jsonl": "fd411c00b85d866bc9e3254cd564f8ddd7275736676c36364b49820edaf9737a",
+    "LAST_RUN.json": "750a0ab259f0ba3648fe67a17b87d8e0ca4231c6cad80498445b95ae24d8a2d4",
+    "console.log": "851d280425e76046c7d8c3bdc9af13894e3ac3705f8aece18ff42b410770fd26",
+    "summary.json": "292e67a166558d795007854a34be1f9e2706e7e804fac0a1888085df2deb7d2f",
+    "v70.jsonl": "fd411c00b85d866bc9e3254cd564f8ddd7275736676c36364b49820edaf9737a"
+  },
+  "same_sha_remote_ci": false,
+  "remaining_reservation_evidence": {
+    "certified": true,
+    "executed_group": "remaining_physical_reservation_and_mle_usage_end_to_end",
+    "scope": [
+      "atomic remaining operator allocation across physical scopes",
+      "fixed admission floors and truthful actual settlement",
+      "fractional quotes do not round above available headroom",
+      "event-prefix semantic recovery and rehashed tamper refusal",
+      "public Framework MLE variable reasoning usage regression"
+    ],
+    "external_provider_api_executed": false,
+    "supplier_invoice_verified": false,
+    "exact_pre_request_prompt_token_bound": false
+  },
+  "journal_snapshot_evidence": {
+    "certified": true,
+    "executed_group": "cooperating_process_journal_snapshot_consistency",
+    "scope": [
+      "cooperating process reader/writer record serialization",
+      "fixed-prefix iteration releases locks before caller code",
+      "persistent corruption remains a visible failure",
+      "original partial-start SIGKILL recovery regression"
+    ],
+    "noncooperating_writers_protected": false,
+    "crash_atomic_or_fsync_durability_claimed": false,
+    "windows_execution_certified": false,
+    "subscription_protocol_certified": false
+  },
+  "check_count": 41,
+  "full_pytest": {
+    "passed": 1821,
+    "seconds": 375.0
+  },
+  "provenance_sha256": "8c7676bc3612ba5c03eeacabeaaec88aee1c3ebe59c3b3f0f32d052ea0aec2a3",
+  "origin": "local_linux_acceptance"
+}
