@@ -5,7 +5,7 @@ This module owns its ordering with invocation, outcome and integrity evidence.
 """
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 import math
 import time
@@ -13,7 +13,7 @@ import time
 from core.composition.contracts import OperatorFailure, Proposal
 from core.composition.evaluation import measured_costs
 from core.executor.types import CostVec, EvidenceRecord
-from core.llm import UsageError
+from core.llm import ProviderBudgetExhausted, UsageError
 
 
 def _physical(cost):
@@ -64,10 +64,27 @@ class _Operation:
         if isinstance(error, Exception) and not self.settled:
             self._unresolved(error)
 
-    async def invoke(self, function):
+    @contextmanager
+    def _remaining_tokens(self):
+        previous = self.provider.__dict__.get("admission_guard")
+        def guard():
+            if previous is not None:
+                previous()
+            if "token" in self.receipt.amounts and self.provider.usage_total - self.before >= self.receipt.amounts["token"]:
+                raise ProviderBudgetExhausted("candidate production consumed its reserved tokens")
+        self.provider.admission_guard = guard
+        try:
+            yield
+        finally:
+            if previous is None:
+                self.provider.__dict__.pop("admission_guard", None)
+            else:
+                self.provider.admission_guard = previous
+
+    async def invoke(self, function, *, stop_at_token_reserve=False):
         governance = self.owner.governance
         meter = (governance.meter(self.provider, self.receipt, lane=self.lane, slot_id=self.slot_id)
-                 if governance is not None else nullcontext())
+                 if governance is not None else self._remaining_tokens() if stop_at_token_reserve else nullcontext())
         with meter:
             return await function()
 
@@ -110,11 +127,12 @@ class InvocationLifecycle:
             finish()
             return result
 
-    async def operator(self, operator, request, candidate, receipt, *, provider, lane="main", slot_id=None):
+    async def operator(self, operator, request, candidate, receipt, *, provider, lane="main", slot_id=None,
+                       stop_at_token_reserve=False):
         with _Operation(self, receipt, provider, lane, slot_id) as operation:
             failure = None
             try:
-                proposal = await operation.invoke(lambda: operator.propose(request))
+                proposal = await operation.invoke(lambda: operator.propose(request), stop_at_token_reserve=stop_at_token_reserve)
             except OperatorFailure as error:
                 failure = error
                 proposal = Proposal(candidate, "", error.cost, error.measured_cost_units)
@@ -127,17 +145,21 @@ class InvocationLifecycle:
                     "proposal": asdict(proposal),
                     "failure_type": type(failure).__name__ if failure else None})
             operation.finish(proposal.cost, proposal.measured_cost_units, operator=True)
+            if failure is not None and getattr(failure, "integrity_failure", False):
+                raise ValueError("construction integrity failed after measured settlement") from failure
             if "node" in proposal.measured_cost_units and proposal.cost.node_count != 1:
                 raise ValueError("operator node measurement differs from the actual candidate attempt")
             return proposal, failure
 
     async def evaluation(self, receipt, provider, invoke, *, identity, domain, elapsed=None,
-                         lane="main", slot_id=None):
+                         lane="main", slot_id=None, outcome_owner="lifecycle"):
         from core.composition.worktree import MeasuredCommandError
+        if outcome_owner not in {"lifecycle", "executor"} or outcome_owner == "executor" and not callable(elapsed):
+            raise ValueError("durable evaluation owner requires its original measurement")
         with _Operation(self, receipt, provider, lane, slot_id) as operation:
             measured_elapsed = None
             try:
-                if self.governance is not None:
+                if self.governance is not None and outcome_owner == "lifecycle":
                     async def recorded():
                         return await self.store.evaluation_call(identity, invoke, provider=provider, domain=domain)
                     evidence, measured_elapsed = await operation.invoke(recorded)
@@ -158,7 +180,7 @@ class InvocationLifecycle:
                     self.store.append("governed_integrity_failure", {"intent_id": receipt.intent_id,
                         "reason": "measured_evaluation_rejected"})
                 raise
-            if self.governance is None and elapsed is not None:
+            if (self.governance is None or outcome_owner == "executor") and elapsed is not None:
                 # Timing retrieval cannot attest a replacement executor bill.
                 measured_elapsed = elapsed()
             if not isinstance(evidence, EvidenceRecord):

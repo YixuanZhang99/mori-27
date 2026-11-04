@@ -351,6 +351,8 @@ def _hierarchical(context, options):
 
 def default_registry():
     registry = Registry()
+    from core.composition.construction_recipes import RecipeOperator, register_construction
+    register_construction(registry)
     from core.composition.recovery import register_worktree
     register_worktree(registry)
     registry.register("provider", "provided", _provided)
@@ -365,12 +367,14 @@ def default_registry():
         ctx.scope_context, **opts), validate_options=population_policy_options)
     for name in ("draft", "reflective"):
         registry.register("operator", name, lambda ctx, opts, kind=name:
-                          PromptOperator(ctx.llm, kind, **opts), validate_options=_operator_options,
+                          RecipeOperator(kind, **opts) if ctx.execution else PromptOperator(ctx.llm, kind, **opts),
+                          validate_options=_operator_options, execution={"schema_version": 1, "contract": "recipe_v1"},
                           governance={"schema_version": 1, "parentless": True} if name == "draft" else None)
-    registry.register("operator", "crossover", lambda ctx, opts: CrossoverOperator(ctx.llm, **opts),
-                      validate_options=crossover_options)
+    registry.register("operator", "crossover", lambda ctx, opts:
+                      RecipeOperator("crossover", **opts) if ctx.execution else CrossoverOperator(ctx.llm, **opts),
+                      validate_options=crossover_options, execution={"schema_version": 1, "contract": "recipe_v1"})
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),
-                      validate_options=_skill_options)
+                      validate_options=_skill_options, execution={"schema_version": 1, "contract": "projected_skill_v1"})
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(
         store=ctx.store, **opts), validate_options=_objective_options)
     registry.register("frontier", "population", lambda ctx, opts: PopulationFrontier(

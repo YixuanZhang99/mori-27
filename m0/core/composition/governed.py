@@ -6,7 +6,7 @@ components to that authority and never inserts control outcomes into search.
 from __future__ import annotations
 
 import copy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from enum import Enum
 from contextlib import contextmanager
 
@@ -64,6 +64,11 @@ class GovernedInvocation:
             if getattr(session["executor"], "durable_operation_recovery", False):
                 session["executor"].validate_domain(domain)
             session["provider"]._governed_store = runtime.store
+            if runtime.construction_enabled:
+                from core.composition.configured_execution import ConfiguredExecution
+                session["construction_execution"] = ConfiguredExecution(runtime.assembly.execution,
+                    session, runtime.store, getattr(runtime, "_recorded_artifacts_root", runtime.workdir),
+                    lane="control", slot_id=slot["slot_id"])
         runtime.parts["provider"]._governed_store = runtime.store
         if not runtime.cfg.resume_from_checkpoint:
             runtime.budget.protect_controls(self.plan)
@@ -201,17 +206,26 @@ class GovernedInvocation:
         request = OperatorRequest(runtime.task, identifier, 0,
                                   context=copy.deepcopy(self.plan["initial_context"]))
         candidate = Candidate(identifier, operator=slot["operator"]["name"], created_cycle=0)
+        source_context = None
+        if runtime.construction_enabled:
+            source_context = session["construction_execution"].control_context(runtime.task)
+            candidate = replace(candidate, context_pack_ref=source_context["context_pack_ref"])
+            request = replace(request, context=session["construction_execution"].project(source_context))
         receipt = runtime.budget.reserve_control_operation(slot_id, "operator", candidate)
         if not receipt.granted:
             raise UsageError("protected control operator reservation was refused")
         runtime.store.append("governed_control_started", {"slot_id": slot_id,
             "plan_ref": self.plan["plan_ref"], "candidate_id": identifier, "main_cycles": main_cycles})
-        proposal, failure = await runtime.invocations.operator(session["operator"], request, candidate, receipt,
+        operator = runtime._production_operator(session["operator"], slot["operator"]["name"],
+            source_context, receipt, parts=session, lane="control", slot_id=slot_id, cycle=0)
+        proposal, failure = await runtime.invocations.operator(operator, request, candidate, receipt,
                                                 provider=session["provider"], lane="control", slot_id=slot_id)
         if proposal.candidate.id != identifier or proposal.candidate.parents or \
                 proposal.candidate.created_cycle != 0 or not isinstance(proposal.artifact, str):
             raise ValueError("control proposal changed frozen identity or parentless lineage")
-        if request.context != self.plan["initial_context"]:
+        expected_context = session["construction_execution"].project(source_context) if runtime.construction_enabled \
+            else self.plan["initial_context"]
+        if request.context != expected_context:
             raise ValueError("control operator mutated its frozen initial context")
         if not runtime.budget.audit_governance()["protection_valid"]:
             raise UsageError("control operator exceeded protected capacity")

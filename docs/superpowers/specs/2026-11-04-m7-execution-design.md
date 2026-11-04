@@ -1,6 +1,6 @@
 # M7 configured construction and immutable artifacts
 
-Status: implementation design after three alternative interface designs and a fresh builder check; implementation is pending. No M7 closure or new runtime is claimed. Baseline f7ab27395b7907b851196ad7a88b38dd7bf5986d. User authorized autonomous development; choices below are engineering decisions, not new user approvals. Original alignment/RUBRIC remain binding.
+Status: Tasks 1–3 implemented and locally verified, including public schema-2 native integration and isolated controls. Git publication, v9 external currency support and integrated acceptance remain Tasks 4–6. No full M7 closure is claimed. Baseline f7ab27395b7907b851196ad7a88b38dd7bf5986d. User authorized autonomous development; choices below are engineering decisions, not new user approvals. Original alignment/RUBRIC remain binding.
 
 ## Intent and current mismatch
 
@@ -41,6 +41,8 @@ Resolve the initial hypothesis from the candidate plan, optionally constrained b
 
 Repairs are bounded by max_attempts and the existing operator reservation/provider call limits. Only local implementation validation feedback may guide repair. Held-out evaluation never repairs or materializes.
 
+For a native provider without a declared hard per-call bound, the runtime stops further repairs once measured token usage consumes the reservation. One unbounded call can overrun that reservation; the original bill remains charged. This is not a pre-dispatch hard token ceiling. Governed providers retain their existing declared hard per-call bounds and protected future capacity.
+
 ## Physical and currency accounting
 
 Candidate production stays one existing operator operation: reserve once, start once, one provider meter with monotonically increasing ordinals across recipe and materializer, persist terminal materialization, settle once. One attempted node, zero evaluation counts. No nested reset of governance ordinal state. Paid M2 activity, if supported, is inside the same envelope; recipes for the built-in default path are pure.
@@ -80,3 +82,11 @@ Two important questions were raised by a fresh builder review; both are resolved
 2. **Feedback and instruction skills.** New reflective/crossover recipes receive selected parent artifact references and numeric public comparison metadata. Raw parent feedback/insight is available only if selected by the single scoped M5 retrieval and its projection; empty/truncated retrieval intentionally means unavailable feedback. This is documented new-runtime behavior, not a silent change to legacy operators. Static user-configured InstructionSkill text becomes an explicit versioned construction-instructions tuple bound in the plan; it remains distinct from retrieved source evidence. Other skill adapters must declare and obey the projected-input execution contract before v9 preflight accepts them. They may not receive hidden unprojected context or arbitrary full strategy dictionaries. Unknown contracts fail before paid work. Role, skill instructions and recipe identifiers are all bound to the artifact receipt.
 
 The existing operator operation is explicitly recorded as a **candidate-production envelope** in v9 construction events: M2 recipe and M7 build/repair substages have distinct recorded identities under one physical intent and a continuous provider ordinal. The event does not claim that old operator records already had M7 semantics. Unknown whole-envelope physical use remains reserved while known per-call provider/CNY evidence stays available; reports must distinguish incomplete aggregate accounting from zero usage.
+
+## Public native integration decisions
+
+Schema 2 creates distinct planning and feedback-absorption instances from the same policy configuration, with separate checkpoint and component-store namespaces. Raw feedback can still be absorbed into M4 memory; planning receives it through the selected M5 projection. This closes an observed bypass where a policy retained excluded feedback in its own state across checkpoint restoration and later echoed it into a hypothesis. Custom policies that require shared implicit absorb/ideate state must transfer that information explicitly through M5. Schema 1 keeps its original behavior. Arbitrary shared Python globals or external state remain outside this interface guarantee.
+
+The constructor factory receives no live model or evaluator dependency. The measured construction invocation supplies the provider. Generation-facing policy/operator/skill factories have scoped journal views and no direct evaluator dependency. Existing memory, frontier and knowledge authorities retain their required journal access. Built-in recipes and role registration live in a pure module separate from runtime orchestration so default registration does not create a dependency cycle.
+
+Task 3 accepts only the native in-process evaluator and rejects schema-2 external currency providers before dispatch. Git publication and command evaluation become available only after Task 4; external providers require the explicit Task 5 runtime and audit support. Completed materializations are verified against the original construction terminal and artifact bytes during resume, inspect and recorded replay. Replay consumes recorded outcomes without new provider or evaluator work.

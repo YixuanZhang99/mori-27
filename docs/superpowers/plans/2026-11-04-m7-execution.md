@@ -57,12 +57,12 @@
 
 **Interfaces:** New assembly schema 2 requires `execution={schema_version:1, spec:{role,hypothesis_frozen,context_projection,hypothesis?}, constructor:{name,options}}`; schema 1 is unchanged. Registry adds explicitly registered `constructor` factories and declarations. Resolve role before dispatch using constructor role definitions. New built-in recipe operators replace generation only in v9; prebuilt legacy path is explicit. Runtime identities are composed-v9-m7, composed-v9-m7-governed and composed-v9-m7-governed-external. External v9 remains rejected before calls until Task 5.
 
-- [ ] Add public Framework tests for native generation, role/projection behavior, echo-policy excluded sentinel isolation, static instruction preservation, free hypothesis frontier attribution, frozen mismatch typed failure, one-node/no-eval failure, same artifact across dev/baseline/calibration/admission/final, pause/resume and zero-call recorded replay.
-- [ ] Add control tests with different main/control input sentinels and fresh provider/constructor/domain/executor instances, frozen parentless controls and protected operator budgets.
-- [ ] Run new tests. Expected: RED from unsupported schema/new path.
-- [ ] Integrate M2 recipes and M7 materialization within one existing InvocationLifecycle.operator envelope. Freeze build inputs after projecting M5, including before ideation. Evaluation only receives a Materialization reference. Persist references in checkpoint and exact new runtime manifest; no reinterpretation of old records. Old profiles/readers remain unchanged.
-- [ ] Run new files plus existing context, skills, population, layered, governance and budget tests, then full project checks. Expected: all GREEN.
-- [ ] Commit public v9 native path and record limitations honestly until Task 4/5.
+- [x] Add public Framework tests for native generation, role/projection behavior, echo-policy excluded sentinel isolation, static instruction preservation, free hypothesis frontier attribution, frozen mismatch typed failure, one-node/no-eval failure, same artifact across dev/baseline/calibration/admission/final, pause/resume and zero-call recorded replay.
+- [x] Add control tests with different main/control input sentinels and fresh provider/constructor/domain/executor instances, frozen parentless controls and protected operator budgets.
+- [x] Run new tests. Expected: RED from unsupported schema/new path.
+- [x] Integrate M2 recipes and M7 materialization within one existing InvocationLifecycle.operator envelope. Freeze build inputs after projecting M5, including before ideation. Evaluation only receives a Materialization reference. Persist references in checkpoint and exact new runtime manifest; no reinterpretation of old records. Old profiles/readers remain unchanged.
+- [x] Run new files plus existing context, skills, population, layered, governance and budget tests, then full project checks. Expected: all GREEN.
+- [x] Commit public v9 native path and record limitations honestly until Task 4/5.
 
 ### Task 4: Real Git publication, native/command evaluation and default profile
 

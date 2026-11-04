@@ -143,6 +143,46 @@ class GovernanceConfig:
 
 
 @dataclass(frozen=True)
+class ExecutionConfig:
+    """Detached versioned construction inputs; no executable configuration."""
+    _encoded: str
+
+    @classmethod
+    def from_dict(cls, value):
+        value = json_copy(value, label="execution configuration")
+        if type(value) is not dict or set(value) != {"schema_version", "spec", "constructor"} \
+                or type(value["schema_version"]) is not int or value["schema_version"] != 1:
+            raise ValueError("unsupported execution configuration")
+        spec = value["spec"]
+        if type(spec) is not dict or not {"role", "hypothesis_frozen", "context_projection"} <= set(spec) \
+                or set(spec) - {"role", "hypothesis_frozen", "context_projection", "hypothesis"}:
+            raise ValueError("execution requires an explicit role, hypothesis policy and projection")
+        _name(spec["role"], "execution role")
+        if type(spec["hypothesis_frozen"]) is not bool:
+            raise ValueError("hypothesis_frozen must be boolean")
+        projection = spec["context_projection"]
+        if type(projection) is not list or any(type(x) is not str or x not in {
+                "memory", "grounding", "query"} for x in projection) or len(set(projection)) != len(projection):
+            raise ValueError("unsupported execution context projection")
+        if spec.get("hypothesis") is not None:
+            _name(spec["hypothesis"], "execution hypothesis")
+        value["constructor"] = ComponentSpec.from_dict(value["constructor"]).to_dict()
+        return cls(json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")))
+
+    def to_dict(self):
+        return json.loads(self._encoded)
+
+    @property
+    def constructor(self):
+        return ComponentSpec.from_dict(self.to_dict()["constructor"])
+
+    @property
+    def spec(self):
+        from core.executor.types import ExecutorSpec
+        return ExecutorSpec(**self.to_dict()["spec"])
+
+
+@dataclass(frozen=True)
 class AssemblyConfig:
     schema_version: int
     name: str
@@ -159,10 +199,16 @@ class AssemblyConfig:
     mode: str = "benchmark"
     knowledge: ComponentSpec | None = None
     governance: GovernanceConfig | None = None
+    execution: ExecutionConfig | None = None
 
     def __post_init__(self) -> None:
-        if type(self.schema_version) is not int or self.schema_version != 1:
-            raise ValueError("assembly schema_version must be integer 1")
+        if type(self.schema_version) is not int or self.schema_version not in {1, 2}:
+            raise ValueError("assembly schema_version must be integer 1 or 2")
+        if (self.schema_version == 1 and self.execution is not None) or (
+                self.schema_version == 2 and not isinstance(self.execution, ExecutionConfig)):
+            raise ValueError("assembly schema 2 requires execution; schema 1 cannot enable it")
+        if self.execution is not None and self.budget.name != "hierarchical":
+            raise ValueError("configured construction requires hierarchical physical accounting")
         _name(self.name, "assembly name")
         if self.mode not in ("benchmark", "research") or type(self.mode) is not str:
             raise ValueError("assembly mode must be benchmark or research")
@@ -207,7 +253,7 @@ class AssemblyConfig:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AssemblyConfig":
         required = {"schema_version", "name", "operators", *_SINGLE_COMPONENTS}
-        allowed = required | {"skills", "mode", "knowledge", "governance"}
+        allowed = required | {"skills", "mode", "knowledge", "governance", "execution"}
         if type(data) is not dict:
             raise ValueError("assembly configuration must be an object")
         data = json_copy(data, label="assembly configuration")
@@ -225,6 +271,7 @@ class AssemblyConfig:
             operators=tuple(ComponentSpec.from_dict(item) for item in data["operators"]),
             skills=tuple(ComponentSpec.from_dict(item) for item in data.get("skills", [])),
             mode=data.get("mode", "benchmark"),
+            execution=ExecutionConfig.from_dict(data["execution"]) if "execution" in data else None,
             governance=GovernanceConfig.from_dict(data["governance"]) if "governance" in data else None,
             knowledge=ComponentSpec.from_dict(data["knowledge"]) if data.get("knowledge") is not None else None,
             **{key: ComponentSpec.from_dict(data[key]) for key in _SINGLE_COMPONENTS})
@@ -236,7 +283,8 @@ class AssemblyConfig:
             "operators": [item.to_dict() for item in self.operators],
             "skills": [item.to_dict() for item in self.skills],
             "mode": self.mode, "knowledge": self.knowledge.to_dict() if self.knowledge else None,
-            **({"governance": self.governance.to_dict()} if self.governance is not None else {})}
+            **({"governance": self.governance.to_dict()} if self.governance is not None else {}),
+            **({"execution": self.execution.to_dict()} if self.execution is not None else {})}
 
 
 @dataclass(frozen=True)
@@ -251,6 +299,7 @@ class BuildContext:
     mode: str = "benchmark"
     invocation_scope: dict[str, Any] | None = None
     governance: Any = None
+    execution: ExecutionConfig | None = None
 
 
 class OperatorFailure(RuntimeError):

@@ -80,8 +80,9 @@ class GreedyPolicy:
         if type(k) is not int or k < 1:
             raise ValueError("ideation count must be a positive integer")
         return [{"operator": "reflective" if parent is not None else "draft",
-                 "hypothesis": "Improve the observed failures" if parent is not None
-                 else "Establish an executable baseline"} for _ in range(k)]
+                 "hypothesis": context.get("execution", {}).get("hypothesis") or (
+                     "Improve the observed failures" if parent is not None
+                     else "Establish an executable baseline")} for _ in range(k)]
 
     async def select(self, frontier, budget):
         return await self._baseline.select(frontier, budget)

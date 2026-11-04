@@ -38,8 +38,9 @@ class PopulationPolicy(GreedyPolicy):
         if type(k) is not int or k < 1:
             raise ValueError("population ideation requires a positive integer count")
         return [{"operator": "crossover" if parent is not None else "draft",
-                 "hypothesis": "Combine complementary behavior from two valid population members"
-                    if parent is not None else "Establish an independent population member"} for _ in range(k)]
+                 "hypothesis": context.get("execution", {}).get("hypothesis") or (
+                     "Combine complementary behavior from two valid population members"
+                     if parent is not None else "Establish an independent population member")} for _ in range(k)]
 
 
 def crossover_options(options):

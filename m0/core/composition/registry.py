@@ -13,7 +13,7 @@ from core.composition.provider import MeteredProvider
 Factory = Callable[[BuildContext, dict[str, Any]], Any]
 OptionValidator = Callable[[dict[str, Any]], None]
 KINDS = frozenset({"provider", "domain", "policy", "operator", "frontier", "memory",
-                   "executor", "admission", "budget", "skill", "knowledge"})
+                   "executor", "admission", "budget", "skill", "knowledge", "constructor"})
 
 
 def _no_options(options: dict[str, Any]) -> None:
@@ -26,6 +26,7 @@ class _Registration:
     factory: Factory
     validate_options: OptionValidator
     governance: dict[str, Any] | None = None
+    execution: dict[str, Any] | None = None
 
 
 class Registry:
@@ -80,7 +81,8 @@ class Registry:
 
     def register(self, kind: str, name: str, factory: Factory, *,
                  validate_options: OptionValidator | None = None,
-                 governance: dict[str, Any] | None = None) -> None:
+                 governance: dict[str, Any] | None = None,
+                 execution: dict[str, Any] | None = None) -> None:
         if type(kind) is not str or kind not in KINDS:
             raise ValueError(f"unknown component kind: {kind}")
         ComponentSpec(name)
@@ -90,7 +92,8 @@ class Registry:
         if not callable(factory) or (validate_options is not None and not callable(validate_options)):
             raise ValueError("component factory and option validator must be callable")
         self._entries[key] = _Registration(factory, validate_options or _no_options,
-            json_copy(governance, label="factory governance") if governance is not None else None)
+            json_copy(governance, label="factory governance") if governance is not None else None,
+            json_copy(execution, label="factory execution") if execution is not None else None)
 
     def preflight(self, config: AssemblyConfig | dict[str, Any]) -> AssemblyConfig:
         if isinstance(config, AssemblyConfig):
@@ -109,7 +112,30 @@ class Registry:
                 raise ValueError(f"option validator mutated configuration: {kind}/{spec.name}")
         if snapshot.governance is not None:
             self._preflight_governance(snapshot)
+        if snapshot.execution is not None:
+            self._preflight_execution(snapshot)
         return snapshot
+
+    def _preflight_execution(self, config):
+        from core.composition.construction import RoleDefinition
+        if config.executor.name != "inprocess":
+            raise ValueError("v9 Git construction integration is not available yet")
+        declared = self._entries[("constructor", config.execution.constructor.name)].execution
+        if type(declared) is not dict or set(declared) != {"schema_version", "roles"} \
+                or type(declared["schema_version"]) is not int or declared["schema_version"] != 1 \
+                or type(declared["roles"]) is not dict or config.execution.spec.role not in declared["roles"]:
+            raise ValueError("constructor requires explicit versioned role definitions")
+        for key, role in declared["roles"].items():
+            if type(role) is not dict or set(role) != {"name", "version", "instructions"} or role["name"] != key:
+                raise ValueError("invalid constructor role declaration")
+            RoleDefinition(**role)
+        for kind, spec in (*self._specs(config), *self._control_specs(config)):
+            entry = self._entries[(kind, spec.name)]
+            if kind in {"operator", "skill"} and entry.execution != {
+                    "schema_version": 1, "contract": "recipe_v1" if kind == "operator" else "projected_skill_v1"}:
+                raise ValueError("component lacks the projected construction input contract")
+            if kind == "provider" and entry.governance and entry.governance.get("external_currency"):
+                raise ValueError("v9 external currency integration is not available yet")
 
     @staticmethod
     def _specs(config: AssemblyConfig):
@@ -122,6 +148,8 @@ class Registry:
             yield "skill", spec
         if config.knowledge is not None:
             yield "knowledge", config.knowledge
+        if config.execution is not None:
+            yield "constructor", config.execution.constructor
 
     @staticmethod
     def _control_specs(config):
@@ -155,6 +183,19 @@ class Registry:
             raise ValueError("component factory mutated frozen governance")
         return component
 
+    def _constructor(self, config, context):
+        from core.composition.governance import LaneStoreView
+        spec = config.execution.constructor
+        entry = self._entries[("constructor", spec.name)]
+        scope = context.invocation_scope or {"lane": "main"}
+        scoped = replace(context, llm=None, evaluator=None, store=LaneStoreView(context.store,
+            lane=scope["lane"], slot_id=scope.get("slot_id"), component="constructor"))
+        component = self._construct(entry, scoped, json_copy(spec.options))
+        binding = json_copy(component.manifest_binding)
+        if binding.get("configuration", {}).get("roles") != entry.execution["roles"]:
+            raise ValueError("constructor roles differ from their preflight declaration")
+        return component
+
     @staticmethod
     def _raw_identities(component):
         # Unwrap only declared adapter links; never deepcopy or traverse arbitrary
@@ -174,7 +215,7 @@ class Registry:
         current = []
         forbidden = [*known, *self._raw_identities(context.llm),
                      *self._raw_identities(context.evaluator)] if control else []
-        for kind in ("provider", "domain", "operator", "executor"):
+        for kind in ("provider", "domain", "operator", "executor", "constructor"):
             if kind not in components:
                 continue
             for value in self._raw_identities(components[kind]):
@@ -217,6 +258,7 @@ class Registry:
         scope = {"lane": "control", "slot_id": slot["slot_id"], "seed": slot["seed"]}
         active = replace(context, llm=None, evaluator=None, mode=snapshot.mode,
             governance=snapshot.governance.to_dict(), invocation_scope=scope,
+            execution=snapshot.execution,
             workdir=Path(context.workdir) / "controls" / slot["slot_id"])
         parts = {}
         for kind, spec in (*self._control_specs(snapshot), ("executor", snapshot.executor)):
@@ -249,6 +291,8 @@ class Registry:
                 component.validate_request(EvalRequest(**slot["request"]))
                 active = replace(active, evaluator=component)
             parts[kind] = component
+        if snapshot.execution is not None:
+            parts["constructor"] = self._constructor(snapshot, active)
         self._remember_session(context, parts, control=True)
         parts["invocation_scope"] = json_copy(scope)
         return parts
@@ -260,6 +304,8 @@ class Registry:
         snapshot = self.preflight(config)
         components: dict[str, Any] = {"operators": [], "skills": []}
         active_context = context if context.mode == snapshot.mode else replace(context, mode=snapshot.mode)
+        if snapshot.execution is not None:
+            active_context = replace(active_context, execution=snapshot.execution)
         governed = snapshot.governance is not None
         if governed:
             maximum = getattr(context.loop_config, "max_generations", None)
@@ -268,13 +314,27 @@ class Registry:
             active_context = replace(active_context, governance=snapshot.governance.to_dict(),
                                      invocation_scope={"lane": "main"})
         for kind, spec in self._specs(snapshot):
+            if kind == "constructor":
+                components[kind] = self._constructor(snapshot, active_context)
+                continue
             registration = self._entries[(kind, spec.name)]
             factory_context = active_context
-            if governed and kind not in {"budget", "executor"}:
+            if (governed and kind not in {"budget", "executor"}) or (
+                    snapshot.execution is not None and kind in {"provider", "policy", "operator", "skill"}):
                 from core.composition.governance import LaneStoreView
                 factory_context = replace(active_context, store=LaneStoreView(context.store,
                     lane="main", component=kind))
+            if snapshot.execution is not None and kind in {"policy", "operator", "skill"}:
+                factory_context = replace(factory_context, evaluator=None)
             component = self._construct(registration, factory_context, json_copy(spec.options))
+            if kind == "policy" and snapshot.execution is not None:
+                from core.composition.governance import LaneStoreView
+                absorber_context = replace(active_context, evaluator=None, store=LaneStoreView(context.store,
+                    lane="main", component="policy_absorber"))
+                absorber = self._construct(registration, absorber_context, json_copy(spec.options))
+                if absorber is component or not callable(getattr(absorber, "absorb", None)):
+                    raise ValueError("construction requires independent planning and absorption policy sessions")
+                components["policy_absorber"] = absorber
             if kind == "provider":
                 if not callable(component):
                     raise ValueError("provider factory must return a callable provider")

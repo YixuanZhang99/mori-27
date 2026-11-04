@@ -152,13 +152,18 @@ class HierarchicalRuntime(ProxyRuntime):
             expected = binding_for(proposal, request, evaluator_version=domain.evaluator_version,
                 evaluation_context=context_for(request) if callable(context_for) else domain.evaluation_context)
         operation = None
-        if self.durable_executor:
+        if self.construction_enabled:
+            operation = self._execution_operation(receipt, request.split_id, lane=lane, slot_id=control_slot,
+                                                 cycle=0 if lane == "control" else None)
+        elif self.durable_executor:
             operation = {"run_id": self._logical_run_id,
                 "cycle": getattr(self, "_active_cycle", 0), "phase": request.split_id,
                 "intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
                 "manifest_sha256": "sha256:" + payload_digest(self.manifest)}
 
         async def invoke():
+            if self.construction_enabled:
+                return await parts["construction_execution"].evaluate(proposal, request, operation)
             if operation is not None:
                 return await parts["executor"].execute_bound(
                     copy.deepcopy(proposal), copy.deepcopy(request), domain, operation)
@@ -167,10 +172,12 @@ class HierarchicalRuntime(ProxyRuntime):
 
         identity = {"intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
             "binding": asdict(expected), "lane": lane, "control_slot": control_slot}
-        elapsed = (lambda: parts["executor"].operation_metadata(operation)["wall_seconds"]) \
+        measurement_owner = parts["construction_execution"].owner if self.construction_enabled else parts["executor"]
+        elapsed = (lambda: measurement_owner.operation_metadata(operation)["wall_seconds"]) \
             if operation is not None else None
         evidence = await self.invocations.evaluation(receipt, parts["provider"], invoke,
-            identity=identity, domain=domain, elapsed=elapsed, lane=lane, slot_id=control_slot)
+            identity=identity, domain=domain, elapsed=elapsed, lane=lane, slot_id=control_slot,
+            outcome_owner="executor" if self.construction_enabled else "lifecycle")
         if lane == "main":
             self._validate_domain(request)
         validate_evidence(evidence, expected_binding=expected)
@@ -243,9 +250,11 @@ class HierarchicalRuntime(ProxyRuntime):
         request = replace(request, context={**request.context, "budget": {
             "state": self.budget.main_state() if self.governed else self.budget.state(), "allocated_request": asdict(evaluation_request),
             "direction_id": direction, "depth": depth}})
+        operator = self._production_operator(operator, selected, context, operation, cycle=cycle)
         proposal, failure = await self.invocations.operator(operator, request, candidate, operation,
-                                                           provider=self.parts["provider"])
-        if request.context.get("retrieval") != context["retrieval"] or \
+            provider=self.parts["provider"], stop_at_token_reserve=self.construction_enabled)
+        producer_context = self.construction.project(context) if self.construction_enabled else context
+        if request.context.get("retrieval") != producer_context["retrieval"] or \
                 request.context.get("context_pack_ref") != context["context_pack_ref"]:
             raise ValueError("operator changed authoritative retrieval context")
         if proposal.candidate.id != identifier or proposal.candidate.parents != parents \

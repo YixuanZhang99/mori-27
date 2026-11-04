@@ -98,8 +98,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.proxy = None
         self.governed = None
         self._stop_disposition = None
-        self.continuation_enabled = self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
+        self.construction_enabled = self.assembly.execution is not None
+        self.construction = None
+        self.continuation_enabled = self.construction_enabled or self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
         self.runtime_identity = "composed-v7-governed" if self.assembly.governance is not None else "composed-v6"
+        if self.construction_enabled:
+            self.runtime_identity = "composed-v9-m7-governed" if self.assembly.governance is not None else "composed-v9-m7"
         self.external_bridge_name = registry.external_bridge_name(self.assembly)
         if self.external_bridge_name is not None:
             from core.composition.external_provider import EXTERNAL_RUNTIME
@@ -130,13 +134,14 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if any(not callable(getattr(self.parts[kind], name, None)) for name in methods):
                 raise ValueError(f"component {kind} does not implement its runtime contract")
         for operator in self.parts["operators"]:
-            if not callable(getattr(operator, "propose", None)):
+            if not callable(getattr(operator, "recipe" if self.construction_enabled else "propose", None)):
                 raise ValueError("operator does not implement propose")
         self.frontier, self.memory = self.parts["frontier"], self.parts["memory"]
         from core.composition.defaults import MetricAdmission, PromptOperator
+        from core.composition.construction_recipes import RecipeOperator
         expected_metric = self.frontier.metric
         if getattr(self.parts["domain"], "metric", expected_metric) != expected_metric or any(
-                isinstance(operator, PromptOperator) and operator.metric != expected_metric
+                isinstance(operator, (PromptOperator, RecipeOperator)) and operator.metric != expected_metric
                 for operator in self.parts["operators"]):
             raise ValueError("configured objective differs across domain/frontier/operators")
         admission = self.parts["admission"]
@@ -183,6 +188,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                          "domain_version": getattr(self.parts["domain"], "evaluator_version", None),
                          "evaluation_context": getattr(self.parts["domain"], "evaluation_context", ""),
                          "knowledge": getattr(self.parts.get("knowledge"), "manifest_binding", None)}
+        if self.construction_enabled:
+            from core.composition.configured_execution import ConfiguredExecution
+            self.construction = ConfiguredExecution(self.assembly.execution, self.parts, self.store,
+                getattr(self, "_recorded_artifacts_root", self.workdir))
+            self.parts["construction_execution"] = self.construction
+            self.manifest["construction"] = self.construction.manifest_binding
         if self.durable_executor:
             self.manifest["command_domain"] = self.parts["domain"].manifest_binding
             self.manifest["executor"] = self.parts["executor"].manifest_binding
@@ -298,7 +309,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 "memory": self.memory.checkpoint_state(), "module_states": self._module_states(),
                 "proposals": {key: _jsonable(value) for key, value in self.proposals.items()},
                 "evidence": {key: encode_evidence(value)["evidence"] for key, value in self.evidence.items()},
-                "incumbent": self.incumbent, "ledger": self.budget.account_summary()}
+                "incumbent": self.incumbent, "ledger": self.budget.account_summary(),
+                **({"materializations": self.construction.snapshot()} if self.construction_enabled else {})}
 
     def _save(self):
         if self.cfg.checkpoint_enabled:
@@ -341,6 +353,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 raise ValueError("checkpoint candidate key differs from evidence identity")
             self._validate_domain(evaluation_requests[key])
             validate_evidence(evidence, expected_binding=self._binding(proposals[key], evaluation_requests[key]))
+        if self.construction_enabled:
+            self.construction.restore(payload.get("materializations"))
+            for key, proposal in proposals.items():
+                item = self.construction.materializations.get(key)
+                if proposal.artifact and (item is None or item.proposal != proposal):
+                    raise ValueError("checkpoint proposal differs from its materialization")
         self._verify_context_export(payload["context_export"])
         if self.hierarchical:
             self.budget.restore_state(payload["budget_checkpoint"])
@@ -385,7 +403,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         provider = self.parts["provider"]
         before = provider.usage_total
         try:
-            return await getattr(self.parts["policy"], name)(*args)
+            component = self.parts["policy_absorber"] if self.construction_enabled and name == "absorb" \
+                else self.parts["policy"]
+            return await getattr(component, name)(*args)
         finally:
             self._policy_tokens += provider.usage_total - before
 
@@ -541,12 +561,18 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                     raise ValueError("policy execution metadata differs from evidence")
 
     async def _prepare_cycle(self, task, cycle, candidate_id):
-        state = {"task": task, "cycle": cycle, "frontier": json.loads(self.frontier.view("json")),
+        selection_view = None
+        if self.construction_enabled:
+            selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
+            self.construction.selection_view(selection_view)
+        state = {"task": task, "cycle": cycle, "frontier": json.loads(
+                    (selection_view if self.construction_enabled else self.frontier).view("json")),
                  "operators": [spec.name for spec in self.assembly.operators]}
         strategy = await self._policy("observe", state, self.budget.main_account_summary() if self.governed else self.budget.account_summary())
         if not isinstance(strategy, dict):
             raise ValueError("policy observe must return a strategy object")
-        selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
+        if selection_view is None:
+            selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
         unavailable = set()
         if self.hierarchical:
             unavailable = {identifier for identifier, proposal in self.proposals.items()
@@ -571,12 +597,28 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         if self.layered:
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
                                          self._source_refs(context))
-        hypotheses = await self._policy("ideate", {**copy.deepcopy(strategy), "context": copy.deepcopy(context)},
-                                        copy.deepcopy(self.proposals[parents[0]]) if parents else None, 1)
+        producer_context = self.construction.project(context) if self.construction_enabled else context
+        parent_inputs = tuple(self.construction.parent_view(self.proposals[p]) if self.construction_enabled
+                              else copy.deepcopy(self.proposals[p]) for p in parents)
+        ideation = {**copy.deepcopy(strategy), "context": copy.deepcopy(producer_context)}
+        if self.construction_enabled:
+            ideation["execution"] = self.assembly.execution.to_dict()["spec"]
+        hypotheses = await self._policy("ideate", ideation,
+                                        parent_inputs[0] if parents else None, 1)
+        if self.construction_enabled:
+            if type(hypotheses) is list and len(hypotheses) == 1 and type(hypotheses[0]) is str:
+                hypotheses = [{"hypothesis": hypotheses[0]}]
+            if type(hypotheses) is not list or len(hypotheses) != 1 or type(hypotheses[0]) is not dict \
+                    or type(hypotheses[0].get("hypothesis")) is not str or not hypotheses[0]["hypothesis"].strip():
+                raise ValueError("configured construction requires one explicit hypothesis")
+            fixed = self.assembly.execution.spec.hypothesis
+            if fixed is not None and hypotheses[0]["hypothesis"] != fixed:
+                raise ValueError("policy hypothesis conflicts with the frozen execution configuration")
         strategy = {**strategy, "hypotheses": hypotheses}
         request = OperatorRequest(task, candidate_id, cycle,
-                                  tuple(copy.deepcopy(self.proposals[p]) for p in parents),
-                                  tuple(public_projection(self.evidence[p]) for p in parents), copy.deepcopy(context), strategy)
+                                  parent_inputs,
+                                  tuple((comparison_projection if self.construction_enabled else public_projection)(
+                                      self.evidence[p]) for p in parents), copy.deepcopy(producer_context), strategy)
         for skill in self.parts["skills"]:
             before = self.parts["provider"].usage_total
             try:
@@ -585,7 +627,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 self._policy_tokens += self.parts["provider"].usage_total - before
             if not isinstance(request, OperatorRequest) or request.candidate_id != candidate_id:
                 raise ValueError("skill changed candidate identity")
-            if request.context.get("retrieval") != context["retrieval"] or \
+            if request.context.get("retrieval") != producer_context["retrieval"] or \
                     request.context.get("context_pack_ref") != context["context_pack_ref"]:
                 raise ValueError("skill changed authoritative retrieval context")
         names = [spec.name for spec in self.assembly.operators]
@@ -594,6 +636,19 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             raise ValueError("policy selected an unregistered operator")
         operator = self.parts["operators"][names.index(selected)]
         return operator, selected, parents, context, request
+
+    def _execution_operation(self, receipt, phase, *, lane="main", slot_id=None, cycle=None):
+        return {"run_id": self._logical_run_id, "cycle": getattr(self, "_active_cycle", 0) if cycle is None else cycle,
+            "phase": phase, "intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
+            "manifest_sha256": "sha256:" + payload_digest(self.manifest), "lane": lane, "slot_id": slot_id}
+
+    def _production_operator(self, operator, selected, context, receipt, *, parts=None,
+                             lane="main", slot_id=None, cycle=None):
+        if not self.construction_enabled:
+            return operator
+        parts = self.parts if parts is None else parts
+        operation = self._execution_operation(receipt, "operator", lane=lane, slot_id=slot_id, cycle=cycle)
+        return parts["construction_execution"].operator(operator, selected, context, operation)
 
     async def _cycle(self, task, cycle):
         self._active_cycle = cycle
@@ -835,11 +890,18 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                        "checkpoint_ref": payload_digest(self._payload())}
         if self._population_state() is not None:
             self.result["population"] = self._population_state()
-        if self.durable_executor:
+        if self.construction_enabled:
+            self.result["execution"] = self._construction_report()
+        elif self.durable_executor:
             self.result["execution"] = self.manifest["executor"]
         if self.governed:
             self.result["governance"] = self.governed.audit()
         return self.result
+
+    def _construction_report(self):
+        return {"kind": "configured_construction_v1", "main": self.construction.report(),
+                "controls": {key: session["construction_execution"].report()
+                             for key, session in self.governed.sessions.items()} if self.governed else {}}
 
     def inspect(self):
         if self.result is None:
@@ -850,6 +912,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             raise RuntimeError("evolve() must run before inspect()")
         certificates = list(self.store.read("replay_certificate"))
         return {**self.result, **({"governance": self.governed.audit()} if self.governed else {}), "assembly": self.assembly.to_dict(),
+                **({"execution": self._construction_report()} if self.construction_enabled else {}),
                 "memory_entries": len(self.memory.entries),
                 "replay_certificate": certificates[-1]["payload"] if certificates else None}
 
@@ -865,8 +928,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         store = AppendOnlyStore(path / "x1.jsonl")
         certificate = {"passed": False, "runtime": self.runtime_identity, "mode": "independent_rerun",
                        "replay_workdir": str(path.resolve()), "replay_id": path.name}
-        if self.governed:
-            self.governed.audit()
+        recorded = self.governed is not None or self.construction_enabled
+        if recorded:
+            if self.governed:
+                self.governed.audit()
             if task is not None and task != self.task:
                 raise ValueError("recorded outcome replay requires the frozen original task")
             certificate.update(mode="recorded_outcomes", external_calls=0)
@@ -880,13 +945,15 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 sources = _copy_sources(self._seed)
                 llm, evaluator = sources["llm"], sources["evaluator"]
             clone = type(self)(self.assembly, self.registry, llm, evaluator,
-                              replace(self.cfg, resume_from_checkpoint=False, stop_after_generation=self.cfg.stop_after_generation if self.governed else None),
+                              replace(self.cfg, resume_from_checkpoint=False, stop_after_generation=self.cfg.stop_after_generation if recorded else None),
                               path, self.stamp)
             clone._forbidden_parts = self.parts
             clone._logical_run_id = self._logical_run_id
-            if self.governed:
+            if recorded:
                 clone._recorded_rows = list(AppendOnlyStore(self.store.path).read())
-                if self.governed.external is not None:
+                if self.construction_enabled:
+                    clone._recorded_artifacts_root = getattr(self, "_recorded_artifacts_root", self.workdir)
+                if self.governed and self.governed.external is not None:
                     clone._recorded_external_bundle = self.governed.external.replay_bundle()
             result = clone.run(task or self.task)
             original = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
@@ -894,11 +961,11 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             certificate["snapshot_match"] = original == copied
             certificate["result_match"] = all(result[key] == self.result[key]
                                                for key in self.result if key != "replay_certificate")
-            if self.governed:
+            if recorded:
                 certificate["receipt_chain_match"] = clone.budget.checkpoint_state() == self.budget.checkpoint_state()
                 certificate["transcript_consumed"] = clone.store.peek() is None
             certificate["passed"] = certificate["snapshot_match"] and certificate["result_match"]
-            if self.governed:
+            if recorded:
                 certificate["passed"] = certificate["passed"] and certificate["receipt_chain_match"] and certificate["transcript_consumed"]
         except Exception as error:
             certificate["error_type"] = type(error).__name__
