@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "source_commit": "a6b58267b7447fbb1c40e47875d0d2ca5534e37d",
+  "official_mle_bench_revision": "507f92e1138bb6e40dac5c6ee7a6758e6424bf97",
+  "scope": "3 tasks x 2 arms x 1 local seed; not the complete MLE-Bench Lite suite",
+  "model_alias": "deepseek-flash",
+  "immutable_model_snapshot_verified": false,
+  "local_seed": 1,
+  "seed_sent_to_provider": false,
+  "per_run_token_budget": 3000000,
+  "per_run_time_limit_seconds": 600,
+  "solution_timeout_seconds": 120,
+  "iterations": 3,
+  "baseline": {
+    "policy": "greedy",
+    "operators": [
+      "draft",
+      "reflective"
+    ],
+    "governance": true
+  },
+  "full": {
+    "policy": "population",
+    "operators": [
+      "draft",
+      "crossover"
+    ],
+    "governance": true
+  },
+  "pilot_complete": true,
+  "valid_official_submissions": 6,
+  "official_score_direction": "minimize",
+  "pilot_tokens": 396545,
+  "pilot_currency_upper_micro_cny": 2743624,
+  "campaign_cumulative_upper_micro_cny": 6771340,
+  "campaign_limit_micro_cny": 200000000,
+  "invoice_verified": false,
+  "independent_audit_passed": true,
+  "independent_audit_external_requests": 0,
+  "statistical_significance_claimed": false,
+  "runs": [
+    {
+      "task": "spooky-author-identification",
+      "seed": 1,
+      "arm": "baseline",
+      "score": 0.40538,
+      "valid_submission": true,
+      "above_median": true,
+      "any_medal": false,
+      "tokens": 67876,
+      "wallclock_seconds": 288.87,
+      "currency_upper_micro_cny": 480440,
+      "submission_sha256": "sha256:7a2d77aee4712e185412ae8a1a76516d75bf3a2d6a0620b3f0a374476e4fd7a9",
+      "official_report_sha256": "sha256:5be90d61d1c6e15ded6258f2c53f95a2a1c22ff919d5a9e6abadee9aa27b6de5"
+    },
+    {
+      "task": "spooky-author-identification",
+      "seed": 1,
+      "arm": "full",
+      "score": 0.42521,
+      "valid_submission": true,
+      "above_median": false,
+      "any_medal": false,
+      "tokens": 52612,
+      "wallclock_seconds": 214.01,
+      "currency_upper_micro_cny": 358040,
+      "submission_sha256": "sha256:99a606984ae374a07e35bee1a3b0304e502e5306cbb474ae9a81cbed7eba8bc4",
+      "official_report_sha256": "sha256:ff5e132c4a1f5127267faff9db4396315a9c4010b37fb29492067b43e34888c3"
+    },
+    {
+      "task": "leaf-classification",
+      "seed": 1,
+      "arm": "full",
+      "score": 0.2622,
+      "valid_submission": true,
+      "above_median": false,
+      "any_medal": false,
+      "tokens": 63355,
+      "wallclock_seconds": 239.78,
+      "currency_upper_micro_cny": 405050,
+      "submission_sha256": "sha256:0862326b336fe338ab12501a185d5facf2fe851d1af392ecd2371a5f0318dfb4",
+      "official_report_sha256": "sha256:5ed93c63f83e38541a4aae2301bb52a12f68a3276a5581271a568f5a03e85325"
+    },
+    {
+      "task": "leaf-classification",
+      "seed": 1,
+      "arm": "baseline",
+      "score": 1.06263,
+      "valid_submission": true,
+      "above_median": false,
+      "any_medal": false,
+      "tokens": 84447,
+      "wallclock_seconds": 341.54,
+      "currency_upper_micro_cny": 588270,
+      "submission_sha256": "sha256:36cf954bf07830179d77c8766fcab17ee2efb442329902cfcba38b5658ffbab6",
+      "official_report_sha256": "sha256:5b10c89529496dc0cd73cf0b2d18bd3d6ed184839d93b8c9d91387bae655513a"
+    },
+    {
+      "task": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "baseline",
+      "score": 0.06501,
+      "valid_submission": true,
+      "above_median": true,
+      "any_medal": true,
+      "tokens": 66974,
+      "wallclock_seconds": 285.24,
+      "currency_upper_micro_cny": 474766,
+      "submission_sha256": "sha256:ab0921fc94479ce7b3da871ab937c03178d7f714ad1738f3f6958151a0ec9132",
+      "official_report_sha256": "sha256:e362c037e67d5f11c9509e7de76ca48317fab8750f296bf0f00b5a6691e2de1b"
+    },
+    {
+      "task": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "full",
+      "score": 0.06403,
+      "valid_submission": true,
+      "above_median": true,
+      "any_medal": true,
+      "tokens": 61281,
+      "wallclock_seconds": 252.16,
+      "currency_upper_micro_cny": 437058,
+      "submission_sha256": "sha256:201d526c3a4e4f601416794d9211b53c0b28eac7119cbc139891b2f0fb42ddfd",
+      "official_report_sha256": "sha256:d95b430f880657d1bcd7174767c6a8df3cb0bec34b1165ad82b7ea0af86976d2"
+    }
+  ]
+}

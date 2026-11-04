@@ -2,7 +2,19 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v74 候选**（实际通过状态见[统一进度页](docs/FRAMEWORK_STATUS.md)）。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v74 候选**（实际通过状态见[统一进度页](docs/FRAMEWORK_STATUS.md)）。它仍在开发：部分真实任务已有成绩，完整 benchmark 与产品级验收尚未完成。
+
+## 真实任务结果：三任务单 seed 试跑
+
+以下是 `a6b5826` 上的 M7 真实模型试跑，使用官方 MLE-bench grader；所有指标越低越好。baseline 与 full 的搜索方法不同，**不能作为治理收益的单变量对比**。
+
+| 任务 / 指标 | baseline | full |
+| --- | ---: | ---: |
+| Spooky Author Identification / log loss | 0.40538 | 0.42521 |
+| Leaf Classification / log loss | 1.06263 | 0.26220 |
+| NOMAD / 两个 RMSLE 的平均值 | 0.06501 | 0.06403 |
+
+全部 6 份提交有效。模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照；这里只覆盖三个任务、一个本地 seed，不代表完整 MLE-Bench Lite 或统计显著结果。方法、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-completed-seed1/README.md)。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -62,11 +74,11 @@ S5 引入 `composed-v5`，不自动接收旧 v1–v4 检查点。`budget=hierarc
 
 S6 周期 anchor/代理有效性回流已按同 SHA CI 封板。S7 新增 `command` domain 与 `git_worktree` executor 的配置组合，使用 hierarchical 预算和 checkpoint 进行真实命令执行与进程接管；Mac 必须显式选择可信本地 `sandbox="none"`，Linux 默认使用 bubblewrap。S8 新增 `population_prompt`：elite 成员保留、四种可复算父代采样和双亲文本 crossover，详见 [S8 指南](docs/POPULATION_RUNTIME_V67.md)。逐项范围和阶段门槛见 [对照清单](docs/ABSTRACTION_ALIGNMENT.md)，配置和平台限制见 [S7 指南](docs/WORKTREE_RECOVERY_V66.md)。实现与验收范围以阶段记录和同 SHA CI 证据为准。
 
-S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最新 anchor、负反馈与种群接到三个公开 CSV 任务。旧 M0 benchmark 入口保留；新试跑的 baseline/full 使用同一模型、数据和资源上限，所有提交冻结后才调用官方 grader。接口通过测试不等于真实模型实验已完成，具体使用和结果边界见 [S9 指南](docs/MLE_COMPOSED_V68.md)。
+S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最新 anchor、负反馈与种群接到三个公开 CSV 任务。旧 M0 benchmark 入口保留；新试跑的 baseline/full 使用同一模型、数据和资源上限，所有提交冻结后才调用官方 grader。[三任务单 seed 试跑](research/experiments/2026-11-05-m7-real-mle-completed-seed1/README.md)已完成，完整 Lite 和多 seed 实验仍未完成。具体接口见 [S9 指南](docs/MLE_COMPOSED_V68.md)。
 
 显式配置 `governance` 可启用 `composed-v7-governed`：主搜索和独立对照共用物理结算权威，七账户是同一实际费用的投影；未来对照额度预先保护，主搜索可见预算固定，避免从对照花费推断结果。调用回执绑定 run、lane、slot、intent、ordinal 和适配器参数，恢复及回放核验原始结果而不重新调用。Native 和真实 worktree 路径均有例子与测试；[使用指南](docs/GOVERNED_CONTROLS.md)说明当前支持范围。该 v7 路径不接收外部货币 provider；后续 v8 桥接已实现，见下一段。两者均不能据此宣称真实付费 IID-RS 已达标。
 
-新增 [外部费用治理桥接](docs/GOVERNED_CURRENCY.md) 提供独立的 loopback HTTP 示例、双重准入和记录恢复；尚未启动真实付费治理试跑。
+新增 [外部费用治理桥接](docs/GOVERNED_CURRENCY.md) 提供独立的 loopback HTTP 示例、双重准入和记录恢复；真实付费三任务试跑已使用该桥接，但尚未完成同搜索治理收益对照。
 
 **当前代码位置：** `main` 仍在 S8/v67；最新开发集中于 `codex/m7-construction`，包含治理、费用桥接、生命周期收拢及 M7 原生构造。新工作尚未合入 main。分支关系、已验证能力、具体合入门槛和未完成项统一见 [框架交付状态](docs/FRAMEWORK_STATUS.md)。
 
