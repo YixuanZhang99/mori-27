@@ -28,3 +28,12 @@ its header attributes the software to DeepMind under Apache 2.0 and other
 materials under CC-BY 4.0. The OR3 instances originate from OR-Library as
 credited in the notebook. The notebook is not copied into this repository.
 
+`PYTHONPATH=m0 python research/experiments/2026-11-05-funsearch-population/prepare_or3.py
+PATH_TO_PINNED_NOTEBOOK NEW_OUTPUT_DIRECTORY` prepares a deterministic 10/10
+split by sorted OR3 instance ID. It refuses an existing output directory and
+records the notebook and split content hashes. The two output directories are
+data preparation only: the future evaluator must mount only the development
+directory during search, freeze the selected candidate, and separately mount
+the held-out directory for final evaluation. This command does not establish a
+sandbox or perform a model run.
+
