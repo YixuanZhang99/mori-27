@@ -785,6 +785,21 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._finalize_frontier_admission(candidate_id, decision,
             decision.receipt_id if self.layered else event_id)
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
+        if self.construction_enabled:
+            # An explicitly configured GEPA selection policy receives only
+            # public binary instance verdicts. Its separate planning session
+            # never receives raw feedback, private items, or evaluator state.
+            from core.composition.gepa_policy import GEPAInstancePolicy
+            policy = self.parts['policy']
+            if type(policy) is GEPAInstancePolicy and evidence.eval_result.status is EvalStatus.OK:
+                public_items = public.eval_result.contract.items or ()
+                verdicts = {item.item_id: item.verdict for item in public_items
+                            if item.seed is None and item.visibility == 'public'}
+                if len(verdicts) != len(public_items):
+                    raise ValueError('GEPA selection requires unique unseeded public instance verdicts')
+                policy.observe_public_verdicts(candidate_id, verdicts)
+                self.store.append('gepa_public_verdicts', {'candidate_id': candidate_id, 'verdicts': verdicts,
+                    'evidence_ref': evidence_ref})
         if decision.admit:
             self.incumbent = candidate_id
         self.eval_requests[candidate_id] = evaluation_request

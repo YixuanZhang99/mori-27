@@ -362,11 +362,8 @@ def default_registry():
         ctx.evaluator, ctx.llm, **opts), validate_options=_domain_options)
     registry.register("domain", "native", _native)
     from core.composition.gepa_policy import GEPAInstancePolicy, gepa_policy_options
-    def gepa_instance(ctx, opts):
-        if ctx.execution is not None:
-            raise ValueError("GEPA instance policy requires a public evidence bridge across separate policy sessions")
-        return GEPAInstancePolicy(ctx.scope_context, **opts)
-    registry.register("policy", "gepa_instance", gepa_instance, validate_options=gepa_policy_options)
+    registry.register("policy", "gepa_instance", lambda ctx, opts: GEPAInstancePolicy(ctx.scope_context, **opts),
+                      validate_options=gepa_policy_options)
     registry.register("policy", "greedy", lambda ctx, opts: GreedyPolicy(ctx.scope_context, **opts),
                       validate_options=policy_options)
     registry.register("policy", "llm_cycles", lambda ctx, opts: LLMCyclesPolicy(

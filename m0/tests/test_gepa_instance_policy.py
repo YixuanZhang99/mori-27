@@ -61,11 +61,29 @@ def test_framework_rejects_missing_public_item_scores(tmp_path):
         build(tmp_path, assembly=assembly, provider=Provider(), domain=Domain(), generations=0).evolve(TASK)
 
 
-def test_configured_construction_fails_closed_until_public_evidence_bridge_exists(tmp_path):
+
+def test_m7_policy_consumes_only_public_verdicts_and_replays(tmp_path):
     from test_configured_construction import profile as construction_profile, ConstructorProvider, build as construction_build
+    class PrivateDomain(ItemDomain):
+        async def evaluate(self, proposal, request):
+            result = await super().evaluate(proposal, request)
+            return replace(result, contract=replace(result.contract, items=result.contract.items +
+                (ItemOutcome('SECRET_PRIVATE_ITEM', 1, visibility='private'),)))
     assembly = construction_profile()
     assembly['policy'] = {'name': 'gepa_instance', 'options': {'items': ['left', 'right'], 'seed': 9}}
     provider = ConstructorProvider()
-    with pytest.raises(ValueError, match='separate policy sessions'):
-        construction_build(tmp_path, assembly=assembly, provider=provider, domain=ItemDomain(), generations=1).evolve(TASK)
-    assert provider.calls == 0
+    fw = construction_build(tmp_path, assembly=assembly, provider=provider, domain=PrivateDomain(), generations=3)
+    fw.evolve(TASK)
+    policy = fw._composed.parts['policy']
+    assert len(policy.instance_frontier.checkpoint_state()['candidates']) == 4
+    assert all('SECRET_PRIVATE_ITEM' not in prompt for prompt in provider.prompts)
+    assert 'SECRET_PRIVATE_ITEM' not in str(policy.checkpoint_state())
+    public_events = [row['payload'] for row in fw.store.read('gepa_public_verdicts')]
+    assert len(public_events) == 4
+    assert all(set(event['verdicts']) == {'left', 'right'} for event in public_events)
+    assert 'SECRET_PRIVATE_ITEM' not in str(public_events)
+    resumed = construction_build(tmp_path, assembly=assembly, provider=ConstructorProvider(forbidden=True),
+                                 domain=ForbiddenDomain(), generations=3, resume=True)
+    resumed.evolve(TASK)
+    assert resumed._composed.parts['policy'].checkpoint_state() == policy.checkpoint_state()
+    assert resumed.replay(TASK, adapter_factory=lambda p, s: (ConstructorProvider(forbidden=True), ForbiddenDomain()))['replay_certificate']['passed']

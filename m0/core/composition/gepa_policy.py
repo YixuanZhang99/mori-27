@@ -35,6 +35,13 @@ class GEPAInstancePolicy(GreedyPolicy):
             return []
         return [self.instance_frontier.select(eligible=eligible)]
 
+    def observe_public_verdicts(self, candidate_id, verdicts):
+        """Receive only explicit public binary selection data from the driver."""
+        if type(verdicts) is not dict or set(verdicts) != set(self.items) or any(
+                type(value) is not int or value not in (0, 1) for value in verdicts.values()):
+            raise ValueError('GEPA selection requires all frozen public instance binary verdicts')
+        self.instance_frontier.offer(candidate_id, verdicts)
+
     async def absorb(self, evidence):
         result = evidence.eval_result
         if result.status is EvalStatus.OK:
@@ -48,7 +55,7 @@ class GEPAInstancePolicy(GreedyPolicy):
                 values[item.item_id] = item.verdict
             if set(values) != set(self.items):
                 raise ValueError('GEPA selection requires all frozen public instance verdicts')
-            self.instance_frontier.offer(evidence.candidate_id, values)
+            self.observe_public_verdicts(evidence.candidate_id, values)
         return await super().absorb(evidence)
 
     def checkpoint_state(self):
