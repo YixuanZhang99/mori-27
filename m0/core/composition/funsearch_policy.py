@@ -25,10 +25,13 @@ class FunSearchPolicy(GreedyPolicy):
         self._config = self.population.checkpoint_state()['config']
         self._evidence_refs = {}
         self._pending = None
+        self._verified = False
 
     async def select(self, frontier, budget):
         if self._pending is not None:
             raise ValueError('pending program selection must be settled first')
+        if self._evidence_refs and not self._verified:
+            raise ValueError('original evidence audit is required before selection')
         eligible = {node.id for node in frontier.nodes.values() if node.status in {'done', 'merged'}
                     and node.eval_status == EvalStatus.OK.value and node.score is not None}
         if not self._evidence_refs:
@@ -41,12 +44,15 @@ class FunSearchPolicy(GreedyPolicy):
         receipt = draw_selection(self.population, None, eligible=eligible, max_parents=2)
         after = self.population.checkpoint_state()
         self._pending = {'receipt': receipt, 'before': before, 'after': after}
+        self._verified = False
         return list(receipt['ancestry'])
 
     def pending_selection(self):
         return copy.deepcopy(self._pending)
 
     def record_evaluated(self, projection):
+        if self._pending is not None and not self._verified:
+            raise ValueError('original evidence audit is required before settling selection')
         if type(projection) is not dict or set(projection) != {
                 'candidate_id', 'scores', 'program_ref', 'program_length', 'evidence_ref'}:
             raise ValueError('evaluated candidate requires a complete public projection')
@@ -66,9 +72,10 @@ class FunSearchPolicy(GreedyPolicy):
             program_length=projection['program_length'], scores=projection['scores'], island=island, epoch=epoch)
         self._evidence_refs[candidate] = ref
         self._pending = None
+        self._verified = False
 
     def abandon_selection(self, reason):
-        if self._pending is None or reason not in {'evaluation_failed', 'stale_epoch'}:
+        if self._pending is None or not self._verified or reason not in {'evaluation_failed', 'stale_epoch'}:
             raise ValueError('pending selection and explicit failure reason are required')
         previous = copy.deepcopy(self._pending)
         self._pending = None
@@ -77,20 +84,29 @@ class FunSearchPolicy(GreedyPolicy):
     def reset_weaker_half(self):
         if self._pending is not None:
             raise ValueError('pending program selection prevents island reset')
+        if self._evidence_refs and not self._verified:
+            raise ValueError('original evidence audit is required before island reset')
         return self.population.reset_weaker_half()
 
-    def audit_original_evidence(self, rows, *, metric, logical_run_id, evaluator_version, evaluation_context):
+    def audit_original_evidence(self, rows, *, metric, logical_run_id, evaluator_version, evaluation_context,
+                                selection_rows=None):
         """Check every retained candidate against authenticated main-lane rows."""
         from core.funsearch_public_evidence import verify_selected_projections
+        self._verified = False
         candidates = self.population.checkpoint_state()['candidates']
-        if not candidates:
-            return True
-        projections = {candidate: {'candidate_id': candidate, **record,
-                       'evidence_ref': self._evidence_refs[candidate]}
-                       for candidate, record in candidates.items()}
-        return verify_selected_projections(rows, projections, set(candidates), case_ids=self._config['case_ids'],
-            metric=metric, logical_run_id=logical_run_id, evaluator_version=evaluator_version,
-            evaluation_context=evaluation_context)
+        if candidates:
+            projections = {candidate: {'candidate_id': candidate, **record,
+                           'evidence_ref': self._evidence_refs[candidate]}
+                           for candidate, record in candidates.items()}
+            verify_selected_projections(rows, projections, set(candidates), case_ids=self._config['case_ids'],
+                metric=metric, logical_run_id=logical_run_id, evaluator_version=evaluator_version,
+                evaluation_context=evaluation_context)
+        if self._pending is not None:
+            if type(selection_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending)
+                                                       for row in selection_rows) != 1:
+                raise ValueError('pending selection lacks its original journal record')
+        self._verified = True
+        return True
 
     def checkpoint_state(self):
         return {'schema_version': 1, 'base': super().checkpoint_state(),
@@ -124,3 +140,4 @@ class FunSearchPolicy(GreedyPolicy):
                 raise ValueError('pending selection differs from population state')
         super().restore_state(state['base'])
         self.population, self._evidence_refs, self._pending = population, dict(refs), copy.deepcopy(pending)
+        self._verified = False

@@ -17,6 +17,30 @@ def build():
         islands=2, seed=4, prompt_size=2, temperature=1, temperature_period=10)
 
 
+def audited_seed(policy, name='a', score=0):
+    import hashlib
+    from dataclasses import replace
+    from core.composition.evaluation import encode_evidence
+    from core.funsearch_public_evidence import project_program_candidate
+    from core.executor.evaluation_contract import ItemOutcome
+    from test_funsearch_public_evidence import evidence
+    source = f'def priority(x):\n    return x + {score}\n'
+    original = evidence()
+    binding = replace(original.eval_result.contract.binding, candidate_id=name,
+                      artifact_sha256=hashlib.sha256(source.encode()).hexdigest())
+    items = tuple(ItemOutcome(case, metrics={'score': score}, visibility='public') for case in ('a', 'b'))
+    contract = replace(original.eval_result.contract, binding=binding, items=items)
+    original = replace(original, candidate_id=name, eval_result=replace(original.eval_result, contract=contract))
+    projected = project_program_candidate(original, source, case_ids=['a', 'b'], metric='score', logical_run_id='run')
+    policy.record_evaluated(projected)
+    row = {'cycle': 0, 'proposal': {'candidate': {'id': name}, 'artifact': source},
+           'evidence_ref': projected['evidence_ref'], 'evidence': encode_evidence(original)['evidence']}
+    args = dict(metric='score', logical_run_id='run', evaluator_version='eval-v1',
+                evaluation_context='sha256:' + 'c' * 64)
+    policy.audit_original_evidence([row], **args)
+    return row, args
+
+
 def frontier(*names):
     return SimpleNamespace(nodes={name: SimpleNamespace(id=name, status='done', eval_status='ok', score=1)
                                   for name in names})
@@ -25,7 +49,7 @@ def frontier(*names):
 def test_policy_selection_binds_island_and_recovers_pending_without_source():
     policy = build()
     assert asyncio.run(policy.select(frontier(), {})) == []
-    policy.record_evaluated(projection('a', 0))
+    row, audit_args = audited_seed(policy)
     parents = asyncio.run(policy.select(frontier('a'), {}))
     pending = policy.pending_selection()
     assert parents == ['a'] and pending['receipt']['samples'] == ['a']
@@ -34,6 +58,9 @@ def test_policy_selection_binds_island_and_recovers_pending_without_source():
     restored = build(); restored.restore_state(saved)
     assert restored.pending_selection() == pending
     assert restored.checkpoint_state() == saved
+    with pytest.raises(ValueError, match='journal'):
+        restored.audit_original_evidence([row], **audit_args)
+    restored.audit_original_evidence([row], selection_rows=[pending], **audit_args)
     restored.record_evaluated(projection('b', 1))
     assert restored.pending_selection() is None
     target = pending['receipt']['island']
@@ -43,7 +70,7 @@ def test_policy_selection_binds_island_and_recovers_pending_without_source():
 
 
 def test_policy_blocks_overlapping_selection_and_rejects_tampered_pending():
-    policy = build(); policy.record_evaluated(projection('a', 0))
+    policy = build(); row, args = audited_seed(policy)
     asyncio.run(policy.select(frontier('a'), {}))
     with pytest.raises(ValueError, match='pending'):
         asyncio.run(policy.select(frontier('a'), {}))
@@ -53,6 +80,7 @@ def test_policy_blocks_overlapping_selection_and_rejects_tampered_pending():
     saved['pending']['receipt']['samples'][0] = 'tampered'
     with pytest.raises(ValueError):
         build().restore_state(saved)
+    policy.audit_original_evidence([row], selection_rows=[policy.pending_selection()], **args)
     abandoned = policy.abandon_selection('evaluation_failed')
     assert abandoned['receipt']['samples'] == ['a'] and policy.pending_selection() is None
     assert asyncio.run(policy.select(frontier('a'), {})) == ['a']
@@ -79,3 +107,21 @@ def test_restored_policy_audits_all_records_against_original_evidence():
     restored = build(); restored.restore_state(tampered)
     with pytest.raises(ValueError):
         restored.audit_original_evidence([row], **args)
+
+
+def test_selection_is_blocked_until_original_evidence_is_audited():
+    policy = build(); policy.record_evaluated(projection('a', 0))
+    with pytest.raises(ValueError, match='audit'):
+        asyncio.run(policy.select(frontier('a'), {}))
+
+
+def test_pending_selection_must_be_audited_against_journal_before_settlement():
+    policy = build(); row, args = audited_seed(policy)
+    asyncio.run(policy.select(frontier('a'), {}))
+    pending = policy.pending_selection()
+    with pytest.raises(ValueError, match='audit'):
+        policy.record_evaluated(projection('b', 1))
+    with pytest.raises(ValueError, match='journal'):
+        policy.audit_original_evidence([row], **args)
+    policy.audit_original_evidence([row], selection_rows=[pending], **args)
+    policy.record_evaluated(projection('b', 1))
