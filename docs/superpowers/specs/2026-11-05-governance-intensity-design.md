@@ -62,6 +62,12 @@ are not pinned by these checks. A trusted bootstrap and dependency identity are
 required before presenting a paid run as source-bound benchmark evidence.
 Accordingly formal comparison preflight fails closed until those controls are
 implemented; the synthetic protocol fixtures remain available.
+An isolated bootstrap now checks a frozen digest of installed dependency roots,
+disables Python site initialization, redirects source bytecode caches and uses
+stdlib-first imports. A local loopback fixture exercises the governance agent
+under that bootstrap. This does not yet exercise the public formal comparison
+entry end to end; interpreter, standard/native libraries and the host remain
+trusted rather than comprehensively attested. The formal gate remains closed.
 Fixture comparisons use a newly created private ledger, a literal loopback
 provider address and a fixture-only credential. The public fixture entry rejects
 caller-supplied ledgers so a test cannot accidentally modify a campaign ledger.

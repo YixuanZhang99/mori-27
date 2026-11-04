@@ -23,6 +23,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import urllib.parse
 from pathlib import Path
@@ -97,12 +98,14 @@ def _comparison_source_state(repo: Path) -> dict:
     try:
         entries = subprocess.run(['git', '-C', str(root), 'ls-tree', '-rz', '--full-tree', commit],
                                  env=env, capture_output=True, timeout=15, check=True).stdout
+        tracked = set()
         for entry in entries.split(b'\0'):
             if not entry:
                 continue
             header, name = entry.split(b'\t', 1)
             mode, kind, expected = header.split(b' ')
             path = root / os.fsdecode(name)
+            tracked.add(path)
             if kind != b'blob' or mode not in (b'100644', b'100755', b'120000'):
                 raise ValueError('comparison requires a clean checkout without submodules')
             info = path.lstat()
@@ -117,6 +120,19 @@ def _comparison_source_state(repo: Path) -> dict:
             actual = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest().encode()
             if actual != expected:
                 raise ValueError('comparison requires clean committed source bytes')
+        source = root / 'm0'
+        if source.is_dir():
+            for directory, dirs, files in os.walk(source, followlinks=False):
+                current = Path(directory)
+                dirs[:] = [name for name in dirs if name != '__pycache__']
+                if any((current / name).is_symlink() for name in dirs):
+                    raise ValueError('comparison has an untracked importable source symlink')
+                for name in files:
+                    path = current / name
+                    if path.is_symlink():
+                        raise ValueError('comparison has a source symlink')
+                    if name.endswith(('.py', '.pyc', '.so')) and path not in tracked:
+                        raise ValueError('comparison has an untracked importable source file')
     except (OSError, subprocess.SubprocessError) as error:
         raise ValueError('comparison requires verifiable clean source bytes') from error
     return {'commit': commit, 'tree': tree, 'scope': 'clean-checkout-not-runtime-attestation'}
@@ -132,6 +148,38 @@ def _comparison_runtime_source() -> dict:
         if not getattr(module, '__file__', None) or Path(module.__file__).resolve() != root / relative:
             raise ValueError('comparison imports differ from the clean source checkout')
     return _comparison_source_state(root)
+
+
+def _comparison_dependency_identity(paths) -> dict:
+    """Hash installed dependency bytes under the trusted host's package roots."""
+    roots = sorted({Path(path).resolve() for path in paths}, key=str)
+    if not roots:
+        raise ValueError('comparison requires installed dependency roots')
+    result = {}
+    for root in roots:
+        if not root.is_dir():
+            raise ValueError('comparison dependency root is missing')
+        digestor = hashlib.sha256()
+        for path in sorted(root.rglob('*')):
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                raise ValueError('comparison dependency roots cannot contain symlinks')
+            if path.is_dir():
+                continue
+            if not path.is_file():
+                raise ValueError('comparison dependency contains a non-regular file')
+            digestor.update(relative.encode() + b'\0' + file_digest(path).encode() + b'\0')
+        result[str(root)] = digestor.hexdigest()
+    return result
+
+
+def _comparison_dependency_roots():
+    return sorted({Path(sysconfig.get_path(name)).resolve() for name in ('purelib', 'platlib')}, key=str)
+
+
+def _comparison_frozen_runtime(spec):
+    return (_comparison_runtime_source() == spec['source'] and
+            _comparison_dependency_identity(_comparison_dependency_roots()) == spec['comparison_dependencies'])
 
 
 def _profile(variant: str, token_budget: int, seed: int, iterations: int, *,
@@ -402,6 +450,7 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
                         'reason': 'trusted pre-import bootstrap and dependency identity are not implemented'})
         try:
             plan['source'] = _comparison_runtime_source()
+            plan['comparison_dependencies'] = _comparison_dependency_identity(_comparison_dependency_roots())
         except (ValueError, OSError) as error:
             missing.append({'requirement': 'comparison_source', 'reason': str(error)})
     try:
@@ -476,13 +525,24 @@ def _command(model, token_budget, solution_timeout, iterations, *,
 
 
 def _comparison_command(model, token_budget, solution_timeout, iterations, *, arm,
-                        spending_ledger_path, max_completion_tokens=16384):
+                        spending_ledger_path, max_completion_tokens=16384,
+                        runtime_identity=None, official_root=None, pycache_root=None):
     if arm not in GOVERNANCE_SCHEDULES:
         raise ValueError('unknown governance comparison arm')
     argv = shlex.split(_command(model, token_budget, solution_timeout, iterations,
         max_completion_tokens=max_completion_tokens, spending_ledger_path=spending_ledger_path, runtime='m7'))
     argv[argv.index('--variant') + 1] = 'full'
     argv.extend(['--control-cycles', *(str(cycle) for cycle in GOVERNANCE_SCHEDULES[arm])])
+    if runtime_identity is not None:
+        if official_root is None or pycache_root is None:
+            raise ValueError('isolated comparison requires the official source and empty cache roots')
+        def escaped(value):
+            return str(value).replace('{', '{{').replace('}', '}}')
+        root = Path(__file__).resolve().parents[3]
+        argv = [argv[0], '-I', '-S', '-B', '-X', escaped('pycache_prefix=' + str(pycache_root)),
+                escaped(Path(__file__).with_name('comparison_bootstrap.py')),
+                escaped(json.dumps(runtime_identity, sort_keys=True)), escaped(root / 'm0'),
+                escaped(Path(official_root).resolve()), argv[2], *argv[3:]]
     return shlex.join(argv)
 
 
@@ -822,6 +882,7 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
     if comparison:
         if grader_factory is None:
             spec['source'] = _comparison_runtime_source()
+            spec['comparison_dependencies'] = _comparison_dependency_identity(_comparison_dependency_roots())
         else:
             spec['comparison']['source_scope'] = 'synthetic-fixture-unverified'
     if _fixture_agent_command is not None and grader_factory is None:
@@ -835,7 +896,8 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
             spending_ledger_path=spending_ledger_path, runtime=runtime, comparison=comparison)
         if not readiness["ready"]:
             raise ValueError("pilot preflight failed: " + json.dumps(readiness["missing"]))
-        if comparison and readiness['plan'].get('source') != spec['source']:
+        if comparison and (readiness['plan'].get('source') != spec['source'] or
+                           readiness['plan'].get('comparison_dependencies') != spec['comparison_dependencies']):
             raise ValueError('comparison source changed during preflight')
     official_root, data_root, output_root = map(lambda p: Path(p).resolve(),
                                                (official_root, data_root, output_root))
@@ -897,7 +959,7 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
                         raise ValueError(stop_reason)
                     if comparison and grader_factory is None:
                         try:
-                            if _comparison_runtime_source() != spec['source']:
+                            if not _comparison_frozen_runtime(spec):
                                 raise ValueError('comparison source identity changed')
                         except Exception as error:
                             stop_reason = 'comparison source verification failed; remaining paid runs are blocked'
@@ -927,9 +989,15 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
                     row["actual_costs"] = {}
                     row.pop("usage_audit")
                     execution_started = True
+                    cache_root = None
+                    if comparison and grader_factory is None:
+                        cache_root = run_dir / 'comparison-empty-pycache'
+                        cache_root.mkdir(mode=0o700)
                     arm_command = (_comparison_command(model, token_budget, solution_timeout, iterations, arm=arm,
                         spending_ledger_path=spending_ledger_path,
-                        max_completion_tokens=spec['provider_sampling']['max_completion_tokens'])
+                        max_completion_tokens=spec['provider_sampling']['max_completion_tokens'],
+                        runtime_identity=spec.get('comparison_dependencies') if grader_factory is None else None,
+                        official_root=official_root if grader_factory is None else None, pycache_root=cache_root)
                         if comparison and _fixture_agent_command is None else command)
                     execution = _execute_agent(arm_command, workspace, task, seed, arm, time_limit, run_dir, {
                         "MLE_OFFICIAL_ROOT": str(official_root), "MLE_DATA_ROOT": str(data_root),
@@ -941,14 +1009,15 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
                         "MLE_PILOT_SPEC_SHA256": digest(spec),
                         "MLE_PILOT_PUBLIC_DATA_SHA256": spec["public_data"][task]["sha256"],
                         **({'PYTHONPATH': os.pathsep.join((str(Path(__file__).resolve().parents[3] / 'm0'), str(official_root))),
-                            'MLE_COMPARISON_SOURCE_COMMIT': spec['source']['commit']}
+                            'MLE_COMPARISON_SOURCE_COMMIT': spec['source']['commit'],
+                            'MLE_COMPARISON_ENV_ONLY': '1', 'OPENAI_API_BASE': spec['provider_base_url']}
                            if comparison and grader_factory is None else {}),
                         **({'MLE_FIXTURE_ENV_ONLY': '1', 'OPENAI_API_BASE': spec['provider_base_url'],
                             'PYTHONPATH': os.pathsep.join((str(Path(__file__).resolve().parents[3] / 'm0'), str(official_root)))}
                            if comparison and grader_factory is not None else {}),
                     })
                     row.update(execution)
-                    if comparison and grader_factory is None and _comparison_runtime_source() != spec['source']:
+                    if comparison and grader_factory is None and not _comparison_frozen_runtime(spec):
                         stop_reason = 'comparison source changed during execution; remaining paid runs are blocked'
                         raise ValueError(stop_reason)
                     if runtime == 'm7':
@@ -1066,7 +1135,7 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
         try:
             _comparison_grading_ready(spec, rows, output_root, spending_ledger)
             _comparison_reaudit(spec, rows, output_root, spending_ledger, keys)
-            if grader_factory is None and _comparison_runtime_source() != spec['source']:
+            if grader_factory is None and not _comparison_frozen_runtime(spec):
                 raise ValueError('comparison source changed before scoring')
             if grader_factory is None and _official_prepared_identity(
                     official_root, data_root, tasks, adapters) != spec['official_prepared_identity']:
