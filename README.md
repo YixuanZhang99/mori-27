@@ -16,6 +16,8 @@
 
 全部 6 份提交有效。模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照；这里只覆盖三个任务、一个本地 seed，不代表完整 MLE-Bench Lite 或统计显著结果。方法、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-completed-seed1/README.md)。
 
+经典方法开发进展：GEPA 实例级选择和 FunSearch 种群机制已有可运行的离线示例；FunSearch 还可对固定 OR3 开发集执行隔离评分。它们目前均属于**机制与开发集验证**，并非完整论文复现或真实模型 benchmark 成绩。执行命令、参考版本及未完成范围分别见 [GEPA 实验记录](research/experiments/2026-11-05-gepa-frontier/README.md)和 [FunSearch 实验记录](research/experiments/2026-11-05-funsearch-population/README.md)。
+
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
 ## 先读这里
