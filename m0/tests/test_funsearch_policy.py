@@ -125,3 +125,22 @@ def test_pending_selection_must_be_audited_against_journal_before_settlement():
         policy.audit_original_evidence([row], **args)
     policy.audit_original_evidence([row], selection_rows=[pending], **args)
     policy.record_evaluated(projection('b', 1))
+
+
+def test_island_reset_requires_replay_and_original_journal_before_further_selection():
+    policy = build(); row, args = audited_seed(policy)
+    events = policy.reset_weaker_half()
+    pending = policy.pending_reset()
+    assert pending['events'] == events
+    with pytest.raises(ValueError, match='reset'):
+        asyncio.run(policy.select(frontier('a'), {}))
+    restored = build(); restored.restore_state(policy.checkpoint_state())
+    with pytest.raises(ValueError, match='reset'):
+        restored.audit_original_evidence([row], **args)
+    restored.audit_original_evidence([row], reset_rows=[pending], **args)
+    assert restored.pending_reset() is None
+    assert asyncio.run(restored.select(frontier('a'), {})) == ['a']
+    corrupted = policy.checkpoint_state()
+    corrupted['pending_reset']['events'][0]['founder'] = 'tampered'
+    with pytest.raises(ValueError):
+        build().restore_state(corrupted)

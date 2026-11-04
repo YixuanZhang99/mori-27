@@ -25,9 +25,12 @@ class FunSearchPolicy(GreedyPolicy):
         self._config = self.population.checkpoint_state()['config']
         self._evidence_refs = {}
         self._pending = None
+        self._pending_reset = None
         self._verified = False
 
     async def select(self, frontier, budget):
+        if self._pending_reset is not None:
+            raise ValueError('pending island reset must be audited first')
         if self._pending is not None:
             raise ValueError('pending program selection must be settled first')
         if self._evidence_refs and not self._verified:
@@ -51,6 +54,8 @@ class FunSearchPolicy(GreedyPolicy):
         return copy.deepcopy(self._pending)
 
     def record_evaluated(self, projection):
+        if self._pending_reset is not None:
+            raise ValueError('pending island reset must be audited first')
         if self._pending is not None and not self._verified:
             raise ValueError('original evidence audit is required before settling selection')
         if type(projection) is not dict or set(projection) != {
@@ -82,14 +87,23 @@ class FunSearchPolicy(GreedyPolicy):
         return {**previous, 'reason': reason}
 
     def reset_weaker_half(self):
+        if self._pending_reset is not None:
+            raise ValueError('pending island reset must be audited first')
         if self._pending is not None:
             raise ValueError('pending program selection prevents island reset')
         if self._evidence_refs and not self._verified:
             raise ValueError('original evidence audit is required before island reset')
-        return self.population.reset_weaker_half()
+        before = self.population.checkpoint_state()
+        events = self.population.reset_weaker_half()
+        self._pending_reset = {'before': before, 'after': self.population.checkpoint_state(), 'events': events}
+        self._verified = False
+        return copy.deepcopy(events)
+
+    def pending_reset(self):
+        return copy.deepcopy(self._pending_reset)
 
     def audit_original_evidence(self, rows, *, metric, logical_run_id, evaluator_version, evaluation_context,
-                                selection_rows=None):
+                                selection_rows=None, reset_rows=None):
         """Check every retained candidate against authenticated main-lane rows."""
         from core.funsearch_public_evidence import verify_selected_projections
         self._verified = False
@@ -105,17 +119,23 @@ class FunSearchPolicy(GreedyPolicy):
             if type(selection_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending)
                                                        for row in selection_rows) != 1:
                 raise ValueError('pending selection lacks its original journal record')
+        if self._pending_reset is not None:
+            if type(reset_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending_reset)
+                                                   for row in reset_rows) != 1:
+                raise ValueError('pending reset lacks its original journal record')
+            self._pending_reset = None
         self._verified = True
         return True
 
     def checkpoint_state(self):
-        return {'schema_version': 1, 'base': super().checkpoint_state(),
+        return {'schema_version': 2, 'base': super().checkpoint_state(),
                 'population': self.population.checkpoint_state(),
-                'evidence_refs': dict(self._evidence_refs), 'pending': self.pending_selection()}
+                'evidence_refs': dict(self._evidence_refs), 'pending': self.pending_selection(),
+                'pending_reset': self.pending_reset()}
 
     def restore_state(self, state):
-        if (type(state) is not dict or set(state) != {'schema_version', 'base', 'population', 'evidence_refs', 'pending'}
-                or type(state['schema_version']) is not int or state['schema_version'] != 1
+        if (type(state) is not dict or set(state) != {'schema_version', 'base', 'population', 'evidence_refs', 'pending', 'pending_reset'}
+                or type(state['schema_version']) is not int or state['schema_version'] != 2
                 or type(state['evidence_refs']) is not dict):
             raise ValueError('invalid FunSearch policy checkpoint')
         population = FunSearchPopulation.from_checkpoint(state['population'])
@@ -127,6 +147,9 @@ class FunSearchPolicy(GreedyPolicy):
                 not re.fullmatch(r'sha256:[0-9a-f]{64}', ref) for ref in refs.values()):
             raise ValueError('FunSearch evidence coverage differs')
         pending = state['pending']
+        reset = state['pending_reset']
+        if pending is not None and reset is not None:
+            raise ValueError('selection and reset cannot both be pending')
         if pending is not None:
             if type(pending) is not dict or set(pending) != {'receipt', 'before', 'after'}:
                 raise ValueError('invalid pending FunSearch selection')
@@ -138,6 +161,16 @@ class FunSearchPolicy(GreedyPolicy):
                 raise ValueError('invalid pending FunSearch selection') from exc
             if payload_digest(pending['after']) != payload_digest(frozen):
                 raise ValueError('pending selection differs from population state')
+        if reset is not None:
+            if type(reset) is not dict or set(reset) != {'before', 'after', 'events'}:
+                raise ValueError('invalid pending island reset')
+            replayed = FunSearchPopulation.from_checkpoint(reset['before'])
+            events = replayed.reset_weaker_half()
+            if (payload_digest(events) != payload_digest(reset['events']) or
+                    payload_digest(replayed.checkpoint_state()) != payload_digest(reset['after']) or
+                    payload_digest(reset['after']) != payload_digest(frozen)):
+                raise ValueError('pending island reset differs from replay')
         super().restore_state(state['base'])
         self.population, self._evidence_refs, self._pending = population, dict(refs), copy.deepcopy(pending)
+        self._pending_reset = copy.deepcopy(reset)
         self._verified = False
