@@ -299,6 +299,10 @@ def run_governed_agent(*, workspace, task_id, model, api_base, token_budget, see
     if receipt_audit['total_tokens'] != inspection['known_provider_tokens'] or \
             receipt_audit['settled_micro_cny'] != inspection['authority']['settled_upper_bound_micro_cny']:
         raise ValueError('independent currency receipts differ from framework inspection')
+    selected_links = [link for link in receipt_audit['construction']['artifact_links']
+                      if link['lane'] == 'main' and link['candidate_id'] == result['best_candidate_id']]
+    if len(selected_links) != 1:
+        raise ValueError('selected candidate lacks a unique main construction provenance')
     proposal_data = selected['proposal']
     proposal = Proposal(Candidate(**proposal_data['candidate']), proposal_data['artifact'])
     record = domain.materialize(proposal, workspace / 'submission.csv', expected_prediction_sha256=

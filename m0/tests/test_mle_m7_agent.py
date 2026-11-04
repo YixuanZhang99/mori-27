@@ -74,6 +74,9 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
         from zoo.mle_bench_lite.m7_pilot_audit import audit_currency_receipts
         audit = audit_currency_receipts(workspace.parent / 'agent_artifacts/composed', ledger, expected_model='deepseek-flash')
         assert audit['total_tokens'] == summary['token_usage']['total_tokens']
+        assert audit['construction']['provider_calls'] == 2 + iterations
+        assert any(link['candidate_id'] == summary['selected_candidate_id'] and link['lane'] == 'main'
+                   for link in audit['construction']['artifact_links'])
         assert audit['settled_micro_cny'] == 38 * (2 + iterations)
         response_file = next((workspace.parent / 'agent_artifacts/composed/.governed-cny').glob('*.response.json'))
         original_response = response_file.read_text()
@@ -89,6 +92,14 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
         forged['sha256'] = payload_digest(forged['payload'])
         response_file.write_text(json.dumps(forged))
         with pytest.raises(ValueError, match='usage differs'):
+            audit_currency_receipts(workspace.parent / 'agent_artifacts/composed', ledger, expected_model='deepseek-flash')
+        response_file.write_text(original_response)
+        transcript = workspace.parent / 'agent_artifacts/composed/x1.jsonl'
+        rows = [json.loads(line) for line in transcript.read_text().splitlines()]
+        materialized = next(row for row in rows if row['kind'] == 'materialization_completed')
+        materialized['payload']['construction_result']['artifact'] += '\n# altered'
+        transcript.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+        with pytest.raises(ValueError):
             audit_currency_receipts(workspace.parent / 'agent_artifacts/composed', ledger, expected_model='deepseek-flash')
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=5)

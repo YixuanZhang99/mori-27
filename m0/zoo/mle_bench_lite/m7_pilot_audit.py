@@ -1,7 +1,7 @@
 """Independent currency-receipt cross-check for M7 MLE runs.
 
-This establishes currency journal and response usage consistency, not the full
-physical transcript, selected artifact, or official benchmark score. Callers
+This establishes currency, response usage and construction provenance, not full
+physical settlement, selected artifact or official benchmark score. Callers
 must perform those checks separately before accepting an experiment.
 """
 from __future__ import annotations
@@ -12,6 +12,7 @@ import stat
 from pathlib import Path
 
 from core.x1.checkpoint import payload_digest
+from core.composition.construction_audit import audit_construction
 from core.composition.external_provider import GovernedCallContext, external_call_id
 from .cny_budget import validate_detailed_usage
 from .governed_currency_audit import verify_governance_evidence
@@ -53,6 +54,7 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
     if len(responses) != len(operations):
         raise ValueError('currency response coverage differs')
     total = 0
+    provider_arguments = {}
     for path in responses:
         context_hash = path.name.removeprefix('call-').removesuffix('.response.json')
         prepared = _record(spool / ('call-' + context_hash + '.prepared.json'))
@@ -64,6 +66,9 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
                 context.currency_run_id != binding['currency_run_id']:
             raise ValueError('prepared call identity differs')
         operation = operations.pop(prepared['call_id'], None)
+        wire = json.loads(body)
+        prompt = wire['messages'][0]['content']
+        provider_arguments[payload_digest(context.to_dict())] = prompt
         response = _record(path)
         if operation is None or response.get('returned_model') != expected_model or \
                 response.get('integrity_reason') is not None or \
@@ -76,6 +81,20 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         total += usage['total_tokens']
     if operations:
         raise ValueError('currency operations lack responses')
+    preparation = _record(spool / 'plan-prepared.json')
+    run = preparation['run']
+    if preparation['currency_run_id'] != binding['currency_run_id'] or \
+            run['logical_run_id'] != ready['logical_run_id']:
+        raise ValueError('construction preparation differs from currency run')
+    transcript = Path(run_root) / 'x1.jsonl'
+    if transcript.is_symlink() or not transcript.is_file():
+        raise ValueError('construction transcript is missing or unsafe')
+    rows = [json.loads(line) for line in transcript.read_text().splitlines()]
+    construction = audit_construction(rows, run['construction'], logical_run_id=run['logical_run_id'],
+                                      provider_arguments=provider_arguments)
+    if construction['provider_calls'] != len(responses):
+        raise ValueError('construction transcript does not cover currency calls')
     return {'total_tokens': total, 'settled_micro_cny': audit['settled_upper_bound_micro_cny'],
             'model': expected_model, 'journal_head': head, 'invoice_verified': False,
-            'coverage': 'currency journal and response usage only; physical and artifact audits required'}
+            'construction': construction,
+            'coverage': 'currency and construction provenance; physical settlement and selected artifact require separate audit'}
