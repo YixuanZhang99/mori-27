@@ -84,3 +84,5 @@
 - v70 — Atomic remaining physical reservations, fractional quote floors and cooperating-process JSONL snapshots; preserves every v69 command and authentic local v69 evidence.
 
 - v71 (2026-11-04): provider input-capacity admission, measured refusal/overrun distinction and durable known-refusal replay; all v70 command groups/timeouts and authentic history retained.
+
+- v72 (2026-11-04): opt-in resident controls, seven protected physical accounts, isolated sessions, native/worktree recovery and recorded replay, additive protected currency migration and semantic audit; all v71 commands/timeouts and authentic history retained.

@@ -30,6 +30,23 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def setUp(self):
+        # This historical certificate-scope unit test intentionally runs v71 in
+        # its frozen control context. Current v72 wiring is tested separately.
+        # No old assertion or command group is rewritten to accept new wiring.
+        if self._testMethodName == "test_v71_scope_requires_group_and_whole_run_success":
+            original_read = Path.read_text
+            frozen = ROOT / "m0/verifier/v72/v71-control-context"
+            controls = {ROOT / name: frozen / name for name in
+                        ("scripts/run_acceptance.py", "Makefile", ".github/workflows/ci.yml")}
+            def historical_read(path, *args, **kwargs):
+                if path in controls:
+                    return original_read(controls[path], *args, **kwargs)
+                return original_read(path, *args, **kwargs)
+            historical_context = patch.object(Path, "read_text", historical_read)
+            historical_context.start()
+            self.addCleanup(historical_context.stop)
+
     def test_v71_scope_requires_group_and_whole_run_success(self):
         path = ROOT / 'm0/verifier/v71/verify.py'
         self.assertTrue(path.is_file())

@@ -9,7 +9,7 @@ help:
 	@echo 'make check        Run axioms, portable tests, examples and workflow tests'
 	@echo 'make test         Run portable tests (Linux cases explicitly deselected)'
 	@echo 'make test-linux   Run every test; any skip fails (Linux x86_64 required)'
-	@echo 'make accept-linux Run the full v71 acceptance in a disposable copy'
+	@echo 'make accept-linux Run the full v72 acceptance in a disposable copy'
 	@echo 'make build        Build wheel and sdist into artifacts/dist'
 	@echo 'make verify-import Verify the immutable imported Git baseline'
 
@@ -31,6 +31,7 @@ examples:
 	cd m0 && $(UV) run --locked python examples/gsm8k_offline.py
 	cd m0 && $(UV) run --locked python examples/funsearch_offline.py
 	cd m0 && $(UV) run --locked python examples/composed_research_offline.py
+	cd m0 && $(UV) run --locked python -c "from examples.governed_controls import main; import tempfile; d=tempfile.TemporaryDirectory(prefix='mori-governed-example-'); main(['--workdir',d.name,'--pause-after','0']); main(['--workdir',d.name,'--resume']); main(['--workdir',d.name,'--replay']); d.cleanup()"
 
 tooling:
 	$(UV) run --project m0 --locked python -m unittest discover -s scripts/tests -v

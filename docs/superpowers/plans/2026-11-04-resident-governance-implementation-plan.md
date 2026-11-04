@@ -20,7 +20,9 @@ The user requested parallel implementation instead of waiting for another paid e
 - Implemented separately: explicit schema-2 CNY journal migration and protected obligation conversion, with schema-1 policy/history preservation and old-reader rejection. This was exercised only on test ledgers. **The provider bridge is not implemented.** Core rejects external monetary capabilities; no formal paid protection or real IID claim is enabled.
 - Fresh final review found five Important issues, all reproduced before fixes: receipt deletion accepted by audit, post-call binding drift lost after crash, bound breach reported as protected, nested evaluator-provider receipts not adopted, and phase reservations below known minimums. The focused regressions now pass. Additional onboarding recovery exposed a lost frontier store view; declared native domain state also required terminal adoption. Both have regression coverage.
 - First project-wide validation found a dependency cycle between the physical budget and its governance projection. Pure shared value contracts now live in `budget_contracts.py`; the unchanged static axiom check passes. The failed validation output is retained separately.
-- Full Linux regression, installed-artifact verification, clean-source versioned acceptance and remote synchronization are still gates, not conclusions inferred from focused tests. Stage 4 integration and Stage 7 real formal experiment remain open.
+- Verified on implementation `bedc5b3`: 2,000 Linux tests, 64 tooling tests, all static axioms, package build/import verification, and checkout-external installed-wheel pause/resume/recorded replay. Clean unchanged v71 acceptance passed all 42 checks in 717.642 seconds; exact original bytes are archived with `m0/verifier/v72/v71-provenance.json`. The implementation branch was pushed. Hosted CI and the additive v72 candidate have separate evidence and must be reported at their actual terminal status.
+- Stage 4 remains partial: the offline versioned CNY authority is implemented, but the provider bridge and dual-authority crash protocol are not. Stage 7 formal paid experiment remains open; the user deferred the third pilot.
+- The original checklist below retains mixed or broader requirements as unchecked when only a subset is implemented. Architecture review is archived at `docs/review/2026-11-04-governance-depth.md`; it does not claim A7's whole-repository 1:3 condition is met.
 
 Rulings: controls use an empty frozen initial context plus original task; unsupported external authority capability fails preflight; known invalid command identity is an integrity stop (canonical FAILED_TO_RUN remains a failed sample that drains); main cannot consume unused control slack; no arbitrary factory sandbox, supplier IID proof, exactly-once external side effects or power-loss guarantee is claimed.
 
@@ -103,26 +105,26 @@ Governed `replay()` must use recorded provider/evaluator outcomes to reconstruct
 
 Files: contracts.py, registry.py, defaults.py, budget.py; new governance.py. Tests: new test_governed_config.py and test_governed_budget.py; retain every existing config/budget/recovery test.
 
-- [ ] RED absent-key byte equality; invalid schema/unknown factories/duplicate schedule/boolean counts/incomplete baskets fail before constructor calls.
-- [ ] RED journaled main explore/exploit/reeval/overhead and control attribution; all seven totals equal one global actual total per unit. Rehashed wrong account/lane/slot cannot replay.
-- [ ] RED main cannot consume future obligations, atomic obligation conversion has no free-capacity window, concurrent reservations remain serialized, true actual overrun preserves bill and invalidates protection, unknown costs block both lanes.
-- [ ] Implement validated GovernanceConfig and deterministic frozen ControlPlan; extend HierarchicalBudget reducer/checkpoints conditionally. Run entire existing budget/config suites, then complete project checks before claiming this stage complete.
+- [x] RED absent-key byte equality; invalid schema/unknown factories/duplicate schedule/boolean counts/incomplete baskets fail before constructor calls.
+- [x] RED journaled main explore/exploit/reeval/overhead and control attribution; all seven totals equal one global actual total per unit. Rehashed wrong account/lane/slot cannot replay.
+- [x] RED main cannot consume future obligations, atomic obligation conversion has no free-capacity window, concurrent reservations remain serialized, true actual overrun preserves bill and invalidates protection, unknown costs block both lanes.
+- [x] Implement validated GovernanceConfig and deterministic frozen ControlPlan; extend HierarchicalBudget reducer/checkpoints conditionally. Run entire existing budget/config suites, then complete project checks before claiming this stage complete.
 
 ### 2. Fresh sessions and lane input isolation
 
 Files: registry.py, contracts.py, provider.py; new governance.py lane views/session builder. Tests: test_governed_sessions.py.
 
-- [ ] RED uncopyable provider succeeds through a fresh registered factory; reused main/control raw adapters are rejected before calls. Stateful evaluator/provider fixtures cannot leak counters/history across draws.
-- [ ] RED poisoned main memory/admission/control result records are unavailable to inappropriate factories/hooks and do not enter control prompts. Initial context, prompt/config hashes and actual sampling contracts remain fixed.
-- [ ] Implement preflight building of declared sessions, namespace bindings, restricted store interfaces and explicit capability failures. Preserve benchmark knowledge restrictions and existing six-kernel public abstraction.
+- [x] RED uncopyable provider succeeds through a fresh registered factory; reused main/control raw adapters are rejected before calls. Stateful evaluator/provider fixtures cannot leak counters/history across draws.
+- [x] RED poisoned main memory/admission/control result records are unavailable to inappropriate factories/hooks and do not enter control prompts. Initial context, prompt/config hashes and actual sampling contracts remain fixed.
+- [x] Implement preflight building of declared sessions, namespace bindings, restricted store interfaces and explicit capability failures. Preserve benchmark knowledge restrictions and existing six-kernel public abstraction.
 
 ### 3. Shared governed invocation and terminal recovery
 
 Files: new governed.py; runtime.py, hierarchical_runtime.py, recovery.py, worktree.py as required. Tests: test_governed_invocations.py, existing composed worktree tests.
 
 - [ ] RED both main/control calls use one reserve/start/outcome/settle identity. Multi-call hooks retain earlier charges on refusal; failure cannot relabel cost. Include explicit crossover refusal and custom multi-call operator-stop cases deferred by v71.
-- [ ] RED actual SIGKILL boundaries around start, known success/failure, physical settlement and checkpoint; missing authority blocks both lanes, recorded outcomes produce no repeat HTTP/evaluation. Native opaque in-flight evaluation remains explicitly unsupported rather than retried.
-- [ ] Implement private shared orchestration. Keep successful legacy event shapes and ungoverned v6 identity intact. Verify real worktree and native public Framework entry paths.
+- [x] RED actual SIGKILL boundaries around start, known success/failure, physical settlement and checkpoint; missing authority blocks both lanes, recorded outcomes produce no repeat HTTP/evaluation. Native opaque in-flight evaluation remains explicitly unsupported rather than retried.
+- [x] Implement private shared orchestration. Keep successful legacy event shapes and ungoverned v6 identity intact. Verify real worktree and native public Framework entry paths.
 
 ### 4. Shared external currency capacity
 
@@ -136,15 +138,15 @@ Files: cny_budget.py, provider.py, currency integration tests; no mutation of a 
 
 Files: runtime.py, governed.py, governance.py. Tests: test_governed_runtime.py and test_governed_worktree.py.
 
-- [ ] RED initial/interleaved schedule, ordinary early-stop drain, explicit pause without drain, failure in predetermined sample set, integrity failure stops all work, repeated resume does not reissue calls.
-- [ ] RED controls absent from frontier, parent selection, memory, proxy fitting, admission and final main selection; scores use the frozen comparable request. State and capacity remain auditable even with failed controls.
+- [x] RED initial/interleaved schedule, ordinary early-stop drain, explicit pause without drain, failure in predetermined sample set, integrity failure stops all work, repeated resume does not reissue calls.
+- [x] RED controls absent from frontier, parent selection, memory, proxy fitting, admission and final main selection; scores use the frozen comparable request. State and capacity remain auditable even with failed controls.
 - [ ] Implement composed-v7-governed scheduler and checkpoints; at least native and worktree examples use exactly the same governance schema.
 
 ### 6. Live audit and evidence replay
 
 Files: governance.py/governed.py/runtime.py and reporting docs/examples. Tests: test_governed_audit.py, test_governed_replay.py.
 
-- [ ] RED post-run appended/tampered evidence invalidates fresh inspect; account totals, control slots, stop disposition and receipt coverage are independently recomputed.
+- [x] RED post-run appended/tampered evidence invalidates fresh inspect; account totals, control slots, stop disposition and receipt coverage are independently recomputed.
 - [ ] RED non-deterministic remote-like provider fixture replay consumes recorded outcomes without network, preserves canonical results/receipt chain and detects wrong request, missing result, altered context, extra ordinal or changed adapter. Currency journal bytes remain unchanged.
 - [ ] Implement explicit separate C1/C2/C3/C4 reports, no fake aggregate pass or superiority inference.
 
