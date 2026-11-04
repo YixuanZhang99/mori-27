@@ -46,17 +46,26 @@ class InstanceFrontier:
             return
         self._scores[candidate_id] = values
 
-    def winners(self):
-        if not self._scores:
+    def _eligible_scores(self, eligible):
+        if eligible is not None and (not isinstance(eligible, (set, frozenset)) or
+                                     any(type(candidate) is not str for candidate in eligible)):
+            raise ValueError('eligible candidates must be an explicit set of identities')
+        return {candidate: scores for candidate, scores in self._scores.items()
+                if eligible is None or candidate in eligible}
+
+    def winners(self, *, eligible=None):
+        scores = self._eligible_scores(eligible)
+        if not scores:
             return {item: [] for item in self._items}
-        return {item: [candidate for candidate, scores in self._scores.items()
-                       if scores[item] == max(row[item] for row in self._scores.values())]
+        return {item: [candidate for candidate, row in scores.items()
+                       if row[item] == max(other[item] for other in scores.values())]
                 for item in self._items}
 
-    def pruned_winners(self):
-        fronts = self.winners()
+    def pruned_winners(self, *, eligible=None):
+        scores = self._eligible_scores(eligible)
+        fronts = self.winners(eligible=eligible)
         # Python's stable sort breaks aggregate ties by insertion order.
-        candidates = sorted(self._scores, key=lambda candidate: sum(self._scores[candidate].values()) / len(self._items))
+        candidates = sorted(scores, key=lambda candidate: sum(scores[candidate].values()) / len(self._items))
         for candidate in candidates:
             covered = [item for item in self._items if candidate in fronts[item]]
             if covered and all(len(fronts[item]) > 1 for item in covered):
@@ -64,17 +73,16 @@ class InstanceFrontier:
                     fronts[item].remove(candidate)
         return fronts
 
-    def frequencies(self):
+    def frequencies(self, *, eligible=None):
         counts = {}
-        for winners in self.pruned_winners().values():
+        for winners in self.pruned_winners(eligible=eligible).values():
             for candidate in winners:
                 counts[candidate] = counts.get(candidate, 0) + 1
         return {candidate: counts[candidate] for candidate in self._scores if candidate in counts}
 
-    def select(self):
-        # Candidate ordering is frozen to insertion order; each winning instance
-        # contributes one slot, matching GEPA's frequency-weighted draw.
-        weighted = [candidate for candidate, count in self.frequencies().items() for _ in range(count)]
+    def select(self, *, eligible=None):
+        # Each winning instance contributes one slot to the seeded draw.
+        weighted = [candidate for candidate, count in self.frequencies(eligible=eligible).items() for _ in range(count)]
         if not weighted:
             raise ValueError('no evaluated candidate available for selection')
         return self._rng.choice(weighted)

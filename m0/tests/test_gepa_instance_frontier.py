@@ -55,3 +55,12 @@ def test_reject_malformed_checkpoint_without_coercing_candidate_identity():
     state['candidates'] = [{'id': [], 'scores': {'a': 1}}]
     with pytest.raises(ValueError):
         InstanceFrontier.from_checkpoint(state)
+
+
+def test_selection_recomputes_winners_after_budget_prunes_a_parent():
+    frontier = InstanceFrontier(['a', 'b'], seed=2)
+    frontier.offer('elite', {'a': 1, 'b': 1})
+    frontier.offer('remaining', {'a': .5, 'b': .5})
+    assert frontier.select(eligible={'remaining'}) == 'remaining'
+    with pytest.raises(ValueError, match='no evaluated'):
+        frontier.select(eligible=set())
