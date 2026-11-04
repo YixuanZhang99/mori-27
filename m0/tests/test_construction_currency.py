@@ -341,3 +341,20 @@ def test_command_evaluation_reuses_currency_bound_git_artifacts(tmp_path, local_
     assert fw.replay(COMMAND_TASK)['replay_certificate']['passed']
     assert campaign.snapshot() == before
     assert len(local_endpoint.requests) == 4
+
+
+def test_external_audit_rejects_funsearch_recipe_without_frozen_policy(tmp_path, local_endpoint, monkeypatch):
+    import core.composition.construction_audit as audit_module
+    from core.x1.checkpoint import payload_digest
+    campaign = campaign_fixture(tmp_path)
+    local_endpoint.responses.extend(answer() for _ in range(4))
+    fw, _ = build(tmp_path / 'run', campaign, local_endpoint)
+    fw.evolve(TASK)
+    bridge = fw._composed.governed.external
+    rows = copy.deepcopy(bridge._root_rows())
+    arguments = {payload_digest(r['prepared']['context']):
+                 json.loads(r['prepared']['wire_body'])['messages'][0]['content'] for r in bridge._records()}
+    monkeypatch.setattr(audit_module, '_prompt_request', lambda *_args: {'recipe': {'kind': 'funsearch'}})
+    with pytest.raises(ValueError, match='frozen FunSearch policy'):
+        audit_module.audit_construction(rows, bridge._run.construction,
+            logical_run_id=bridge._run.logical_run_id, provider_arguments=arguments)

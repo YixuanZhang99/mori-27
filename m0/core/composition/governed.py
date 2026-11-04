@@ -223,7 +223,13 @@ class GovernedInvocation:
         if runtime.construction_enabled:
             source_context = session["construction_execution"].control_context(runtime.task)
             candidate = replace(candidate, context_pack_ref=source_context["context_pack_ref"])
-            request = replace(request, context=session["construction_execution"].project(source_context))
+            control_context = session["construction_execution"].project(source_context)
+            if runtime.funsearch:
+                control_context['instruction'] = ('Return exactly one Python function with the target name and '
+                    'signature in this frozen template. Do not include other top-level statements.\n' +
+                    runtime.assembly.policy.options['template'])
+            frozen_control_context = copy.deepcopy(control_context)
+            request = replace(request, context=control_context)
         receipt = runtime.budget.reserve_control_operation(slot_id, "operator", candidate)
         if not receipt.granted:
             raise UsageError("protected control operator reservation was refused")
@@ -236,7 +242,7 @@ class GovernedInvocation:
         if proposal.candidate.id != identifier or proposal.candidate.parents or \
                 proposal.candidate.created_cycle != 0 or not isinstance(proposal.artifact, str):
             raise ValueError("control proposal changed frozen identity or parentless lineage")
-        expected_context = session["construction_execution"].project(source_context) if runtime.construction_enabled \
+        expected_context = frozen_control_context if runtime.construction_enabled \
             else self.plan["initial_context"]
         if request.context != expected_context:
             raise ValueError("control operator mutated its frozen initial context")

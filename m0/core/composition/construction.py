@@ -34,6 +34,44 @@ def _text(value, label):
         raise ValueError(f"{label} must be valid UTF-8 text") from error
 
 
+def _funsearch_binding(binding, prompt, parents):
+    """Validate a local binding; the owning runtime must audit its journal."""
+    fields = {'selection', 'selection_ref', 'input_ref', 'prompt_ref', 'evidence_refs', 'binding_ref'}
+    if type(binding) is not dict or set(binding) != fields:
+        raise ValueError('FunSearch construction requires a complete selection binding')
+    refs = ('selection_ref', 'input_ref', 'prompt_ref', 'binding_ref')
+    if any(type(binding[key]) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', binding[key]) for key in refs):
+        raise ValueError('FunSearch construction references must be canonical digests')
+    selection = binding['selection']
+    keys = {'schema_version', 'requested_island', 'island', 'epoch', 'samples', 'ancestry',
+            'eligible', 'state_before_ref', 'state_after_ref'}
+    if type(selection) is not dict or set(selection) != keys or type(selection['schema_version']) is not int \
+            or selection['schema_version'] != 2 or type(selection['island']) is not int \
+            or selection['island'] < 0 or type(selection['epoch']) is not int or selection['epoch'] < 0 \
+            or (selection['requested_island'] is not None and
+                (type(selection['requested_island']) is not int or selection['requested_island'] != selection['island'])):
+        raise ValueError('invalid FunSearch selection record')
+    samples, ancestry, eligible = selection['samples'], selection['ancestry'], selection['eligible']
+    if type(samples) is not list or not samples or any(type(x) is not str or not x for x in samples) \
+            or type(ancestry) is not list or ancestry != list(dict.fromkeys(samples)) or ancestry != parents \
+            or type(eligible) is not list or any(type(x) is not str or not x for x in eligible) \
+            or eligible != sorted(set(eligible)) or not set(samples) <= set(eligible):
+        raise ValueError('FunSearch samples differ from selected ancestry or eligibility')
+    if any(type(selection[key]) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', selection[key])
+           for key in ('state_before_ref', 'state_after_ref')):
+        raise ValueError('invalid FunSearch population state reference')
+    evidence = binding['evidence_refs']
+    if type(evidence) is not dict or set(evidence) != set(parents) or any(
+            type(value) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', value)
+            for value in evidence.values()):
+        raise ValueError('FunSearch evidence references differ from ancestry')
+    if binding['selection_ref'] != _ref(selection) or binding['prompt_ref'] != _ref(prompt):
+        raise ValueError('FunSearch selection or prompt differs from its digest')
+    core = {key: binding[key] for key in ('selection_ref', 'input_ref', 'prompt_ref', 'evidence_refs')}
+    if binding['binding_ref'] != _ref(core):
+        raise ValueError('FunSearch prompt binding differs')
+
+
 @dataclass(frozen=True)
 class RoleDefinition:
     name: str
@@ -103,10 +141,10 @@ class ConstructionPlan:
         projection = project_context(context_pack, spec.context_projection,
                                      expected_ref=candidate.context_pack_ref)
         recipe = json_copy(recipe, label="construction recipe")
-        if type(recipe) is not dict or set(recipe) != {
-                "kind", "task_desc", "parent_artifacts", "instructions", "comparison"}:
+        base = {"kind", "task_desc", "parent_artifacts", "instructions", "comparison"}
+        if type(recipe) is not dict or set(recipe) != base | ({'funsearch_binding'} if recipe.get('kind') == 'funsearch' else set()):
             raise ValueError("construction recipe requires explicit permitted inputs")
-        if recipe["kind"] not in {"draft", "reflective", "crossover"}:
+        if recipe["kind"] not in {"draft", "reflective", "crossover", "funsearch"}:
             raise ValueError("unsupported construction recipe")
         _text(recipe["task_desc"], "construction task")
         if type(recipe["instructions"]) is not list or any(type(x) is not str or not x.strip()
@@ -117,9 +155,13 @@ class ConstructionPlan:
                 or type(p["artifact"]) is not str for p in parents) \
                 or [p["candidate_id"] for p in parents] != candidate.parents:
             raise ValueError("recipe artifacts must match candidate parent identities in order")
-        expected = {"draft": 0, "reflective": 1, "crossover": 2}[recipe["kind"]]
-        if len(parents) != expected:
+        expected = {"draft": 0, "reflective": 1, "crossover": 2}.get(recipe["kind"])
+        if expected is not None and len(parents) != expected or recipe['kind'] == 'funsearch' and len(parents) not in (1, 2):
             raise ValueError("recipe parent count differs from its construction kind")
+        if recipe['kind'] == 'funsearch':
+            if len(recipe['instructions']) != 1:
+                raise ValueError('FunSearch construction requires one bound program prompt')
+            _funsearch_binding(recipe['funsearch_binding'], recipe['instructions'][0], candidate.parents)
         comparison = recipe["comparison"]
         if type(comparison) is not dict or set(comparison) - set(candidate.parents) \
                 or any(type(value) not in (int, float) for value in comparison.values()):

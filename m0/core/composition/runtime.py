@@ -99,6 +99,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.governed = None
         self._stop_disposition = None
         self.construction_enabled = self.assembly.execution is not None
+        funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
+            self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
+            self.assembly.executor.options.get('sandbox') == 'bubblewrap')
+        if self.assembly.policy.name == 'funsearch' and (
+                not self.construction_enabled or not funsearch_executor_ok):
+            raise ValueError('FunSearch requires its bounded M7 configuration')
         self.construction = None
         self.continuation_enabled = self.construction_enabled or self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
         self.runtime_identity = "composed-v7-governed" if self.assembly.governance is not None else "composed-v6"
@@ -199,6 +205,34 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.manifest["command_domain"] = self.parts["domain"].manifest_binding
             self.manifest["executor"] = self.parts["executor"].manifest_binding
         self.manifest["evaluation_contexts"] = {"dev": self.manifest["evaluation_context"]}
+        self.funsearch = None
+        if self.assembly.policy.name == 'funsearch':
+            from core.composition.funsearch_coordinator import FunSearchCoordinator
+            from core.composition.command_domain import CommandDomain
+            options = self.assembly.policy.options
+            domain_binding = getattr(self.parts['domain'], 'funsearch_binding', None)
+            if domain_binding is not None and domain_binding != {key: options[key] for key in
+                    ('case_ids', 'metric', 'template_ref')}:
+                raise ValueError('frozen FunSearch task differs from policy configuration')
+            constructor = self.assembly.execution.constructor if self.construction_enabled else None
+            funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
+                self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
+                self.assembly.executor.options.get('sandbox') == 'bubblewrap')
+            if (not self.construction_enabled or not funsearch_executor_ok or self.durable_executor or
+                    self.assembly.executor.name == 'git_artifact' and not isinstance(self.parts['domain'], CommandDomain) or
+                    [spec.name for spec in self.assembly.operators] != ['draft', 'funsearch'] or
+                    constructor.name != 'funsearch_prompt' or constructor.options != {
+                        'template': options['template'], 'function_name': options['function_name']} or
+                    options.get('comparison_metric', 'dev/score') != self.frontier.metric or
+                    self.assembly.operators[1].options.get('metric', 'dev/score') != self.frontier.metric):
+                raise ValueError('FunSearch requires its bounded M7 configuration')
+            self.funsearch = FunSearchCoordinator(self.parts['policy'], self.store,
+                case_ids=options['case_ids'], metric=options['metric'], logical_run_id=self._logical_run_id,
+                evaluator_version=self.manifest['domain_version'], evaluation_context=self.manifest['evaluation_context'],
+                template_ref=options['template_ref'], template=options['template'], function_name=options['function_name'])
+        elif (any(spec.name == 'funsearch' for spec in self.assembly.operators) or
+              self.construction_enabled and self.assembly.execution.constructor.name == 'funsearch_prompt'):
+            raise ValueError('FunSearch components require the FunSearch policy')
         if self.layered:
             contexts = self.layered.validate_domain(self.parts["domain"])
             self.manifest["evaluation_contexts"].update(contexts)
@@ -383,6 +417,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
+        if self.funsearch:
+            self.funsearch._audit()
         if self.proxy:
             self.proxy.restore_state(payload["proxy_state"])
             self.memory.verify_proxy_feedback(self.proxy)
@@ -392,6 +428,37 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.memory.verify_proxy_feedback(None)
         if self.governed is None:
             self.frontier.store = self.store
+        if self.construction_enabled:
+            from core.composition.gepa_policy import GEPAInstancePolicy
+            policy = self.parts['policy']
+            if type(policy) is GEPAInstancePolicy:
+                saved = {item['id']: item['scores'] for item in
+                         policy.instance_frontier.checkpoint_state()['candidates']}
+                recorded = [row['payload'] for row in self.store.read('gepa_public_verdicts')]
+                journal_evidence = {row['payload']['proposal']['candidate']['id']: row['payload']
+                                    for row in self.store.read('composed_evidence')}
+                expected = {}
+                for candidate_id, evidence in evidence_by_id.items():
+                    if evidence.eval_result.status is not EvalStatus.OK:
+                        continue
+                    public_items = public_projection(evidence).eval_result.contract.items or ()
+                    verdicts = {item.item_id: item.verdict for item in public_items
+                                if item.visibility == 'public' and item.seed is None}
+                    row = journal_evidence.get(candidate_id)
+                    if len(verdicts) != len(public_items) or row is None or \
+                            row['evidence'] != encode_evidence(evidence)['evidence']:
+                        raise ValueError('GEPA public verdict evidence differs from original journal')
+                    expected[candidate_id] = (verdicts, row['evidence_ref'])
+                if len(recorded) != len(expected) or len(saved) != len(expected):
+                    raise ValueError('GEPA public verdict evidence coverage differs')
+                for row in recorded:
+                    candidate_id = row.get('candidate_id')
+                    if set(row) != {'candidate_id', 'verdicts', 'evidence_ref'} or candidate_id not in expected \
+                            or (row['verdicts'], row['evidence_ref']) != expected.pop(candidate_id) \
+                            or saved.get(candidate_id) != row['verdicts']:
+                        raise ValueError('GEPA public verdict evidence differs from checkpoint')
+                if expected:
+                    raise ValueError('GEPA public verdict evidence is missing')
         self.proposals, self.evidence = proposals, evidence_by_id
         self.eval_requests = evaluation_requests
         self._halted_reason = payload["halted_reason"]
@@ -582,7 +649,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             # sampling. The policy may choose another branch or a fresh draft.
             for identifier in unavailable:
                 selection_view.nodes[identifier].status = "pruned"
-        parents = await self._policy("select", selection_view, self.budget.main_account_summary() if self.governed else self.budget.account_summary())
+        selection_budget = self.budget.main_account_summary() if self.governed else self.budget.account_summary()
+        parents = await self.funsearch.select(candidate_id, selection_view, selection_budget) if self.funsearch \
+            else await self._policy("select", selection_view, selection_budget)
         eligible_parents = {node.id for node in self.frontier.nodes.values()
                             if node.status in {"done", "merged"}
                             and node.eval_status == EvalStatus.OK.value
@@ -599,6 +668,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
                                          self._source_refs(context))
         producer_context = self.construction.project(context) if self.construction_enabled else context
+        if self.funsearch and not parents:
+            producer_context['instruction'] = ('Return exactly one Python function with the target name and '
+                'signature in this frozen template. Do not include other top-level statements.\n' +
+                self.assembly.policy.options['template'])
         parent_inputs = tuple(self.construction.parent_view(self.proposals[p]) if self.construction_enabled
                               else copy.deepcopy(self.proposals[p]) for p in parents)
         ideation = {**copy.deepcopy(strategy), "context": copy.deepcopy(producer_context)}
@@ -616,7 +689,17 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if fixed is not None and hypotheses[0]["hypothesis"] != fixed:
                 raise ValueError("policy hypothesis conflicts with the frozen execution configuration")
         strategy = {**strategy, "hypotheses": hypotheses}
-        request = OperatorRequest(task, candidate_id, cycle,
+        if self.funsearch and parents:
+            options = self.assembly.policy.options
+            materialized = self.funsearch.materialize(candidate_id, options['template'], options['function_name'])
+            strategy['funsearch'] = {'selection': self.parts['policy'].pending_selection()['receipt'],
+                                     'materialization': materialized}
+        producer_task = task
+        if self.funsearch:
+            producer_task += ('\nReturn one complete unversioned function named ' +
+                self.assembly.policy.options['function_name'] + ' with the frozen signature; '
+                'do not return versioned examples or other top-level statements.')
+        request = OperatorRequest(producer_task, candidate_id, cycle,
                                   parent_inputs,
                                   tuple((comparison_projection if self.construction_enabled else public_projection)(
                                       self.evidence[p]) for p in parents), copy.deepcopy(producer_context), strategy)
@@ -785,6 +868,29 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._finalize_frontier_admission(candidate_id, decision,
             decision.receipt_id if self.layered else event_id)
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
+        if self.funsearch:
+            if evidence.eval_result.status is EvalStatus.OK:
+                self.funsearch.record_evaluated(candidate_id)
+                count = len(list(self.store.read('funsearch_public_candidate')))
+                if count > 1 and count % self.assembly.policy.options['reset_interval'] == 0:
+                    self.funsearch.reset_weaker_half()
+            elif self.parts['policy'].pending_selection() is not None:
+                self.funsearch.abandon(candidate_id, 'evaluation_failed')
+        if self.construction_enabled:
+            # An explicitly configured GEPA selection policy receives only
+            # public binary instance verdicts. Its separate planning session
+            # never receives raw feedback, private items, or evaluator state.
+            from core.composition.gepa_policy import GEPAInstancePolicy
+            policy = self.parts['policy']
+            if type(policy) is GEPAInstancePolicy and evidence.eval_result.status is EvalStatus.OK:
+                public_items = public.eval_result.contract.items or ()
+                verdicts = {item.item_id: item.verdict for item in public_items
+                            if item.seed is None and item.visibility == 'public'}
+                if len(verdicts) != len(public_items):
+                    raise ValueError('GEPA selection requires unique unseeded public instance verdicts')
+                policy.observe_public_verdicts(candidate_id, verdicts)
+                self.store.append('gepa_public_verdicts', {'candidate_id': candidate_id, 'verdicts': verdicts,
+                    'evidence_ref': evidence_ref})
         if decision.admit:
             self.incumbent = candidate_id
         self.eval_requests[candidate_id] = evaluation_request

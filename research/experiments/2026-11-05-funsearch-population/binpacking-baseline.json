@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "method": "best_fit_reference_baseline",
+  "notebook_sha256": "eec45846a8661722addbb856179327cf2ede0bc502e32be4ad58a6ac54e0aca6",
+  "results": {
+    "OR3": {
+      "instances": 20,
+      "average_bins": 212.0,
+      "average_l1_bound": 201.2,
+      "excess_percent": 5.367793240556666
+    },
+    "Weibull 5k": {
+      "instances": 5,
+      "average_bins": 2067.0,
+      "average_l1_bound": 1987.8,
+      "excess_percent": 3.9843042559613666
+    }
+  }
+}

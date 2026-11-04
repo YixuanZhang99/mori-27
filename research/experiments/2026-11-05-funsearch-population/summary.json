@@ -1,0 +1,7 @@
+{
+  "reference_commit": "cc53f274237d7ab05c19df939edbc1f9616a7c19",
+  "reference_sha256": "b2bef312d04861f467f304f65788efe959f0493818976b052c46b4703151affc",
+  "random_fixtures": 200,
+  "maximum_absolute_probability_error": 2.220446049250313e-16,
+  "scope": "signature, reduction and probability calculations only; not RNG parity or benchmark"
+}
