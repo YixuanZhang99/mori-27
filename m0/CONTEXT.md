@@ -211,3 +211,13 @@ OpenAI-compatible HTTP request with Authorization still succeeds. It is therefor
 filtering for a trusted proposal adapter, not Bubblewrap, filesystem/network isolation or
 credential isolation. Fallback calls made without an operation context and arbitrary
 in-process proposers/evaluators do not pass through this worker and are not covered.
+
+## Configured M7 construction vocabulary
+
+**ConstructionPlan**: A candidate's frozen construction intent: its recipe, canonical ExecutorSpec, role definition and authorized projection of an existing ContextPack. It is not an evaluated artifact.
+
+**RoleDefinition**: The versioned generation instructions associated with an execution role.
+
+**ConstructionResult**: The generated artifact and effective hypothesis, together with the original hypothesis, construction-attempt history and known physical usage. It does not establish admission or evaluation success.
+
+**Materialization**: A published immutable artifact and its exact construction-outcome binding, reused by subsequent evaluations. Publication and recovery are a separate implementation step from producing a ConstructionResult.

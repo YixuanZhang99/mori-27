@@ -33,11 +33,11 @@
 
 **Interfaces:** `RoleDefinition(name, version, instructions)` is immutable. `ConstructionPlan.create(candidate, recipe, spec, context_pack, *, roles)` freezes canonical input; recipe keys are `kind`, `task_desc`, `parent_artifacts`, `instructions`, `comparison`, with explicit strict validation. Existing `ExecutorSpec` is used, no competing spec type. `project_context(pack, fields, *, expected_ref)` returns detached selected data with original identity and provenance. `PromptMaterializer(roles, *, max_attempts=1, validator=None)` exposes async `construct(plan, provider) -> ConstructionResult`. Result binds final candidate/artifact, original/effective hypotheses, role/spec/projection/plan references, attempts and measured aggregate construction cost/coverage. Failure with known bill uses existing OperatorFailure; unknown usage propagates UsageError.
 
-- [ ] Write tests proving changed role changes provider input and artifact; exact projection/no source mutation; unknown/duplicate/summary fields reject before call; frozen candidate/spec conflict before call; output hypothesis change known-cost failure; free hypothesis persisted; strict JSON and bounded validation repair; unknown second call retains prior observations and raises UsageError; no extra eval count.
-- [ ] Run `env TMPDIR=/dev/shm PYTHONPATH=m0 /usr/local/share/mori27-local/dev/bin/python -m pytest -q m0/tests/test_construction.py`. Expected: RED because new module/behavior absent.
-- [ ] Implement the private module. Permit selectable fields memory/grounding/query; default is explicit memory/grounding. Each retry gets same frozen plan and only deterministic local feedback. Consume current provider usage immediately after each call before decoding. Never reset governance ordinals or nest meters.
-- [ ] Run the same test command plus `m0/tests/test_composition_context.py m0/tests/test_composed_context.py`. Expected: GREEN, no historical source changes.
-- [ ] Commit tested construction core. This task alone is not public M7 completion.
+- [x] Write tests proving changed role changes provider input and artifact; exact projection/no source mutation; unknown/duplicate/summary fields reject before call; frozen candidate/spec conflict before call; output hypothesis change known-cost failure; free hypothesis persisted; strict JSON and bounded validation repair; unknown second call retains prior observations and raises UsageError; no extra eval count.
+- [x] Run `env TMPDIR=/dev/shm PYTHONPATH=m0 /usr/local/share/mori27-local/dev/bin/python -m pytest -q m0/tests/test_construction.py`. Expected: RED because new module/behavior absent.
+- [x] Implement the private module. Permit selectable fields memory/grounding/query; default is explicit memory/grounding. Each retry gets same frozen plan and only deterministic local feedback. Consume current provider usage immediately after each call before decoding. Never reset governance ordinals or nest meters.
+- [x] Run the same test command plus `m0/tests/test_composition_context.py m0/tests/test_composed_context.py`. Expected: GREEN, no historical source changes.
+- [x] Commit tested construction core. This task alone is not public M7 completion.
 
 ### Task 2: Durable materialization and frozen native artifacts
 
