@@ -6,13 +6,12 @@ components to that authority and never inserts control outcomes into search.
 from __future__ import annotations
 
 import copy
-import time
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from enum import Enum
 from contextlib import contextmanager
 
-from core.composition.contracts import BuildContext, OperatorFailure, OperatorRequest, Proposal
-from core.composition.evaluation import binding_for, decode_evidence, encode_evidence, validate_evidence
+from core.composition.contracts import BuildContext, OperatorRequest
+from core.composition.evaluation import encode_evidence
 from core.executor.types import Candidate, EvalRequest, EvalStatus
 from core.llm import ProviderBudgetExhausted, UsageError
 from core.memory.types import ScopeContext
@@ -174,39 +173,6 @@ class GovernedInvocation:
                 "intent_id": receipt.intent_id, "reason": reason})
             raise UsageError("governance binding or provider call bound violated")
 
-    async def operator(self, operator, request, candidate, receipt, *, provider, lane="main", slot_id=None):
-        """One shared operator settlement path for main and controls."""
-        runtime = self.runtime
-        runtime.budget.start_operation(receipt.intent_id, fingerprint=receipt.fingerprint)
-        before, started, settled, failure = provider.usage_total, time.monotonic(), False, None
-        try:
-            try:
-                with self.meter(provider, receipt, lane=lane, slot_id=slot_id):
-                    proposal = await operator.propose(request)
-            except OperatorFailure as error:
-                failure = error
-                proposal = Proposal(candidate, "", error.cost, error.measured_cost_units)
-            if not isinstance(proposal, Proposal):
-                raise UsageError("operator returned no measurable Proposal")
-            runtime._check_provider_floor(receipt, before, proposal.cost, provider=provider)
-            # The terminal outcome precedes settlement, so a crash cannot cause
-            # an already measured invocation to disappear from its authority.
-            runtime.store.append("governed_operator_outcome", {
-                "intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
-                "proposal": asdict(proposal),
-                "failure_type": type(failure).__name__ if failure else None})
-            runtime._settle_physical(receipt, proposal.cost, proposal.measured_cost_units,
-                                    time.monotonic() - started, operator=True)
-            settled = True
-            self.check_integrity(receipt)
-            if "node" in proposal.measured_cost_units and proposal.cost.node_count != 1:
-                raise ValueError("operator node measurement differs from the actual candidate attempt")
-            return proposal, failure
-        except Exception as error:
-            if not settled:
-                runtime._unresolved_physical(receipt, error)
-            raise
-
     def _terminals(self):
         from core.composition.governance_audit import audit_terminals
         return audit_terminals(self.runtime, self.plan, self.sessions)
@@ -240,7 +206,7 @@ class GovernedInvocation:
             raise UsageError("protected control operator reservation was refused")
         runtime.store.append("governed_control_started", {"slot_id": slot_id,
             "plan_ref": self.plan["plan_ref"], "candidate_id": identifier, "main_cycles": main_cycles})
-        proposal, failure = await self.operator(session["operator"], request, candidate, receipt,
+        proposal, failure = await runtime.invocations.operator(session["operator"], request, candidate, receipt,
                                                 provider=session["provider"], lane="control", slot_id=slot_id)
         if proposal.candidate.id != identifier or proposal.candidate.parents or \
                 proposal.candidate.created_cycle != 0 or not isinstance(proposal.artifact, str):

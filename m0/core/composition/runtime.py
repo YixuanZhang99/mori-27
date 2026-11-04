@@ -233,6 +233,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if self.governed.external is not None:
                 self.manifest["external_governance"] = self.governed.external_plan.to_dict()
 
+        if self.hierarchical:
+            from core.composition.invocation import InvocationLifecycle
+            from core.composition.hierarchical_runtime import time as physical_clock
+            self.invocations = InvocationLifecycle(self.budget, self.store, self._settle_physical,
+                                                   governance=self.governed, clock=physical_clock.monotonic)
+
     def _validate_domain(self, request):
         validate_request(request)
         original_request = asdict(request)

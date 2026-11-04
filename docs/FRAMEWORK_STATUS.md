@@ -57,3 +57,9 @@ B1–B5 需要真实的独立对照、固定数据/模型/预算、足够任务�
 在上述 bedc5b3/v72 基线之后，独立分支增加了 [v8 外部费用桥接](GOVERNED_CURRENCY.md)：固定 main/control 货币容量、逐调用双重准入、私有结果与 provider 状态持久化、独立账本审计及记录回放。native、真实 worktree 和实际 SIGKILL 路径已用临时账本与 loopback HTTP 验证。P0 桥接的工程实现因此已接入；完整版本验收、同 SHA CI 和真实供应商实验仍须分别报告实际结果。本增量不改写上面的历史证据，也不宣称原设计全部完成。
 
 新增[本地桥接验证记录](../research/experiments/2026-11-04-governed-currency-local/README.md)：2,116 Linux tests、76项当前 tooling 检查通过；安装后的 wheel 在仓库外完成独立示例。v72 基线 ff5c441 的[同提交 GitHub CI](https://github.com/YixuanZhang99/mori-27/actions/runs/41816499445)两项 job 已成功，草稿 [PR #1](https://github.com/YixuanZhang99/mori-27/pull/1) 已创建。v73 候选的验收状态须单独查看，不能继承该绿色结果。
+
+## 调用生命周期收拢（当前开发增量）
+
+planning、operator、evaluation 的物理调用现在由私有 `InvocationLifecycle` 负责开始、计量、失败分类、结算和完整性检查顺序，主流程／对照以及旧的 hierarchical 路径使用同一实现。`GovernedInvocation` 保留固定计划、会话、逐请求准入和控制调度；`HierarchicalRuntime._settle_physical` 保留真实单位覆盖与持久化测量政策。flat 非层级账务路径仍保留原语义。
+
+已通过89项相关回归及11项静态公理；上一版75f397e安装包产生的暂停状态由新代码恢复完成，主流程4次与对照3次provider调用均只有一组原始开始／完成记录，记录回放零新调用。完整项目检查现已通过2,129项Linux tests、76项tooling、公理、六个例子、构建及导入完整性；同提交验收仍须单独核对。本增量降低调用者需要维护的顺序约束，不据此关闭A7全仓比例或完整设计。

@@ -64,7 +64,8 @@ Public `Framework.replay()` first validates and captures the original live autho
 | Module | Responsibility |
 | --- | --- |
 | `core/composition/external_provider.py` | Immutable run, plan, call and outcome ports; finite identity and call-count contracts |
-| `registry.py`, `governed.py`, `provider.py` | Explicit fresh bridge construction, physical context and dispatch ordering |
+| `registry.py`, `governed.py`, `provider.py` | Explicit fresh bridge construction, physical context and per-request admission |
+| `invocation.py` | Shared planning/operator/evaluation lifecycle: start, metering, known settlement, unresolved retention and integrity ordering |
 | `recovery.py`, `provider_evidence.py` | Known-outcome adoption and independent physical receipt links |
 | `zoo/mle_bench_lite/provider_protocol.py`, `governed_provider.py` | Exact request bytes, sanitized response parsing and one transport attempt |
 | `governed_currency.py` | Frozen monetary capacity, private evidence, dual admission, recovery and cross-record audit |
