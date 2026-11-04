@@ -103,8 +103,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
             self.assembly.executor.options.get('sandbox') == 'bubblewrap')
         if self.assembly.policy.name == 'funsearch' and (
-                not self.construction_enabled or self.assembly.governance is not None or
-                not funsearch_executor_ok):
+                not self.construction_enabled or not funsearch_executor_ok):
             raise ValueError('FunSearch requires its bounded M7 configuration')
         self.construction = None
         self.continuation_enabled = self.construction_enabled or self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
@@ -219,8 +218,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
                 self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
                 self.assembly.executor.options.get('sandbox') == 'bubblewrap')
-            if (not self.construction_enabled or self.assembly.governance is not None or
-                    not funsearch_executor_ok or self.durable_executor or
+            if (not self.construction_enabled or not funsearch_executor_ok or self.durable_executor or
                     self.assembly.executor.name == 'git_artifact' and not isinstance(self.parts['domain'], CommandDomain) or
                     [spec.name for spec in self.assembly.operators] != ['draft', 'funsearch'] or
                     constructor.name != 'funsearch_prompt' or constructor.options != {
