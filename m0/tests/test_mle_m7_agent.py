@@ -123,6 +123,14 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
         response_file.write_text(json.dumps(forged))
         with pytest.raises(ValueError, match='usage differs'):
             audit_currency_receipts(workspace.parent / 'agent_artifacts/composed', ledger, expected_model='deepseek-flash')
+        # A rehashed successful response must not be relabelled as a harmless
+        # truncated call while its original transcript says it succeeded.
+        forged = json.loads(original_response)
+        forged['payload'].update(integrity_reason='incomplete_output', finish_reason='length', result=None)
+        forged['sha256'] = payload_digest(forged['payload'])
+        response_file.write_text(json.dumps(forged))
+        with pytest.raises(ValueError, match='truncated.*failed'):
+            audit_currency_receipts(workspace.parent / 'agent_artifacts/composed', ledger, expected_model='deepseek-flash')
         response_file.write_text(original_response)
         transcript = workspace.parent / 'agent_artifacts/composed/x1.jsonl'
         rows = [json.loads(line) for line in transcript.read_text().splitlines()]

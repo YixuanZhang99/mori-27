@@ -55,6 +55,7 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         raise ValueError('currency response coverage differs')
     total = 0
     provider_arguments = {}
+    truncated_calls = set()
     for path in responses:
         context_hash = path.name.removeprefix('call-').removesuffix('.response.json')
         prepared = _record(spool / ('call-' + context_hash + '.prepared.json'))
@@ -70,11 +71,19 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         prompt = wire['messages'][0]['content']
         provider_arguments[payload_digest(context.to_dict())] = prompt
         response = _record(path)
+        # A truncated provider response is a known, billed failed call, not a
+        # corrupted receipt. It must contain no usable result and cannot claim
+        # a normal stop; construction provenance below still binds every call.
+        reason = response.get('integrity_reason')
+        complete_or_truncated = reason is None or (reason == 'incomplete_output' and
+            response.get('result') is None and response.get('finish_reason') != 'stop')
         if operation is None or response.get('returned_model') != expected_model or \
-                response.get('integrity_reason') is not None or \
+                not complete_or_truncated or \
                 response.get('response_sha256') != operation.get('response_sha256') or \
                 operation.get('request_sha256') != prepared['wire_request_sha256']:
             raise ValueError('response identity or outcome differs from currency journal')
+        if reason == 'incomplete_output':
+            truncated_calls.add(payload_digest(context.to_dict()))
         usage = validate_detailed_usage(response.get('usage'))
         if usage != operation.get('usage') or operation.get('bound_violation'):
             raise ValueError('response usage differs from settled currency journal')
@@ -90,6 +99,25 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
     if transcript.is_symlink() or not transcript.is_file():
         raise ValueError('construction transcript is missing or unsafe')
     rows = [json.loads(line) for line in transcript.read_text().splitlines()]
+    # The receipt envelope alone is not independent proof of failure: require
+    # the original provider transcript to mark the same invocation as failed.
+    observed_truncated = set()
+    pending = None
+    for row in rows:
+        if row['kind'] == 'composed_provider_started':
+            context = row['payload']['invocation'].get('external_context')
+            context_ref = payload_digest(context) if context is not None else None
+            if context_ref in truncated_calls:
+                if pending is not None or context_ref in observed_truncated:
+                    raise ValueError('truncated call lacks a unique failed provider transcript')
+                pending = (row['payload']['binding'], context_ref)
+        elif row['kind'] == 'composed_provider_completed' and pending is not None:
+            if row['payload']['binding'] != pending[0] or row['payload'].get('outcome') != 'failed':
+                raise ValueError('truncated call differs from its failed provider transcript')
+            observed_truncated.add(pending[1])
+            pending = None
+    if pending is not None or observed_truncated != truncated_calls:
+        raise ValueError('truncated call lacks a unique failed provider transcript')
     construction = audit_construction(rows, run['construction'], logical_run_id=run['logical_run_id'],
                                       provider_arguments=provider_arguments)
     if construction['provider_calls'] != len(responses):

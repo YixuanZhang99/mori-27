@@ -86,7 +86,7 @@ with open("predictions.csv","w",newline="") as f:
             calls.append(content)
             result = json.dumps({'artifact': code, 'hypothesis': content['hypothesis']})
             raw = json.dumps({'model': 'deepseek-flash', 'usage': {'prompt_tokens': 3,
-                'completion_tokens': 4, 'total_tokens': 7}, 'choices': [{'finish_reason': 'stop',
+                'completion_tokens': 4, 'total_tokens': 7}, 'choices': [{'finish_reason': 'length' if len(calls) == 2 else 'stop',
                 'message': {'content': result}}]}).encode()
             self.send_response(200); self.end_headers(); self.wfile.write(raw)
         def log_message(self, *_args):
