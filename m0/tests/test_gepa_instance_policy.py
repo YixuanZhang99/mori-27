@@ -115,3 +115,52 @@ def test_m7_rejects_coherently_rehashed_policy_score_tampering_on_resume(tmp_pat
                                  domain=ForbiddenDomain(), generations=1, resume=True)
     with pytest.raises(ValueError, match='public verdict evidence'):
         resumed.evolve(TASK)
+
+
+def test_m7_crash_after_public_verdict_event_reuses_original_calls(tmp_path, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+    from test_configured_construction import profile as construction_profile, ConstructorProvider, build as construction_build
+    from test_materialization_recovery import Crash
+    assembly = construction_profile(projection=[])
+    assembly['policy'] = {'name': 'gepa_instance', 'options': {'items': ['left', 'right'], 'seed': 1}}
+    provider, domain = ConstructorProvider(), ItemDomain()
+    write = ContinuationStore._write
+    def cut(store, row):
+        write(store, row)
+        if row['kind'] == 'gepa_public_verdicts':
+            raise Crash('public verdict committed')
+    monkeypatch.setattr(ContinuationStore, '_write', cut)
+    first = construction_build(tmp_path, assembly=assembly, provider=provider, domain=domain, generations=0)
+    with pytest.raises(Crash):
+        first.evolve(TASK)
+    assert provider.calls == 1 and len(domain.calls) == 1
+    monkeypatch.setattr(ContinuationStore, '_write', write)
+    resumed = construction_build(tmp_path, assembly=assembly, provider=ConstructorProvider(forbidden=True),
+                                 domain=ForbiddenDomain(), generations=0, resume=True)
+    resumed.evolve(TASK)
+    assert len(list(resumed.store.read('gepa_public_verdicts'))) == 1
+    assert provider.calls == 1 and len(domain.calls) == 1
+    assert resumed.replay(TASK, adapter_factory=lambda p, s: (ConstructorProvider(forbidden=True), ForbiddenDomain()))['replay_certificate']['passed']
+
+
+def test_m7_public_selection_never_receives_control_verdicts(tmp_path):
+    from core.loop import Framework
+    from test_construction_controls import FreshConstructor
+    from test_configured_construction import profile as construction_profile
+    from test_governed_runtime import governed
+    template, _, _, _, _ = governed(tmp_path, provider_factory=FreshConstructor, domain_factory=ItemDomain)
+    assembly = template._composed.assembly.to_dict()
+    assembly.update(schema_version=2, execution=construction_profile(projection=[])['execution'])
+    assembly['policy'] = {'name': 'gepa_instance', 'options': {'items': ['left', 'right'], 'seed': 1}}
+    fw = Framework.from_profile(assembly, FreshConstructor(), ItemDomain(), template._composed.cfg,
+                                str(tmp_path), component_registry=template._composed.registry)
+    result = fw.evolve(TASK)
+    assert result['governance']['completed'] == 3
+    events = [row['payload'] for row in fw.store.read('gepa_public_verdicts')]
+    main_ids = {row['payload']['proposal']['candidate']['id'] for row in fw.store.read('composed_evidence')}
+    control_ids = {row['payload']['construction_result']['candidate']['id']
+                   for row in fw.store.read('materialization_completed')
+                   if row['payload']['identity']['operation']['lane'] == 'control'}
+    assert {event['candidate_id'] for event in events} == main_ids
+    assert not control_ids.intersection(main_ids)
+    assert {item['id'] for item in fw._composed.parts['policy'].instance_frontier.checkpoint_state()['candidates']} == main_ids
