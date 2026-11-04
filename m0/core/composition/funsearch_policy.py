@@ -5,13 +5,48 @@ projection against original evidence, and bind state to that journal on restore.
 """
 from __future__ import annotations
 
+import ast
 import copy
+import hashlib
 import re
-from core.composition.strategies import GreedyPolicy
+from core.composition.strategies import GreedyPolicy, policy_options
 from core.executor.types import EvalStatus
 from core.funsearch_population import FunSearchPopulation
 from core.funsearch_selection import draw_selection, verify_selection
 from core.x1.checkpoint import payload_digest
+
+
+def funsearch_policy_options(options):
+    """Validate the complete, frozen configuration before any provider call."""
+    required = {'case_ids', 'islands', 'seed', 'prompt_size', 'temperature', 'temperature_period',
+                'metric', 'template', 'template_ref', 'function_name', 'reset_interval'}
+    optional = {'context_window', 'comparison_metric'}
+    if type(options) is not dict or not required <= set(options) or set(options) - required - optional:
+        raise ValueError('FunSearch requires explicit frozen policy, task and reset configuration')
+    policy_options({'context_window': options.get('context_window', 8)})
+    FunSearchPopulation(**{key: options[key] for key in
+        ('case_ids', 'islands', 'seed', 'prompt_size', 'temperature', 'temperature_period')})
+    if options['prompt_size'] > 2 or type(options['reset_interval']) is not int or options['reset_interval'] < 1:
+        raise ValueError('invalid FunSearch parent limit or reset interval')
+    if any(type(options.get(key, default)) is not str or not options.get(key, default).strip()
+           for key, default in (('metric', ''), ('comparison_metric', 'dev/score'), ('function_name', ''))):
+        raise ValueError('FunSearch metrics and function identity are required')
+    template, reference = options['template'], options['template_ref']
+    if type(template) is not str or type(reference) is not str:
+        raise ValueError('FunSearch requires a frozen template')
+    try:
+        if 'sha256:' + hashlib.sha256(template.encode('utf-8')).hexdigest() != reference:
+            raise ValueError('FunSearch template reference differs')
+        tree = ast.parse(template)
+        matches = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                   and node.name == options['function_name']]
+        if len(matches) != 1:
+            raise ValueError('FunSearch target must be one top-level function')
+        source = ast.get_source_segment(template, matches[0])
+        from core.funsearch_prompt import build_prompt
+        build_prompt(template, options['function_name'], ['seed'], {'seed': source})
+    except (SyntaxError, UnicodeEncodeError, TypeError) as error:
+        raise ValueError('invalid frozen FunSearch template') from error
 
 
 class FunSearchPolicy(GreedyPolicy):

@@ -162,3 +162,19 @@ def test_failed_selection_disposition_must_survive_recovery_before_retry():
     restored.audit_original_evidence([row], selection_rows=[selection], abandonment_rows=[failure], **args)
     assert restored.pending_selection() is None
     assert asyncio.run(restored.select(frontier('a'), {})) == ['a']
+
+
+def test_funsearch_profile_options_freeze_template_metric_and_reset_policy():
+    import hashlib
+    from core.composition.funsearch_policy import funsearch_policy_options
+    template = 'def priority(x):\n    return x\n'
+    options = {'case_ids': ['a', 'b'], 'islands': 2, 'seed': 4, 'prompt_size': 2,
+               'temperature': 1.0, 'temperature_period': 10, 'metric': 'score',
+               'template': template, 'template_ref': 'sha256:' + hashlib.sha256(template.encode()).hexdigest(),
+               'function_name': 'priority', 'reset_interval': 4}
+    funsearch_policy_options(options)
+    for field, value in [('template_ref', 'sha256:' + '0' * 64), ('metric', ''),
+                         ('function_name', 'missing'), ('reset_interval', 0), ('prompt_size', 3)]:
+        invalid = {**options, field: value}
+        with pytest.raises(ValueError): funsearch_policy_options(invalid)
+    with pytest.raises(ValueError): funsearch_policy_options({**options, 'unexpected': True})
