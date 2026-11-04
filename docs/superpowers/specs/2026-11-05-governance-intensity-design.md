@@ -56,18 +56,15 @@ ignores the cooperative lock is outside this coordination guarantee; the
 campaign's own transactional currency cap remains authoritative.
 
 Source checks compare tracked checkout bytes and child imports with the frozen
-commit at specific times. They do not attest the executed runtime: normal Python
-startup can load site hooks before the child checks itself, and dependencies
-are not pinned by these checks. A trusted bootstrap and dependency identity are
-required before presenting a paid run as source-bound benchmark evidence.
-Accordingly formal comparison preflight fails closed until those controls are
-implemented; the synthetic protocol fixtures remain available.
-An isolated bootstrap now checks a frozen digest of installed dependency roots,
+commit at specific times. An isolated bootstrap checks a frozen digest of installed dependency roots,
 disables Python site initialization, redirects source bytecode caches and uses
 stdlib-first imports. A local loopback fixture exercises the governance agent
-under that bootstrap. This does not yet exercise the public formal comparison
-entry end to end; interpreter, standard/native libraries and the host remain
-trusted rather than comprehensively attested. The formal gate remains closed.
+under that bootstrap and verifies each child's source identity. The parent
+process, interpreter, standard/native libraries and host remain trusted rather
+than comprehensively attested; a Git commit denotes checks at specific times,
+not proof of all executed bytes. Formal preflight still requires the source,
+dependencies, data, model configuration and intact campaign budget. A paid
+run also requires the separately specified local and hosted acceptance checks.
 Fixture comparisons use a newly created private ledger, a literal loopback
 provider address and a fixture-only credential. The public fixture entry rejects
 caller-supplied ledgers so a test cannot accidentally modify a campaign ledger.

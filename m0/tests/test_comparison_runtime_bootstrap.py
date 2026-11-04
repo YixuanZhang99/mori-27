@@ -150,6 +150,7 @@ def test_comparison_preflight_freezes_dependency_identity(tmp_path, monkeypatch)
         token_budget=5_000_000, iterations=3, runtime='m7', comparison='governance-intensity',
         spending_ledger_path=tmp_path / 'missing.db')
     assert result['plan']['comparison_dependencies'] == pilot._comparison_dependency_identity([packages])
+    assert not any(item['requirement'] == 'comparison_runtime_attestation' for item in result['missing'])
 
 
 def test_comparison_frozen_runtime_detects_changed_dependency(tmp_path, monkeypatch):

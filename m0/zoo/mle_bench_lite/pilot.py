@@ -446,8 +446,6 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
                  spending_ledger_path=spending_ledger_path, runtime=runtime, comparison=comparison)
     missing = []
     if comparison:
-        missing.append({'requirement': 'comparison_runtime_attestation',
-                        'reason': 'trusted pre-import bootstrap and dependency identity are not implemented'})
         try:
             plan['source'] = _comparison_runtime_source()
             plan['comparison_dependencies'] = _comparison_dependency_identity(_comparison_dependency_roots())
@@ -885,6 +883,7 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
             spec['comparison_dependencies'] = _comparison_dependency_identity(_comparison_dependency_roots())
         else:
             spec['comparison']['source_scope'] = 'synthetic-fixture-unverified'
+            spec['comparison_dependencies'] = _comparison_dependency_identity(_comparison_dependency_roots())
     if _fixture_agent_command is not None and grader_factory is None:
         raise ValueError("custom agent commands are reserved for labelled protocol fixtures")
     if grader_factory is None:
@@ -990,14 +989,14 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
                     row.pop("usage_audit")
                     execution_started = True
                     cache_root = None
-                    if comparison and grader_factory is None:
+                    if comparison:
                         cache_root = run_dir / 'comparison-empty-pycache'
                         cache_root.mkdir(mode=0o700)
                     arm_command = (_comparison_command(model, token_budget, solution_timeout, iterations, arm=arm,
                         spending_ledger_path=spending_ledger_path,
                         max_completion_tokens=spec['provider_sampling']['max_completion_tokens'],
-                        runtime_identity=spec.get('comparison_dependencies') if grader_factory is None else None,
-                        official_root=official_root if grader_factory is None else None, pycache_root=cache_root)
+                        runtime_identity=spec.get('comparison_dependencies'),
+                        official_root=official_root, pycache_root=cache_root)
                         if comparison and _fixture_agent_command is None else command)
                     execution = _execute_agent(arm_command, workspace, task, seed, arm, time_limit, run_dir, {
                         "MLE_OFFICIAL_ROOT": str(official_root), "MLE_DATA_ROOT": str(data_root),
@@ -1106,6 +1105,8 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
                                    run_dir / "agent_artifacts/agent_run.json"))
                 except Exception as error:
                     row.update(status="failed", error=f"{type(error).__name__}: {error}"[-2000:])
+                    if comparison:
+                        stop_reason = stop_reason or 'comparison slot failed; remaining paid runs are blocked'
                     if runtime == 'm7' and execution_started:
                         stop_reason = stop_reason or 'M7 execution or independent evidence failed; remaining paid runs are blocked'
                         row.setdefault('usage_audit', {'complete': False, 'costs_complete': False,

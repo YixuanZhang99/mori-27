@@ -52,7 +52,7 @@ def test_m7_preflight_reports_missing_campaign_without_launch(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize('scenario', [None, 'governance-intensity', 'comparison-failure',
-                                      'comparison-pending', 'comparison-tamper'])
+                                      'comparison-pending', 'comparison-tamper', 'comparison-pre-execution-failure'])
 def test_synthetic_m7_six_slot_pilot_freezes_before_grading(tmp_path, monkeypatch, scenario):
     import json
     import shutil
@@ -112,6 +112,7 @@ with open("predictions.csv","w",newline="") as f:
         schedule = ([0] if arm == 'one_control' else [0, 2]) if comparison else None
         if comparison:
             command = shlex.split(_command)
+            assert command[1:4] == ['-I', '-S', '-B']
             assert command[command.index('--variant') + 1] == 'full'
             assert command[command.index('--control-cycles') + 1:] == [str(value) for value in schedule]
         run_governed_agent(workspace=workspace, task_id=task, model='deepseek-flash', api_base=endpoint,
@@ -121,6 +122,11 @@ with open("predictions.csv","w",newline="") as f:
             anonymization_key_path=agent_env['MLE_ANONYMIZATION_KEY_PATH'], spending_ledger_path=ledger.path)
         return {'agent_returncode': 0, 'timed_out': False, 'actual_costs': {'wallclock': time.monotonic()-start}}
     monkeypatch.setattr(pilot, '_execute_agent', execute)
+    if scenario == 'comparison-pre-execution-failure':
+        from zoo.mle_bench_lite.adapter import MLEBenchLiteAdapter
+        def fail_setup(*_args, **_kwargs):
+            raise OSError('fixture workspace setup failed')
+        monkeypatch.setattr(MLEBenchLiteAdapter, 'setup', fail_setup)
     if scenario == 'comparison-pending':
         original_gate = pilot._comparison_grading_ready
         def inject_pending(spec, rows, output, authority):
@@ -153,6 +159,12 @@ with open("predictions.csv","w",newline="") as f:
             time_limit=600, solution_timeout=120, iterations=3, seeds=(1,),
             manifest_path=manifest, spending_ledger_path=ledger.path if ledger else None, grader_factory=tracked_grader, runtime='m7',
             comparison=comparison)
+        if scenario == 'comparison-pre-execution-failure':
+            assert not result['pilot_complete'] and not grader_calls
+            assert all(row['status'] == 'failed' for row in result['runs'])
+            assert all(row.get('blocked_before_execution') for row in result['runs'][1:])
+            assert not calls and not launches
+            return
         if scenario == 'comparison-failure':
             assert not result['pilot_complete'] and not grader_calls
             assert result['runs'][0]['status'] == 'ungraded'
@@ -174,6 +186,65 @@ with open("predictions.csv","w",newline="") as f:
             assert set(result['arms']) == {'one_control', 'two_controls'}
             assert all(pair['complete'] and 'score_delta_two_minus_one' in pair for pair in result['pairs'])
             assert all(row['usage_audit']['control_timing']['all_on_schedule'] for row in result['runs'])
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=5)
+
+
+def test_comparison_public_entry_runs_isolated_agent_and_loopback(tmp_path, monkeypatch):
+    import json
+    import os
+    import shutil
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from test_mle_pilot import fixtures, grader
+    from test_mle_composed import fixture_public
+
+    official, data, manifest = fixtures(tmp_path)
+    for task in pilot.DEFAULT_TASKS:
+        public = data / task / 'prepared/public'
+        shutil.rmtree(public)
+        fixture_public(public, task)
+    code = '''import csv,json
+p=json.load(open("data/protocol.json"))
+with open("data/predict.csv", newline="") as f: rows=list(csv.DictReader(f))
+cols=p["output_columns"]; n=len(cols)-1
+with open("predictions.csv","w",newline="") as f:
+ w=csv.writer(f); w.writerow(cols)
+ for row in rows: w.writerow([row["row_id"]]+[1/n if p["kind"]=="classification" else 1.0]*n)
+'''
+    calls = []
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            request = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            content = json.loads(request['messages'][0]['content'])
+            calls.append(content)
+            answer = json.dumps({'artifact': code, 'hypothesis': content['hypothesis']})
+            body = json.dumps({'model': 'deepseek-flash', 'usage': {'prompt_tokens': 3,
+                'completion_tokens': 4, 'total_tokens': 7}, 'choices': [{'finish_reason': 'stop',
+                'message': {'content': answer}}]}).encode()
+            self.send_response(200); self.end_headers(); self.wfile.write(body)
+        def log_message(self, *_args):
+            pass
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    monkeypatch.setenv('OPENAI_API_BASE', f'http://127.0.0.1:{server.server_port}/v1')
+    monkeypatch.setenv('OPENAI_API_KEY', 'fixture-only')
+    if os.environ.get('MORI_FIXTURE_REQUIRE_SOURCE') == '1':
+        source = pilot._comparison_runtime_source()
+        execute = pilot._execute_agent
+        def source_checked_execute(command, workspace, task, seed, arm, limit, run_dir, agent_env):
+            bound_env = dict(agent_env, MLE_COMPARISON_SOURCE_COMMIT=source['commit'])
+            return execute(command, workspace, task, seed, arm, limit, run_dir, bound_env)
+        monkeypatch.setattr(pilot, '_execute_agent', source_checked_execute)
+    try:
+        result = pilot.run_pilot(official, data, tmp_path / 'pilot', model='deepseek-flash',
+            token_budget=5_000_000, time_limit=600, solution_timeout=120, iterations=3,
+            seeds=(1,), manifest_path=manifest, grader_factory=grader,
+            runtime='m7', comparison='governance-intensity')
+        assert result['pilot_complete'], result['runs']
+        assert result['evidence_kind'] == 'protocol_fixture'
+        assert len(calls) == 30
+        assert all(row['usage_audit']['control_timing']['all_on_schedule'] for row in result['runs'])
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=5)
 

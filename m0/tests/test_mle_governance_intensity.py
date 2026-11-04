@@ -255,13 +255,16 @@ def test_comparison_child_rejects_wrong_source_before_agent(tmp_path, monkeypatc
                              '--runtime', 'm7', '--control-cycles', '0'])
 
 
-def test_formal_comparison_preflight_reports_missing_runtime_attestation(tmp_path):
+def test_formal_comparison_preflight_rejects_unverifiable_source(tmp_path, monkeypatch):
     from zoo.mle_bench_lite import pilot
+    def fail_source():
+        raise ValueError('unverifiable fixture source')
+    monkeypatch.setattr(pilot, '_comparison_runtime_source', fail_source)
     result = pilot.preflight_pilot(tmp_path / 'official', tmp_path / 'data', model='deepseek-flash',
         token_budget=5_000_000, iterations=3, runtime='m7', comparison='governance-intensity',
         spending_ledger_path=tmp_path / 'missing.db')
     assert not result['ready']
-    assert any(item['requirement'] == 'comparison_runtime_attestation' for item in result['missing'])
+    assert any(item['requirement'] == 'comparison_source' for item in result['missing'])
 
 
 @pytest.mark.parametrize('endpoint,key,ledger', [
