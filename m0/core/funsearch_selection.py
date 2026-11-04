@@ -21,9 +21,9 @@ def draw_selection(population, island, *, eligible, max_parents):
     if type(max_parents) is not int or max_parents < population.prompt_size:
         raise ValueError('parent limit must accommodate the configured prompt size')
     before = _ref(population.checkpoint_state())
-    result = population.sample(island, eligible=eligible)
+    result = population.sample_any(eligible=eligible) if island is None else population.sample(island, eligible=eligible)
     samples = result['candidates']
-    return {'schema_version': 1, 'island': result['island'], 'epoch': result['epoch'],
+    return {'schema_version': 2, 'requested_island': island, 'island': result['island'], 'epoch': result['epoch'],
             'samples': samples, 'ancestry': list(dict.fromkeys(samples)),
             'eligible': sorted(eligible), 'state_before_ref': before,
             'state_after_ref': _ref(population.checkpoint_state())}
@@ -34,7 +34,7 @@ def verify_selection(receipt, before, after, *, eligible, max_parents):
         raise ValueError('selection and population states must be objects')
     population = FunSearchPopulation.from_checkpoint(before)
     try:
-        replayed = draw_selection(population, receipt['island'], eligible=eligible, max_parents=max_parents)
+        replayed = draw_selection(population, receipt['requested_island'], eligible=eligible, max_parents=max_parents)
     except (KeyError, TypeError) as exc:
         raise ValueError('invalid selection receipt') from exc
     if _ref(receipt) != _ref(replayed) or _ref(population.checkpoint_state()) != _ref(after):

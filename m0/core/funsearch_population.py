@@ -164,6 +164,17 @@ class FunSearchPopulation:
         return {'island': index, 'epoch': state['epoch'],
                 'candidates': sorted(selected, key=lambda candidate: self._candidates[candidate]['scores'][self.case_ids[-1]])}
 
+    def sample_any(self, *, eligible=None):
+        available = [index for index in range(self.islands) if self._eligible_clusters(index, eligible)]
+        if not available:
+            raise ValueError('no island has eligible candidates')
+        random_state = self._rng.getstate()
+        try:
+            return self.sample(self._rng.choice(available), eligible=eligible)
+        except Exception:
+            self._rng.setstate(random_state)
+            raise
+
     def _reset(self, index, founder_island, founder, epoch):
         old = self._island(index)
         if (type(epoch) is not int or epoch != old['epoch'] + 1 or founder_island == index or
