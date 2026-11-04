@@ -83,6 +83,13 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
             workspace / 'submission.csv', expected_tokens=audit['total_tokens'])
         assert independent['selected_candidate_id'] == summary['selected_candidate_id']
         assert independent['submission_sha256'] == summary['submission_sha256']
+        from zoo.mle_bench_lite.pilot import _audit_m7_result, public_snapshot
+        checked = _audit_m7_result(workspace.parent, preview, ledger, task=TASK, seed=1, arm=variant,
+            model='deepseek-flash', token_budget=3_000_000, iterations=iterations, solution_timeout=120,
+            max_completion_tokens=4, expected_profile=summary['profile'],
+            expected_public_data=public_snapshot(workspace / 'data'), expected_dataset=preview.manifest,
+            expected_endpoint=f'http://127.0.0.1:{server.server_port}/v1')
+        assert checked['known_tokens'] == 7 * (2 + iterations)
         submission = workspace / 'submission.csv'
         original_submission = submission.read_bytes()
         submission.write_bytes(original_submission + b'\n')

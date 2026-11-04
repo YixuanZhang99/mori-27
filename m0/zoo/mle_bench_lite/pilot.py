@@ -82,6 +82,14 @@ def _profile(variant: str, token_budget: int, seed: int, iterations: int, *,
     raise ValueError('unknown pilot runtime')
 
 
+
+def _runtime_profile(variant, token_budget, seed, iterations, *, runtime, max_completion_tokens):
+    if runtime == 'legacy':
+        return _profile(variant, token_budget, seed, iterations)
+    return _profile(variant, token_budget, seed, iterations, runtime=runtime,
+                    max_completion_tokens=max_completion_tokens)
+
+
 def _protected_host_path(path: Path) -> None:
     resolved = path.resolve()
     for root in ("/usr", "/bin", "/sbin", "/lib", "/lib64"):
@@ -290,14 +298,22 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
                     model: str, token_budget: int, time_limit: float = 600,
                     solution_timeout: float = 60, iterations: int = 4,
                     seeds: tuple[int, ...] = (1,), task_ids=None,
-                    manifest_path: str | Path | None = None, spending_ledger_path=None) -> dict:
+                    manifest_path: str | Path | None = None, spending_ledger_path=None,
+                    runtime='legacy') -> dict:
     """Read-only readiness report. No provider request or agent process is started."""
     tasks = list(DEFAULT_TASKS if task_ids is None else task_ids)
     plan = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
-                 spending_ledger_path=spending_ledger_path)
+                 spending_ledger_path=spending_ledger_path, runtime=runtime)
     missing = []
     try:
-        _bind_campaign(plan, spending_ledger_path)
+        campaign = _bind_campaign(plan, spending_ledger_path)
+        if runtime == 'm7':
+            snapshot = campaign.snapshot()
+            if snapshot.get('journal_schema_version') != 2 or snapshot.get('protection_breaches'):
+                raise ValueError('M7 requires an enabled and intact governance journal')
+            per_call = campaign.quote_call(plan['provider_sampling']['max_completion_tokens'])['reserved_micro_cny']
+            if snapshot['remaining_micro_cny'] < 2 * per_call:
+                raise ValueError('campaign cannot reserve both main and control call bounds')
     except (ValueError, OSError) as error:
         missing.append({"requirement": "campaign_currency_budget", "reason": str(error)})
     if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
@@ -324,7 +340,8 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
         plan["datasets"] = {f"{task}:{seed}": _dataset_manifest(
             Path(data_root) / task / "prepared/public", task, seed) for task in tasks for seed in seeds}
         plan["official_manifest_sha256"] = file_digest(adapters[tasks[0]].manifest_path)
-        plan["profiles"] = {f"{seed}:{arm}": _profile(arm, token_budget, seed, iterations)
+        plan["profiles"] = {f"{seed}:{arm}": _runtime_profile(arm, token_budget, seed, iterations,
+                            runtime=runtime, max_completion_tokens=plan['provider_sampling']['max_completion_tokens'])
                             for seed in seeds for arm in ARMS}
         if importlib.util.find_spec("mlebench") is not None:
             plan["official_prepared_identity"] = _official_prepared_identity(
@@ -384,6 +401,65 @@ def _validate_agent_summary(summary: dict, *, task, seed, arm, model, token_budg
     # additionally binds the complete public input tree independently.
     if summary.get("public_data_sha256") != public_data["sha256"]:
         raise ValueError("agent public data identity differs from the frozen snapshot")
+
+
+
+def _audit_m7_result(run_dir, bundle, ledger, *, task, seed, arm, model, token_budget,
+                     iterations, solution_timeout, max_completion_tokens, expected_profile,
+                     expected_public_data, expected_dataset, expected_endpoint):
+    """Independently reject inconsistent M7 evidence before freezing a submission."""
+    from core.composition.contracts import AssemblyConfig
+    from core.x1.checkpoint import RunCheckpoint
+    from zoo.mle_bench_lite.m7_pilot_audit import (_record, audit_currency_receipts,
+                                                    audit_physical_and_submission)
+    run_dir = Path(run_dir)
+    artifacts = run_dir / 'agent_artifacts'
+    run_root = artifacts / 'composed'
+    summary_path = artifacts / 'agent_run.json'
+    if summary_path.is_symlink() or not summary_path.is_file():
+        raise ValueError('M7 run summary is missing or unsafe')
+    summary = json.loads(summary_path.read_text())
+    _validate_agent_summary(summary, task=task, seed=seed, arm=arm, model=model,
+        token_budget=token_budget, profile=expected_profile, public_data=expected_public_data,
+        dataset=expected_dataset, iterations=iterations, solution_timeout=solution_timeout,
+        max_completion_tokens=max_completion_tokens)
+    if summary.get('runtime') != 'composed-v9-m7-governed-external' or summary.get('actual_model') != model \
+            or summary.get('submission_materialized') is not True or bundle.manifest != expected_dataset:
+        raise ValueError('M7 runtime, response model or dataset differs from pilot')
+    checkpoint = RunCheckpoint.load(run_root / 'checkpoint.json').payload
+    if checkpoint['manifest']['assembly'] != AssemblyConfig.from_dict(expected_profile).to_dict():
+        raise ValueError('M7 checkpoint assembly differs from frozen pilot profile')
+    preparation = _record(run_root / '.governed-cny/plan-prepared.json')
+    manifests = preparation['manifests']
+    if set(manifests) != {'main', 'control-0000'}:
+        raise ValueError('M7 provider session coverage differs')
+    for manifest in manifests.values():
+        expected = {'requested_model': model, 'base_url': expected_endpoint.rstrip('/'),
+                    'max_completion_tokens': max_completion_tokens, 'timeout': float(max(30.0, solution_timeout)),
+                    'request_format': 'deepseek', 'retry_policy': 'never', 'response_model_required': True,
+                    'thinking': {'type': 'enabled'}, 'reasoning_effort': 'high',
+                    'temperature_applied': False, 'seed_applied': False, 'campaign': ledger.manifest_binding()}
+        if any(manifest.get(key) != value for key, value in expected.items()):
+            raise ValueError('M7 provider settings differ from frozen pilot')
+    currency = audit_currency_receipts(run_root, ledger, expected_model=model)
+    physical = audit_physical_and_submission(run_root, bundle, run_dir / 'workspace/submission.csv',
+                                             expected_tokens=currency['total_tokens'])
+    if physical['selected_candidate_id'] != summary.get('selected_candidate_id') or \
+            physical['submission_sha256'] != summary.get('submission_sha256') or \
+            summary.get('token_usage', {}).get('total_tokens') != currency['total_tokens'] or \
+            currency['total_tokens'] > token_budget:
+        raise ValueError('M7 selected submission or usage differs from independent audit')
+    certificates = [row['payload'] for row in AppendOnlyStore(run_root / 'x1.jsonl').read('replay_certificate')]
+    cert = summary.get('recorded_replay')
+    if not certificates or certificates[-1] != cert or not all(cert.get(key) is True for key in (
+            'passed', 'snapshot_match', 'result_match', 'receipt_chain_match', 'transcript_consumed')) \
+            or cert.get('mode') != 'recorded_outcomes' or cert.get('external_calls') != 0:
+        raise ValueError('M7 recorded replay evidence is incomplete')
+    return {'known_tokens': currency['total_tokens'], 'actual_model': model,
+            'receipt_count': currency['construction']['provider_calls'],
+            'currency_audit': currency, 'physical_submission_audit': physical,
+            'complete': True, 'costs_complete': True, 'unresolved_calls': [],
+            'actual_models': [model], 'usage': {'total_tokens': currency['total_tokens']}}
 
 
 def _validate_provider_settings(run_dir: Path, spec: dict, *, fixture: bool):
@@ -477,11 +553,11 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
               solution_timeout: float = 60, iterations: int = 4,
               seeds: tuple[int, ...] = (1,), task_ids=None,
               manifest_path: str | Path | None = None, grader_factory: Callable | None = None,
-              _fixture_agent_command: str | None = None, spending_ledger_path=None) -> dict:
+              _fixture_agent_command: str | None = None, spending_ledger_path=None, runtime='legacy') -> dict:
     """Run fixed paired variants. Test injections cannot emit production evidence."""
     tasks = list(DEFAULT_TASKS if task_ids is None else task_ids)
     spec = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
-                 spending_ledger_path=spending_ledger_path)
+                 spending_ledger_path=spending_ledger_path, runtime=runtime)
     spending_ledger = _bind_campaign(spec, spending_ledger_path, output_root=output_root)
     if _fixture_agent_command is not None and grader_factory is None:
         raise ValueError("custom agent commands are reserved for labelled protocol fixtures")
@@ -491,7 +567,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
         readiness = preflight_pilot(official_root, data_root, model=model,
             token_budget=token_budget, time_limit=time_limit, solution_timeout=solution_timeout,
             iterations=iterations, seeds=seeds, task_ids=tasks, manifest_path=manifest_path,
-            spending_ledger_path=spending_ledger_path)
+            spending_ledger_path=spending_ledger_path, runtime=runtime)
         if not readiness["ready"]:
             raise ValueError("pilot preflight failed: " + json.dumps(readiness["missing"]))
     official_root, data_root, output_root = map(lambda p: Path(p).resolve(),
@@ -512,7 +588,8 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
         data_root / task / "prepared/public", task, seed, anonymization_key=keys[(task, seed)])
         for task in tasks for seed in seeds}
     spec["official_manifest_sha256"] = file_digest(adapters[tasks[0]].manifest_path)
-    spec["profiles"] = {f"{seed}:{arm}": _profile(arm, token_budget, seed, iterations)
+    spec["profiles"] = {f"{seed}:{arm}": _runtime_profile(arm, token_budget, seed, iterations, runtime=runtime,
+                        max_completion_tokens=spec['provider_sampling']['max_completion_tokens'])
                         for seed in seeds for arm in ARMS}
     spec["profile_sha256"] = {key: digest(value) for key, value in spec["profiles"].items()}
     spec["execution_host"] = {"system": platform.system(), "machine": platform.machine(),
@@ -520,7 +597,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
     _atomic_json(output_root / "pilot_spec.json", {"spec": spec, "sha256": digest(spec)})
     command = _fixture_agent_command or _command(model, token_budget, solution_timeout, iterations,
         max_completion_tokens=spec["provider_sampling"]["max_completion_tokens"],
-        spending_ledger_path=spending_ledger_path)
+        spending_ledger_path=spending_ledger_path, runtime=runtime)
     rows = []
     observed_backbones = set()
     stop_reason = None
@@ -542,6 +619,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                        "evidence_kind": "protocol_fixture" if grader_factory else "official_task_subset"}
                 adapter = adapters[task]
                 currency_before = None
+                execution_started = False
                 try:
                     if stop_reason is not None:
                         row["blocked_before_execution"] = True
@@ -569,6 +647,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                     # evidence; a prior preflight refusal has known zero cost.
                     row["actual_costs"] = {}
                     row.pop("usage_audit")
+                    execution_started = True
                     execution = _execute_agent(command, workspace, task, seed, arm, time_limit, run_dir, {
                         "MLE_OFFICIAL_ROOT": str(official_root), "MLE_DATA_ROOT": str(data_root),
                         "MLE_MANIFEST_PATH": str(adapter.manifest_path.resolve()),
@@ -580,45 +659,74 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                         "MLE_PILOT_PUBLIC_DATA_SHA256": spec["public_data"][task]["sha256"],
                     })
                     row.update(execution)
-                    # An unfinished second request cannot disappear behind the
-                    # first request's valid receipt. Keep known and unknown costs separate.
-                    usage_audit = audit_usage(run_dir / "agent_artifacts/token_usage",
-                                              allow_fixture_receipts=grader_factory is not None,
-                                              spending_ledger=spending_ledger)
-                    if not usage_audit["receipt_count"] and not usage_audit["started_calls"]:
-                        usage_audit.update(costs_complete=False, complete=False)
-                        usage_audit["errors"].append({"kind": "absence", "call_id": "",
-                            "reason": "agent left no call or usage evidence"})
-                    row["usage_audit"] = usage_audit
-                    observed_backbones.update(usage_audit["actual_models"])
-                    if len(observed_backbones) > 1:
-                        stop_reason = "actual provider model changed; remaining paid runs are blocked"
-                    elif usage_audit["unresolved_calls"]:
-                        stop_reason = "provider operation has unresolved usage; remaining paid runs are blocked"
-                    elif not usage_audit["complete"] and (usage_audit["receipt_count"]
-                            or usage_audit["started_calls"] or usage_audit["completed_calls"]):
-                        stop_reason = "provider billing or identity evidence is invalid; remaining paid runs are blocked"
-                    if usage_audit["costs_complete"]:
-                        row["actual_costs"]["token"] = usage_audit["known_tokens"]
-                    if usage_audit["usage"] is not None:
-                        row["token_usage"] = usage_audit["usage"]
-                    if execution["timed_out"] or execution["agent_returncode"] != 0:
-                        raise ValueError("agent timed out or exited unsuccessfully")
-                    if len(observed_backbones) > 1:
-                        raise ValueError(stop_reason)
-                    if not usage_audit["complete"] or not usage_audit["receipt_count"]:
-                        raise ValueError("provider calls have incomplete usage or identity evidence")
-                    _validate_provider_settings(run_dir, spec, fixture=grader_factory is not None)
-                    token_cost, actual_model, usage = _required_token_cost(run_dir, token_budget)
-                    row.update(actual_model=actual_model, token_usage=usage)
-                    row["actual_costs"]["token"] = token_cost
-                    summary = json.loads((run_dir / "agent_artifacts/agent_run.json").read_text())
-                    _validate_agent_summary(summary, task=task, seed=seed, arm=arm, model=model,
-                        token_budget=token_budget, profile=spec["profiles"][f"{seed}:{arm}"],
-                        public_data=spec["public_data"][task], dataset=spec["datasets"][f"{task}:{seed}"],
-                        iterations=iterations, solution_timeout=solution_timeout,
-                        max_completion_tokens=spec["provider_sampling"]["max_completion_tokens"],
-                        currency_campaign=spec.get("currency_campaign"), currency_audit=usage_audit.get("currency_audit"))
+                    if runtime == 'm7':
+                        # Any missing or inconsistent evidence stops all later paid slots.
+                        row['usage_audit'] = {'complete': False, 'costs_complete': False,
+                            'known_tokens': 0, 'receipt_count': 0, 'started_calls': 0,
+                            'completed_calls': 0, 'unresolved_calls': ['unverified'], 'errors': [],
+                            'actual_models': [], 'usage': None}
+                        try:
+                            if execution['timed_out'] or execution['agent_returncode'] != 0:
+                                raise ValueError('M7 agent timed out or exited unsuccessfully')
+                            from zoo.mle_bench_lite.public_train import PublicTrainBundle
+                            bundle = PublicTrainBundle(workspace / 'data', run_dir / 'agent_artifacts/public_inputs',
+                                task, seed, anonymization_key=keys[(task, seed)])
+                            checked = _audit_m7_result(run_dir, bundle, spending_ledger, task=task, seed=seed,
+                                arm=arm, model=model, token_budget=token_budget, iterations=iterations,
+                                solution_timeout=solution_timeout,
+                                max_completion_tokens=spec['provider_sampling']['max_completion_tokens'],
+                                expected_profile=spec['profiles'][f'{seed}:{arm}'],
+                                expected_public_data=spec['public_data'][task],
+                                expected_dataset=spec['datasets'][f'{task}:{seed}'],
+                                expected_endpoint=spec['provider_base_url'])
+                        except Exception:
+                            stop_reason = 'M7 execution or independent evidence is incomplete; remaining paid runs are blocked'
+                            raise
+                        row['usage_audit'] = checked
+                        observed_backbones.update(checked['actual_models'])
+                        row['actual_costs']['token'] = checked['known_tokens']
+                        row.update(actual_model=checked['actual_model'], token_usage=checked['usage'])
+                        summary = json.loads((run_dir / 'agent_artifacts/agent_run.json').read_text())
+                    else:
+                        # An unfinished second request cannot disappear behind the
+                        # first request's valid receipt. Keep known and unknown costs separate.
+                        usage_audit = audit_usage(run_dir / "agent_artifacts/token_usage",
+                                                  allow_fixture_receipts=grader_factory is not None,
+                                                  spending_ledger=spending_ledger)
+                        if not usage_audit["receipt_count"] and not usage_audit["started_calls"]:
+                            usage_audit.update(costs_complete=False, complete=False)
+                            usage_audit["errors"].append({"kind": "absence", "call_id": "",
+                                "reason": "agent left no call or usage evidence"})
+                        row["usage_audit"] = usage_audit
+                        observed_backbones.update(usage_audit["actual_models"])
+                        if len(observed_backbones) > 1:
+                            stop_reason = "actual provider model changed; remaining paid runs are blocked"
+                        elif usage_audit["unresolved_calls"]:
+                            stop_reason = "provider operation has unresolved usage; remaining paid runs are blocked"
+                        elif not usage_audit["complete"] and (usage_audit["receipt_count"]
+                                or usage_audit["started_calls"] or usage_audit["completed_calls"]):
+                            stop_reason = "provider billing or identity evidence is invalid; remaining paid runs are blocked"
+                        if usage_audit["costs_complete"]:
+                            row["actual_costs"]["token"] = usage_audit["known_tokens"]
+                        if usage_audit["usage"] is not None:
+                            row["token_usage"] = usage_audit["usage"]
+                        if execution["timed_out"] or execution["agent_returncode"] != 0:
+                            raise ValueError("agent timed out or exited unsuccessfully")
+                        if len(observed_backbones) > 1:
+                            raise ValueError(stop_reason)
+                        if not usage_audit["complete"] or not usage_audit["receipt_count"]:
+                            raise ValueError("provider calls have incomplete usage or identity evidence")
+                        _validate_provider_settings(run_dir, spec, fixture=grader_factory is not None)
+                        token_cost, actual_model, usage = _required_token_cost(run_dir, token_budget)
+                        row.update(actual_model=actual_model, token_usage=usage)
+                        row["actual_costs"]["token"] = token_cost
+                        summary = json.loads((run_dir / "agent_artifacts/agent_run.json").read_text())
+                        _validate_agent_summary(summary, task=task, seed=seed, arm=arm, model=model,
+                            token_budget=token_budget, profile=spec["profiles"][f"{seed}:{arm}"],
+                            public_data=spec["public_data"][task], dataset=spec["datasets"][f"{task}:{seed}"],
+                            iterations=iterations, solution_timeout=solution_timeout,
+                            max_completion_tokens=spec["provider_sampling"]["max_completion_tokens"],
+                            currency_campaign=spec.get("currency_campaign"), currency_audit=usage_audit.get("currency_audit"))
                     if public_snapshot(workspace / "data") != spec["public_data"][task]:
                         raise ValueError("agent modified the public input snapshot")
                     row["dataset_identity"] = summary["dataset_identity"]
@@ -635,9 +743,17 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                                    run_dir / "agent_artifacts/agent_run.json"))
                 except Exception as error:
                     row.update(status="failed", error=f"{type(error).__name__}: {error}"[-2000:])
+                    if runtime == 'm7' and execution_started:
+                        stop_reason = stop_reason or 'M7 execution or independent evidence failed; remaining paid runs are blocked'
+                        row.setdefault('usage_audit', {'complete': False, 'costs_complete': False,
+                            'known_tokens': 0, 'receipt_count': 0, 'started_calls': 0,
+                            'completed_calls': 0, 'unresolved_calls': ['unverified'], 'errors': [],
+                            'actual_models': [], 'usage': None})
                 if spending_ledger is not None and currency_before is not None:
                     try:
                         currency_after = spending_ledger.snapshot()
+                        row['currency_settled_upper_bound_micro_cny'] = (
+                            currency_after['settled_upper_bound_micro_cny'] - currency_before['settled_upper_bound_micro_cny'])
                         previous_ids = {item["call_id"] for item in currency_before["operations"]}
                         row["currency_call_ids"] = [item["call_id"] for item in currency_after["operations"]
                                                      if item["call_id"] not in previous_ids]
@@ -700,12 +816,14 @@ def main(argv=None) -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[1])
     parser.add_argument("--tasks", nargs="+", default=list(DEFAULT_TASKS))
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--runtime", choices=("legacy", "m7"), default="legacy")
     parser.add_argument("--spending-ledger", type=Path)
     args = parser.parse_args(argv)
     values = dict(model=args.model, token_budget=args.token_budget, time_limit=args.time_limit,
                   solution_timeout=args.solution_timeout, iterations=args.iterations,
                   seeds=tuple(args.seeds), task_ids=args.tasks, manifest_path=args.manifest_path,
-                  spending_ledger_path=args.spending_ledger or os.environ.get("MLE_CNY_LEDGER_PATH") or None)
+                  spending_ledger_path=args.spending_ledger or os.environ.get("MLE_CNY_LEDGER_PATH") or None,
+                  runtime=args.runtime)
     try:
         if args.preflight_only:
             report = preflight_pilot(args.official_root, args.data_root, **values)
