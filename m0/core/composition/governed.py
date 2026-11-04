@@ -29,10 +29,17 @@ class GovernedInvocation:
         from core.composition.governance import ControlPlan, validate_factory_governance
         self.runtime = runtime
         self._violations = {}
+        self.external = None
+        self.external_plan = None
         binding = getattr(runtime.parts["provider"], "governance_binding", None)
         if not callable(binding):
             raise ValueError("main provider requires a governance binding and hard call bound")
-        self.main_binding = validate_factory_governance("provider", binding())
+        self.main_binding = validate_factory_governance("provider", binding(),
+            external_bridges=runtime.registry.external_bridge_names)
+        expected_external = runtime.external_bridge_name
+        actual_external = self.main_binding.get("external_currency")
+        if (actual_external.get("bridge") if isinstance(actual_external, dict) else None) != expected_external:
+            raise ValueError("main and control providers require the same external authority capability")
         self.plan = ControlPlan.freeze(runtime.assembly.governance, task_desc=runtime.task,
             initial_context={}, max_generations=runtime.cfg.max_generations,
             units=runtime.budget.units).to_dict()
@@ -62,6 +69,38 @@ class GovernedInvocation:
         if not runtime.cfg.resume_from_checkpoint:
             runtime.budget.protect_controls(self.plan)
 
+        if expected_external is not None:
+            from core.composition.external_provider import ExternalRunContext
+            self.external = runtime.registry.external_bridge(expected_external)
+            recorded = getattr(runtime, "_recorded_external_bundle", None)
+            context = ExternalRunContext(logical_run_id=runtime._logical_run_id,
+                runtime_id=runtime.runtime_identity, workdir=str(runtime.workdir.resolve()),
+                physical_plan=self.plan, main_provider_binding=self.main_binding,
+                control_provider_bindings={key: value["governance_binding"] for key, value in self.sessions.items()},
+                mode="recorded" if recorded is not None else "live", recorded_bundle=recorded,
+                store=runtime.store, physical_identity_lookup=runtime.budget.invocation_identity,
+                provider_sessions={"main": runtime.parts["provider"].raw_provider,
+                    **{key: value["provider"].raw_provider for key, value in self.sessions.items()}})
+            self.external_plan = self.external.bind_run(context)
+
+    def _external_context(self, receipt, binding, lane, slot_id, ordinal, args, kwargs):
+        from core.composition.external_provider import GovernedCallContext, external_session_id
+        identity = self.runtime.budget.invocation_identity(receipt.intent_id, fingerprint=receipt.fingerprint)
+        if identity["lane"] != lane or identity["slot_id"] != slot_id:
+            raise ValueError("external call lane differs from physical authority")
+        authority = self.external_plan.authority_binding
+        return GovernedCallContext(schema_version=1, runtime_id=self.runtime.runtime_identity,
+            logical_run_id=self.runtime._logical_run_id, currency_run_id=authority["currency_run_id"],
+            campaign_id=authority["campaign_id"], policy_sha256=authority["policy_sha256"],
+            physical_plan_ref=self.plan["plan_ref"], bridge_plan_ref=self.external_plan.bridge_plan_ref,
+            lane=lane, slot_id=slot_id, candidate_id=identity["candidate_id"], intent_id=receipt.intent_id,
+            physical_fingerprint=receipt.fingerprint, account=identity["account"],
+            operation=identity["operation"], phase=identity["phase"], ordinal=ordinal,
+            adapter_binding_sha256=payload_digest(binding),
+            session_id=external_session_id(self.runtime._logical_run_id, lane, slot_id, payload_digest(binding)),
+            argument_sha256=payload_digest({"args": args, "kwargs": kwargs}))
+
+
     @contextmanager
     def meter(self, provider, receipt, *, lane="main", slot_id=None):
         """Admit every provider ordinal against one physical intent envelope."""
@@ -78,8 +117,20 @@ class GovernedInvocation:
             if not unchanged():
                 self._violations[receipt.intent_id] = "provider_governance_binding_changed"
                 raise ProviderBudgetExhausted("provider changed its frozen governance binding")
+            if self.external is not None:
+                from core.composition.external_provider import validate_external_ordinal
+                current = provider.__dict__.get("current_external_context")
+                if current is None:
+                    raise UsageError("external invocation has no trusted call context")
+                if current.phase != "planning":
+                    try:
+                        validate_external_ordinal(binding, current.phase, current.ordinal)
+                    except ValueError:
+                        raise ProviderBudgetExhausted("external invocation exhausted its frozen ordinal allowance") from None
             allowance = receipt.amounts.get("token", 0)
             bound = binding["call_bound"]["units"].get("token", 0)
+            if self.external is not None and provider.current_external_context.ordinal >= allowance // bound:
+                raise ProviderBudgetExhausted("external invocation exhausted its frozen physical call-count allowance")
             if provider.usage_total - before + bound > allowance:
                 raise ProviderBudgetExhausted("governed invocation cannot admit another bounded call")
 
@@ -96,6 +147,11 @@ class GovernedInvocation:
             "run_id": self.runtime._logical_run_id,
             "adapter_binding_sha256": payload_digest(binding)}
         provider.invocation_ordinal = 0
+        if self.external is not None:
+            provider.external_context_factory = lambda ordinal, args, kwargs: self._external_context(
+                receipt, binding, lane, slot_id, ordinal, args, kwargs)
+            provider.external_invoke = self.external.invoke
+            provider.external_recover = self.external.recover
         try:
             yield
         finally:
@@ -105,9 +161,13 @@ class GovernedInvocation:
             provider.__dict__.pop("governance_measurement", None)
             provider.__dict__.pop("invocation_binding", None)
             provider.__dict__.pop("invocation_ordinal", None)
+            for name in ("external_context_factory", "external_invoke", "external_recover"):
+                provider.__dict__.pop(name, None)
 
     def check_integrity(self, receipt):
         reason = self._violations.pop(receipt.intent_id, None)
+        if self.external is not None and not self.external.audit()["protection_valid"]:
+            reason = reason or "external_currency_protection_breached"
         if reason is not None:
             self.runtime.budget.invalidate_protection(receipt.intent_id, reason)
             self.runtime.store.append("governed_integrity_failure", {
@@ -154,7 +214,10 @@ class GovernedInvocation:
     async def due(self, main_cycles, *, drain=False):
         runtime = self.runtime
         for slot in self.plan["slots"]:
-            if slot["slot_id"] in self._terminals():
+            terminals = self._terminals()
+            if slot["slot_id"] in terminals:
+                if self.external is not None:
+                    self.external.finish_control(slot["slot_id"], "sha256:" + payload_digest(terminals[slot["slot_id"]]))
                 continue
             if not drain and slot["after_main_cycles"] > main_cycles:
                 continue
@@ -205,6 +268,8 @@ class GovernedInvocation:
             "main_cycles": main_cycles, "status": status,
             "proposal": asdict(proposal), "evidence": encode_evidence(evidence) if evidence else None,
             "failure_type": type(failure).__name__ if failure else None})
+        if self.external is not None:
+            self.external.finish_control(slot_id, "sha256:" + payload_digest(self._terminals()[slot_id]))
 
     def audit(self):
         from core.x1.store import AppendOnlyStore
@@ -222,6 +287,7 @@ class GovernedInvocation:
         completed = sum(t["status"] == "evaluated" for t in terminals.values())
         failed = len(terminals) - completed
         unresolved = len(started - terminals.keys())
+        external_audit = self.external.audit() if self.external is not None else None
         return {"schema_version": 1, "plan_ref": self.plan["plan_ref"],
             "planned": planned, "completed": completed, "failed": failed,
             "pending": planned - len(started), "unresolved": unresolved,
@@ -231,5 +297,6 @@ class GovernedInvocation:
             "input_isolation": "registered_fresh_sessions_and_restricted_store_views",
             "sampling": {key: value["governance_binding"] for key, value in self.sessions.items()},
             "iid_statistically_verified": False, "superiority_established": False,
-            "external_currency_protected": False,
+            "external_currency_protected": bool(external_audit and external_audit["protection_valid"]),
+            **({"external_currency": external_audit} if external_audit is not None else {}),
             "formal_release_certified": False}

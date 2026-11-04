@@ -1,0 +1,21 @@
+{
+  "external_governance_contract_runtime_state_integrity": [
+    "test_governed_external_contract.py",
+    "test_governed_external_runtime.py",
+    "test_governed_external_state.py",
+    "test_governed_external_integrity.py"
+  ],
+  "governed_cny_transport_authority_recovery_refusals": [
+    "test_governed_cny_provider.py",
+    "test_governed_cny_bridge.py",
+    "test_governed_cny_audit.py",
+    "test_governed_cny_recovery.py",
+    "test_governed_cny_refusals.py"
+  ],
+  "public_native_worktree_cny_framework_end_to_end": [
+    "test_governed_cny_framework.py"
+  ],
+  "governed_cny_offline_example": [
+    "examples/governed_cny_offline.py"
+  ]
+}

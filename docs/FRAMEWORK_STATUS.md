@@ -4,7 +4,7 @@
 
 当前可交付的是**可安装、可运行、可恢复、可离线回放的治理工程预览**。不能称 v1.0 或完整设计全部完成。原 RUBRIC 要求 A1–A7、B1–B5、C1–C4 全部达标；测试通过不能替代这些条款。
 
-## 已接通的使用路径
+## v72 基线已接通的使用路径
 
 从 [开发指南](DEVELOPMENT.md) 安装框架，用 [治理示例](GOVERNED_CONTROLS.md) 运行同一 `Framework.evolve/inspect/replay` 入口：
 
@@ -13,7 +13,7 @@
 - 主流程与对照的 provider 调用绑定精确身份、请求、ordinal 和适配器声明；失败保留已知成本，未知费用或完整性问题停止新调用。
 - native 与真实 worktree 均支持已有终态接管、暂停与恢复；不明的原生执行不会自动重试。
 - governed replay 消费已记录结果，校验预算与回执链，不发起新模型请求。旧 ungoverned replay 保留原来的重新执行语义。
-- CNY authority 的版本迁移、未来义务及语义审计已在临时账本验证；**外部 provider 桥接尚未接通**，不能据此启动正式受保护的付费对照。
+- CNY authority 的版本迁移、未来义务及语义审计已在临时账本验证；**该基线的外部 provider 桥接尚未接通**，不能据此启动正式受保护的付费对照。
 
 省略 governance 保留既有 composed-v6 行为。支持边界和配置拒绝条件见治理指南。
 
@@ -30,7 +30,7 @@
 | [架构审计](review/2026-11-04-governance-depth.md) | 新增模块承担实际规则；invocation 生命周期分散与动态属性协议仍需收敛，A7 全仓比例未关闭 |
 | [四个参考仓库比较](../research/2026-11-04-framework-development-priorities.md) | 固定源码来源的机制比较与取舍；不宣称其他系统无法实现相同能力 |
 
-## 按原设计继续开发
+## 基线审查时的开发顺序（桥接进展见文末）
 
 | 优先级 / 对应条款 | 待交付能力 | 最低关闭证据 |
 | --- | --- | --- |
@@ -50,3 +50,10 @@
 已保留两轮小规模 MLE 诊断。第二轮有三份有效提交，但三个任务均没有同轮完整有效的 baseline/full 配对；baseline 是 greedy，不是 OpenEvolve 或 IID-RS。因此不能报告框架优势或模块归因。两轮历史合计 33 次请求、477,858 token、保守费用上界 3.242064 元，未结调用为 0；这不是供应商账单。用户将本轮重点转向框架开发，第三轮付费试跑暂缓。
 
 B1–B5 需要真实的独立对照、固定数据/模型/预算、足够任务与种子、官方评分及全成本记录。工程可以保证实验记录和拒绝条件，不能保证效果超过其他框架。正式 IID-RS、供应商统计独立性、任意外部副作用 exactly-once 和整机断电恢复均不由当前离线结果推出。
+
+
+## 后续工程增量：外部费用桥接
+
+在上述 bedc5b3/v72 基线之后，独立分支增加了 [v8 外部费用桥接](GOVERNED_CURRENCY.md)：固定 main/control 货币容量、逐调用双重准入、私有结果与 provider 状态持久化、独立账本审计及记录回放。native、真实 worktree 和实际 SIGKILL 路径已用临时账本与 loopback HTTP 验证。P0 桥接的工程实现因此已接入；完整版本验收、同 SHA CI 和真实供应商实验仍须分别报告实际结果。本增量不改写上面的历史证据，也不宣称原设计全部完成。
+
+新增[本地桥接验证记录](../research/experiments/2026-11-04-governed-currency-local/README.md)：2,116 Linux tests、76项当前 tooling 检查通过；安装后的 wheel 在仓库外完成独立示例。v72 基线 ff5c441 的[同提交 GitHub CI](https://github.com/YixuanZhang99/mori-27/actions/runs/41816499445)两项 job 已成功，草稿 [PR #1](https://github.com/YixuanZhang99/mori-27/pull/1) 已创建。v73 候选的验收状态须单独查看，不能继承该绿色结果。

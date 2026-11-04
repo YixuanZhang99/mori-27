@@ -20,6 +20,7 @@ from pathlib import Path
 from core.llm import ProviderBudgetExhausted, UsageError, validate_usage
 from zoo.mle_bench_lite.agent_common import token_usage_summary
 from zoo.mle_bench_lite.usage_audit import audit_usage
+from zoo.mle_bench_lite.provider_protocol import build_request
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -160,15 +161,9 @@ class BenchmarkProvider:
             allowance = self.max_completion_tokens
             quote = admission_quote(self.token_admission, prompt_bytes=len(prompt.encode("utf-8")),
                 used=used, token_budget=self.token_budget, output_allowance=allowance)
-        payload = {"model": self.model, "temperature": self.temperature,
-                   "max_completion_tokens": allowance,
-                   "messages": [{"role": "user", "content": prompt}]}
-        if self.request_format == "deepseek":
-            payload.pop("temperature")
-            payload.pop("max_completion_tokens")
-            payload.update(max_tokens=allowance, stream=False, thinking={"type": "enabled"},
-                           reasoning_effort="high")
-        body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        body = build_request(prompt, {"requested_model": self.model,
+            "temperature": self.temperature, "max_completion_tokens": allowance,
+            "request_format": self.request_format})
         call_id = uuid.uuid4().hex
         request_hash = hashlib.sha256(body).hexdigest()
         request = urllib.request.Request(

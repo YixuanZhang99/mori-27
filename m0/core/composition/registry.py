@@ -39,6 +39,44 @@ class Registry:
     def __init__(self) -> None:
         self._entries: dict[tuple[str, str], _Registration] = {}
         self._session_objects: dict[str, list[Any]] = {}
+        self._external_bridges: dict[str, Any] = {}
+        self._external_bridge_instances: list[Any] = []
+
+    def install_external_bridge(self, name, factory):
+        """Install a trusted zero-argument factory without constructing its authority."""
+        ComponentSpec(name)
+        if not callable(factory):
+            raise ValueError("external bridge registration requires a callable factory")
+        if name in self._external_bridges:
+            raise ValueError("external bridge is already installed")
+        self._external_bridges[name] = factory
+
+    @property
+    def external_bridge_names(self):
+        return tuple(sorted(self._external_bridges))
+
+    def external_bridge_name(self, config):
+        """Resolve the versioned control bridge before choosing runtime/checkpoint identity."""
+        snapshot = self.preflight(config)
+        if snapshot.governance is None:
+            return None
+        spec = snapshot.governance.controls["provider"]
+        declaration = self._entries[("provider", spec["name"])].governance
+        if declaration["schema_version"] == 1:
+            return None
+        return declaration["external_currency"]["bridge"]
+
+    def external_bridge(self, name):
+        if name not in self._external_bridges:
+            raise ValueError("external bridge is not explicitly installed")
+        bridge = self._external_bridges[name]()
+        methods = ("bind_run", "invoke", "recover", "finish_control", "audit", "replay_bundle")
+        if any(not callable(getattr(bridge, method, None)) for method in methods):
+            raise ValueError("external bridge must implement the complete versioned integration port")
+        if any(bridge is previous for previous in self._external_bridge_instances):
+            raise ValueError("external bridge factory reused an existing run authority instance")
+        self._external_bridge_instances.append(bridge)
+        return bridge
 
     def register(self, kind: str, name: str, factory: Factory, *,
                  validate_options: OptionValidator | None = None,
@@ -98,7 +136,9 @@ class Registry:
         for kind, spec in self._control_specs(config):
             declared = self._entries[(kind, spec.name)].governance
             validate_factory_governance(kind, declared,
-                reservation=controls["reservations"]["operator"] if kind == "provider" else None)
+                reservation=controls["reservations"]["operator"] if kind == "provider" else None,
+                phase_reservations=controls["reservations"] if kind == "provider" else None,
+                external_bridges=self.external_bridge_names)
 
     @staticmethod
     def _construct(registration, context, options):
@@ -195,7 +235,8 @@ class Registry:
                 if not callable(binding_method):
                     raise ValueError("control provider requires governance_binding()")
                 binding = validate_factory_governance("provider", binding_method(),
-                    reservation=controls["reservations"]["operator"])
+                    reservation=controls["reservations"]["operator"],
+                    phase_reservations=controls["reservations"], external_bridges=self.external_bridge_names)
                 declared = self._entries[(kind, spec.name)].governance
                 if json.dumps(binding, sort_keys=True) != json.dumps(declared, sort_keys=True):
                     raise ValueError("provider binding differs from preflight declaration")

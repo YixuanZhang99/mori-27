@@ -127,14 +127,15 @@ class LaneStoreView:
                 yield {"kind": payload["kind"], "payload": json_copy(payload["payload"])}
 
 
-def validate_factory_governance(kind: str, declaration: Any, *, reservation=None) -> dict:
+def validate_factory_governance(kind: str, declaration: Any, *, reservation=None,
+                                phase_reservations=None, external_bridges=()) -> dict:
     """Validate trusted factory capabilities without instantiating adapters.
 
     ``deterministic_fixture`` explicitly disclaims stochastic IID sampling.
     ``independent`` is an adapter/supplier assertion, separate from enforced
     fresh objects. Parameters must be actually applied, never an ignored knob.
-    External monetary authorities are rejected until cross-authority protection
-    is implemented; physical-only protection must not silently certify them.
+    Schema 1 refuses external money. Schema 2 requires an explicitly installed
+    bridge and finite ordinal caps; the runtime still owns dual admission.
     """
     if type(declaration) is not dict:
         if kind == "operator":
@@ -153,13 +154,17 @@ def validate_factory_governance(kind: str, declaration: Any, *, reservation=None
         fields = base
     else:
         raise ValueError("unsupported governance factory kind")
-    if set(value) != fields or type(value["schema_version"]) is not int or value["schema_version"] != 1 \
+    external = kind == "provider" and type(value.get("schema_version")) is int and value["schema_version"] == 2
+    if external:
+        fields |= {"phase_call_limits"}
+    if set(value) != fields or type(value["schema_version"]) is not int or value["schema_version"] != (2 if external else 1) \
             or value["fresh_session"] is not True or value["state_independent"] is not True:
         raise ValueError(f"{kind} requires versioned fresh and independent session capability")
     if kind == "provider":
         sampling = value["sampling"]
         if type(sampling) is not dict or set(sampling) != {"method", "parameters", "applied"} \
-                or sampling["method"] not in {"independent", "deterministic_fixture"} \
+                or sampling["method"] not in ({"independent", "deterministic_fixture", "supplier_unverified"} if external
+                                              else {"independent", "deterministic_fixture"}) \
                 or type(sampling["parameters"]) is not dict or sampling["applied"] is not True:
             raise ValueError("provider requires an explicitly applied supported sampling contract")
         bound = value["call_bound"]
@@ -168,15 +173,35 @@ def validate_factory_governance(kind: str, declaration: Any, *, reservation=None
             raise ValueError("provider requires a defensible hard total-call bound")
         if set(bound["units"]) != {"token"}:
             raise ValueError("provider hard call bound supports exactly the metered token unit")
+        if type(bound["units"]["token"]) is not int or bound["units"]["token"] < 0:
+            raise ValueError("provider hard call bound requires nonnegative integer tokens")
+        if external:
+            if bound["units"]["token"] == 0:
+                raise ValueError("external provider requires a positive hard token bound")
+            authority = value["external_currency"]
+            if type(authority) is not dict or set(authority) != {"schema_version", "bridge"} or \
+                    type(authority["schema_version"]) is not int or authority["schema_version"] != 1 or \
+                    type(authority["bridge"]) is not str or authority["bridge"] not in external_bridges:
+                raise ValueError("external provider requires an explicitly installed versioned bridge capability")
+            caps = value["phase_call_limits"]
+            if type(caps) is not dict or set(caps) != {"operator", "evaluation"} or any(
+                    type(caps[phase]) is not int or caps[phase] < (1 if phase == "operator" else 0)
+                    for phase in ("operator", "evaluation")):
+                raise ValueError("external provider requires finite operator/evaluation ordinal limits")
+            if phase_reservations is not None:
+                for phase, cap in caps.items():
+                    basket = phase_reservations.get(phase)
+                    if type(basket) is not dict or "token" not in basket or cap * bound["units"]["token"] > basket["token"]:
+                        raise ValueError("external phase call bounds exceed frozen physical reservations")
         for unit, amount in bound["units"].items():
             if unit not in {"token", "node", "eval_count", "wallclock", "gpu_hours", "usd"} \
                     or type(amount) not in (int, float) or amount < 0 \
                     or unit in {"token", "node", "eval_count"} and type(amount) is not int:
                 raise ValueError("provider hard call bound has invalid physical units")
-            if reservation is not None and (unit not in reservation or amount > reservation[unit]):
+            if reservation is not None and (unit not in reservation or amount * (value["phase_call_limits"]["operator"] if external else 1) > reservation[unit]):
                 raise ValueError("provider hard call bound exceeds control operator reservation")
         if reservation is not None and "token" in reservation and "token" not in bound["units"]:
             raise ValueError("provider hard call bound must cover token consumption")
-        if value["external_currency"] is not False:
+        if not external and value["external_currency"] is not False:
             raise ValueError("external currency protection is unsupported; formal governance fails closed")
     return value

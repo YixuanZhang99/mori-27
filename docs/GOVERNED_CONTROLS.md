@@ -120,3 +120,8 @@ The public methods remain `Framework.evolve`, `inspect` and `replay`. Configurat
 | `governance_audit.py` | Recompute control status from linked starts, outcomes, requests, measurements and settlements |
 
 CNY obligations remain in `zoo/mle_bench_lite/cny_budget.py`; no currency conversion enters the core. The separate [CNY journal contract](superpowers/specs/2026-11-04-cny-governance-journal.md) documents its tested migration and recovery states. Enabling that journal format alone does not connect it to governed model invocations.
+
+
+## External-provider extension
+
+The v7 scope above remains unchanged. The explicit v8 bridge is described in [Governed currency](GOVERNED_CURRENCY.md), with a standalone loopback example. It requires a separately registered fresh bridge factory and schema-2 provider capabilities; no live ledger migration follows from enabling v7. Its real-provider experiment and release claims remain unverified.

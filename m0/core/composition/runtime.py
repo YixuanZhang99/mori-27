@@ -100,6 +100,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._stop_disposition = None
         self.continuation_enabled = self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
         self.runtime_identity = "composed-v7-governed" if self.assembly.governance is not None else "composed-v6"
+        self.external_bridge_name = registry.external_bridge_name(self.assembly)
+        if self.external_bridge_name is not None:
+            from core.composition.external_provider import EXTERNAL_RUNTIME
+            self.runtime_identity = EXTERNAL_RUNTIME
 
     def _build(self, task):
         scope = ScopeContext(self._logical_run_id, _id("task", task),
@@ -226,6 +230,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.governed = GovernedInvocation(self)
             self.manifest["governance"] = self.governed.plan
             self.manifest["governance_provider"] = self.governed.main_binding
+            if self.governed.external is not None:
+                self.manifest["external_governance"] = self.governed.external_plan.to_dict()
 
     def _validate_domain(self, request):
         validate_request(request)
@@ -874,6 +880,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             clone._logical_run_id = self._logical_run_id
             if self.governed:
                 clone._recorded_rows = list(AppendOnlyStore(self.store.path).read())
+                if self.governed.external is not None:
+                    clone._recorded_external_bundle = self.governed.external.replay_bundle()
             result = clone.run(task or self.task)
             original = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
             copied = RunCheckpoint.load(path / "checkpoint.json").payload

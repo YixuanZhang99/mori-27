@@ -1,0 +1,103 @@
+name: Development and Linux acceptance
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-acceptance:
+    name: Linux x86_64 / Python 3.12 / full v72
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      UV_PROJECT_ENVIRONMENT: /usr/local/share/mori27-venv
+      UV_PYTHON: /usr/bin/python3.12
+      UV_PYTHON_DOWNLOADS: never
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install locked uv tool version
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.6.8'
+          enable-cache: true
+          cache-dependency-glob: m0/uv.lock
+      - name: Prepare Linux execution prerequisites
+        run: bash scripts/setup_linux_ci.sh
+      - name: Install locked Python environment
+        run: make setup PYTHON=/usr/bin/python3.12
+      - name: Verify original import provenance
+        run: make verify-import
+      - name: Build distributable packages
+        run: make build
+      - name: Acceptance wrapper regressions
+        run: make tooling
+      - name: Offline examples
+        run: make examples
+      - name: Full acceptance with no skipped tests
+        run: make accept-linux
+      - name: Confirm historical certificates were not modified
+        if: always()
+        run: git diff --exit-code -- m0/verifier
+      - name: Upload acceptance evidence and packages
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-acceptance-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+  mle-cloud-runtime:
+    name: MLE CPU dependencies / pinned official graders / synthetic data
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UV_PYTHON_DOWNLOADS: never
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: openai/mle-bench
+          ref: 507f92e1138bb6e40dac5c6ee7a6758e6424bf97
+          path: artifacts/mle-smoke-official
+          lfs: true
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.6.8'
+      - name: Install hash-locked CPU dependencies into a separate environment
+        run: |
+          sudo install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" /usr/local/share/mori27-mle-smoke
+          uv venv --python /usr/bin/python3.12 /usr/local/share/mori27-mle-smoke
+          uv pip install --python /usr/local/share/mori27-mle-smoke/bin/python --require-hashes -r scripts/requirements-mle-pilot.lock
+      - name: Verify official runtime without credentials or real datasets
+        env:
+          PYTHONPATH: ${{ github.workspace }}/m0:${{ github.workspace }}/artifacts/mle-smoke-official
+        run: |
+          /usr/local/share/mori27-mle-smoke/bin/python scripts/verify_mle_cloud_runtime.py \
+            --official-root artifacts/mle-smoke-official --report artifacts/mle-runtime/report.json
+      - name: Upload synthetic runtime verification only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mle-runtime-${{ github.sha }}
+          path: artifacts/mle-runtime/report.json
+          if-no-files-found: warn
+          retention-days: 14

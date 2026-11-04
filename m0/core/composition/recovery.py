@@ -52,6 +52,7 @@ def save_checkpoint(checkpoint, workdir, store):
 class ContinuationStore(AppendOnlyStore):
     """Expose the validated prefix during restore, then consume its suffix once."""
     diagnostics = {"frontier_checkpoint", "composed_resumed", "replay_certificate"}
+    recover_external_outcomes = True
 
     def __init__(self, path, checkpoint=None):
         super().__init__(path)
@@ -157,6 +158,9 @@ class ContinuationStore(AppendOnlyStore):
             row = self.peek()
             if row is None or row["kind"] != "composed_provider_completed" \
                     or row["payload"].get("binding") != binding:
+                if row is None and self.recover_external_outcomes and governed is not None and governed.get("schema_version") == 2:
+                    data = self._recover_external_provider(provider, binding, governed, request_sha256)
+                    return self._adopt_provider(provider, data, governed=governed)
                 raise UsageError("provider invocation has no durable completion; refusing paid retry")
             return self._adopt_provider(provider, row["payload"], governed=governed)
         before = provider.usage_total
@@ -197,6 +201,29 @@ class ContinuationStore(AppendOnlyStore):
             raise failed
         return result
 
+    def _recover_external_provider(self, provider, binding, governed, request_sha256):
+        from core.composition.external_provider import GovernedCallContext, ExternalCallOutcome
+        recover = provider.__dict__.get("external_recover")
+        if not callable(recover):
+            raise UsageError("external provider has no authoritative recovery capability")
+        context = GovernedCallContext.from_dict(governed["external_context"])
+        if context.argument_sha256 != request_sha256:
+            raise ValueError("external recovery request differs from its recorded context")
+        outcome = recover(context, request_sha256)
+        if not isinstance(outcome, ExternalCallOutcome) or outcome.context_sha256 != payload_digest(context.to_dict()):
+            raise ValueError("external recovery outcome belongs to another context")
+        if outcome.outcome == "unknown" or outcome.usage is None:
+            raise UsageError("external authority has unresolved provider usage; dispatch forbidden")
+        result = outcome.result
+        data = {"binding": binding, "result": result, "tokens": outcome.usage["total_tokens"], "state": outcome.provider_state,
+                "observed_binding_sha256": None if outcome.integrity_reason == "provider_binding_changed"
+                                            else context.adapter_binding_sha256}
+        if outcome.outcome == "known_failed":
+            data.update(outcome="failed", result="provider invocation failed (RuntimeError)")
+        elif outcome.outcome == "known_refused":
+            data.update(outcome="budget_exhausted", result="external provider refused before dispatch")
+        return data
+
     def _adopt_provider(self, provider, data, *, governed, propagate=True):
         if type(data["tokens"]) is not int or data["tokens"] < 0 or type(data["result"]) is not str:
             raise ValueError("invalid durable provider completion")
@@ -226,13 +253,28 @@ class ContinuationStore(AppendOnlyStore):
         data = self.peek()["payload"]
         base = provider.__dict__.get("invocation_binding")
         expected = {**(base or {}), "ordinal": provider.__dict__.get("invocation_ordinal")}
-        if base is None or data.get("invocation") != expected or data.get("binding") != payload_digest({
+        invocation = data.get("invocation")
+        if isinstance(invocation, dict) and type(invocation.get("schema_version")) is int and invocation["schema_version"] == 2:
+            from core.composition.external_provider import GovernedCallContext
+            context = GovernedCallContext.from_dict(invocation.get("external_context"))
+            if context.argument_sha256 != data.get("request_sha256") or context.intent_id != expected.get("intent_id") or \
+                    context.physical_fingerprint != expected.get("fingerprint") or context.ordinal != expected.get("ordinal") or \
+                    context.adapter_binding_sha256 != expected.get("adapter_binding_sha256") or \
+                    context.logical_run_id != expected.get("run_id") or context.lane != expected.get("lane") or \
+                    context.slot_id != expected.get("slot_id"):
+                raise ValueError("nested external provider context differs from evaluation")
+            expected.update(schema_version=2, external_context=context.to_dict())
+        if base is None or invocation != expected or data.get("binding") != payload_digest({
                 "request_sha256": data.get("request_sha256"), "invocation": expected}):
             raise ValueError("nested provider receipt differs from evaluation invocation")
         provider.invocation_ordinal += 1
         self.append("composed_provider_started", data)
         row = self.peek()
         if row is None or row["kind"] != "composed_provider_completed" or row["payload"].get("binding") != data["binding"]:
+            if row is None and self.recover_external_outcomes and expected.get("schema_version") == 2:
+                completion = self._recover_external_provider(provider, data["binding"], expected, data["request_sha256"])
+                self._adopt_provider(provider, completion, governed=expected, propagate=False)
+                return
             raise UsageError("nested provider has no completion; evaluator retry forbidden")
         self._adopt_provider(provider, row["payload"], governed=expected, propagate=False)
 
@@ -275,6 +317,8 @@ class ContinuationStore(AppendOnlyStore):
 
 class RecordedOutcomeStore(ContinuationStore):
     """Consume a frozen transcript; an absent outcome never permits execution."""
+
+    recover_external_outcomes = False
 
     def __init__(self, path, rows):
         base = AppendOnlyStore(path)

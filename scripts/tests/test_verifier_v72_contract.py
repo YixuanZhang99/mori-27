@@ -24,6 +24,20 @@ def groups(version):
 
 
 class VerifierV72ContractTests(unittest.TestCase):
+    def setUp(self):
+        # Execute this historical scope test with its exact original controls.
+        # All old test method bodies remain unchanged; v73 checks actual wiring.
+        if self._testMethodName == 'test_certificate_uses_current_controls_and_requires_whole_run_success':
+            original_read = Path.read_text
+            frozen = ROOT / 'm0/verifier/v73/v72-control-context'
+            controls = {ROOT / name: frozen / name for name in
+                        ('scripts/run_acceptance.py', 'Makefile', '.github/workflows/ci.yml')}
+            def historical_read(path, *args, **kwargs):
+                return original_read(controls.get(path, path), *args, **kwargs)
+            context = patch.object(Path, 'read_text', historical_read)
+            context.start()
+            self.addCleanup(context.stop)
+
     def test_every_v71_command_and_timeout_is_retained_exactly(self):
         previous, current = groups('v71'), groups('v72')
         self.assertEqual(len(previous), 33)

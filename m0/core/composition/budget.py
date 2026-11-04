@@ -343,6 +343,25 @@ class HierarchicalBudget:
             self._commit("reserve", {"intent": intent, "fingerprint": fingerprint})
             return ReservationReceipt(intent_id, "granted", fingerprint, json_copy(intent["amounts"]))
 
+    def invocation_identity(self, intent_id, *, fingerprint):
+        """Read the started physical authority identity; never accept provider labels."""
+        with self._lock:
+            if self._governed is None:
+                raise BudgetError("external invocation identity requires governed physical authority")
+            state, sequence, head = self._rebuild()
+            if sequence != self._seq or head != self._head:
+                raise BudgetError("live invocation journal differs from committed physical authority")
+            operation = state["operations"].get(intent_id)
+            if operation is None or operation["fingerprint"] != fingerprint or operation["status"] != "started":
+                raise BudgetError("external invocation requires the exact started physical reservation")
+            intent = operation["intent"]
+            phase = intent["operation"] if intent["operation"] in {"operator", "planning"} else "evaluation"
+            return json_copy({"intent_id": intent_id, "physical_fingerprint": fingerprint,
+                "candidate_id": intent["candidate"]["id"], "lane": intent["lane"],
+                "slot_id": intent["control_slot"], "account": intent["account"],
+                "operation": intent["operation"], "phase": phase, "status": "started",
+                "amounts": intent["amounts"]})
+
     def start_operation(self, intent_id, *, fingerprint):
         """Optional durable call-start marker; started calls cannot be released."""
         with self._lock:

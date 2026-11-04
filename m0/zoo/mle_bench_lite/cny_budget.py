@@ -276,6 +276,107 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
     return pending, spent
 
 
+def _reduce_history(policies, events, heads):
+    """Reconstruct authority state from exact policy/event/head records."""
+    if len(policies) != 1:
+        raise ValueError("campaign policy is missing or duplicated")
+    policy = json.loads(policies[0][0])
+    if (not isinstance(policy, dict) or set(policy) != set(POLICY) | {"campaign_id", "limit_micro_cny"}
+            or any(policy[key] != value for key, value in POLICY.items())
+            or not isinstance(policy["campaign_id"], str)
+            or re.fullmatch(r"[a-f0-9]{32}", policy["campaign_id"]) is None):
+        raise ValueError("campaign policy is unsupported or damaged")
+    limit = _integer(policy["limit_micro_cny"], "campaign limit", 1)
+    if limit > 200000000:
+        raise ValueError("campaign authorization exceeds supported limit")
+    operations, pending, spent = {}, None, 0
+    governance = {"enabled": False, "runs": {}, "breaches": []}
+    seq, previous = 0, ZERO_HASH
+    for number, payload, recorded_hash in events:
+        event = json.loads(payload)
+        if number != seq + 1 or recorded_hash != _hash({"seq": number, "previous": previous, "event": event}):
+            raise ValueError("campaign journal hash chain is damaged")
+        if type(event) is not dict:
+            raise ValueError("campaign event must be an object")
+        if "schema_version" in event:
+            pending, spent = _reduce_governance(event, policy, governance, operations, pending, spent,
+                                                 seq=seq, previous=previous)
+            seq, previous = number, recorded_hash
+            continue
+        call_id = event.get("call_id")
+        if not isinstance(call_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", call_id) is None:
+            raise ValueError("campaign call identity is invalid")
+        if event.get("kind") == "reserve":
+            if set(event) != {"kind", "call_id", "run_id", "request_sha256", "output_allowance", "reserved_micro_cny"}:
+                raise ValueError("campaign reservation shape is invalid")
+            if event["run_id"] is not None:
+                _sha(event["run_id"])
+            allowance = _integer(event["output_allowance"], "output allowance", 1)
+            reserve = policy["context_tokens"] * 2 + allowance * 8
+            if (allowance > policy["max_output_tokens"] or event["reserved_micro_cny"] != reserve
+                    or pending is not None or call_id in operations or governance["breaches"]
+                    or spent + reserve + _outstanding(governance) > limit):
+                raise ValueError("campaign reservation violates admission policy")
+            _sha(event["request_sha256"])
+            operations[call_id] = dict(event)
+            pending = call_id
+        elif event.get("kind") == "settle":
+            if set(event) != {"kind", "call_id", "usage", "response_sha256", "upper_bound_micro_cny"} or pending != call_id:
+                raise ValueError("campaign settlement lacks its reservation")
+            usage = validate_detailed_usage(event["usage"])
+            reserve = operations[call_id]
+            if reserve["kind"] != "reserve":
+                raise ValueError("legacy settlement cannot complete a governed reservation")
+            cost = usage["prompt_tokens"] * 2 + usage["completion_tokens"] * 8
+            if (usage != event["usage"] or usage["prompt_tokens"] > policy["context_tokens"]
+                    or usage["completion_tokens"] > reserve["output_allowance"]
+                    or cost != event["upper_bound_micro_cny"] or cost > reserve["reserved_micro_cny"]):
+                raise ValueError("provider usage exceeds frozen reservation policy")
+            _sha(event["response_sha256"])
+            operations[call_id].update({key: value for key, value in event.items() if key != "kind"})
+            spent += cost
+            pending = None
+        else:
+            raise ValueError("unknown campaign event")
+        seq, previous = number, recorded_hash
+    if heads != [(seq, previous)]:
+        raise ValueError("campaign journal head differs from recorded history")
+    reserved = operations[pending]["reserved_micro_cny"] if pending else 0
+    return policy, {"seq": seq, "hash": previous, "operations": operations,
+                    "pending": pending, "spent": spent, "reserved": reserved, "governance": governance}
+
+
+def _audit_run(policy, state, run_id, plan_ref):
+    """Project a run audit only from semantically reduced authority state."""
+    run = _run(state["governance"], run_id, plan_ref)
+    operations = [value for value in state["operations"].values() if value.get("run_id") == run_id]
+    slots = {}
+    for obligation in run["obligations"]:
+        summary = slots.setdefault(obligation["slot_id"], {"planned": 0, "pending": 0,
+            "admitted": 0, "settled": 0, "cancelled": 0})
+        summary["planned"] += 1
+        summary[obligation["status"]] += 1
+    outstanding = sum(value["bound"]["reserved_micro_cny"] for value in run["obligations"]
+                      if value["status"] == "pending")
+    reserved = sum(value["reserved_micro_cny"] for value in operations if "usage" not in value)
+    spent = sum(value["upper_bound_micro_cny"] for value in operations if "usage" in value)
+    breaches = list(state["governance"]["breaches"])
+    return {"schema_version": 1, "run_id": run_id, "plan_ref": plan_ref,
+        "campaign_id": policy["campaign_id"], "policy_sha256": _hash(policy),
+        "outstanding_micro_cny": outstanding, "reserved_micro_cny": reserved,
+        "settled_upper_bound_micro_cny": spent,
+        "campaign_settled_upper_bound_micro_cny": state["spent"],
+        "campaign_outstanding_micro_cny": _outstanding(state["governance"]),
+        "pending_calls": [value["call_id"] for value in operations if "usage" not in value],
+        "campaign_pending_calls": [state["pending"]] if state["pending"] else [],
+        "slots": slots, "breaches": breaches, "protection_valid": not breaches,
+        "admission_open": state["pending"] is None and not breaches,
+        "frozen_obligations": json.loads(_json(run["frozen"])),
+        "operations": json.loads(_json(operations)),
+        "invoice_verified": False,
+        "journal_head": {"seq": state["seq"], "sha256": state["hash"]}}
+
+
 class CampaignBudget:
     """Open an existing ledger. Only explicit create() grants a fresh budget."""
 
@@ -334,73 +435,10 @@ class CampaignBudget:
 
     @staticmethod
     def _read(db):
-        policies = db.execute("SELECT payload FROM policy").fetchall()
-        if len(policies) != 1:
-            raise ValueError("campaign policy is missing or duplicated")
-        policy = json.loads(policies[0][0])
-        if (not isinstance(policy, dict) or set(policy) != set(POLICY) | {"campaign_id", "limit_micro_cny"}
-                or any(policy[key] != value for key, value in POLICY.items())
-                or not isinstance(policy["campaign_id"], str)
-                or re.fullmatch(r"[a-f0-9]{32}", policy["campaign_id"]) is None):
-            raise ValueError("campaign policy is unsupported or damaged")
-        limit = _integer(policy["limit_micro_cny"], "campaign limit", 1)
-        if limit > 200000000:
-            raise ValueError("campaign authorization exceeds supported limit")
-        operations, pending, spent = {}, None, 0
-        governance = {"enabled": False, "runs": {}, "breaches": []}
-        seq, previous = 0, ZERO_HASH
-        for number, payload, recorded_hash in db.execute("SELECT seq, payload, hash FROM events ORDER BY seq"):
-            event = json.loads(payload)
-            if number != seq + 1 or recorded_hash != _hash({"seq": number, "previous": previous, "event": event}):
-                raise ValueError("campaign journal hash chain is damaged")
-            if type(event) is not dict:
-                raise ValueError("campaign event must be an object")
-            if "schema_version" in event:
-                pending, spent = _reduce_governance(event, policy, governance, operations, pending, spent,
-                                                     seq=seq, previous=previous)
-                seq, previous = number, recorded_hash
-                continue
-            call_id = event.get("call_id")
-            if not isinstance(call_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", call_id) is None:
-                raise ValueError("campaign call identity is invalid")
-            if event.get("kind") == "reserve":
-                if set(event) != {"kind", "call_id", "run_id", "request_sha256", "output_allowance", "reserved_micro_cny"}:
-                    raise ValueError("campaign reservation shape is invalid")
-                if event["run_id"] is not None:
-                    _sha(event["run_id"])
-                allowance = _integer(event["output_allowance"], "output allowance", 1)
-                reserve = policy["context_tokens"] * 2 + allowance * 8
-                if (allowance > policy["max_output_tokens"] or event["reserved_micro_cny"] != reserve
-                        or pending is not None or call_id in operations or governance["breaches"]
-                        or spent + reserve + _outstanding(governance) > limit):
-                    raise ValueError("campaign reservation violates admission policy")
-                _sha(event["request_sha256"])
-                operations[call_id] = dict(event)
-                pending = call_id
-            elif event.get("kind") == "settle":
-                if set(event) != {"kind", "call_id", "usage", "response_sha256", "upper_bound_micro_cny"} or pending != call_id:
-                    raise ValueError("campaign settlement lacks its reservation")
-                usage = validate_detailed_usage(event["usage"])
-                reserve = operations[call_id]
-                if reserve["kind"] != "reserve":
-                    raise ValueError("legacy settlement cannot complete a governed reservation")
-                cost = usage["prompt_tokens"] * 2 + usage["completion_tokens"] * 8
-                if (usage != event["usage"] or usage["prompt_tokens"] > policy["context_tokens"]
-                        or usage["completion_tokens"] > reserve["output_allowance"]
-                        or cost != event["upper_bound_micro_cny"] or cost > reserve["reserved_micro_cny"]):
-                    raise ValueError("provider usage exceeds frozen reservation policy")
-                _sha(event["response_sha256"])
-                operations[call_id].update({key: value for key, value in event.items() if key != "kind"})
-                spent += cost
-                pending = None
-            else:
-                raise ValueError("unknown campaign event")
-            seq, previous = number, recorded_hash
-        if db.execute("SELECT seq, hash FROM head").fetchall() != [(seq, previous)]:
-            raise ValueError("campaign journal head differs from recorded history")
-        reserved = operations[pending]["reserved_micro_cny"] if pending else 0
-        return policy, {"seq": seq, "hash": previous, "operations": operations,
-                        "pending": pending, "spent": spent, "reserved": reserved, "governance": governance}
+        return _reduce_history(
+            db.execute("SELECT payload FROM policy").fetchall(),
+            db.execute("SELECT seq, payload, hash FROM events ORDER BY seq").fetchall(),
+            db.execute("SELECT seq, hash FROM head").fetchall())
 
     @staticmethod
     def _append(db, state, event):
@@ -543,30 +581,42 @@ class CampaignBudget:
     def audit_run(self, run_id, plan_ref):
         """Recompute currency obligations and charges from the current journal."""
         with self._transaction() as (_, policy, state):
-            run = _run(state["governance"], run_id, plan_ref)
-            operations = [value for value in state["operations"].values() if value.get("run_id") == run_id]
-            slots = {}
-            for obligation in run["obligations"]:
-                summary = slots.setdefault(obligation["slot_id"], {"planned": 0, "pending": 0,
-                    "admitted": 0, "settled": 0, "cancelled": 0})
-                summary["planned"] += 1
-                summary[obligation["status"]] += 1
-            outstanding = sum(value["bound"]["reserved_micro_cny"] for value in run["obligations"]
-                              if value["status"] == "pending")
-            reserved = sum(value["reserved_micro_cny"] for value in operations if "usage" not in value)
-            spent = sum(value["upper_bound_micro_cny"] for value in operations if "usage" in value)
-            breaches = list(state["governance"]["breaches"])
-            return {"schema_version": 1, "run_id": run_id, "plan_ref": plan_ref,
-                "campaign_id": policy["campaign_id"], "policy_sha256": _hash(policy),
-                "outstanding_micro_cny": outstanding, "reserved_micro_cny": reserved,
-                "settled_upper_bound_micro_cny": spent,
-                "campaign_settled_upper_bound_micro_cny": state["spent"],
-                "campaign_outstanding_micro_cny": _outstanding(state["governance"]),
-                "pending_calls": [value["call_id"] for value in operations if "usage" not in value],
-                "campaign_pending_calls": [state["pending"]] if state["pending"] else [],
-                "slots": slots, "breaches": breaches, "protection_valid": not breaches,
-                "admission_open": state["pending"] is None and not breaches,
-                "frozen_obligations": json.loads(_json(run["frozen"])),
-                "operations": json.loads(_json(operations)),
-                "invoice_verified": False,
+            return _audit_run(policy, state, run_id, plan_ref)
+
+    def export_governance_evidence(self, run_id, plan_ref):
+        """Export a private, complete campaign prefix from one read snapshot.
+
+        The returned proof describes this recorded head, not future live balance.
+        It includes other runs because their charges constrain shared capacity.
+        No authority events or database schema are changed.
+        """
+        _sha(run_id)
+        _plan_ref(plan_ref)
+        if self.path.is_symlink() or not self.path.is_file():
+            raise ValueError("existing regular campaign ledger is required")
+        if stat.S_IMODE(self.path.stat().st_mode) != 0o600:
+            raise ValueError("campaign ledger must have private 0600 permissions")
+        db = None
+        try:
+            db = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True,
+                                 isolation_level=None, timeout=30)
+            db.execute("BEGIN")
+            policies = db.execute("SELECT payload FROM policy").fetchall()
+            events = db.execute("SELECT seq, payload, hash FROM events ORDER BY seq").fetchall()
+            heads = db.execute("SELECT seq, hash FROM head").fetchall()
+            policy, state = _reduce_history(policies, events, heads)
+            if self._binding is not None and policy != self._binding:
+                raise ValueError("campaign identity or policy changed")
+            _run(state["governance"], run_id, plan_ref)
+            evidence = {"schema_version": 1, "run_id": run_id, "plan_ref": plan_ref,
+                "policy_json": policies[0][0], "policy_sha256": _hash(policy),
+                "events": [{"seq": number, "payload": payload, "sha256": hashed}
+                           for number, payload, hashed in events],
                 "journal_head": {"seq": state["seq"], "sha256": state["hash"]}}
+            db.execute("COMMIT")
+            return evidence
+        except (sqlite3.Error, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ValueError(f"campaign ledger integrity failed ({type(error).__name__})") from None
+        finally:
+            if db is not None:
+                db.close()

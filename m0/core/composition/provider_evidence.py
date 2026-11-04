@@ -20,6 +20,16 @@ def invocation_records(store):
                 raise ValueError("governed provider receipt start is missing or overlapping")
             inv = data["invocation"]
             fields = {"intent_id", "fingerprint", "lane", "slot_id", "run_id", "adapter_binding_sha256", "ordinal"}
+            if type(inv) is dict and type(inv.get("schema_version")) is int and inv["schema_version"] == 2:
+                from core.composition.external_provider import GovernedCallContext
+                fields |= {"schema_version", "external_context"}
+                context = GovernedCallContext.from_dict(inv.get("external_context"))
+                if context.intent_id != inv.get("intent_id") or context.physical_fingerprint != inv.get("fingerprint") or \
+                        context.logical_run_id != inv.get("run_id") or context.lane != inv.get("lane") or \
+                        context.slot_id != inv.get("slot_id") or context.ordinal != inv.get("ordinal") or \
+                        context.adapter_binding_sha256 != inv.get("adapter_binding_sha256") or \
+                        context.argument_sha256 != data.get("request_sha256"):
+                    raise ValueError("external provider context differs from its physical invocation")
             if type(inv) is not dict or set(inv) != fields or inv["lane"] not in {"main", "control"}:
                 raise ValueError("governed provider invocation identity is invalid")
             identifier = inv["intent_id"]
@@ -66,6 +76,13 @@ def audit_provider_receipts(runtime, sessions, main_binding):
                         inv["lane"] != intent["lane"] or inv["slot_id"] != intent["control_slot"] or \
                         inv["adapter_binding_sha256"] != payload_digest(binding):
                     raise ValueError("governed provider receipt differs from physical authority")
+                if inv.get("schema_version") == 2:
+                    context = inv["external_context"]
+                    phase = intent["operation"] if intent["operation"] in {"operator", "planning"} else "evaluation"
+                    if context["candidate_id"] != intent["candidate"]["id"] or context["account"] != intent["account"] or \
+                            context["operation"] != intent["operation"] or context["phase"] != phase or \
+                            context["physical_plan_ref"] != runtime.governed.plan["plan_ref"]:
+                        raise ValueError("external provider context differs from physical intent")
             else:
                 total += data["tokens"]
         if operation["status"] == "settled":
