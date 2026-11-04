@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 
-from core.composition.evaluation import encode_evidence, public_projection
+from core.composition.evaluation import decode_evidence, encode_evidence, public_projection
 from core.executor.types import EvalStatus
 from core.funsearch_population import _finite
 from core.x1.checkpoint import payload_digest
@@ -50,3 +50,46 @@ def project_program_candidate(evidence, artifact, *, case_ids, metric, logical_r
     if digest != evidence.eval_result.contract.binding.artifact_sha256:
         raise ValueError('artifact differs from original evaluation binding')
     return {**projection, 'program_ref': 'sha256:' + digest, 'program_length': len(artifact)}
+
+
+def verify_selected_projections(rows, projections, selected, *, case_ids, metric, logical_run_id,
+                                evaluator_version, evaluation_context):
+    """Compare selected projections with trusted main-lane composed evidence.
+
+    The caller must supply rows from its authenticated run journal, never an
+    untrusted checkpoint or a control-lane store.
+    """
+    if (type(rows) is not list or type(projections) is not dict or
+            type(selected) not in (set, frozenset) or not selected or
+            any(type(x) is not str or not x for x in selected) or set(projections) != selected or
+            type(evaluator_version) is not str or not evaluator_version or
+            type(evaluation_context) is not str or not evaluation_context):
+        raise ValueError('trusted evidence rows and exact selected identities are required')
+    found = {}
+    for row in rows:
+        try:
+            if type(row) is not dict or set(row) != {'cycle', 'proposal', 'evidence_ref', 'evidence'}:
+                raise ValueError('invalid composed evidence event')
+            proposal = row['proposal']
+            candidate_id = proposal['candidate']['id']
+            if type(candidate_id) is not str or not candidate_id:
+                raise ValueError('invalid candidate identity')
+            if candidate_id not in selected:
+                continue
+            if candidate_id in found:
+                raise ValueError('duplicate original evidence for selected candidate')
+            evidence = decode_evidence({'schema_version': 1, 'evidence': row['evidence']})
+            binding = evidence.eval_result.contract.binding
+            if (candidate_id != evidence.candidate_id or binding.evaluator_version != evaluator_version or
+                    binding.evaluation_context != evaluation_context):
+                raise ValueError('selected evidence differs from frozen evaluation identity')
+            actual = project_program_candidate(evidence, proposal['artifact'], case_ids=case_ids,
+                                               metric=metric, logical_run_id=logical_run_id)
+            if row['evidence_ref'] != actual['evidence_ref'] or payload_digest(actual) != payload_digest(projections[candidate_id]):
+                raise ValueError('selected evidence or program projection differs from original')
+            found[candidate_id] = actual['evidence_ref']
+        except (KeyError, TypeError, OverflowError) as exc:
+            raise ValueError('invalid composed evidence event') from exc
+    if set(found) != selected:
+        raise ValueError('selected candidate lacks original evidence')
+    return True

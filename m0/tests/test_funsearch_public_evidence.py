@@ -74,3 +74,32 @@ def test_candidate_program_identity_is_bound_without_exposing_source():
     assert 'PRIVATE_SOURCE_SENTINEL' not in repr(projection)
     with pytest.raises(ValueError, match='artifact'):
         project_program_candidate(bound, source + 'x', case_ids=['a', 'b'], metric='score', logical_run_id='run')
+
+
+def test_selected_projection_requires_original_committed_evidence_and_artifact():
+    import copy
+    import hashlib
+    from core.funsearch_public_evidence import verify_selected_projections
+    original = evidence()
+    artifact = 'def priority(x):\n    return x\n'
+    binding = replace(original.eval_result.contract.binding, artifact_sha256=hashlib.sha256(artifact.encode()).hexdigest())
+    contract = replace(original.eval_result.contract, binding=binding)
+    original = replace(original, eval_result=replace(original.eval_result, contract=contract))
+    projection = __import__('core.funsearch_public_evidence', fromlist=['project_program_candidate']).project_program_candidate(
+        original, artifact, case_ids=['a', 'b'], metric='score', logical_run_id='run')
+    row = {'cycle': 0, 'proposal': {'candidate': {'id': 'candidate-1'}, 'artifact': artifact},
+           'evidence_ref': projection['evidence_ref'], 'evidence': encode_evidence(original)['evidence']}
+    args = dict(case_ids=['a', 'b'], metric='score', logical_run_id='run',
+                evaluator_version='eval-v1', evaluation_context='sha256:' + 'c' * 64)
+    assert verify_selected_projections([row], {'candidate-1': projection}, {'candidate-1'}, **args)
+    altered = copy.deepcopy(projection); altered['scores']['a'] = .9
+    with pytest.raises(ValueError):
+        verify_selected_projections([row], {'candidate-1': altered}, {'candidate-1'}, **args)
+    corrupt = copy.deepcopy(row); corrupt['proposal']['artifact'] += '#changed'
+    with pytest.raises(ValueError):
+        verify_selected_projections([corrupt], {'candidate-1': projection}, {'candidate-1'}, **args)
+    corrupt = copy.deepcopy(row); corrupt['evidence_ref'] = 'sha256:' + 'd' * 64
+    with pytest.raises(ValueError):
+        verify_selected_projections([corrupt], {'candidate-1': projection}, {'candidate-1'}, **args)
+    with pytest.raises(ValueError):
+        verify_selected_projections([row, row], {'candidate-1': projection}, {'candidate-1'}, **args)
