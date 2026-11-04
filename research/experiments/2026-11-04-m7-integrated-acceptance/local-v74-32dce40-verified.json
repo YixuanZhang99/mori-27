@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "commit": "32dce401e1a4801e607ca232f276542cba83f57f",
+  "checks": 55,
+  "elapsed_seconds": 856.122,
+  "verified_source_files": 1119,
+  "source_manifest_sha256": "63ed700111286e0de81b148b0c9d3e700709a748238302682ef77cc4b3398663",
+  "artifact_directory": "/home/neekyoung12/.codex/worktrees/governed-currency-bridge/mori-27/artifacts/linux-acceptance/20261104T160750.676186Z-xzsj1zcu",
+  "artifact_sha256": {
+    "v74.jsonl": "97d5713dc6b7c18f257559d61cc9688ec11f4d90e66c63fd7d81b20007d71b6e",
+    "new-runs.jsonl": "97d5713dc6b7c18f257559d61cc9688ec11f4d90e66c63fd7d81b20007d71b6e",
+    "LAST_RUN.json": "4418d34a4deae28ca085cc16e3dee86e74472a0ccacd7052d5c215aff76c25e7",
+    "console.log": "7b0e504d8a919b8c7e5efe7722cabfc08b56aa7883b73f569f32d80bf0779784",
+    "summary.json": "f976ded33586dc66244bcb9cbef2621cff8c1818b03b8a2837065386d7e061c2",
+    "source-files.json": "b08b88ad53d31e4f5ab6d62293816a80027296a1c0adb20e238495d057eb9fc0",
+    "execution-source-files.json": "b08b88ad53d31e4f5ab6d62293816a80027296a1c0adb20e238495d057eb9fc0"
+  }
+}
