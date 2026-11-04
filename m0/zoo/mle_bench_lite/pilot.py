@@ -71,10 +71,15 @@ def public_snapshot(root: Path) -> dict:
     return {"files": files, "sha256": digest(files)}
 
 
-def _profile(variant: str, token_budget: int, seed: int, iterations: int) -> dict:
-    from zoo.mle_bench_lite.composed_agent import build_profile
-    return build_profile(variant=variant, token_budget=token_budget,
-                         seed=seed, iterations=iterations)
+def _profile(variant: str, token_budget: int, seed: int, iterations: int, *,
+             runtime='legacy', max_completion_tokens=MAX_COMPLETION_TOKENS) -> dict:
+    from zoo.mle_bench_lite.composed_agent import build_profile, build_governed_profile
+    if runtime == 'legacy':
+        return build_profile(variant=variant, token_budget=token_budget, seed=seed, iterations=iterations)
+    if runtime == 'm7':
+        return build_governed_profile(variant=variant, token_budget=token_budget, seed=seed,
+                                      iterations=iterations, max_completion_tokens=max_completion_tokens)
+    raise ValueError('unknown pilot runtime')
 
 
 def _protected_host_path(path: Path) -> None:
@@ -209,7 +214,14 @@ def _validate_plan(model, token_budget, time_limit, solution_timeout, iterations
 
 
 def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
-          *, spending_ledger_path=None):
+          *, spending_ledger_path=None, runtime='legacy'):
+    if runtime not in {'legacy', 'm7'}:
+        raise ValueError('unknown pilot runtime')
+    if runtime == 'm7':
+        if spending_ledger_path is None:
+            raise ValueError('m7 requires the existing campaign ledger')
+        _profile('baseline', token_budget, seeds[0] if seeds else 0, iterations,
+                 runtime='m7', max_completion_tokens=16384)
     _validate_plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks)
     endpoint = os.environ.get("OPENAI_API_BASE", os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
     parsed = urllib.parse.urlsplit(endpoint)
@@ -241,6 +253,8 @@ def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, 
         plan["official_model_mapping"] = {"api_id": "deepseek-flash", "display_name": "DeepSeek-V4.1-Flash-1017",
             "verified_date": "2026-11-04", "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
             "immutable_snapshot_verified": False}
+    if runtime == 'm7':
+        plan['runtime'] = 'm7'
     return plan
 
 
@@ -323,12 +337,16 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
 
 
 def _command(model, token_budget, solution_timeout, iterations, *,
-             max_completion_tokens=MAX_COMPLETION_TOKENS, spending_ledger_path=None) -> str:
+             max_completion_tokens=MAX_COMPLETION_TOKENS, spending_ledger_path=None, runtime='legacy') -> str:
     argv = [sys.executable, "-m", "zoo.mle_bench_lite.composed_agent",
             "--workspace", "{workspace}", "--task", "{task}", "--seed", "{seed}",
             "--variant", "{arm}", "--model", model, "--token-budget", str(token_budget),
             "--solution-timeout", str(solution_timeout), "--iterations", str(iterations),
             "--max-completion-tokens", str(max_completion_tokens)]
+    if runtime not in {'legacy', 'm7'}:
+        raise ValueError('unknown pilot runtime')
+    if runtime == 'm7':
+        argv.extend(['--runtime', 'm7'])
     if spending_ledger_path is not None:
         argv.extend(["--spending-ledger", str(Path(spending_ledger_path).absolute()).replace("{", "{{").replace("}", "}}")])
     # The shared runner expands its known placeholders after shlex parsing.

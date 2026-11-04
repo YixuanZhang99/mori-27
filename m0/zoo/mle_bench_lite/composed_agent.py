@@ -173,17 +173,171 @@ def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1
     return summary
 
 
+
+
+def build_governed_profile(*, variant, token_budget, seed, iterations, max_completion_tokens=4096):
+    """Freeze M7 search, resident control and hard per-call reservations."""
+    from zoo.mle_bench_lite.cny_budget import POLICY
+    if type(token_budget) is not int or type(max_completion_tokens) is not int or max_completion_tokens <= 0:
+        raise ValueError("hard provider capacity requires positive integer budgets")
+    if max_completion_tokens > POLICY["max_output_tokens"]:
+        raise ValueError("hard provider capacity exceeds maximum output")
+    bound = POLICY["context_tokens"] + max_completion_tokens
+    if token_budget < 2 * bound:
+        raise ValueError("hard provider capacity requires at least two call bounds")
+    profile = build_profile(variant=variant, token_budget=token_budget, seed=seed, iterations=iterations)
+    profile.update(schema_version=2, executor={'name': 'git_artifact', 'options': {}},
+        execution={'schema_version': 1, 'spec': {'role': 'general', 'hypothesis_frozen': True,
+                   'context_projection': ['memory', 'grounding']},
+                   'constructor': {'name': 'prompt', 'options': {'max_attempts': 1}}})
+    limits = profile['budget']['options']['limits']
+    for level in limits.values():
+        level['node'] = iterations + 2
+        level['token'] = token_budget
+    budget = profile['budget']['options']
+    budget.pop('reservation_modes', None)
+    budget['operation_reservations']['operator'] = {'token': bound, 'eval_count': 0, 'node': 1}
+    profile['governance'] = {'schema_version': 1, 'controls': {'after_main_cycles': [0], 'seed': seed,
+        'provider': {'name': 'mle-cny'}, 'domain': {'name': 'mle-public-control'},
+        'operator': {'name': 'draft'}, 'request': {'fidelity': 'dev', 'split_id': 'dev', 'seed_set': [seed]},
+        'reservations': {'operator': {'token': bound, 'node': 1, 'eval_count': 0},
+                         'evaluation': {'token': 0, 'node': 0, 'eval_count': 1}}}}
+    return profile
+
+
+def run_governed_agent(*, workspace, task_id, model, api_base, token_budget, seed=1,
+                       iterations=3, solution_timeout=120, variant="full", max_completion_tokens=4096,
+                       runner=None, anonymization_key_path=None, spending_ledger_path=None, api_key=None,
+                       resume=False, protected_roots=()):
+    """Experimental M7 public-train entry; caller must supply the existing CNY ledger."""
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+    from core.composition.defaults import default_registry
+
+    profile = build_governed_profile(variant=variant, token_budget=token_budget, seed=seed,
+                                     iterations=iterations, max_completion_tokens=max_completion_tokens)
+    if spending_ledger_path is None:
+        raise ValueError("existing shared campaign ledger required")
+    workspace = Path(workspace).resolve()
+    artifacts = workspace.parent / "agent_artifacts"
+    ledger_path = Path(spending_ledger_path).absolute()
+    if any(ledger_path.resolve() == root or root in ledger_path.resolve().parents for root in (workspace, artifacts)):
+        raise ValueError("ledger must stay outside candidate workspace and artifacts")
+    if runner is None:
+        runner = SandboxRunner()
+    if isinstance(runner, SandboxRunner):
+        runner.validate_paths(workspace, ledger_path, *protected_roots)
+        runner.preflight()
+    ledger = CampaignBudget(ledger_path)
+    snapshot = ledger.snapshot()
+    if snapshot.get("pending_calls") or snapshot.get("protection_breaches") or snapshot.get("journal_schema_version") != 2:
+        raise ValueError("campaign must be quiescent and governance enabled")
+    key_path = Path(anonymization_key_path).absolute() if anonymization_key_path else artifacts / "anonymization.key"
+    if key_path == workspace or workspace in key_path.resolve().parents:
+        raise ValueError("anonymization key must stay outside candidate workspace")
+    artifacts.mkdir(parents=True, exist_ok=True)
+    if isinstance(runner, SandboxRunner):
+        runner.validate_paths(key_path)
+    key = load_anonymization_key(key_path, create=anonymization_key_path is None and not resume
+                                 and not (artifacts / "public_inputs").exists())
+    bundle = PublicTrainBundle(workspace / "data", artifacts / "public_inputs", task_id, seed,
+                              anonymization_key=key)
+    domain = PublicTrainDomain(bundle, artifacts / "composed_candidates", solution_timeout=solution_timeout, runner=runner)
+    registry = default_registry()
+    registry.install_external_bridge('cny_invocation_v1', lambda: CNYInvocationBridge(ledger))
+    binding = ledger.manifest_binding()
+    secret = api_key if api_key is not None else os.environ.get('OPENAI_API_KEY')
+    def fresh_provider():
+        return GovernedCNYProvider(model, api_base, campaign_binding=binding,
+            max_completion_tokens=max_completion_tokens, timeout=max(30., solution_timeout), api_key=secret,
+            phase_call_limits={'operator': 1, 'evaluation': 0})
+    provider = fresh_provider()
+    registry.register('provider', 'mle-cny', lambda ctx, opts: fresh_provider(),
+                      governance=provider.governance_binding())
+    def fresh_domain(ctx, opts):
+        return PublicTrainDomain(bundle, artifacts / 'control_candidates' / ctx.invocation_scope['slot_id'],
+                                 solution_timeout=solution_timeout, runner=runner)
+    registry.register('domain', 'mle-public-control', fresh_domain,
+                      governance={'schema_version': 1, 'fresh_session': True, 'state_independent': True})
+    task = task_description(bundle).replace('Return code only.',
+        'Put the complete executable code in the artifact field of the required JSON response.')
+    contract = {'protocol': PROTOCOL, 'profile': profile, 'dataset_identity': bundle.identity,
+                'domain': domain.manifest_binding, 'provider': provider.manifest_binding(),
+                'task_description_sha256': digest(task), 'runtime': 'm7-governed-cny'}
+    contract_path = artifacts / 'agent_contract.json'
+    if contract_path.exists():
+        if not resume or contract_path.is_symlink() or json.loads(contract_path.read_text()) != contract:
+            raise ValueError("agent contract differs from original run; use a fresh output directory")
+    else:
+        if resume or (artifacts / "composed/x1.jsonl").exists():
+            raise ValueError("existing run lacks its original frozen agent contract")
+        with contract_path.open('x') as stream:
+            json.dump(contract, stream, sort_keys=True, allow_nan=False)
+    cfg = LoopConfig(total_budget=token_budget, intent_cost=1, reeval_floor=0, max_generations=iterations,
+                     checkpoint_enabled=True, resume_from_checkpoint=resume)
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(artifacts / 'composed'),
+                                component_registry=registry)
+    domain.restore_evidence(fw.store.read('composed_evidence'))
+    result = fw.evolve(task)
+    selected = next((row['payload'] for row in fw.store.read('composed_evidence')
+                     if row['payload']['proposal']['candidate']['id'] == result.get('best_candidate_id')), None)
+    if selected is None:
+        raise ValueError('run has no admitted successful candidate to submit')
+    inspection = fw.inspect()['governance']['external_currency']
+    if inspection['unknown_cost_calls'] or inspection['integrity_violations'] or not inspection['protection_valid'] \
+            or inspection['invocations'] < 1:
+        raise ValueError("governed provider audit is incomplete or has an integrity violation")
+    def replay_adapters(_workdir, _store):
+        return fresh_provider(), PublicTrainDomain(bundle, artifacts / 'composed_candidates',
+                                                   solution_timeout=solution_timeout, runner=runner)
+    certificate = fw.replay(task, adapter_factory=replay_adapters)['replay_certificate']
+    if not certificate.get('passed') or certificate.get('external_calls') != 0:
+        raise ValueError('recorded replay did not certify the original run')
+    from zoo.mle_bench_lite.m7_pilot_audit import audit_currency_receipts
+    receipt_audit = audit_currency_receipts(artifacts / 'composed', ledger, expected_model=model)
+    if receipt_audit['total_tokens'] != inspection['known_provider_tokens'] or \
+            receipt_audit['settled_micro_cny'] != inspection['authority']['settled_upper_bound_micro_cny']:
+        raise ValueError('independent currency receipts differ from framework inspection')
+    proposal_data = selected['proposal']
+    proposal = Proposal(Candidate(**proposal_data['candidate']), proposal_data['artifact'])
+    record = domain.materialize(proposal, workspace / 'submission.csv', expected_prediction_sha256=
+        selected['evidence']['eval_result']['contract']['private']['data']['prediction_sha256'])
+    summary = {'runtime': result['runtime'], 'submission_materialized': True,
+               'recorded_replay': certificate, 'independent_currency_receipts': receipt_audit, 'arm': variant, 'variant': variant, 'task_id': task_id,
+               'seed': seed, 'protocol': PROTOCOL, 'requested_model': model, 'token_budget': token_budget,
+               'actual_model': model, 'immutable_snapshot_verified': False,
+               'profile': profile, 'profile_sha256': digest(profile),
+               'dataset_identity': bundle.identity, 'dataset_manifest': bundle.manifest,
+               'agent_contract_sha256': digest(contract), 'external_benchmark_score_produced': False,
+               'selected_candidate_id': result['best_candidate_id'],
+               'selected_artifact_sha256': record['identity']['artifact_sha256'],
+               'prediction_sha256': record['prediction_sha256'], 'submission_sha256':
+                   'sha256:' + __import__('hashlib').sha256((workspace / 'submission.csv').read_bytes()).hexdigest(),
+               'token_usage': {'total_tokens': inspection['known_provider_tokens']},
+               'details': {'training_invocations': domain.training_invocations, 'iterations': iterations,
+                           'solution_timeout': solution_timeout, 'max_completion_tokens': max_completion_tokens,
+                           'temperature': 0.0, 'temperature_applied': False, 'provider_request_format': 'deepseek',
+                           'controls_completed': result['governance']['completed']}, 'currency_audit': inspection}
+    from zoo.mle_bench_lite.pilot import public_snapshot
+    summary['public_data_sha256'] = public_snapshot(workspace / 'data')['sha256']
+    _atomic_json(artifacts / 'agent_run.json', summary)
+    return summary
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     add_common_arguments(parser)
     parser.add_argument("--variant", choices=("baseline", "full"), required=True)
+    parser.add_argument("--runtime", choices=("legacy", "m7"), default="legacy")
     parser.add_argument("--max-completion-tokens", type=int, default=4096)
     parser.add_argument("--spending-ledger", type=Path)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
     if not args.model:
         parser.error("--model is required for a frozen same-backbone comparison")
-    summary = run_agent(workspace=args.workspace, task_id=args.task or os.environ.get("MLE_TASK_ID"),
+    entry = run_governed_agent if args.runtime == "m7" else run_agent
+    summary = entry(workspace=args.workspace, task_id=args.task or os.environ.get("MLE_TASK_ID"),
         model=args.model, api_base=args.api_base, token_budget=args.token_budget, seed=args.seed,
         iterations=args.iterations, solution_timeout=args.solution_timeout, variant=args.variant,
         max_completion_tokens=args.max_completion_tokens, resume=args.resume,
