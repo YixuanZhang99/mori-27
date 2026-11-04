@@ -1,0 +1,9 @@
+# M7 durable native materialization: engineering evidence
+
+CandidateExecution now freezes a constructed text artifact once and evaluates those same bytes across splits. Native publication is content-addressed and atomically persisted. Materialization binds its plan, role, projection, provider outcome, operation, and original construction terminal. A self-consistent replacement artifact cannot substitute for that terminal.
+
+Twenty-eight new tests exercise original-outcome adoption, exception-injected crash boundaries, ambiguous provider completion refusal, immutable-byte checks, journal/lane separation, repeated failure accounting, invalid terminal measurements, and zero-call recorded replay. Known construction/publication failures retain the original bill; protocol-integrity failures are typed for a caller to settle before stopping. Unknown usage is not converted into a zero or replacement call. This module never reserves or settles a budget itself.
+
+After observed failing regressions and fixes, the final focused run passed 78 construction/recovery tests, including historical governed native/CNY recovery. The frozen-source full project run passed 2,180 Linux tests, 76 tooling tests, 11 axioms, examples, builds and original import integrity. Exact timestamps and digests are in [summary.json](summary.json). No real model requests or live campaign changes occurred.
+
+This completes Task 2 of the [M7 implementation plan](../../../docs/superpowers/plans/2026-11-04-m7-execution.md). It does not complete public Framework integration, new control sessions, Git artifact publication, v9 CNY support, M7-03 concurrency, actual Mac validation, or whole-framework/research acceptance. The new crash cuts here use a real durable store with exception injection; integrated Git/SIGKILL evidence remains Task 4. Native execution is trusted in-process and makes no sandbox claim. Final independent review and versioned acceptance remain Task 6.

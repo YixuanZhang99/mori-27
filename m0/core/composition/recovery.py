@@ -278,6 +278,60 @@ class ContinuationStore(AppendOnlyStore):
             raise UsageError("nested provider has no completion; evaluator retry forbidden")
         self._adopt_provider(provider, row["payload"], governed=expected, propagate=False)
 
+    async def construction_call(self, identity, invoke, *, provider, recoverable):
+        """Adopt a bound construction outcome or its original recorded calls.
+
+        Only a declared deterministic materializer may reconstruct an incomplete
+        outcome. Recorded replay always requires the original terminal outcome.
+        """
+        from dataclasses import asdict
+        from core.composition.construction import ConstructionResult, decode_construction_outcome
+        from core.composition.contracts import OperatorFailure, json_copy
+        identity = json_copy(identity, label="construction identity")
+        was_recorded = self.peek() is not None
+        self.append("construction_started", {"identity": identity})
+        before = provider.usage_total
+
+        def decode(data):
+            result = decode_construction_outcome(data, identity)
+            if result.cost.tokens_in != provider.usage_total - before:
+                raise UsageError("construction outcome differs from original provider usage")
+            return result
+
+        terminal = None
+        if was_recorded:
+            for row in self.rows[self.cursor:]:
+                if self.external(row["kind"]) or self._diagnostic(row):
+                    continue
+                if row["kind"] in {"composed_provider_started", "composed_provider_completed"}:
+                    continue
+                if row["kind"] == "construction_outcome":
+                    terminal = row["payload"]
+                break
+        if terminal is not None:
+            while self.peek() is not None and self.peek()["kind"] == "composed_provider_started":
+                self._adopt_nested_provider(provider)
+            result = decode(terminal)
+            self.append("construction_outcome", terminal)
+            provider.last_usage = {"total_tokens": 0}
+        else:
+            if was_recorded and (not recoverable or not self.recover_external_outcomes):
+                raise UsageError("construction lacks a terminal outcome; materializer reentry forbidden")
+            try:
+                result = await invoke()
+                if not isinstance(result, ConstructionResult):
+                    raise UsageError("materializer returned no measured construction result")
+                outcome = {"kind": "returned", "result": result.to_dict()}
+            except OperatorFailure as error:
+                outcome = {"kind": "failed", "failure_type": type(error).__name__, "detail": str(error),
+                           "cost": asdict(error.cost), "measured_cost_units": list(error.measured_cost_units or ())}
+            data = {"identity": identity, "outcome": outcome}
+            result = decode(data)
+            self.append("construction_outcome", data)
+        if isinstance(result, OperatorFailure):
+            raise result
+        return result
+
     async def evaluation_call(self, identity, invoke, *, provider=None, domain=None):
         """Adopt canonical native evidence; never retry an opaque started call."""
         from core.composition.evaluation import decode_evidence, encode_evidence

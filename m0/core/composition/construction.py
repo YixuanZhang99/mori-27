@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+import re
+from dataclasses import asdict, dataclass, fields
 
 from core.composition.context import ContextPack
 from core.composition.contracts import OperatorBudgetExhausted, OperatorFailure, json_copy
@@ -134,6 +135,69 @@ class ConstructionPlan:
 class ConstructionResult:
     _encoded: str
 
+    @classmethod
+    def from_dict(cls, payload):
+        value = json_copy(payload, label="construction result")
+        required = {"schema_version", "plan_ref", "candidate", "artifact", "role", "spec_ref",
+                    "projection_ref", "initial_hypothesis", "effective_hypothesis", "cost",
+                    "measured_cost_units", "attempts"}
+        if type(value) is not dict or set(value) != required or type(value["schema_version"]) is not int \
+                or value["schema_version"] != 1:
+            raise ValueError("unsupported construction result schema")
+        for key in ("plan_ref", "spec_ref", "projection_ref"):
+            if type(value[key]) is not str or not re.fullmatch(r"sha256:[0-9a-f]{64}", value[key]):
+                raise ValueError("invalid construction result reference")
+        for key in ("artifact", "initial_hypothesis", "effective_hypothesis"):
+            _text(value[key], key)
+        candidate = value["candidate"]
+        if type(candidate) is not dict or set(candidate) != {f.name for f in fields(Candidate)} \
+                or type(candidate["created_cycle"]) is not int or candidate["created_cycle"] < 0 \
+                or type(candidate["parents"]) is not list or any(type(p) is not str or not p for p in candidate["parents"]):
+            raise ValueError("invalid construction candidate")
+        for key in ("id", "operator", "context_pack_ref", "hypothesis"):
+            _text(candidate[key], "candidate " + key)
+        Candidate(**candidate).validate()
+        if candidate["hypothesis"] != value["effective_hypothesis"]:
+            raise ValueError("constructed candidate lost its effective hypothesis")
+        if type(value["role"]) is not dict or set(value["role"]) != {"name", "version", "instructions"}:
+            raise ValueError("invalid construction role binding")
+        RoleDefinition(**value["role"])
+        cost = construction_cost(value["cost"], value["measured_cost_units"])
+        attempts = value["attempts"]
+        if type(attempts) is not list or not attempts:
+            raise ValueError("construction result requires its actual attempts")
+        previous = 0
+        for index, attempt in enumerate(attempts, 1):
+            if type(attempt) is not dict or set(attempt) - {"attempt", "status", "known_tokens", "feedback", "hypothesis"} \
+                    or not {"attempt", "status", "known_tokens", "feedback"} <= set(attempt) \
+                    or type(attempt["attempt"]) is not int or attempt["attempt"] != index \
+                    or attempt["status"] not in {"invalid_output", "invalid_artifact", "complete"} \
+                    or type(attempt["known_tokens"]) is not int or not previous <= attempt["known_tokens"] <= cost.tokens_in \
+                    or type(attempt["feedback"]) is not list or any(type(x) is not str for x in attempt["feedback"]):
+                raise ValueError("invalid construction attempt sequence")
+            if attempt["status"] == "complete" and (index != len(attempts) or attempt["feedback"]):
+                raise ValueError("construction completion cannot precede more attempts")
+            if attempt["status"] != "invalid_output":
+                _text(attempt.get("hypothesis"), "attempt hypothesis")
+            previous = attempt["known_tokens"]
+        if attempts[-1]["status"] != "complete" or previous != cost.tokens_in \
+                or attempts[-1]["hypothesis"] != value["effective_hypothesis"]:
+            raise ValueError("construction result differs from its final attempt")
+        return cls(_json(value))
+
+    def validate_for(self, plan):
+        value, expected = self.to_dict(), plan.to_dict()
+        expected_candidate = {**expected["candidate"], "hypothesis": value["effective_hypothesis"]}
+        if value["plan_ref"] != plan.ref or value["candidate"] != expected_candidate \
+                or value["role"] != expected["role"] or value["spec_ref"] != _ref(expected["spec"]) \
+                or value["projection_ref"] != expected["projection_ref"] \
+                or value["initial_hypothesis"] != expected["candidate"]["hypothesis"] \
+                or expected["spec"]["hypothesis_frozen"] and any(
+                    attempt.get("hypothesis", value["initial_hypothesis"]) != value["initial_hypothesis"]
+                    for attempt in value["attempts"]):
+            raise ValueError("construction outcome differs from its frozen plan")
+        return self
+
     def to_dict(self):
         return json.loads(self._encoded)
 
@@ -177,15 +241,76 @@ def _output(raw):
     return value
 
 
+def construction_cost(payload, coverage):
+    """Decode measured candidate-production cost without inferring unknown units."""
+    payload = json_copy(payload, label="construction cost")
+    if type(payload) is not dict or set(payload) != {f.name for f in fields(CostVec)} \
+            or list(coverage) != ["token", "node", "eval_count"]:
+        raise ValueError("invalid construction cost or measurement coverage")
+    for key, value in payload.items():
+        if type(value) not in (int, float) or value < 0 or key in {
+                "tokens_in", "tokens_out", "node_count", "eval_count"} and type(value) is not int:
+            raise ValueError("invalid construction physical measurement")
+    if payload["node_count"] != 1 or payload["eval_count"] != 0 or any(
+            payload[key] != 0 for key in ("tokens_out", "wall_seconds", "gpu_hours", "usd")):
+        raise ValueError("construction cost must measure one attempt and no evaluations")
+    return CostVec(**payload)
+
+
+class ConstructionIntegrityError(OperatorFailure):
+    """Known physical bill whose construction must not enter evaluation."""
+
+    integrity_failure = True
+
+
+def decode_construction_outcome(data, identity):
+    """Decode a terminal result without changing provider state or accounting."""
+    if type(data) is not dict or set(data) != {"identity", "outcome"} or data["identity"] != identity:
+        raise ValueError("construction terminal identity changed")
+    outcome = data["outcome"]
+    if type(outcome) is not dict:
+        raise ValueError("invalid construction terminal")
+    if set(outcome) == {"kind", "result"} and outcome["kind"] == "returned":
+        return ConstructionResult.from_dict(outcome["result"])
+    failures = {kind.__name__: kind for kind in (OperatorFailure, OperatorBudgetExhausted,
+                                                ConstructionIntegrityError)}
+    if set(outcome) != {"kind", "failure_type", "detail", "cost", "measured_cost_units"} \
+            or outcome["kind"] != "failed" or outcome["failure_type"] not in failures \
+            or type(outcome["detail"]) is not str:
+        raise ValueError("unsupported construction outcome")
+    cost = construction_cost(outcome["cost"], outcome["measured_cost_units"])
+    return failures[outcome["failure_type"]](cost, outcome["detail"],
+        measured_cost_units=tuple(outcome["measured_cost_units"]))
+
+
 class PromptMaterializer:
     """Generate a measured artifact; caller supplies its scoped metered provider."""
-    def __init__(self, roles, *, max_attempts=1, validator=None):
+    def __init__(self, roles, *, max_attempts=1, validator=None,
+                 validator_version=None, validator_deterministic=False):
         self.roles = _roles(roles)
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("construction max_attempts must be a positive integer")
         if validator is not None and not callable(validator):
             raise ValueError("local construction validator must be callable")
         self.max_attempts, self.validator = max_attempts, validator
+        if validator_version is not None:
+            _text(validator_version, "validator version")
+        if type(validator_deterministic) is not bool:
+            raise ValueError("validator recovery declaration must be boolean")
+        self.validator_version, self.validator_deterministic = validator_version, validator_deterministic
+
+    @property
+    def manifest_binding(self):
+        if self.validator is not None and self.validator_version is None:
+            raise ValueError("durable construction requires an explicit validator version")
+        deterministic = self.validator is None or self.validator_deterministic
+        return {"schema_version": 1, "kind": "prompt_materializer_v1",
+                "recovery_model": "recorded_calls" if deterministic else "terminal_only",
+                "configuration": {"max_attempts": self.max_attempts,
+                    "roles": {key: asdict(role) for key, role in self.roles.items()},
+                    "validator": {"kind": "nonempty" if self.validator is None else "custom",
+                        "version": "1" if self.validator is None else self.validator_version,
+                        "deterministic": deterministic}}}
 
     async def construct(self, plan, provider):
         if not isinstance(plan, ConstructionPlan) or not callable(provider):

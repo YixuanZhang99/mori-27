@@ -45,11 +45,11 @@
 
 **Interfaces:** `CandidateExecution(materializer, artifact_backend, store, provider, evaluator)` exposes async `materialize(plan, *, operation) -> Materialization`, and async `evaluate(materialization, request, *, operation) -> EvidenceRecord`. `Materialization` has strict versioned encode/decode and immutable artifact ref/content digest, ConstructionResult, exact operation identity and terminal outcome reference. `NativeArtifactBackend` publishes/loads bound immutable bytes. These methods do not reserve/settle budget; production/evaluation lifecycle owners do so once.
 
-- [ ] Write real-store tests for complete materialization adoption, changed plan/operation/artifact rejection, publication tampering, no regeneration during reevaluation, provider-completed suffix adoption, unresolved native start, recorded replay with explosive provider/evaluator, and strict failure cost evidence.
-- [ ] Run `pytest -q m0/tests/test_materialization_recovery.py` with the Task 1 environment. Expected: RED.
-- [ ] Implement terminal persistence before settlement, exact continuation consumption, immutable publication and deterministic reconstruction only from certified original outcomes. Use existing provider recovery, not a replacement journal for calls. Result adoption restores provider state as required.
-- [ ] Run Task 1+2 test files plus existing composed/governed recovery tests. Expected: GREEN.
-- [ ] Commit durable native artifact lifecycle.
+- [x] Write real-store tests for complete materialization adoption, changed plan/operation/artifact rejection, publication tampering, no regeneration during reevaluation, provider-completed suffix adoption, unresolved native start, recorded replay with explosive provider/evaluator, and strict failure cost evidence.
+- [x] Run `pytest -q m0/tests/test_materialization_recovery.py` with the Task 1 environment. Expected: RED.
+- [x] Implement terminal persistence before settlement, exact continuation consumption, immutable publication and deterministic reconstruction only from certified original outcomes. Use existing provider recovery, not a replacement journal for calls. Result adoption restores provider state as required.
+- [x] Run Task 1+2 test files plus existing composed/governed recovery tests. Expected: GREEN.
+- [x] Commit durable native artifact lifecycle.
 
 ### Task 3: Public v9 composition, recipes and isolated controls
 
