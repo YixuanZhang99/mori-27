@@ -18,7 +18,8 @@ from core.x1.checkpoint import payload_digest
 
 
 class FunSearchCoordinator:
-    def __init__(self, policy, store, *, case_ids, metric, logical_run_id, evaluator_version, evaluation_context):
+    def __init__(self, policy, store, *, case_ids, metric, logical_run_id, evaluator_version, evaluation_context,
+                 template_ref, function_name):
         if type(policy) is not FunSearchPolicy or not isinstance(store, ContinuationStore):
             raise ValueError('durable FunSearch policy and continuation store are required')
         if any(type(value) is not str or not value.strip() for value in
@@ -26,7 +27,11 @@ class FunSearchCoordinator:
             raise ValueError('frozen evaluator and run identities are required')
         if case_ids != policy.population.checkpoint_state()['config']['case_ids']:
             raise ValueError('frozen case identities differ from policy')
+        if (type(template_ref) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', template_ref) or
+                type(function_name) is not str or not function_name.isidentifier()):
+            raise ValueError('frozen template reference and function identity are required')
         self.policy, self.store = policy, store
+        self.template_ref, self.function_name = template_ref, function_name
         self.frozen = dict(case_ids=list(case_ids), metric=metric, logical_run_id=logical_run_id,
                            evaluator_version=evaluator_version, evaluation_context=evaluation_context)
 
@@ -121,6 +126,9 @@ class FunSearchCoordinator:
         return events
 
     def materialize(self, candidate_id, template, function_name):
+        if (type(template) is not str or function_name != self.function_name or
+                'sha256:' + hashlib.sha256(template.encode('utf-8')).hexdigest() != self.template_ref):
+            raise ValueError('template differs from frozen program configuration')
         self._audit()
         selection = self._event(candidate_id)['selection']
         identifiers = selection['receipt']['ancestry']

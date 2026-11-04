@@ -14,7 +14,8 @@ from test_funsearch_public_evidence import evidence
 
 SOURCE = 'def priority(x):\n    return x\n'
 FROZEN = dict(case_ids=['a', 'b'], metric='score', logical_run_id='run', evaluator_version='eval-v1',
-              evaluation_context='sha256:' + 'c' * 64)
+              evaluation_context='sha256:' + 'c' * 64,
+              template_ref='sha256:' + hashlib.sha256(SOURCE.encode()).hexdigest(), function_name='priority')
 
 
 def policy():
@@ -186,7 +187,7 @@ def test_materialization_journal_rejects_template_substitution_and_is_idempotent
     first = coord.materialize('child-1', SOURCE, 'priority')
     second = coord.materialize('child-1', SOURCE, 'priority')
     assert first == second and len(list(store.read('funsearch_materialization'))) == 1
-    with pytest.raises(ValueError, match='materialization'):
+    with pytest.raises(ValueError, match='template'):
         coord.materialize('child-1', '# changed\n' + SOURCE, 'priority')
     assert len(list(store.read('funsearch_materialization'))) == 1
 
@@ -246,3 +247,14 @@ def test_evaluated_child_requires_durable_materialization_first(tmp_path):
     coord.materialize('child-1', SOURCE, 'priority')
     coord.record_evaluated('child-1')
     assert len(list(store.read('funsearch_public_candidate'))) == 2
+
+
+def test_changed_template_is_rejected_before_first_materialization(tmp_path):
+    store = ContinuationStore(tmp_path / 'journal.jsonl')
+    store.append('composed_evidence', original_row())
+    coord = FunSearchCoordinator(policy(), store, **FROZEN)
+    coord.record_evaluated('candidate-1')
+    asyncio.run(coord.select('child-1', frontier('candidate-1'), {}))
+    with pytest.raises(ValueError, match='template'):
+        coord.materialize('child-1', '# changed\n' + SOURCE, 'priority')
+    assert not list(store.read('funsearch_materialization'))
