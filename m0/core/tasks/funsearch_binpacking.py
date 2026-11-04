@@ -3,6 +3,15 @@ import hashlib
 import json
 
 
+def score_partition(instances, priority):
+    """Score a complete partition; caller must sandbox the supplied priority."""
+    if type(instances) is not dict or len(instances) != 10 or any(
+            type(key) is not str or not key.strip() for key in instances):
+        raise ValueError('OR3 partition requires 10 named instances')
+    scores = {key: score_instance(instances[key], priority) for key in sorted(instances)}
+    return {'case_scores': scores, 'mean_score': sum(scores.values()) / len(scores)}
+
+
 def score_instance(instance, priority):
     """Return negative used-bin count; execute priority only in a caller's sandbox."""
     import numpy as np
