@@ -26,6 +26,58 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def test_v70_executes_cooperating_process_journal_snapshot_boundaries(self):
+        self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 journal group is missing')
+        group = command_groups(verifier_tree('v70'))['cooperating_process_journal_snapshot_consistency']
+        arguments = [node.value for node in group.args[1].elts if isinstance(node, ast.Constant)]
+        self.assertIn('tests/test_x1_store_concurrency.py', arguments)
+        self.assertIn('tests/test_external_batch_partial_start_recovery.py', arguments)
+        self.assertNotIn('-k', arguments)
+        self.assertNotIn('-m', arguments[1:])
+        self.assertEqual(next(k.value.value for k in group.keywords if k.arg == 'timeout'), 120)
+
+    def test_archived_v69_is_exact_verified_local_linux_evidence(self):
+        expected = {
+            "m0/verifier/v69/LAST_RUN.json": "1b4ab41c4cdb631bb85b3884d7b99bea4f7085ae9a3a3048239f9665dc7d0e1e",
+            "m0/verifier/runs/v69.jsonl": "19f70b2b97fe3e83ac9798aeef636ca97d82eb4edf8fb989a7a140e0dcfc10d6",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file(), "authentic v69 evidence must be archived")
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / 'm0/verifier/v69/LAST_RUN.json').read_text())
+        entries = [json.loads(line) for line in (ROOT / 'm0/verifier/runs/v69.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['checks'], certificate['checks'])
+        self.assertEqual(entries[0]['command'], 'python3 verifier/v69/verify.py')
+        self.assertEqual(entries[0]['exit_code'], 0)
+        self.assertTrue(certificate['passed'])
+        self.assertEqual(len(certificate['checks']), 39)
+        self.assertTrue(all(item['passed'] for item in certificate['checks']))
+        provenance = json.loads((ROOT / 'm0/verifier/v70/v69-provenance.json').read_text())
+        self.assertEqual(provenance['source_commit'], '5fa85d3ab7c4f643550ecaa2223a65231d7f7a86')
+        self.assertEqual(provenance['origin'], 'local_linux_acceptance')
+        self.assertFalse(provenance['same_sha_remote_ci'])
+
+    def test_v70_keeps_every_v69_command_group_and_timeout(self):
+        self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 must preserve prior coverage')
+        previous, current = command_groups(verifier_tree('v69')), command_groups(verifier_tree('v70'))
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v70_executes_remaining_reservation_and_recovery_without_filters(self):
+        self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 remaining-reservation group is missing')
+        group = command_groups(verifier_tree('v70'))['remaining_physical_reservation_and_mle_usage_end_to_end']
+        arguments = [node.value for node in group.args[1].elts if isinstance(node, ast.Constant)]
+        for name in ('tests/test_hierarchical_budget.py', 'tests/test_composed_budget.py',
+                     'tests/test_composed_recovery.py', 'tests/test_mle_currency_integration.py'):
+            self.assertIn(name, arguments)
+        self.assertNotIn('-k', arguments)
+        self.assertNotIn('-m', arguments[1:])
+        self.assertEqual(next(k.value.value for k in group.keywords if k.arg == 'timeout'), 480)
+
     def test_archived_v68_is_exact_verified_linux_evidence(self):
         expected = {
             "m0/verifier/v68/LAST_RUN.json":

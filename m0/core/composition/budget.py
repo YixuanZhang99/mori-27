@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import threading
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -71,7 +72,7 @@ def _request(data):
 def hierarchical_options(options):
     """Pure strict preflight suitable for Registry.register(validate_options=...)."""
     allowed = {"limits", "reservation", "operation_reservations", "fidelity_rungs",
-               "rung_by", "rung_every", "convergence", "proxy_validity"}
+               "rung_by", "rung_every", "convergence", "proxy_validity", "reservation_modes"}
     if type(options) is not dict or set(options) - allowed \
             or not {"limits", "reservation", "fidelity_rungs"}.issubset(options):
         raise BudgetError("hierarchical budget requires limits, reservation and fidelity_rungs")
@@ -91,6 +92,13 @@ def hierarchical_options(options):
         raise BudgetError("unknown operation reservation override")
     for operation, amounts in overrides.items():
         _basket(amounts, f"{operation} reservation", units=global_limits)
+    modes = options.get("reservation_modes", {})
+    if type(modes) is not dict or set(modes) - {"operator"}:
+        raise BudgetError("reservation modes support operator physical units only")
+    for units in modes.values():
+        if type(units) is not dict or not units or set(units) - set(global_limits) \
+                or any(mode != "remaining" for mode in units.values()):
+            raise BudgetError("operator reservation modes require configured units and remaining mode")
     rungs = options["fidelity_rungs"]
     if type(rungs) is not list or not rungs:
         raise BudgetError("fidelity_rungs must be a nonempty list")
@@ -157,9 +165,28 @@ class HierarchicalBudget:
         self._seq, self._head = 0, None
         self._lock = threading.RLock()
 
-    def _reservation(self, operation):
-        return json_copy(self.options.get("operation_reservations", {}).get(
+    def _reservation(self, operation, *, state=None, candidate_id=None, direction_id=None):
+        amounts = json_copy(self.options.get("operation_reservations", {}).get(
             operation, self.options["reservation"]))
+        modes = self.options.get("reservation_modes", {}).get(operation, {})
+        if modes:
+            scopes = (("global", {}), ("direction", {"direction_id": direction_id}),
+                      ("candidate", {"candidate_id": candidate_id}))
+            for unit in modes:
+                available = []
+                for level, scope in scopes:
+                    if unit in self.options["limits"][level]:
+                        used, reserved = self._totals(state, **scope)
+                        available.append(self._decimal(self.options["limits"][level][unit])
+                                         - used[unit] - reserved[unit])
+                # The fixed quote is a minimum, never a way to obtain a zero
+                # allowance after exhaustion. _insufficient rejects it if needed.
+                exact = max(self._decimal(amounts[unit]), min(available))
+                quantity = self._numeric(unit, exact)
+                if unit not in COUNTS and self._decimal(quantity) > exact:
+                    quantity = math.nextafter(quantity, 0.0)
+                amounts[unit] = quantity
+        return amounts
 
     @staticmethod
     def _decimal(value):
@@ -235,7 +262,7 @@ class HierarchicalBudget:
         with self._lock:
             return self._allocation(candidate, direction_id or candidate.id, depth, self._data)
 
-    def _intent(self, intent_id, candidate, direction_id, operation, request, depth):
+    def _intent(self, intent_id, candidate, direction_id, operation, request, depth, *, state):
         _text(intent_id, "intent identity")
         _text(direction_id, "direction identity")
         if not isinstance(candidate, Candidate) or type(operation) is not str or operation not in OPERATIONS:
@@ -257,12 +284,13 @@ class HierarchicalBudget:
             raise BudgetError("operation depth must be a nonnegative integer")
         return json_copy({"intent_id": intent_id, "candidate": asdict(candidate), "direction_id": direction_id,
             "operation": operation, "request": asdict(request) if request is not None else None,
-            "depth": depth, "amounts": self._reservation(operation)})
+            "depth": depth, "amounts": self._reservation(operation, state=state,
+                candidate_id=candidate.id, direction_id=direction_id)})
 
     def reserve_operation(self, intent_id, candidate, direction_id, operation, *, request=None, depth=None):
-        intent = self._intent(intent_id, candidate, direction_id, operation, request, depth)
-        fingerprint = _hash(intent)
         with self._lock:
+            intent = self._intent(intent_id, candidate, direction_id, operation, request, depth, state=self._data)
+            fingerprint = _hash(intent)
             if intent_id in self._data["operations"]:
                 return ReservationReceipt(intent_id, "rejected_invalid", fingerprint, {}, "intent identity already used")
             reason = self._insufficient(self._data, intent)
@@ -312,7 +340,7 @@ class HierarchicalBudget:
                 raise BudgetError("invalid reservation binding")
             rebuilt = self._intent(intent["intent_id"], Candidate(**intent["candidate"]), intent["direction_id"],
                 intent["operation"], EvalRequest(**intent["request"]) if intent["request"] is not None else None,
-                intent["depth"])
+                intent["depth"], state=state)
             if rebuilt != intent or _hash(intent) != data["fingerprint"] or intent["intent_id"] in operations:
                 raise BudgetError("reservation fingerprint or identity mismatch")
             if intent["operation"] == "dev" and intent["request"] != asdict(self._allocation(

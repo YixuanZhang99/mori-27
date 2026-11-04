@@ -31,6 +31,7 @@ def build_profile(*, variant, token_budget, seed, iterations, anchor_every=1, ca
         "reservation": {"token": 0, "eval_count": 1, "node": 0},
         "operation_reservations": {"planning": {"token": 0, "eval_count": 0, "node": 0},
                                    "operator": {"token": max(1, token_budget // (iterations + 1)), "eval_count": 0, "node": 1}},
+        "reservation_modes": {"operator": {"token": "remaining"}},
         "fidelity_rungs": [{"fidelity": "dev", "split_id": "dev", "seed_set": [seed]}]}
     if variant == "full":
         budget["proxy_validity"] = {"every_n_cycles": anchor_every,

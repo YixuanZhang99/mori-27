@@ -105,3 +105,9 @@ v68 的公开 seed 同时驱动标签分组抽样与匿名行排序。审查用�
 生产 pilot 的 preflight 现在通过实际 Bubblewrap/seccomp 执行当前解释器并导入 NumPy/pandas/scikit-learn；失败形成 candidate_runtime 缺口，零 agent、零模型调用。直接 agent 也先检查同一沙箱解释器与 NumPy，再生成候选。普通用户目录虚拟环境可能在沙箱不可见；该情况应修复运行环境，不绕过隔离。
 
 新增 `test_mle_isolation.py` 验证攻击阻断、显式共享密钥、字节身份、恢复拒绝和真实导入探针；原有 MLE 公开 Framework、HTTP、费用、失败矩阵和 Linux 隔离回归继续保留。Linux 全量、下一版本验收和真实外部试跑状态以新的实际记录为准。
+
+## 第一次真实试跑与可变用量修复
+
+2026-11-04 的固定 v69 源码试跑取得两个有效官方分数、四个失败，详细记录见 [第一次真实尝试](../research/experiments/2026-11-04-deepseek-pilot-attempt-1/README.md)。所有六次均受固定单次预留过小影响，不能将两条有效评分解释成完整组合算法的效果证明。
+
+后续 profile 为 baseline/full 同时启用 [operator 剩余预留](HIERARCHICAL_BUDGET_V64.md#可变用量-operator-的剩余预留)。原来的平均份额仅作为最低准入要求，真实预留受所有作用域剩余额度限制；真实费用、未知调用、总 token 超额停机和货币累计上限的约束不变。此 profile 变化会改变冻结身份，不能用新版续跑或覆盖旧实验。新源码必须完成独立验收后再产生新的实测记录。

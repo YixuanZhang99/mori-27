@@ -94,3 +94,11 @@ goal 曾由用户在界面暂停；用户后续明确要求继续本轮工作，
 已创建本次授权唯一的真实累计 200 元账本，最终生产预检 `ready=true`、无缺失项。六次 DeepSeek 真实试跑已经启动，首条外部用量回执已验证并结算费用上界；当前结果未完结。运行源码为上述提交的只读 archive，已核对 1,194 个文件摘要，因此后续工作区文档更新不改变正在执行的代码。三个任务、baseline/full、seed 1、每 run 60,000 token、4 次迭代、600 秒运行限额和 120 秒单次执行限额均已冻结。
 
 接续时先检查原运行句柄及 `outputs/local-pilot-launch-status.json`，不得因观察超时或暂无报告而另起付费试跑。运行结果位于 `work/deepseek-pilot-5fa85d3/`；全部提交冻结后才进行官方隐藏评分。完整账本、原始候选和日志留在本地，公开报告使用 `scripts/run_mle_cloud.py` 的白名单导出。所有失败、未知费用及模型身份限制必须保留。GitHub `push/admin` 仍为 false；Goal 为 active，人工配置已完成。
+
+## 第一次真实试跑的终态与修复
+
+原执行进程已退出 1，六次运行均已结束：spooky 两组官方评分有效，leaf/nomad 四组失败。9 次外部请求、130,501 token，独立回执与账本对账完整；累计费用保守上界 0.927284 元，未结调用为零，付费执行已关闭。结果与解释见 [第一次真实尝试](../research/experiments/2026-11-04-deepseek-pilot-attempt-1/README.md)，不得将六次“已执行”写成六次“成功”。
+
+全部运行均在某次模型调用超过固定 12,000-token operator 预留后停止；两条有效 spooky 提交也受到提前停止影响。正在按 [独立修复计划](superpowers/plans/2026-11-04-mle-reservation.md) 增加原子剩余预留策略。原始只读源码、输出和已有 campaign 账本保持不变，后续尝试必须使用同一累计预算。结构复审见 [组合运行接口审视](ARCHITECTURE_REVIEW_2026-11-04.md)：常驻 IID-RS 与七账户完整映射仍需另行接通。
+
+最终预留/日志/v70 候选完整流水线通过：1,821 pytest、60 tooling、11 axioms、4 示例、打包与导入核验，374.25 秒且源码指纹未变；详细结果保存在本机 `outputs/remaining-x1-v70-validation.json` 和日志。三任务官方合成评分 smoke 通过。当前仍需在干净提交上完成 v70，不将本次流水线或首次失败试跑称为全量 benchmark 成功。

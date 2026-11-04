@@ -80,3 +80,5 @@
 - v68 — S9 将 MLE-Bench Lite 的公开训练数据评估、anchor、负反馈与种群搜索接入配置 Framework，并验收同模型同预算的小规模对照试跑协议；保留全部 v67 命令、超时与真实历史。离线 fixture 不代表真实 benchmark 成绩，子集试跑不代表 22 题全量成绩。见 [v68](v68/README.md)。
 
 - v69 — S9 private anonymous prediction order, pre-provider sandbox readiness and durable shared CNY campaign admission; preserves all v68 command groups and verified historical evidence.
+
+- v70 — Atomic remaining physical reservations, fractional quote floors and cooperating-process JSONL snapshots; preserves every v69 command and authentic local v69 evidence.

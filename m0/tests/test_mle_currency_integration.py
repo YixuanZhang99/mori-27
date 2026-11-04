@@ -123,6 +123,39 @@ with open('predictions.csv','w',newline='') as f:
     assert len(endpoint.requests) == 1
 
 
+@pytest.mark.parametrize('variant', ['baseline', 'full'])
+def test_variable_reasoning_usage_does_not_abort_an_affordable_first_candidate(tmp_path, endpoint, variant):
+    # Actual first-pilot usage exceeded an artificial 12000-token cycle share,
+    # despite fitting the real 60000-token run budget and provider output cap.
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    workspace = tmp_path / 'run/workspace'
+    fixture_public(workspace / 'data')
+    code = '''import csv
+with open('data/predict.csv') as f: rows=list(csv.DictReader(f))
+with open('predictions.csv','w',newline='') as f:
+    writer=csv.writer(f); writer.writerow(['row_id','A','B','C'])
+    for row in rows: writer.writerow([row['row_id'],1/3,1/3,1/3])
+'''
+    first = deepseek_response(content=code)
+    first['usage'] = {'prompt_tokens': 3190, 'completion_tokens': 10204, 'total_tokens': 13394,
+                      'prompt_cache_hit_tokens': 0, 'prompt_cache_miss_tokens': 3190,
+                      'completion_tokens_details': {'reasoning_tokens': 9000}}
+    endpoint.replies.append(first)
+    endpoint.replies.extend(deepseek_response(content=code) for _ in range(4))
+    provider = deepseek_provider(tmp_path / 'run/agent_artifacts', endpoint, ledger)
+    result = run_agent(workspace=workspace, task_id=TASK, model='deepseek-flash',
+        api_base=endpoint.url, token_budget=60000, iterations=4, variant=variant,
+        max_completion_tokens=16384, provider=provider, runner=TrustedFixtureRunner(),
+        spending_ledger_path=ledger.path)
+    assert result['submission_materialized'] and (workspace / 'submission.csv').is_file()
+    assert result['token_usage']['total_tokens'] == 13874
+    assert len(endpoint.requests) == 5
+    assert result['currency_audit']['complete']
+    assert result['currency_audit']['settled_upper_bound_micro_cny'] == 89452
+    assert result['details']['physical_ledger']['global']['used']['token'] == 13874
+    assert result['details']['physical_ledger']['halt_reasons'] == []
+
+
 def test_agent_rejects_candidate_visible_currency_ledger_before_generation(tmp_path):
     workspace = tmp_path / 'run/workspace'
     fixture_public(workspace / 'data')
