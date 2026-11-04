@@ -12,6 +12,15 @@ import math
 import random
 
 
+def _finite(value):
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _softmax(values, temperature):
     maximum = max(values)
     weights = [math.exp((value - maximum) / temperature) for value in values]
@@ -35,7 +44,7 @@ class FunSearchPopulation:
             raise ValueError('frozen sorted unique case ids are required')
         if (type(islands) is not int or islands < 2 or type(seed) is not int or seed < 0 or
                 type(prompt_size) is not int or prompt_size < 1 or
-                type(temperature) not in (float, int) or not math.isfinite(temperature) or temperature <= 0 or
+                not _finite(temperature) or temperature <= 0 or
                 type(temperature_period) is not int or temperature_period < 1):
             raise ValueError('invalid population configuration')
         self.case_ids = tuple(case_ids)
@@ -62,7 +71,7 @@ class FunSearchPopulation:
             raise ValueError('global seed registration is only valid at initialization')
         if (type(candidate_id) is not str or not candidate_id or type(program) is not str or not program or
                 type(scores) is not dict or set(scores) != set(self.case_ids) or
-                any(type(v) not in (int, float) or not math.isfinite(v) for v in scores.values())):
+                any(not _finite(v) for v in scores.values())):
             raise ValueError('candidate requires finite scores for all frozen cases')
         record = {'program': program, 'scores': {key: float(scores[key]) for key in self.case_ids}}
         existing = self._candidates.get(candidate_id)
@@ -129,7 +138,7 @@ class FunSearchPopulation:
 
     def _reset(self, index, founder_island, founder, epoch):
         old = self._island(index)
-        if (epoch != old['epoch'] + 1 or founder_island == index or
+        if (type(epoch) is not int or epoch != old['epoch'] + 1 or founder_island == index or
                 self._island(founder_island)['best'] != founder or founder not in self._candidates):
             raise ValueError('invalid reset founder or epoch')
         self._islands[index] = self._empty(epoch)

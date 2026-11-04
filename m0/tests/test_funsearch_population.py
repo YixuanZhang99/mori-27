@@ -89,3 +89,20 @@ def test_sample_binds_candidates_to_the_island_epoch():
     p.register('base', 'x', {'a': 0, 'b': 0}, island=None)
     draw = p.sample(0)
     assert draw == {'island': 0, 'epoch': 0, 'candidates': ['base']}
+
+
+def test_checkpoint_rejects_boolean_reset_epoch():
+    p = population()
+    p.register('base', 'x', {'a': 0, 'b': 0}, island=None)
+    p.register('best', 'y', {'a': 0, 'b': 1}, island=1, epoch=0)
+    p.reset_weaker_half()
+    state = p.checkpoint_state()
+    state['history'][-1]['epoch'] = True
+    with pytest.raises(ValueError):
+        FunSearchPopulation.from_checkpoint(state)
+
+
+def test_enormous_integer_scores_are_rejected_as_invalid():
+    p = population()
+    with pytest.raises(ValueError):
+        p.register('bad', 'x', {'a': 0, 'b': 10 ** 1000}, island=0, epoch=0)
