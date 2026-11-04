@@ -275,3 +275,56 @@ def test_currency_command_preserves_explicit_shared_path_and_output_cap(tmp_path
     command = _command(template, tmp_path / 'workspace', TASK, 1, 'baseline', 600)
     assert command[command.index('--spending-ledger') + 1] == str(path)
     assert command[command.index('--max-completion-tokens') + 1] == '16384'
+
+
+@pytest.mark.parametrize('variant', ['baseline', 'full'])
+def test_input_capacity_stop_keeps_admitted_submission_and_replays_without_http(tmp_path, endpoint, variant):
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    workspace = tmp_path / 'run/workspace'
+    fixture_public(workspace / 'data')
+    code = '''import csv
+with open('data/predict.csv') as f: rows=list(csv.DictReader(f))
+with open('predictions.csv','w',newline='') as f:
+    writer=csv.writer(f); writer.writerow(['row_id','A','B','C'])
+    for row in rows: writer.writerow([row['row_id'],1/3,1/3,1/3])
+'''
+    value = deepseek_response(content=code)
+    value['usage'] = {'prompt_tokens': 100, 'completion_tokens': 14900, 'total_tokens': 15000}
+    endpoint.replies.extend(value for _ in range(5))
+    provider = deepseek_provider(tmp_path / 'run/agent_artifacts', endpoint, ledger)
+    args = dict(workspace=workspace, task_id=TASK, model='deepseek-flash', api_base=endpoint.url,
+        token_budget=60000, iterations=4, variant=variant, max_completion_tokens=16384,
+        provider=provider, runner=TrustedFixtureRunner(), spending_ledger_path=ledger.path)
+    result = run_agent(**args)
+    assert result['submission_materialized']
+    assert result['token_usage']['total_tokens'] == 45000 and len(endpoint.requests) == 3
+    assert 'capacity' in (result['details']['result']['stop_reason'] or '')
+    state = result['details']['physical_ledger']
+    assert state['global']['used']['token'] == 45000
+    assert state['global']['used']['node'] == 4  # includes the refused local attempt
+    assert not state['open_intents'] and not ledger.snapshot()['pending_calls']
+    replayed = run_agent(**{**args, 'resume': True})
+    assert replayed['selected_candidate_id'] == result['selected_candidate_id']
+    assert len(endpoint.requests) == 3
+
+
+def test_admission_used_prefix_is_checked_against_independent_campaign_order(tmp_path, endpoint):
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.extend([deepseek_response(), deepseek_response()])
+    provider = deepseek_provider(tmp_path / 'run', endpoint, ledger)
+    provider('one'); provider('two')
+    second = ledger.snapshot()['operations'][1]['call_id']
+    for path in [provider.calls_dir / f'{second}.started.json', provider.usage_dir / f'{second}.json']:
+        value = json.loads(path.read_text())
+        value['token_admission'].update(used_before=0, remaining_before=60000)
+        path.write_text(json.dumps(value))
+    completed = provider.calls_dir / f'{second}.completed.json'
+    value = json.loads(completed.read_text())
+    value['usage_receipt_sha256'] = hashlib.sha256((provider.usage_dir / f'{second}.json').read_bytes()).hexdigest()
+    completed.write_text(json.dumps(value))
+    audit = audit_usage(provider.usage_dir, spending_ledger=ledger)
+    assert not audit['complete'] and audit['costs_complete'] and audit['known_tokens'] == 240
+    assert not audit['unresolved_calls']
+    with pytest.raises(ValueError, match='audit'):
+        deepseek_provider(tmp_path / 'run', endpoint, ledger)
+    assert len(endpoint.requests) == 2

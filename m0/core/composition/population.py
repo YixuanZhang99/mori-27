@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from core.composition.contracts import OperatorFailure, Proposal
+from core.composition.contracts import OperatorBudgetExhausted, OperatorFailure, Proposal
 from core.composition.evaluation import validate_evidence
 from core.composition.strategies import GreedyPolicy, policy_options
 from core.executor.types import Candidate, CostVec, EvalStatus
@@ -93,7 +93,9 @@ class CrossoverOperator:
             raise
         except Exception as error:
             used = take_usage(self.llm)
-            raise OperatorFailure(CostVec(tokens_in=used, node_count=1),
+            from core.llm import ProviderBudgetExhausted
+            failure = OperatorBudgetExhausted if isinstance(error, ProviderBudgetExhausted) else OperatorFailure
+            raise failure(CostVec(tokens_in=used, node_count=1),
                 f"{type(error).__name__}: {error}", measured_cost_units=self.measured_cost_units) from error
         used = take_usage(self.llm)
         if type(artifact) is not str or not artifact.strip():

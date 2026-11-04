@@ -18,7 +18,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from types import FunctionType
 
-from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorRequest, Proposal
+from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorBudgetExhausted, OperatorRequest, Proposal
 from core.composition.context import ContextMemory, ContextPackBuilder
 from core.composition.knowledge import KnowledgePack
 from core.composition.admission import LayeredAdmissionController
@@ -594,6 +594,13 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self._check_provider_floor(intent, provider_before, failure.cost)
             self._known_cost += _tokens(failure.cost)
             self._call_cost_known = True
+            if isinstance(failure, OperatorBudgetExhausted):
+                if request.context.get("retrieval") != context["retrieval"] or \
+                        request.context.get("context_pack_ref") != context["context_pack_ref"]:
+                    raise ValueError("operator changed authoritative retrieval context")
+                self.budget.settle(intent, self._known_cost + self._policy_tokens)
+                self._current_intent = None
+                return self._halt_physical(cycle, str(failure), started=True)
             proposal = Proposal(Candidate(candidate_id, parents, operator=selected, created_cycle=cycle,
                                           context_pack_ref=context["context_pack_ref"]),
                                 "", failure.cost, failure.measured_cost_units)

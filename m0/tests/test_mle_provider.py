@@ -309,3 +309,112 @@ def test_wrong_deepseek_model_preserves_tokens_but_cannot_settle_flash_prices(tm
     with pytest.raises(ValueError, match='unresolved'):
         other('two')
     assert len(endpoint.requests) == 1
+
+
+def test_full_output_and_input_capacity_refusal_preserves_prior_charge(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    first = deepseek_response()
+    first['usage'] = {'prompt_tokens': 30000, 'completion_tokens': 15787, 'total_tokens': 45787}
+    last = deepseek_response()
+    last['usage'] = {'prompt_tokens': 4480, 'completion_tokens': 12563, 'total_tokens': 17043}
+    endpoint.replies.extend([first, last])
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    p('a' * 30000)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='capacity'):
+        p('last candidate')
+    assert len(endpoint.requests) == 1
+    assert take_usage(p) == 0
+    assert ledger.snapshot() == before
+    assert token_usage_summary(p.usage_dir)['total_tokens'] == 45787
+
+
+def test_unicode_input_capacity_is_checked_before_any_paid_reservation(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append(deepseek_response())
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    with pytest.raises(ValueError, match='capacity'):
+        p('界' * 15000)
+    assert not endpoint.requests and take_usage(p) == 0
+    assert ledger.snapshot()['operations'] == []
+    assert not list(p.calls_dir.iterdir())
+
+
+def test_model_capacity_mode_refuses_a_small_budget_before_http(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append(deepseek_response())
+    p = deepseek_provider(tmp_path, endpoint, ledger, token_admission='model_capacity_v1')
+    with pytest.raises(ValueError, match='capacity'):
+        p('one')
+    assert not endpoint.requests and not ledger.snapshot()['operations']
+    assert p.manifest_binding()['token_admission']['guarantee'] == 'service_capacity_bound'
+
+
+@pytest.mark.parametrize('reason', ['stop', 'length', None])
+def test_completion_reason_is_persisted_even_for_rejected_output(tmp_path, endpoint, reason):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append(deepseek_response(finish_reason=reason))
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    if reason == 'stop':
+        p('one')
+    else:
+        with pytest.raises(ValueError, match='completion'):
+            p('one')
+    receipt = json.loads(next(p.usage_dir.glob('*.json')).read_text())
+    start = json.loads(next(p.calls_dir.glob('*.started.json')).read_text())
+    assert receipt['finish_reason'] == reason
+    assert receipt['token_admission'] == start['token_admission']
+    assert receipt['token_admission']['input_allowance'] == 1027
+    assert receipt['token_admission']['total_allowance'] == 17411
+    assert start['provider']['token_admission']['guarantee'] == 'estimate_only'
+    assert ledger.snapshot()['pending_calls'] == []
+
+
+def test_input_estimate_breach_is_charged_invalidates_audit_and_blocks_restart(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    from zoo.mle_bench_lite.usage_audit import audit_usage
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    value = deepseek_response()
+    value['usage'] = {'prompt_tokens': 2000, 'completion_tokens': 20, 'total_tokens': 2020}
+    endpoint.replies.extend([value, deepseek_response()])
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    with pytest.raises(ValueError, match='admission'):
+        p('one')
+    assert take_usage(p) == 2020
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 4160
+    audit = audit_usage(p.usage_dir, spending_ledger=ledger)
+    assert audit['known_tokens'] == 2020 and audit['costs_complete']
+    assert not audit['complete'] and not audit['unresolved_calls']
+    with pytest.raises(ValueError, match='audit'):
+        deepseek_provider(tmp_path, endpoint, ledger)
+    with pytest.raises(ValueError):
+        p('two')
+    assert len(endpoint.requests) == 1
+
+
+def test_changed_admission_policy_cannot_resume_old_receipts(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append(deepseek_response())
+    deepseek_provider(tmp_path, endpoint, ledger)('one')
+    with pytest.raises(ValueError, match='configuration'):
+        deepseek_provider(tmp_path, endpoint, ledger, token_admission='model_capacity_v1')
+    assert len(endpoint.requests) == 1
+
+
+def test_prior_overrun_is_not_reclassified_as_ordinary_budget_exhaustion(tmp_path, endpoint):
+    from core.llm import ProviderBudgetExhausted
+    endpoint.replies.append(response(total=12))
+    p = provider(tmp_path, endpoint, token_budget=10, max_completion_tokens=8)
+    with pytest.raises(ValueError, match='exceeded'):
+        p('one')
+    with pytest.raises(ValueError) as caught:
+        p('two')
+    assert not isinstance(caught.value, ProviderBudgetExhausted)
+    with pytest.raises(ValueError, match='exceeded'):
+        provider(tmp_path, endpoint, token_budget=10, max_completion_tokens=8)
+    assert len(endpoint.requests) == 1

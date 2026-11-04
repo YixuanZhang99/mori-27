@@ -1,8 +1,9 @@
 """Auditable, non-retrying provider boundary for measured MLE pilot runs.
 
-The returned model identifier, not just the requested alias, is evidence. Token
-limits are physical totals; a response can exceed the remaining allowance due
-to input tokens. Such usage is retained and makes the run ineligible.
+The returned model identifier, not just the requested alias, is evidence.
+DeepSeek checks input plus full output capacity before dispatch. Its default
+input envelope is an estimate, not a hard hosted-tokenizer bound. Actual usage
+is always retained; a breached envelope makes the run ineligible.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from core.llm import UsageError, validate_usage
+from core.llm import ProviderBudgetExhausted, UsageError, validate_usage
 from zoo.mle_bench_lite.agent_common import token_usage_summary
 from zoo.mle_bench_lite.usage_audit import audit_usage
 
@@ -43,7 +44,7 @@ class BenchmarkProvider:
                  token_budget: int, max_completion_tokens: int = 4096,
                  temperature: float = 0.0, timeout: float = 120.0,
                  api_key: str | None = None, *, request_format: str | None = None,
-                 spending_ledger=None):
+                 spending_ledger=None, token_admission: str | None = None):
         if not isinstance(model, str) or not model.strip():
             raise ValueError("an explicit model is required")
         for name, value in (("token_budget", token_budget),
@@ -80,6 +81,13 @@ class BenchmarkProvider:
             self._campaign_binding = binding
         elif spending_ledger is not None:
             raise ValueError("campaign CNY pricing requires the DeepSeek request format")
+        self.token_admission = None
+        if self.request_format == "deepseek":
+            from zoo.mle_bench_lite.token_admission import admission_policy
+            self.token_admission = admission_policy(
+                "estimated_utf8_v1" if token_admission is None else token_admission, self._campaign_binding)
+        elif token_admission is not None:
+            raise ValueError("token admission policies require DeepSeek campaign limits")
         self.usage_dir = Path(usage_dir)
         self.calls_dir = self.usage_dir.parent / (self.usage_dir.name + "_calls")
         self.token_budget, self.max_completion_tokens = token_budget, max_completion_tokens
@@ -104,6 +112,7 @@ class BenchmarkProvider:
                            reasoning_effort="high", wire_output_field="max_tokens",
                            temperature_applied=False, immutable_snapshot_verified=False,
                            campaign=self._campaign_binding, currency_run_id=usage_run_id(self.usage_dir))
+            binding["token_admission"] = dict(self.token_admission)
         return binding
 
     def _validate_existing(self) -> None:
@@ -113,6 +122,8 @@ class BenchmarkProvider:
         if not audit["complete"]:
             raise ValueError("provider receipt identity or model changed; campaign or evidence audit failed")
         usage = token_usage_summary(self.usage_dir, require_nonempty=False)
+        if usage["total_tokens"] > self.token_budget:
+            raise ValueError("token budget exhausted after actual provider usage exceeded its limit")
         if len(usage["models"]) > 1:
             raise ValueError("provider response model changed within a run")
         if usage["models"]:
@@ -141,8 +152,14 @@ class BenchmarkProvider:
         used = token_usage_summary(self.usage_dir, require_nonempty=False)["total_tokens"]
         remaining = self.token_budget - used
         if remaining <= 0:
-            raise ValueError("token budget exhausted before provider invocation")
+            raise ProviderBudgetExhausted("token budget exhausted before provider invocation")
         allowance = min(self.max_completion_tokens, remaining)
+        quote = None
+        if self.token_admission is not None:
+            from zoo.mle_bench_lite.token_admission import admission_quote
+            allowance = self.max_completion_tokens
+            quote = admission_quote(self.token_admission, prompt_bytes=len(prompt.encode("utf-8")),
+                used=used, token_budget=self.token_budget, output_allowance=allowance)
         payload = {"model": self.model, "temperature": self.temperature,
                    "max_completion_tokens": allowance,
                    "messages": [{"role": "user", "content": prompt}]}
@@ -160,9 +177,12 @@ class BenchmarkProvider:
         if self.spending_ledger is not None:
             from zoo.mle_bench_lite.cny_budget import usage_run_id
             self.spending_ledger.reserve(call_id, request_hash, allowance, run_id=usage_run_id(self.usage_dir))
-        _exclusive_json(self.calls_dir / f"{call_id}.started.json", {
+        start = {
             "call_id": call_id, "request_sha256": request_hash,
-            "provider": self.manifest_binding(), "output_allowance": allowance})
+            "provider": self.manifest_binding(), "output_allowance": allowance}
+        if quote is not None:
+            start["token_admission"] = quote
+        _exclusive_json(self.calls_dir / f"{call_id}.started.json", start)
         self.last_usage = None
         self._unresolved = True
         try:
@@ -181,6 +201,14 @@ class BenchmarkProvider:
                    "requested_model": self.model, "model": returned_model if valid_model else "",
                    "pid": os.getpid(), "request_sha256": request_hash,
                    "response_sha256": hashlib.sha256(raw).hexdigest(), **usage}
+        try:
+            reason = data["choices"][0]["finish_reason"]
+        except (KeyError, IndexError, TypeError):
+            reason = None
+        receipt["finish_reason"] = (reason if isinstance(reason, str) and reason in {
+            "stop", "length", "content_filter", "tool_calls", "insufficient_system_resource"} else None)
+        if quote is not None:
+            receipt["token_admission"] = quote
         if self.request_format == "deepseek":
             from zoo.mle_bench_lite.cny_budget import validate_detailed_usage
             # A known total survives even when component details cannot settle
@@ -216,12 +244,11 @@ class BenchmarkProvider:
         self._unresolved = False
         if used + usage["total_tokens"] > self.token_budget:
             raise ValueError("actual provider usage exceeded the token budget")
+        if quote is not None:
+            from zoo.mle_bench_lite.token_admission import validate_admission
+            validate_admission(start, receipt)
         if self.request_format == "deepseek":
-            try:
-                finish_reason = data["choices"][0]["finish_reason"]
-            except (KeyError, IndexError, TypeError):
-                finish_reason = None
-            if finish_reason != "stop":
+            if receipt["finish_reason"] != "stop":
                 raise ValueError("provider completion is incomplete; measured usage was retained")
         try:
             content = data["choices"][0]["message"]["content"]

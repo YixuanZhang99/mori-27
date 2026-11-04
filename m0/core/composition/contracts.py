@@ -167,6 +167,10 @@ class OperatorFailure(RuntimeError):
         self.measured_cost_units = measured_cost_units
 
 
+class OperatorBudgetExhausted(OperatorFailure):
+    """Stop proposing after settling this invocation's complete known cost."""
+
+
 
 @dataclass(frozen=True)
 class Proposal:

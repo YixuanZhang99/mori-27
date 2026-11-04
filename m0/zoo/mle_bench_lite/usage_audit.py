@@ -25,6 +25,14 @@ def _audit_currency(root, starts, receipts, completions, ledger):
         operations = {row["call_id"]: row for row in snapshot["operations"]}
         run_id = usage_run_id(root)
         owned_ids = {key for key, row in operations.items() if row["run_id"] == run_id}
+        # The verified journal preserves reservation order, unlike UUID sorting.
+        # A local quote cannot certify its own claim about the earlier balance.
+        used_before, run_tokens = {}, 0
+        for row in snapshot["operations"]:
+            if row["run_id"] == run_id:
+                used_before[row["call_id"]] = run_tokens
+                if "usage" in row:
+                    run_tokens += row["usage"]["total_tokens"]
         local_ids = set(starts) | set(receipts) | set(completions)
         result["call_ids"] = sorted(owned_ids)
         if owned_ids != local_ids:
@@ -60,6 +68,9 @@ def _audit_currency(root, starts, receipts, completions, ledger):
                         or start.get("output_allowance") != operation["output_allowance"]
                         or validate_detailed_usage(receipt) != operation["usage"]):
                     raise ValueError("local receipt differs from independent currency settlement")
+                if "token_admission" in provider and start.get("token_admission", {}).get(
+                        "used_before") != used_before[call_id]:
+                    raise ValueError("token admission prior usage differs from independent campaign order")
             except (ValueError, TypeError, KeyError, AttributeError) as error:
                 result["errors"].append({"call_id": call_id, "reason": str(error)})
         result["complete"] = not result["errors"]
@@ -155,6 +166,11 @@ def audit_usage(usage_dir: str | Path, *, allow_fixture_receipts: bool = False,
                 error('integrity', call_id, 'completed call does not bind the exact receipt bytes')
                 costs_complete = False
                 unresolved.add(call_id)
+            try:
+                from zoo.mle_bench_lite.token_admission import validate_admission
+                validate_admission(start, receipt)
+            except (ValueError, KeyError, TypeError):
+                error('admission', call_id, 'token admission evidence is invalid or actual usage breached its allowance')
 
     models = sorted({record['model'] for record in receipts.values()
                      if isinstance(record.get('model'), str) and record['model'].strip()})

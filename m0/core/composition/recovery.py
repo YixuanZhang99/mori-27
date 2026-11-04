@@ -14,7 +14,7 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 
-from core.llm import UsageError
+from core.llm import ProviderBudgetExhausted, UsageError
 from core.x1.checkpoint import RunCheckpoint, payload_digest
 from core.x1.store import AppendOnlyStore
 
@@ -148,6 +148,9 @@ class ContinuationStore(AppendOnlyStore):
             data = row["payload"]
             if type(data["tokens"]) is not int or data["tokens"] < 0 or type(data["result"]) is not str:
                 raise ValueError("invalid durable provider completion")
+            outcome = data.get("outcome", "returned")
+            if outcome not in ("returned", "budget_exhausted"):
+                raise ValueError("invalid durable provider outcome")
             restore = getattr(provider.raw_provider, "restore_state", None)
             if data["state"] is not None:
                 if not callable(restore):
@@ -156,15 +159,26 @@ class ContinuationStore(AppendOnlyStore):
             provider._usage_total += data["tokens"]
             provider.last_usage = {"total_tokens": data["tokens"]}
             self.append("composed_provider_completed", data)
+            if outcome == "budget_exhausted":
+                raise ProviderBudgetExhausted(data["result"])
             return data["result"]
         before = provider.usage_total
-        result = invoke(*args, **kwargs)
+        refusal = None
+        try:
+            result = invoke(*args, **kwargs)
+        except ProviderBudgetExhausted as error:
+            refusal = error
+            result = str(error)
         if type(result) is not str:
             raise UsageError("recoverable provider must return text")
         save = getattr(provider.raw_provider, "checkpoint_state", None)
         data = {"binding": binding, "result": result, "tokens": provider.usage_total - before,
                 "state": detached(save()) if callable(save) else None}
+        if refusal is not None:
+            data["outcome"] = "budget_exhausted"
         self.append("composed_provider_completed", data)
+        if refusal is not None:
+            raise refusal
         return result
 
 

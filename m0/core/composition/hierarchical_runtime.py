@@ -259,6 +259,7 @@ class HierarchicalRuntime(ProxyRuntime):
 
     async def _cycle_hierarchical(self, task, cycle):
         from core.composition.defaults import OperatorFailure
+        from core.composition.contracts import OperatorBudgetExhausted
         signal = self.budget.converged(self.frontier)
         if signal:
             return self._halt_physical(cycle, signal.rule + ": " + signal.reason)
@@ -313,6 +314,8 @@ class HierarchicalRuntime(ProxyRuntime):
         proposal.candidate.validate()
         if proposal.candidate.context_pack_ref != context["context_pack_ref"]:
             raise ValueError("operator dropped or changed retrieval context identity")
+        if isinstance(failure, OperatorBudgetExhausted):
+            return self._halt_physical(cycle, str(failure), started=True)
         if self.layered:
             self.layered.check_integrity(proposal, self._source_refs(context))
         if self.parts.get("knowledge") is not None:

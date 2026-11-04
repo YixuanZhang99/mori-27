@@ -214,3 +214,32 @@ def test_command_cannot_override_supervisor_walltime_with_a_zero_producer_meter(
     assert actual >= 0.15
     assert used(result)["wallclock"] >= actual
     assert rows(tmp_path, "composed_evidence")[0]["evidence"]["eval_result"]["cost"]["wall_seconds"] == 0
+
+
+def test_known_budget_refusal_replays_after_previous_checkpoint_without_dispatch(tmp_path):
+    from core.llm import ProviderBudgetExhausted
+
+    class Refusing:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, prompt):
+            self.calls += 1
+            self.last_usage = {'total_tokens': 0}
+            raise ProviderBudgetExhausted('capacity exhausted before dispatch')
+
+    store, checkpoint = base(tmp_path)
+    raw = Refusing()
+    metered = MeteredProvider(raw)
+    metered.durable_store = store
+    with pytest.raises(ProviderBudgetExhausted, match='capacity'):
+        metered('same request')
+    original = store.path.read_bytes()
+    raw2 = Refusing()
+    metered2 = MeteredProvider(raw2)
+    metered2.durable_store = resumed(store, checkpoint)
+    with pytest.raises(ProviderBudgetExhausted, match='capacity'):
+        metered2('same request')
+    assert raw.calls == 1 and raw2.calls == 0
+    assert metered2.usage_total == 0 and metered2.last_usage == {'total_tokens': 0}
+    assert store.path.read_bytes() == original

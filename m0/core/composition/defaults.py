@@ -13,7 +13,7 @@ from dataclasses import asdict, replace
 
 from core.budget.ledger import BudgetLedger
 from core.budget.types import AccountingStamp
-from core.composition.contracts import Decision, OperatorFailure, OperatorRequest, Proposal
+from core.composition.contracts import Decision, OperatorBudgetExhausted, OperatorFailure, OperatorRequest, Proposal
 from core.composition.admission import LayeredAdmissionController, layered_options
 from core.composition.budget import HierarchicalBudget, hierarchical_options
 from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
@@ -153,7 +153,9 @@ class PromptOperator:
             raise
         except Exception as error:
             used = take_usage(self.llm)
-            raise OperatorFailure(CostVec(tokens_in=used, node_count=1),
+            from core.llm import ProviderBudgetExhausted
+            failure = OperatorBudgetExhausted if isinstance(error, ProviderBudgetExhausted) else OperatorFailure
+            raise failure(CostVec(tokens_in=used, node_count=1),
                                   f"{type(error).__name__}: {error}",
                                   measured_cost_units=("token", "node", "eval_count")) from error
         used = take_usage(self.llm)
