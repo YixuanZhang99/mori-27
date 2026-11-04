@@ -52,6 +52,8 @@ def test_framework_constructs_funsearch_candidates_and_replays_without_new_calls
     assert len([r for r in events if r['kind'] == 'funsearch_reset']) == 1
     requests = [json.loads(prompt) for prompt in provider.prompts]
     assert [request['recipe']['kind'] for request in requests] == ['draft', 'funsearch', 'funsearch']
+    assert TEMPLATE in requests[0]['recipe']['instructions'][0]
+    assert all('named priority' in request['recipe']['task_desc'] for request in requests)
     assert all('priority_v0' in request['recipe']['instructions'][0] for request in requests[1:])
     before = provider.calls, len(domain.calls)
     assert fw.replay(TASK)['replay_certificate']['passed']

@@ -658,6 +658,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
                                          self._source_refs(context))
         producer_context = self.construction.project(context) if self.construction_enabled else context
+        if self.funsearch and not parents:
+            producer_context['instruction'] = ('Return exactly one Python function with the target name and '
+                'signature in this frozen template. Do not include other top-level statements.\n' +
+                self.assembly.policy.options['template'])
         parent_inputs = tuple(self.construction.parent_view(self.proposals[p]) if self.construction_enabled
                               else copy.deepcopy(self.proposals[p]) for p in parents)
         ideation = {**copy.deepcopy(strategy), "context": copy.deepcopy(producer_context)}
@@ -680,7 +684,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             materialized = self.funsearch.materialize(candidate_id, options['template'], options['function_name'])
             strategy['funsearch'] = {'selection': self.parts['policy'].pending_selection()['receipt'],
                                      'materialization': materialized}
-        request = OperatorRequest(task, candidate_id, cycle,
+        producer_task = task
+        if self.funsearch:
+            producer_task += ('\nReturn one complete unversioned function named ' +
+                self.assembly.policy.options['function_name'] + ' with the frozen signature; '
+                'do not return versioned examples or other top-level statements.')
+        request = OperatorRequest(producer_task, candidate_id, cycle,
                                   parent_inputs,
                                   tuple((comparison_projection if self.construction_enabled else public_projection)(
                                       self.evidence[p]) for p in parents), copy.deepcopy(producer_context), strategy)
