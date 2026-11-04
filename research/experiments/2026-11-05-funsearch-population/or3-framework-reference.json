@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "runtime": "composed-v9-m7",
+  "dev_sha256": "a99be58e4e5cf25986edcffd55f03928f47e82f2db00397eab72b9c1d73c19c3",
+  "dev_cases": 10,
+  "candidate_mean_scores": [
+    -213.9,
+    -213.9
+  ],
+  "recorded_replay_passed": true,
+  "external_model_requests": 0,
+  "model_benchmark_result": false,
+  "notice": "Pinned best-fit reference fixture; no held-out or model-generated result."
+}

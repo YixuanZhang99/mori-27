@@ -66,3 +66,9 @@ It does not supply final held-out grading, durable child-process adoption, or
 real-model results; interruption may leave a running evaluator thread until
 its bounded deadline. Those are required before a reproduction claim.
 
+The saved `or3-framework-reference.json` can be reproduced after preparing the
+split with `PYTHONPATH=m0 python research/experiments/2026-11-05-funsearch-population/check_or3_framework.py
+PATH_TO_OUTPUT/dev/data.json`. This executes a fixed reference best-fit function
+twice through M7, checks public-case evidence and recorded replay, and sends no
+external model request. It does not grade the held-out split.
+
