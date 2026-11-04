@@ -99,9 +99,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.governed = None
         self._stop_disposition = None
         self.construction_enabled = self.assembly.execution is not None
+        funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
+            self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
+            self.assembly.executor.options.get('sandbox') == 'bubblewrap')
         if self.assembly.policy.name == 'funsearch' and (
                 not self.construction_enabled or self.assembly.governance is not None or
-                self.assembly.executor.name != 'inprocess'):
+                not funsearch_executor_ok):
             raise ValueError('FunSearch requires its bounded M7 configuration')
         self.construction = None
         self.continuation_enabled = self.construction_enabled or self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
@@ -206,10 +209,15 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.funsearch = None
         if self.assembly.policy.name == 'funsearch':
             from core.composition.funsearch_coordinator import FunSearchCoordinator
+            from core.composition.command_domain import CommandDomain
             options = self.assembly.policy.options
             constructor = self.assembly.execution.constructor if self.construction_enabled else None
+            funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
+                self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
+                self.assembly.executor.options.get('sandbox') == 'bubblewrap')
             if (not self.construction_enabled or self.assembly.governance is not None or
-                    self.assembly.executor.name != 'inprocess' or self.durable_executor or
+                    not funsearch_executor_ok or self.durable_executor or
+                    self.assembly.executor.name == 'git_artifact' and not isinstance(self.parts['domain'], CommandDomain) or
                     [spec.name for spec in self.assembly.operators] != ['draft', 'funsearch'] or
                     constructor.name != 'funsearch_prompt' or constructor.options != {
                         'template': options['template'], 'function_name': options['function_name']} or
