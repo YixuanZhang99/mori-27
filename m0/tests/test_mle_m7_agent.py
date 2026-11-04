@@ -78,6 +78,29 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
         assert any(link['candidate_id'] == summary['selected_candidate_id'] and link['lane'] == 'main'
                    for link in audit['construction']['artifact_links'])
         assert audit['settled_micro_cny'] == 38 * (2 + iterations)
+        from zoo.mle_bench_lite.m7_pilot_audit import audit_physical_and_submission
+        independent = audit_physical_and_submission(workspace.parent / 'agent_artifacts/composed', preview,
+            workspace / 'submission.csv', expected_tokens=audit['total_tokens'])
+        assert independent['selected_candidate_id'] == summary['selected_candidate_id']
+        assert independent['submission_sha256'] == summary['submission_sha256']
+        submission = workspace / 'submission.csv'
+        original_submission = submission.read_bytes()
+        submission.write_bytes(original_submission + b'\n')
+        with pytest.raises(ValueError, match='submission'):
+            audit_physical_and_submission(workspace.parent / 'agent_artifacts/composed', preview,
+                submission, expected_tokens=audit['total_tokens'])
+        submission.write_bytes(original_submission)
+        transcript = workspace.parent / 'agent_artifacts/composed/x1.jsonl'
+        original_transcript = transcript.read_bytes()
+        modified = [json.loads(line) for line in original_transcript.splitlines()]
+        physical = next(row for row in modified if row['kind'] == 'hierarchical_budget')
+        physical['payload']['event_ref'] = '0' * 64
+        transcript.write_text(''.join(json.dumps(row) + '\n' for row in modified))
+        from core.budget.ledger import BudgetError
+        with pytest.raises(BudgetError, match='integrity'):
+            audit_physical_and_submission(workspace.parent / 'agent_artifacts/composed', preview,
+                submission, expected_tokens=audit['total_tokens'])
+        transcript.write_bytes(original_transcript)
         response_file = next((workspace.parent / 'agent_artifacts/composed/.governed-cny').glob('*.response.json'))
         original_response = response_file.read_text()
         response_file.write_text(original_response.replace('deepseek-flash', 'other-model'))

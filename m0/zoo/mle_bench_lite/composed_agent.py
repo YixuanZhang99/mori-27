@@ -307,7 +307,13 @@ def run_governed_agent(*, workspace, task_id, model, api_base, token_budget, see
     proposal = Proposal(Candidate(**proposal_data['candidate']), proposal_data['artifact'])
     record = domain.materialize(proposal, workspace / 'submission.csv', expected_prediction_sha256=
         selected['evidence']['eval_result']['contract']['private']['data']['prediction_sha256'])
+    from zoo.mle_bench_lite.m7_pilot_audit import audit_physical_and_submission
+    physical_audit = audit_physical_and_submission(artifacts / 'composed', bundle, workspace / 'submission.csv',
+                                                   expected_tokens=receipt_audit['total_tokens'])
+    if physical_audit['selected_candidate_id'] != result['best_candidate_id']:
+        raise ValueError('independent physical audit chose a different candidate')
     summary = {'runtime': result['runtime'], 'submission_materialized': True,
+               'independent_physical_submission': physical_audit,
                'recorded_replay': certificate, 'independent_currency_receipts': receipt_audit, 'arm': variant, 'variant': variant, 'task_id': task_id,
                'seed': seed, 'protocol': PROTOCOL, 'requested_model': model, 'token_budget': token_budget,
                'actual_model': model, 'immutable_snapshot_verified': False,

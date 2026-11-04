@@ -98,3 +98,73 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
             'model': expected_model, 'journal_head': head, 'invoice_verified': False,
             'construction': construction,
             'coverage': 'currency and construction provenance; physical settlement and selected artifact require separate audit'}
+
+
+def audit_physical_and_submission(run_root, bundle, submission, *, expected_tokens):
+    """Rebuild physical accounting and rederive the submission from frozen predictions."""
+    import tempfile
+    from core.budget.types import AccountingStamp
+    from core.composition.budget import HierarchicalBudget
+    from core.x1.checkpoint import RunCheckpoint
+    from core.x1.store import AppendOnlyStore
+
+    bundle.validate()
+    root = Path(run_root)
+    checkpoint_path, transcript = root / 'checkpoint.json', root / 'x1.jsonl'
+    if any(path.is_symlink() or not path.is_file() for path in (checkpoint_path, transcript)):
+        raise ValueError('physical checkpoint or transcript missing')
+    checkpoint = RunCheckpoint.load(checkpoint_path).payload
+    assembly = checkpoint['manifest']['assembly']
+    budget_checkpoint = checkpoint['budget_checkpoint']
+    budget = HierarchicalBudget(assembly['budget']['options'], AccountingStamp(**budget_checkpoint['stamp']),
+                                AppendOnlyStore(transcript), governance=assembly['governance'])
+    budget.restore_state(budget_checkpoint)
+    state = budget.state()
+    if state['open_intents'] or state['halt_reasons'] or state['global']['used']['token'] != expected_tokens:
+        raise ValueError('physical settlement differs from provider receipt coverage')
+    candidate_id = checkpoint['incumbent']
+    rows = [json.loads(line) for line in transcript.read_text().splitlines()]
+    all_decisions = [row['payload'] for row in rows if row['kind'] == 'composed_decision']
+    for decision in all_decisions:
+        original_receipt = {name: decision[name] for name in ('candidate_id', 'incumbent', 'evidence', 'decision')}
+        if decision['event_id'] != 'sha256:' + payload_digest(original_receipt):
+            raise ValueError('admission decision identity differs')
+    admitted = [decision['candidate_id'] for decision in all_decisions if decision['decision']['admit']]
+    if not admitted or admitted[-1] != candidate_id:
+        raise ValueError('selected candidate differs from final admitted decision')
+    decisions = [decision for decision in all_decisions if decision['candidate_id'] == candidate_id]
+    evidences = [row['payload'] for row in rows if row['kind'] == 'composed_evidence'
+                 and row['payload']['proposal']['candidate']['id'] == candidate_id]
+    if len(decisions) != 1 or not decisions[0]['decision']['admit'] or len(evidences) != 1:
+        raise ValueError('selected candidate lacks unique admitted evidence')
+    proposal = evidences[0]['proposal']
+    original = evidences[0]['evidence']['eval_result']
+    if original['status'] != 'ok' or original['contract']['binding']['candidate_id'] != candidate_id:
+        raise ValueError('selected evaluation is invalid')
+    artifact_hash = hashlib.sha256(proposal['artifact'].encode()).hexdigest()
+    if original['contract']['binding']['artifact_sha256'] != artifact_hash:
+        raise ValueError('selected artifact differs from evaluation binding')
+    candidate_root = root.parent / 'composed_candidates' / hashlib.sha256(candidate_id.encode()).hexdigest()
+    outcome_path, prediction_path = candidate_root / 'outcome.json', candidate_root / 'predictions.csv'
+    if candidate_root.is_symlink() or any(path.is_symlink() or not path.is_file() for path in (outcome_path, prediction_path)):
+        raise ValueError('selected prediction evidence missing')
+    outcome = json.loads(outcome_path.read_text())
+    identity = outcome['identity']
+    if identity['candidate_id'] != candidate_id or identity['artifact_sha256'] != artifact_hash or \
+            identity['dataset_identity'] != bundle.identity or outcome['status'] != 'ok':
+        raise ValueError('selected prediction identity differs')
+    prediction_hash = 'sha256:' + hashlib.sha256(prediction_path.read_bytes()).hexdigest()
+    if prediction_hash != outcome['prediction_sha256'] or \
+            prediction_hash != original['contract']['private']['data']['prediction_sha256']:
+        raise ValueError('selected prediction differs from original evaluation')
+    submission = Path(submission)
+    if submission.is_symlink() or not submission.is_file():
+        raise ValueError('submission must be a regular file')
+    with tempfile.TemporaryDirectory(prefix='mori-mle-submission-audit-') as directory:
+        expected = Path(directory) / 'submission.csv'
+        bundle.submission(bundle.predictions(prediction_path), expected)
+        if submission.read_bytes() != expected.read_bytes():
+            raise ValueError('submission differs from frozen selected predictions')
+    return {'selected_candidate_id': candidate_id,
+            'submission_sha256': 'sha256:' + hashlib.sha256(submission.read_bytes()).hexdigest(),
+            'physical_tokens': expected_tokens, 'prediction_sha256': prediction_hash}
