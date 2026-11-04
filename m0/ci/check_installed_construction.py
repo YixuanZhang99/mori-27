@@ -27,9 +27,14 @@ def main():
         wheels = list((root / 'dist').glob('*.whl'))
         if len(wheels) != 1:
             raise ValueError('expected exactly one built wheel')
-        run(['uv', 'venv', '--python', sys.executable, str(root / 'venv')])
+        # A locked sync can use cached distributions without registry index
+        # metadata, unlike resolving the wheel's unpinned dependencies offline.
+        env['UV_PROJECT_ENVIRONMENT'] = str(root / 'venv')
+        run(['uv', 'sync', '--project', str(ROOT), '--locked', '--offline',
+             '--no-dev', '--no-install-project', '--python', sys.executable])
         python = str(root / 'venv/bin/python')
-        run(['uv', 'pip', 'install', '--offline', '--python', python, str(wheels[0])])
+        run(['uv', 'pip', 'install', '--offline', '--no-deps', '--python', python, str(wheels[0])])
+        run(['uv', 'pip', 'check', '--python', python])
         location = Path(run([python, '-I', '-c', 'from pathlib import Path; import core; print(Path(core.__file__).parent.parent)']).strip())
         if not location.is_relative_to(root / 'venv'):
             raise ValueError('independent interpreter imported outside its environment')
