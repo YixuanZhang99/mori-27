@@ -112,7 +112,8 @@ def test_public_framework_resumes_after_evaluation_terminal(tmp_path, monkeypatc
     if tamper:
         with pytest.raises(ValueError, match='predictions changed') as caught:
             recovered.evolve('Generate a CSV prediction program')
-        assert 'durable continuation diverged' in str(caught.value.__cause__)
+        assert 'durable continuation diverged' in str(caught.value)
+        assert 'predictions changed' in str(caught.value.__cause__)
         assert recovered_domain.training_invocations == 0 and provider.calls == 1
         return
     result = recovered.evolve('Generate a CSV prediction program')

@@ -232,3 +232,26 @@ def test_public_durable_executor_distinguishes_execution_bill_from_timing_error(
     assert state['reserved'] == {'token': 10 if origin == 'timing' else 0,
                                  'node': 0, 'eval_count': int(origin == 'timing')}
     assert framework._composed.parts['provider'].raw_provider.calls == 1
+
+
+@pytest.mark.parametrize('journal_error', [ValueError('continuation diverged'), OSError('disk unavailable')])
+def test_unresolved_write_failure_preserves_journal_and_operation_errors(journal_error):
+    from core.composition.invocation import _Operation
+    class Budget:
+        def start_operation(self, *_args, **_kwargs):
+            pass
+        def mark_unresolved(self, *_args, **_kwargs):
+            raise journal_error
+    provider = SimpleNamespace(usage_total=0)
+    receipt = SimpleNamespace(intent_id='x', fingerprint='y')
+    owner = SimpleNamespace(budget=Budget(), clock=lambda: 1.0)
+    with pytest.raises(type(journal_error)) as caught:
+        with _Operation(owner, receipt, provider):
+            raise ValueError('original evaluation integrity failure')
+    if isinstance(journal_error, ValueError):
+        assert 'continuation diverged' in str(caught.value)
+        assert 'original evaluation integrity failure' in str(caught.value)
+        assert 'original evaluation integrity failure' in str(caught.value.__cause__)
+    else:
+        assert 'disk unavailable' in str(caught.value)
+        assert any('original evaluation integrity failure' in note for note in caught.value.__notes__)

@@ -65,10 +65,13 @@ class _Operation:
             try:
                 self._unresolved(error)
             except Exception as journal_error:
-                # Preserve both failures; no unresolved event can be claimed
-                # when continuation refuses the write. The original operation
-                # error remains the exception callers see.
-                raise error.with_traceback(traceback) from journal_error
+                # A failed journal write is the primary integrity failure; no
+                # unresolved event can be claimed. Include the original failure
+                # without changing non-ValueError journal exception types.
+                if isinstance(journal_error, ValueError):
+                    raise ValueError(f"{journal_error}; original operation failure: {error}") from error
+                journal_error.add_note(f"Original operation failure: {type(error).__name__}: {error}")
+                raise
 
     @contextmanager
     def _remaining_tokens(self):
