@@ -17,6 +17,7 @@ def _function(source, *, label):
         raise ValueError(label + ' must be nonempty source')
     try:
         tree = ast.parse(source)
+        compile(tree, '<funsearch-source>', 'exec')
     except (SyntaxError, ValueError) as exc:
         raise ValueError(label + ' must parse as Python') from exc
     return tree

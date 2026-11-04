@@ -65,3 +65,15 @@ def test_reference_version_convention_is_reported_separately():
     result = build_prompt(TEMPLATE, 'priority', ['simple'], CANDIDATES)
     assert result['prompt_header_version'] == 1
     assert result['reference_version_generated'] == 2
+
+
+def test_semantically_invalid_python_is_rejected():
+    with pytest.raises(ValueError):
+        build_prompt(TEMPLATE, 'priority', ['a'], {'a': 'def priority(x: float) -> float:\n    break\n'})
+
+
+def test_unselected_candidate_never_appears_in_prompt_or_binding():
+    selected = {'simple': CANDIDATES['simple'], 'private': 'PRIVATE_SENTINEL'}
+    result = build_prompt(TEMPLATE, 'priority', ['simple'], selected)
+    assert 'PRIVATE_SENTINEL' not in repr(result)
+    assert result == build_prompt(TEMPLATE, 'priority', ['simple'], {'simple': CANDIDATES['simple']})
