@@ -62,7 +62,13 @@ class _Operation:
     def __exit__(self, kind, error, traceback):
         # A real process interruption has no trustworthy ordinary terminal.
         if isinstance(error, Exception) and not self.settled:
-            self._unresolved(error)
+            try:
+                self._unresolved(error)
+            except Exception as journal_error:
+                # Preserve both failures; no unresolved event can be claimed
+                # when continuation refuses the write. The original operation
+                # error remains the exception callers see.
+                raise error.with_traceback(traceback) from journal_error
 
     @contextmanager
     def _remaining_tokens(self):
