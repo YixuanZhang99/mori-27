@@ -118,8 +118,8 @@ class Registry:
 
     def _preflight_execution(self, config):
         from core.composition.construction import RoleDefinition
-        if config.executor.name != "inprocess":
-            raise ValueError("v9 Git construction integration is not available yet")
+        if config.executor.name not in {"inprocess", "git_artifact"}:
+            raise ValueError("v9 construction requires an explicit artifact executor")
         declared = self._entries[("constructor", config.execution.constructor.name)].execution
         if type(declared) is not dict or set(declared) != {"schema_version", "roles"} \
                 or type(declared["schema_version"]) is not int or declared["schema_version"] != 1 \

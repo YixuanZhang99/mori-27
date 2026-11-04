@@ -332,7 +332,8 @@ class ContinuationStore(AppendOnlyStore):
             raise result
         return result
 
-    async def evaluation_call(self, identity, invoke, *, provider=None, domain=None):
+    async def evaluation_call(self, identity, invoke, *, provider=None, domain=None,
+                              recoverable_command=False, elapsed_reader=None):
         """Adopt canonical native evidence; never retry an opaque started call."""
         from core.composition.evaluation import decode_evidence, encode_evidence
         identity = detached(identity)
@@ -344,24 +345,27 @@ class ContinuationStore(AppendOnlyStore):
                     raise UsageError("evaluation cannot adopt unbound provider receipts")
                 self._adopt_nested_provider(provider)
             row = self.peek()
-            if row is None or row["kind"] != "governed_evaluation_completed" or \
-                    row["payload"].get("identity") != identity:
-                raise UsageError("native evaluation has no durable completion; refusing retry")
-            data = row["payload"]
-            elapsed = data.get("elapsed")
-            if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
-                raise ValueError("invalid durable native evaluation measurement")
-            evidence = decode_evidence(data["evidence"])
-            if data.get("domain_state") is not None:
-                restore = getattr(domain, "restore_state", None)
-                if not callable(restore):
-                    raise ValueError("native domain cannot restore its terminal state")
-                restore(data["domain_state"])
-            self.append("governed_evaluation_completed", data)
-            return evidence, elapsed
+            if row is not None or not (recoverable_command and self.recover_external_outcomes):
+                if row is None or row["kind"] != "governed_evaluation_completed" or \
+                        row["payload"].get("identity") != identity:
+                    raise UsageError("native evaluation has no durable completion; refusing retry")
+                data = row["payload"]
+                elapsed = data.get("elapsed")
+                if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
+                    raise ValueError("invalid durable native evaluation measurement")
+                evidence = decode_evidence(data["evidence"])
+                if data.get("domain_state") is not None:
+                    restore = getattr(domain, "restore_state", None)
+                    if not callable(restore):
+                        raise ValueError("native domain cannot restore its terminal state")
+                    restore(data["domain_state"])
+                self.append("governed_evaluation_completed", data)
+                return evidence, elapsed
         started = time.monotonic()
         evidence = await invoke()
-        elapsed = time.monotonic() - started
+        elapsed = elapsed_reader() if elapsed_reader is not None else time.monotonic() - started
+        if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
+            raise ValueError("invalid original evaluation measurement")
         save = getattr(domain, "checkpoint_state", None)
         self.append("governed_evaluation_completed", {"identity": identity,
             "evidence": encode_evidence(evidence), "elapsed": elapsed,
@@ -393,12 +397,14 @@ class RecordedOutcomeStore(ContinuationStore):
             raise UsageError("recorded replay cannot dispatch a provider")
         return super().provider_call(provider, forbidden, args, kwargs)
 
-    async def evaluation_call(self, identity, invoke, *, provider=None, domain=None):
+    async def evaluation_call(self, identity, invoke, *, provider=None, domain=None,
+                              recoverable_command=False, elapsed_reader=None):
         if self.peek() is None:
             raise UsageError("recorded replay has no evaluation outcome; live execution forbidden")
         async def forbidden():
             raise UsageError("recorded replay cannot dispatch an evaluator")
-        return await super().evaluation_call(identity, forbidden, provider=provider, domain=domain)
+        return await super().evaluation_call(identity, forbidden, provider=provider, domain=domain,
+            recoverable_command=False, elapsed_reader=elapsed_reader)
 
 
 @contextmanager

@@ -1,6 +1,6 @@
 # M7 configured construction and immutable artifacts
 
-Status: Tasks 1–3 implemented and locally verified, including public schema-2 native integration and isolated controls. Git publication, v9 external currency support and integrated acceptance remain Tasks 4–6. No full M7 closure is claimed. Baseline f7ab27395b7907b851196ad7a88b38dd7bf5986d. User authorized autonomous development; choices below are engineering decisions, not new user approvals. Original alignment/RUBRIC remain binding.
+Status: Tasks 1–4 implemented and locally verified, including public schema-2 native integration, isolated controls, immutable Git publication and command recovery; v9 external currency support and integrated acceptance remain Tasks 5–6. No full M7 closure is claimed. Baseline f7ab27395b7907b851196ad7a88b38dd7bf5986d. User authorized autonomous development; choices below are engineering decisions, not new user approvals. Original alignment/RUBRIC remain binding.
 
 ## Intent and current mismatch
 
@@ -89,4 +89,4 @@ Schema 2 creates distinct planning and feedback-absorption instances from the sa
 
 The constructor factory receives no live model or evaluator dependency. The measured construction invocation supplies the provider. Generation-facing policy/operator/skill factories have scoped journal views and no direct evaluator dependency. Existing memory, frontier and knowledge authorities retain their required journal access. Built-in recipes and role registration live in a pure module separate from runtime orchestration so default registration does not create a dependency cycle.
 
-Task 3 accepts only the native in-process evaluator and rejects schema-2 external currency providers before dispatch. Git publication and command evaluation become available only after Task 4; external providers require the explicit Task 5 runtime and audit support. Completed materializations are verified against the original construction terminal and artifact bytes during resume, inspect and recorded replay. Replay consumes recorded outcomes without new provider or evaluator work.
+The Task 3 baseline accepts only the native in-process evaluator. Task 4 adds the explicit git_artifact executor, retaining legacy git_worktree configuration behavior; external providers remain rejected until explicit Task 5 runtime and audit support. Completed materializations are verified against the original construction terminal and artifact bytes during resume, inspect and recorded replay. Replay consumes recorded outcomes without new provider or evaluator work.

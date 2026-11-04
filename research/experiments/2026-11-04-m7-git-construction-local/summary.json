@@ -1,0 +1,70 @@
+{
+  "scope": "M7 Task 4: immutable Git construction and native/command reuse",
+  "base_commit": "4351a0298e5d97ffada7ea0770ae0cac7a2d1bac",
+  "implementation_identity": "source hashes below; commit containing this summary",
+  "passed": true,
+  "full_validation": {
+    "started_at": "2026-11-04T14:00:16.724803+00:00",
+    "finished_at": "2026-11-04T14:05:25.528066+00:00",
+    "elapsed_seconds": 308.772,
+    "exit_code": 0,
+    "source_unchanged": true,
+    "external_provider_requests": 0
+  },
+  "command": "make axioms test-linux examples tooling build verify-import",
+  "linux_tests": 2238,
+  "tooling_tests": 76,
+  "axiom_checks": 11,
+  "installed_wheel": {
+    "passed": true,
+    "wheel_sha256": "33df29956d05b60e1291acb904f35e6dda3c58b824d09472389ce947f0b676de",
+    "example_sha256": "e5381dae1087546258c66c4ba89d8dcba740885e0d9bb509c19a4fa964a9ce8b",
+    "import_path": "/usr/local/share/mori27-local/m7-git-wheel/lib/python3.12/site-packages/core/composition/git_artifacts.py",
+    "isolated_python": true,
+    "outside_checkout": true,
+    "report": {
+      "runtime": "composed-v9-m7",
+      "artifacts": 2,
+      "artifact_commits": [
+        "2a54d23eed892e2b32d1f7c59dbd43c06c53273a",
+        "a956a425575c1e152d904f7d8f7ffa23df674aee"
+      ],
+      "evaluations": 5,
+      "generation_calls": 2,
+      "synthetic_generation_tokens": 10,
+      "external_provider_requests": 0,
+      "recorded_replay_passed": true,
+      "notice": "Offline fixture scores and usage; not a benchmark result."
+    }
+  },
+  "source_sha256": {
+    "Makefile": "06bb9804efec39051fcc7994cb93a612538b02152792c36f2378f6b859fcbc68",
+    "m0/core/composition/configured_execution.py": "464bbdb82556e5bb56a9c40dbcf062a1cdf80b4a1c3f43a677cf2807f3075b52",
+    "m0/core/composition/construction_recipes.py": "e1e102f6c8dc19d7f37bf7f8919dcf3fdacb95c386b33d8fcda90a16c04f3261",
+    "m0/core/composition/defaults.py": "9b6d213965cd1d746bf74a6b481e5cbcb27631924c25a99b9a8ca7ba0c86e67f",
+    "m0/core/composition/execution.py": "dd2c45b4ed4b7aa2386129299d97e89ae6d361940f0abea3967832f4b2bc6a42",
+    "m0/core/composition/governance_audit.py": "8e92674489a195e99656807c61f0e70a01be836f44b393c64b2737203f190461",
+    "m0/core/composition/hierarchical_runtime.py": "10a2687263a82c0432c15ff85633ecdf5325bb6f5c56f6f5495e7710ef355d8f",
+    "m0/core/composition/invocation.py": "9e5c67deb54f96342f1f3e2cdb45bc5a5a7749e6e484cd1d8211e91931ff783d",
+    "m0/core/composition/recovery.py": "d7c050a167605eb53d5e2a7f343acab399cc63f11d43fabc63e045e93e32506f",
+    "m0/core/composition/registry.py": "c144d2bc4d9382b9f7cefcf5e7ad223e5618b6c902acf76b570f38cc7875e583",
+    "m0/core/composition/runtime.py": "722437f1104fdeb9dc8b40b393bdec6a9ae297fdaf4c6d6ac39d8b1faaf73136",
+    "m0/core/composition/construction_workspace.py": "88c817505e94e6640c9d9241b075726b85b8d98fca6728ba9458f15a51e2f0b5",
+    "m0/core/composition/git_artifacts.py": "a5f99cc2a9164c26e24c2ac6fadd7e746b9afa97e5d05368c6a66d6c6c5e39b0",
+    "m0/examples/configured_execution_offline.py": "e5381dae1087546258c66c4ba89d8dcba740885e0d9bb509c19a4fa964a9ce8b",
+    "m0/tests/test_construction_worktree.py": "47b60ee0cae3bcf0c1837635689ce97039db88f8685540e4b0d5d4ecc1f34440",
+    "m0/tests/test_construction_worktree_framework.py": "ebda82d36f89352d11c3fa3e69a1efe39bf65fdcf1073fb904f1ce1ba463cf6c"
+  },
+  "evidence_sha256": {
+    "m7-git-construction-final-validation.json": "397f1736e6aabf93f7beeb3a13583408f9c84418e4e03aa1cd33b9120cd64434",
+    "m7-git-construction-final-validation.log": "c3c299be69a5f60c0f43ffd6801d86f605fccbcd54747159417a8180e7fe7464",
+    "m7-git-final-installed-wheel.json": "7c4777e8af35300230d8f689e7fb0ffee53c440aa84085a43782422d1e174126"
+  },
+  "limitations": [
+    "Task 5 v9 external currency remains open",
+    "Task 6 fresh whole-branch review and v74 acceptance remain open",
+    "No same-commit hosted or Mac result yet for this increment",
+    "No paid provider calls or live ledger changes",
+    "No whole-framework completion or benchmark superiority claim"
+  ]
+}

@@ -70,11 +70,11 @@
 
 **Interfaces:** `GitArtifactBackend` publishes one protected-base artifact commit with a durable publication plan and verifies content/protected manifests. Evaluation consumes that commit without changing allocated EvalRequest. Worktree evaluation scratch and output logs do not redefine artifact identity. New recommended `execution_profile()` emits schema 2, hierarchical budget, checkpoints and Git artifact isolation; no base_repo means an explicitly managed empty artifact repo inside the run directory. Native domains can evaluate Git-published text without requiring CommandDomain.
 
-- [ ] Write actual Git tests showing generation once, final commit reused across splits, native evaluator with Git publication, protected path/symlink rejection, changed commit/content binding rejection, SIGKILL after provider terminal and after commit plan/publication, and no duplicate calls/commit effects on resume.
-- [ ] Run new tests. Expected: RED.
-- [ ] Implement Git backend and command evaluation binding, preserving original sandbox/process adoption. Check out exact blobs without user hooks/filters. Complete native and command adapters through Framework.
-- [ ] Run new tests and all prior worktree/governance tests. Expected: GREEN. Installed example must run outside checkout using a temporary repo, with independent artifact digest assertions.
-- [ ] Commit the default new execution profile; document old profile as compatibility and leave any broader default migration requirement explicit.
+- [x] Write actual Git tests showing generation once, final commit reused across splits, native evaluator with Git publication, protected path/symlink rejection, changed commit/content binding rejection, SIGKILL after provider terminal and after commit plan/publication, and no duplicate calls/commit effects on resume.
+- [x] Run new tests. Expected: RED.
+- [x] Implement Git backend and command evaluation binding, preserving original sandbox/process adoption. Check out exact blobs without user hooks/filters. Complete native and command adapters through Framework.
+- [x] Run new tests and all prior worktree/governance tests. Expected: GREEN. Installed example must run outside checkout using a temporary repo, with independent artifact digest assertions.
+- [x] Commit the default new execution profile; document old profile as compatibility and leave any broader default migration requirement explicit.
 
 ### Task 5: External currency v9 compatibility and full recovery audit
 

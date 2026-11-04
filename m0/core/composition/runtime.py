@@ -160,7 +160,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._preflight_population()
         self.durable_executor = bool(getattr(self.parts["executor"], "durable_operation_recovery", False))
         required_executor = getattr(self.parts["domain"], "required_executor", None)
-        if required_executor is not None and required_executor != self.assembly.executor.name:
+        if required_executor is not None and required_executor != self.assembly.executor.name and not (
+                self.construction_enabled and required_executor == "git_worktree" and self.assembly.executor.name == "git_artifact"):
             raise ValueError("domain requires its bound worktree executor")
         if self.continuation_enabled:
             from core.composition.recovery import ContinuationStore

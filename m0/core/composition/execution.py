@@ -13,6 +13,7 @@ import json
 import math
 
 from core.composition.artifacts import NativeArtifactBackend
+from core.composition.git_artifacts import GitArtifactBackend
 from core.composition.construction import (ConstructionIntegrityError, ConstructionPlan,
     ConstructionResult, decode_construction_outcome, _json, _ref)
 from core.composition.contracts import OperatorFailure, Proposal, json_copy
@@ -73,10 +74,19 @@ class Materialization:
         outcome = {"identity": identity, "outcome": {"kind": "returned", "result": result.to_dict()}}
         if value["outcome_ref"] != _ref(outcome) or result.plan_ref != identity["plan_ref"]:
             raise ValueError("materialization does not match its construction outcome")
-        artifact = NativeArtifactBackend._descriptor(value["artifact"])
+        backend = identity["artifact_backend"]
+        if backend == {"schema_version": 1, "kind": "native_text_v1"}:
+            artifact = NativeArtifactBackend._descriptor(value["artifact"])
+        elif type(backend) is dict and set(backend) == {"schema_version", "kind", "base_repo", "base_commit",
+                "artifact_path", "protected_paths", "protected"} and backend["schema_version"] == 1 \
+                and backend["kind"] == "git_text_v1":
+            artifact = GitArtifactBackend._descriptor(value["artifact"])
+            if artifact["artifact_path"] != backend["artifact_path"]:
+                raise ValueError("materialization Git artifact path differs")
+        else:
+            raise ValueError("unsupported materialization artifact backend")
         raw = result.artifact.encode("utf-8")
-        if identity["artifact_backend"] != {"schema_version": 1, "kind": "native_text_v1"} \
-                or artifact["reference"] != "sha256:" + hashlib.sha256(raw).hexdigest() \
+        if artifact["reference"] != "sha256:" + hashlib.sha256(raw).hexdigest() \
                 or artifact["size_bytes"] != len(raw):
             raise ValueError("materialization descriptor differs from its constructed bytes")
         return cls(_json(value))
@@ -95,7 +105,7 @@ class Materialization:
 
 
 class CandidateExecution:
-    def __init__(self, materializer, artifact_backend, store, provider, evaluator):
+    def __init__(self, materializer, artifact_backend, store, provider, evaluator, *, command_executor=None):
         if not isinstance(store, ContinuationStore):
             raise ValueError("candidate execution requires a continuation journal")
         if not callable(getattr(materializer, "construct", None)) or not callable(provider):
@@ -104,6 +114,14 @@ class CandidateExecution:
         self.provider, self.evaluator = provider, evaluator
         self.binding = _binding(materializer.manifest_binding)
         self.backend_binding = json_copy(artifact_backend.manifest_binding)
+        self.command_executor = command_executor
+        self.evaluation_binding = None
+        if command_executor is not None:
+            from core.composition.worktree import WorktreeCommandExecutor
+            if not isinstance(command_executor, WorktreeCommandExecutor) or not isinstance(artifact_backend, GitArtifactBackend):
+                raise ValueError("command evaluation requires original worktree protocol and Git artifacts")
+            self.evaluation_binding = {"executor": json_copy(command_executor.manifest_binding),
+                                       "domain": json_copy(evaluator.manifest_binding)}
         self._measurements = {}
 
     @contextmanager
@@ -277,10 +295,24 @@ class CandidateExecution:
         if any(row["payload"]["identity"].get("intent_id") == operation["intent_id"]
                for row in self.store.read("governed_evaluation_started")):
             raise UsageError("incomplete evaluation is outside the active continuation window")
+        elapsed_reader = None
+        if self.command_executor is not None:
+            if self.evaluation_binding != {"executor": json_copy(self.command_executor.manifest_binding),
+                                          "domain": json_copy(domain.manifest_binding)}:
+                raise ValueError("command evaluation binding changed")
+            # Bind the existing durable command protocol to the original artifact
+            # commit. EvalRequest, including resume_from, remains unchanged.
+            executor = copy.copy(self.command_executor)
+            executor.base_commit = materialized.to_dict()["artifact"]["commit"]
+            command_operation = {key: value for key, value in operation.items() if key not in {"lane", "slot_id"}}
+            invoke = lambda: executor.execute_bound(materialized.proposal, copy.deepcopy(request), domain, command_operation)
+            elapsed_reader = lambda: executor.operation_metadata(command_operation)["wall_seconds"]
+        else:
+            invoke = lambda: InProcessExecutor().execute(materialized.proposal, copy.deepcopy(request), domain)
         with self._provider_scope(operation):
-            evidence, elapsed = await self.store.evaluation_call(identity,
-                lambda: InProcessExecutor().execute(materialized.proposal, copy.deepcopy(request), domain),
-                provider=self.provider, domain=domain)
+            evidence, elapsed = await self.store.evaluation_call(identity, invoke,
+                provider=self.provider, domain=domain, recoverable_command=self.command_executor is not None,
+                elapsed_reader=elapsed_reader)
         self._measurements[operation["intent_id"]] = (operation, elapsed)
         # Driver validation follows physical settlement, preserving known usage.
         return evidence

@@ -1,14 +1,14 @@
 # 框架交付范围与后续开发顺序
 
-本文是当前开发状态的统一入口，区分代码位置、实现范围和验收结果。设计依据仍是 [统一抽象对照表](ABSTRACTION_ALIGNMENT.md) 与 [RUBRIC](../autoresearch-fw/RUBRIC.md)，不以本页替换原验收门槛。以下分支快照于 2026-11-04 核对，功能提交为 `c2e8cee97554ecfc3d1ec91fc6a43a75f929cded`；后续纯文档提交不改变这个功能基线。
+本文是当前开发状态的统一入口，区分代码位置、实现范围和验收结果。设计依据仍是 [统一抽象对照表](ABSTRACTION_ALIGNMENT.md) 与 [RUBRIC](../autoresearch-fw/RUBRIC.md)，不以本页替换原验收门槛。以下分支快照于 2026-11-04 核对；本页随 M7 Task 4 功能提交同步，精确源码哈希和验证结果见[本阶段记录](../research/experiments/2026-11-04-m7-git-construction-local/summary.json)。
 
 ## 当前应该看哪个分支
 
 - **已合入主线：** `main`，`49be71e`，停在 S8 / v67 的配置种群与双亲 crossover。
 - **最近完成独立版本验收的工程节点：** `f7ab273`，v73，包含常驻对照、外部费用桥接及调用生命周期收拢；其本地和同 SHA Linux CI 均通过。它尚未合入 main，也不是正式发布。
-- **当前唯一继续开发的分支：** `codex/m7-construction`，功能节点 `c2e8cee`，包含上述所有工作并新增 M7 原生构造。当前不再按每个子任务新增开发分支。
+- **当前唯一继续开发的分支：** `codex/m7-construction`，包含上述所有工作，并新增 M7 原生构造、Git 产物发布及命令恢复。当前不再按每个子任务新增开发分支。
 
-功能节点比 main 多 **21 个提交**，没有与 main 分叉。远端 16 个分支并非 16 份互不相容的实现：所有分支头都在当前开发分支的祖先链上。回滚以精确 SHA 和已验证 bundle 为依据，无需长期保留每一个阶段分支名。
+本阶段提交后比 main 多 **23 个提交**（含设计和状态文档），没有与 main 分叉。远端 16 个分支并非 16 份互不相容的实现：所有分支头都在当前开发分支的祖先链上。回滚以精确 SHA 和已验证 bundle 为依据，无需长期保留每一个阶段分支名。
 
 | 远端分支 / 分组 | 相对 main 的状态 | 用途与 PR |
 | --- | --- | --- |
@@ -18,9 +18,9 @@
 | `codex/resident-governance` | 领先 main 13 个提交 | [PR #1 → main](https://github.com/YixuanZhang99/mori-27/pull/1)，Draft |
 | `codex/governed-currency-bridge` | 领先 main 14 个提交 | [PR #2 → resident-governance](https://github.com/YixuanZhang99/mori-27/pull/2)，Draft；比前者多 1 个 |
 | `codex/invocation-lifecycle` | 领先 main 17 个提交 | [PR #3 → governed-currency-bridge](https://github.com/YixuanZhang99/mori-27/pull/3)，Draft；比前者多 3 个 |
-| `codex/m7-construction` | 功能节点领先 main 21 个提交 | 当前开发分支；比 lifecycle 多 4 个功能/设计提交，M7 尚未完成整体交付 |
+| `codex/m7-construction` | 本阶段提交后领先 main 23 个提交 | [PR #4 → invocation-lifecycle](https://github.com/YixuanZhang99/mori-27/pull/4)，Draft；本轮已完成 4/6 项，尚未完成整体交付 |
 
-这是一条累积提交链：`main → MLE → resident-governance → currency-bridge → invocation-lifecycle → M7`。三个 Draft PR 当时均显示 MERGEABLE，但 Git 可合并不等于满足仓库验收要求。
+这是一条累积提交链：`main → MLE → resident-governance → currency-bridge → invocation-lifecycle → M7`。目前有四个按上述依赖顺序排列的 Draft PR；Git 可合并不等于满足仓库验收要求。
 
 ## 实际开发到哪里
 
@@ -31,11 +31,11 @@
 | 常驻治理 / v72 | 独立对照会话、未来容量保护、七账户投影、原始结果接管及记录回放 | `ff5c441` [同 SHA CI 通过](https://github.com/YixuanZhang99/mori-27/actions/runs/41816499445)，46 项版本验收；尚未合入 main |
 | 外部费用桥 / v73 | 物理与人民币双重准入、独立费用审计、已知结果恢复、回放不新增请求 | `75f397e` [同 SHA CI 通过](https://github.com/YixuanZhang99/mori-27/actions/runs/41820454246)，50 项版本验收；新路径使用 loopback 验证，未迁移真实账本 |
 | 调用生命周期收拢 | planning/operator/evaluation 共用调用与结算顺序，保留真实计费权威 | `f7ab273`：2,132 Linux tests、76 tooling、本地 v73 50 项和[同 SHA CI](https://github.com/YixuanZhang99/mori-27/actions/runs/41827376262)通过；不等于 A7 全仓关闭 |
-| M7 原生构造（当前） | 角色/冻结或自由假设/上下文投影真正参与生成；不可变 artifact；独立对照、恢复、零新调用回放 | `c2e8cee`：2,211 Linux tests、76 tooling、11 公理、示例/构建/导入通过；功能提交的同 SHA CI 尚未认证；文档同步后的运行见[分支 Actions](https://github.com/YixuanZhang99/mori-27/actions?query=branch%3Acodex%2Fm7-construction)；M7 总计划 6 项完成 3 项 |
+| M7 构造与 Git 执行（当前） | 角色/假设/投影参与生成；不可变原生/Git artifact；命令评估复用原提交；独立对照、SIGKILL 恢复及零新调用回放 | Task 4：2,238 Linux tests、76 tooling、11 公理、示例/构建/导入通过；安装包仓库外验证通过；M7 总计划 6 项完成 4 项。Task 3 文档节点 `4351a02` 的[Linux CI 已成功](https://github.com/YixuanZhang99/mori-27/actions/runs/41840205319)，Task 4 同 SHA CI 待验证 |
 
-**M7 下一步：** Task 4 Git artifact 发布、原生/命令评估接入和实际 SIGKILL；Task 5 新 v9 路径的外部费用桥；Task 6 整体独立审查、安装包示例与 v74 验收。旧 v8 桥已完成，不代表新的 v9 构造路径已经支持它。见 [实施计划](superpowers/plans/2026-11-04-m7-execution.md)和[当前原生接口](CONFIGURED_CONSTRUCTION.md)。
+**M7 下一步：** Task 5 新 v9 路径的外部费用桥；Task 6 整体独立审查、安装包示例与 v74 验收。旧 v8 桥已完成，不代表新的 v9 构造路径已经支持它。见 [实施计划](superpowers/plans/2026-11-04-m7-execution.md)和[当前原生接口](CONFIGURED_CONSTRUCTION.md)。
 
-**框架整体仍开放：** composed 并发池、完整算子与比较反思、部分准入组装、HITL、事件订阅、网络知识、A7 全仓指标，以及 RUBRIC B1–B5 等真实研究/产品证据。不能用“当前计划完成 3/6”推导框架完成 50%，也不能用单测数量推导发布完成度。
+**框架整体仍开放：** composed 并发池、完整算子与比较反思、部分准入组装、HITL、事件订阅、网络知识、A7 全仓指标，以及 RUBRIC B1–B5 等真实研究/产品证据。不能用“当前计划完成 4/6”推导框架整体完成比例，也不能用单测数量推导发布完成度。
 
 ## 为什么还没合入，以及收敛顺序
 

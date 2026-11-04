@@ -353,6 +353,8 @@ def default_registry():
     registry = Registry()
     from core.composition.construction_recipes import RecipeOperator, register_construction
     register_construction(registry)
+    from core.composition.construction_workspace import register_git_construction
+    register_git_construction(registry)
     from core.composition.recovery import register_worktree
     register_worktree(registry)
     registry.register("provider", "provided", _provided)
@@ -417,3 +419,26 @@ def population_profile(name="composed-population", mode="benchmark", *, capacity
                    operators=[{"name": "draft"}, {"name": "crossover"}],
                    frontier={"name": "population", "options": frontier_options})
     return profile
+
+
+def execution_profile(name="configured-execution", mode="benchmark"):
+    """Explicit M7 assembly with managed Git artifacts and three-layer evaluation.
+
+    Budget values are initial configuration, not provider hard per-call bounds.
+    Legacy profiles remain available with their original execution semantics.
+    """
+    value = composed_profile(name, mode)
+    value.update(schema_version=2, domain={"name": "native"},
+        executor={"name": "git_artifact"}, admission={"name": "layered"},
+        execution={"schema_version": 1, "spec": {"role": "general", "hypothesis_frozen": True,
+            "context_projection": ["memory", "grounding"]},
+            "constructor": {"name": "prompt", "options": {"max_attempts": 2}}},
+        budget={"name": "hierarchical", "options": {
+            "limits": {level: {"token": 1_000_000, "node": 100, "eval_count": 1000}
+                       for level in ("global", "direction", "candidate")},
+            "reservation": {"token": 20_000, "node": 0, "eval_count": 1},
+            "operation_reservations": {
+                "planning": {"token": 4_000, "node": 0, "eval_count": 0},
+                "operator": {"token": 16_000, "node": 1, "eval_count": 0}},
+            "fidelity_rungs": [{"fidelity": "dev", "split_id": "dev"}]}})
+    return value

@@ -77,7 +77,7 @@ class HierarchicalRuntime(ProxyRuntime):
             _identity(self._logical_run_id, candidate.id, operation, tag), candidate,
             direction, operation, request=request, depth=depth)
 
-    def _settle_physical(self, receipt, cost, coverage, elapsed, *, evaluation=False, operator=False):
+    def _settle_physical(self, receipt, cost, coverage, elapsed, *, evaluation=False, operator=False, supervised=False):
         if getattr(self, "continuation_enabled", False):
             if not evaluation and "wallclock" in self.budget.units \
                     and receipt.intent_id in self.store.replayed_starts and self.store.peek() is None:
@@ -97,7 +97,7 @@ class HierarchicalRuntime(ProxyRuntime):
             # A native batch may report more than one experiment, but an actual
             # domain invocation cannot consume fewer than one evaluation.
             values["eval_count"] = max(1, values["eval_count"])
-            if getattr(self, "durable_executor", False):
+            if getattr(self, "durable_executor", False) or supervised:
                 # The supervisor measures the actual process lifetime. A
                 # producer's zero/shorter wall meter cannot make it free.
                 values["wallclock"] = max(values["wallclock"], elapsed)
@@ -177,7 +177,8 @@ class HierarchicalRuntime(ProxyRuntime):
             if operation is not None else None
         evidence = await self.invocations.evaluation(receipt, parts["provider"], invoke,
             identity=identity, domain=domain, elapsed=elapsed, lane=lane, slot_id=control_slot,
-            outcome_owner="executor" if self.construction_enabled else "lifecycle")
+            outcome_owner="executor" if self.construction_enabled else "lifecycle",
+            supervised=self.construction_enabled and measurement_owner.command_executor is not None)
         if lane == "main":
             self._validate_domain(request)
         validate_evidence(evidence, expected_binding=expected)

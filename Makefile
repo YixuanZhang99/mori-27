@@ -31,6 +31,7 @@ examples:
 	cd m0 && $(UV) run --locked python examples/gsm8k_offline.py
 	cd m0 && $(UV) run --locked python examples/funsearch_offline.py
 	cd m0 && $(UV) run --locked python examples/composed_research_offline.py
+	cd m0 && $(UV) run --locked python examples/configured_execution_offline.py
 	cd m0 && $(UV) run --locked python -c "from examples.governed_controls import main; import tempfile; d=tempfile.TemporaryDirectory(prefix='mori-governed-example-'); main(['--workdir',d.name,'--pause-after','0']); main(['--workdir',d.name,'--resume']); main(['--workdir',d.name,'--replay']); d.cleanup()"
 	cd m0 && $(UV) run --locked python -c "from examples.governed_cny_offline import main; import tempfile; d=tempfile.TemporaryDirectory(prefix='mori-cny-example-'); main(['--workdir',d.name]); d.cleanup()"
 

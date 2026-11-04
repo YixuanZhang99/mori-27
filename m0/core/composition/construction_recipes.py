@@ -43,4 +43,3 @@ def register_construction(registry):
     registry.register("constructor", "prompt", lambda ctx, opts: PromptMaterializer(DEFAULT_ROLES, **opts),
         validate_options=constructor_options,
         execution={"schema_version": 1, "roles": {key: asdict(role) for key, role in DEFAULT_ROLES.items()}})
-

@@ -91,13 +91,13 @@ class _Operation:
     def check_floor(self, cost):
         check_provider_floor(self.owner.store, self.receipt, self.provider, self.before, cost)
 
-    def finish(self, cost, coverage, elapsed=None, *, evaluation=False, operator=False, integrity=True):
+    def finish(self, cost, coverage, elapsed=None, *, evaluation=False, operator=False, integrity=True, supervised=False):
         if self.settled:
             raise UsageError("physical invocation has already settled")
         self.check_floor(cost)
         self.owner.settle(self.receipt, cost, coverage,
             self.owner.clock() - self.started if elapsed is None else elapsed,
-            evaluation=evaluation, operator=operator)
+            evaluation=evaluation, operator=operator, **({"supervised": True} if supervised else {}))
         self.settled = True
         if integrity and self.owner.governance is not None:
             self.owner.governance.check_integrity(self.receipt)
@@ -152,7 +152,7 @@ class InvocationLifecycle:
             return proposal, failure
 
     async def evaluation(self, receipt, provider, invoke, *, identity, domain, elapsed=None,
-                         lane="main", slot_id=None, outcome_owner="lifecycle"):
+                         lane="main", slot_id=None, outcome_owner="lifecycle", supervised=False):
         from core.composition.worktree import MeasuredCommandError
         if outcome_owner not in {"lifecycle", "executor"} or outcome_owner == "executor" and not callable(elapsed):
             raise ValueError("durable evaluation owner requires its original measurement")
@@ -175,7 +175,7 @@ class InvocationLifecycle:
                         "fingerprint": receipt.fingerprint, "cost": asdict(error.cost),
                         "measured_cost_units": list(error.measured_cost_units), "reason": "MeasuredCommandError"})
                 operation.finish(error.cost, error.measured_cost_units, error.wall_seconds,
-                                 evaluation=True, integrity=False)
+                                 evaluation=True, integrity=False, supervised=supervised)
                 if self.governance is not None:
                     self.store.append("governed_integrity_failure", {"intent_id": receipt.intent_id,
                         "reason": "measured_evaluation_rejected"})
@@ -188,7 +188,7 @@ class InvocationLifecycle:
             operation.check_floor(evidence.eval_result.cost)
             measured_costs(evidence.eval_result)
             operation.finish(evidence.eval_result.cost, evidence.eval_result.contract.measured_cost_units,
-                             measured_elapsed, evaluation=True)
+                             measured_elapsed, evaluation=True, supervised=supervised)
             if evidence.eval_result.cost.eval_count < 1:
                 raise ValueError("evaluation count is below the actual domain invocation")
             return evidence

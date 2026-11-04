@@ -21,15 +21,20 @@ class ConfiguredExecution:
         self.config, self.parts, self.store = config, parts, store
         self.lane, self.slot_id = lane, slot_id
         location = Path(root) / "construction-artifacts" / ("main" if lane == "main" else slot_id)
-        self.owner = CandidateExecution(parts["constructor"], NativeArtifactBackend(location),
-                                        store, parts["provider"], parts["domain"])
+        create_backend = getattr(parts["executor"], "construction_backend", None)
+        backend = create_backend(location, store) if callable(create_backend) else NativeArtifactBackend(location)
+        evaluator_factory = getattr(parts["executor"], "evaluation_executor", None)
+        command = evaluator_factory(backend, store, parts["domain"]) if callable(evaluator_factory) else None
+        self.owner = CandidateExecution(parts["constructor"], backend,
+            store, parts["provider"], parts["domain"], command_executor=command)
         self.materializations = {}
 
     @property
     def manifest_binding(self):
         return {"schema_version": 1, "envelope": "candidate_production_v1",
                 "policy_sessions": "separate_planning_absorption_v1",
-                "constructor": self.owner.binding, "artifact_backend": self.owner.backend_binding}
+                "constructor": self.owner.binding, "artifact_backend": self.owner.backend_binding,
+                **({"evaluation_backend": self.owner.evaluation_binding} if self.owner.command_executor else {})}
 
     def project(self, context):
         pack = ContextPack(_json(context["retrieval"]))
@@ -117,4 +122,3 @@ class ConfiguredExecution:
                 raise ValueError("checkpoint construction identity differs")
             result[key] = item
         self.materializations = result
-

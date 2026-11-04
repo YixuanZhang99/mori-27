@@ -175,8 +175,13 @@ def audit_terminals(runtime, plan, sessions):
             amounts['eval_count'] = max(1, amounts['eval_count'])
         if 'wallclock' not in coverage:
             amounts['wallclock'] = elapsed
-        elif evaluation and getattr(runtime, 'durable_executor', False):
-            amounts['wallclock'] = max(amounts['wallclock'], elapsed)
+        elif evaluation:
+            slot = reservation_record['intent']['control_slot']
+            construction = sessions[slot].get('construction_execution')
+            supervised = getattr(runtime, 'durable_executor', False) or (
+                construction is not None and construction.owner.command_executor is not None)
+            if supervised:
+                amounts['wallclock'] = max(amounts['wallclock'], elapsed)
         _require(settled['actual_costs'] == {unit: amounts[unit] for unit in runtime.budget.units},
                  'physical settlement differs from actual terminal costs')
         return settle_index

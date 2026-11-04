@@ -1,6 +1,6 @@
-# M7 原生构造接入：schema 2
+# M7 构造与 Git 产物：schema 2
 
-本页描述 M7 实施计划 Task 3 的公开接口。它提供 `composed-v9-m7` 和 `composed-v9-m7-governed` 原生路径；Git artifact 发布、命令评估接入和 v9 外部货币桥仍待后续任务。它不表示 M7 并发调度或整个框架验收完成。原有 schema 1 配置与历史检查点按原契约运行，不自动升级。
+本页描述 M7 实施计划 Tasks 3–4 的公开接口。它提供 `composed-v9-m7` 和 `composed-v9-m7-governed`，包含原生 artifact 与 Git artifact，以及原生/命令评估接入；v9 外部货币桥仍待 Task 5。它不表示 M7 并发调度或整个框架验收完成。原有 schema 1 配置与历史检查点按原契约运行，不自动升级。
 
 ## 配置与调用
 
@@ -44,4 +44,46 @@ schema 2 将同一策略配置实例化为两个独立会话：一个规划，�
 
 每个对照槽位有独立 provider、constructor、domain、executor 和 artifact 空间，使用冻结的初始任务、空 memory/grounding 和无父候选配方。主线耗尽可用预算后，已保留的对照容量仍受保护。对照候选不进入主线选择和准入。
 
-实现与验证范围见 [M7 计划](superpowers/plans/2026-11-04-m7-execution.md)。完整 Git/SIGKILL、安装包示例、v9 外部货币审计及新版本验收通过之前，不应把此增量当作完整发布证书。
+实现与验证范围见 [M7 计划](superpowers/plans/2026-11-04-m7-execution.md)。Git/SIGKILL 与安装包示例是工程验证的一部分；v9 外部货币审计、整体独立审查与新版本验收仍未完成，不应把此增量当作完整发布证书。
+
+
+## 推荐的 Git 产物配置
+
+新代码可以从 `core.composition.defaults.execution_profile()` 获取显式 schema-2 配置：原生 domain、`git_artifact` executor、hierarchical budget、三层准入和 prompt constructor。它与旧 `composed_profile()` 的兼容语义分开；没有改变旧 profile 的默认路径。预算数值是可修改的起始配置，不是模型调用硬上界或对真实任务的费用建议。
+
+省略 `base_repo` 时，在本次运行的 artifact 空间创建受管理的空 Git 仓库，绝不自动快照调用方当前目录。有基础代码与受信评分器时可显式配置：
+
+```python
+from core.composition.defaults import execution_profile
+
+profile = execution_profile()
+profile["execution"]["spec"]["role"] = "coder"
+profile["executor"] = {
+    "name": "git_artifact",
+    "options": {
+        "base_repo": "/absolute/path/to/base-repository",
+        "base_ref": "HEAD",  # 启动时解析并绑定到确切 commit
+        "artifact_path": "candidate.py",
+        "protected_paths": ["evaluate.py"],
+        "sandbox": "bubblewrap",
+    },
+}
+```
+
+`base_repo` 必须已经提交需要的文件；工作目录中的未提交改动不会成为构造基线。运行空间必须在该仓库外。当前只支持一个 artifact 文件，基础树中的符号链接、子模块和特殊文件会拒绝；artifact 不能覆盖受保护路径、目录或执行器控制路径。原生评估仍为受信任进程内执行；Git 发布本身不是 OS 沙箱。选择已有 `command` domain 后，命令评估默认使用 Linux bubblewrap，或显式 `sandbox="none"` 的可信本地模式。`resource_limits` 沿用原命令执行器的 memory_bytes/file_bytes/process_count 契约。
+
+构造器只生成一次。发布使用基础提交的精确 blob、独立 Git index、冻结 tree 和 commit 内容，绕开用户 hooks/filters，不修改调用方工作树和 index。提交计划先持久化，再发布提交及引用；恢复验证原 journal、计划、提交和字节，采用同一个原始提交。Git 对象可能有不同候选共享的 blob，但每次候选生产的提交身份绑定到自身操作。
+
+命令评估使用现有 WorktreeCommandExecutor，从原始 artifact 提交创建自己的评估工作区；分配好的 `EvalRequest`（包括 resume_from）不改写。评分日志与结果提交属于评估工作，不重新定义构造 artifact。调用记录将原始 artifact commit 保存在执行器基础提交绑定中。真正的 supervisor 时长继续作为墙钟费用下限，评分器申报零时间不会让命令免费。
+
+不完整的命令调用仅通过原进程身份协议接续；没有可验证进程/结果的启动意图仍拒绝替代。原生调用保持不明终态不重试。recorded replay 使用原 terminal evidence，不再创建评分进程。公开入口已有真实 SIGKILL 测试覆盖 provider 完成、产物计划/提交，以及评分进程开始/完成和结果发布；它们不证明整机断电丢写恢复。
+
+## 安装包独立示例
+
+先构建并安装 wheel，把 [configured_execution_offline.py](../m0/examples/configured_execution_offline.py) 复制到仓库外，再用安装环境运行：
+
+```bash
+python -I /path/outside/checkout/configured_execution_offline.py --workdir /new/empty/run-directory
+```
+
+也可在开发环境执行 `uv run --project m0 --locked python m0/examples/configured_execution_offline.py`，或运行 `make examples`。示例实际执行 2 次合成模型生成、5 次本地评估；暂停恢复后仍是原始 Git 产物，并使用会直接报错的 provider/domain 验证回放零新调用。10 个生成 token 是合成 fixture 用量；分数不是 benchmark 成绩。
