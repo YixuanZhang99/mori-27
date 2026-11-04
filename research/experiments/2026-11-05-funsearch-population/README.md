@@ -46,3 +46,13 @@ callback in the scorer's process could modify the scorer even inside a sandbox.
 Model-generated candidates require a separate isolated execution process and a
 trusted scoring boundary, with only the chosen split exposed, before model work.
 
+An experimental `SandboxedPriority` prototype keeps the scorer in the parent
+and sends only the current item and eligible-bin capacities to a separate
+Bubblewrap/seccomp child. Its offline tests cover host-file and environment
+isolation, invalid output and a deadline; a trusted reference function scored
+the ten OR3 dev instances at -213.9, matching the split baseline. The child
+does not receive the dataset or scorer module. This is not yet connected to the
+Framework's durable evaluator or independently audited recovery protocol, and
+the underlying sandbox is not a complete resource policy or a hostile-kernel
+boundary. Do not treat this prototype as a model benchmark result.
+
