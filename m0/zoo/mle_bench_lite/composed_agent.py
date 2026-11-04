@@ -66,7 +66,8 @@ def task_description(bundle):
 
 def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1,
               iterations=3, solution_timeout=120, variant="full", max_completion_tokens=4096,
-              provider=None, runner=None, resume=False, protected_roots=(), anonymization_key_path=None):
+              provider=None, runner=None, resume=False, protected_roots=(), anonymization_key_path=None,
+              spending_ledger_path=None):
     profile = build_profile(variant=variant, token_budget=token_budget, seed=seed, iterations=iterations)
     workspace = Path(workspace).resolve()
     if runner is None:
@@ -75,6 +76,21 @@ def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1
         SandboxRunner.validate_paths(workspace, *protected_roots)
         runner.preflight()
     artifacts = workspace.parent / "agent_artifacts"
+    spending_ledger = getattr(provider, "spending_ledger", None)
+    if spending_ledger_path is None and spending_ledger is not None:
+        spending_ledger_path = spending_ledger.path
+    if spending_ledger_path is not None:
+        from zoo.mle_bench_lite.cny_budget import CampaignBudget
+        ledger_path = Path(spending_ledger_path).absolute()
+        SandboxRunner.validate_paths(ledger_path)
+        if any(ledger_path.resolve() == root or root in ledger_path.resolve().parents
+               for root in (workspace, artifacts)):
+            raise ValueError("campaign ledger must stay outside candidate workspace and run artifacts")
+        loaded = CampaignBudget(ledger_path)
+        if provider is not None and (spending_ledger is None
+                or spending_ledger.manifest_binding() != loaded.manifest_binding()):
+            raise ValueError("provided provider uses a different campaign ledger")
+        spending_ledger = loaded
     artifacts.mkdir(parents=True, exist_ok=True)
     key_path = (Path(anonymization_key_path).absolute() if anonymization_key_path is not None
                 else artifacts / "anonymization.key")
@@ -92,7 +108,9 @@ def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1
         from zoo.mle_bench_lite.provider import BenchmarkProvider
         provider = BenchmarkProvider(model=model, base_url=api_base, usage_dir=artifacts / "token_usage",
             token_budget=token_budget, max_completion_tokens=max_completion_tokens,
-            temperature=0.0, timeout=max(30.0, solution_timeout))
+            temperature=0.0, timeout=max(30.0, solution_timeout),
+            request_format="deepseek" if spending_ledger is not None else None,
+            spending_ledger=spending_ledger)
     contract = {"protocol": PROTOCOL, "profile": profile, "dataset_identity": bundle.identity,
                 "domain": domain.manifest_binding, "provider": provider.manifest_binding(),
                 "task_description_sha256": digest(task_description(bundle))}
@@ -111,7 +129,7 @@ def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1
     domain.restore_evidence(framework.store.read("composed_evidence"))
     result = framework.evolve(task_description(bundle))
     from zoo.mle_bench_lite.usage_audit import audit_usage
-    usage_audit = audit_usage(artifacts / "token_usage")
+    usage_audit = audit_usage(artifacts / "token_usage", spending_ledger=spending_ledger)
     if not usage_audit["complete"] or not usage_audit["receipt_count"]:
         raise ValueError("provider operations lack complete independent cost and identity evidence")
     chosen = result.get("best_candidate_id")
@@ -140,8 +158,12 @@ def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1
             "sha256:" + __import__("hashlib").sha256((workspace / "submission.csv").read_bytes()).hexdigest(),
         "details": {"iterations": iterations, "solution_timeout": solution_timeout,
             "temperature": 0.0, "max_completion_tokens": max_completion_tokens,
+            "provider_request_format": getattr(provider, "request_format", "fixture"),
             "training_invocations": domain.training_invocations, "evaluation_calls": len(domain.calls),
             "physical_ledger": framework._composed.budget.state(), "result": result}}
+    if spending_ledger is not None:
+        summary.update(currency_campaign=spending_ledger.manifest_binding(),
+                       currency_audit=usage_audit["currency_audit"], immutable_snapshot_verified=False)
     # This full public tree identity is an independent cross-check of the pilot
     # runner's copied inputs (auxiliary files are bound even though unused).
     from zoo.mle_bench_lite.pilot import public_snapshot
@@ -155,6 +177,7 @@ def main(argv=None):
     add_common_arguments(parser)
     parser.add_argument("--variant", choices=("baseline", "full"), required=True)
     parser.add_argument("--max-completion-tokens", type=int, default=4096)
+    parser.add_argument("--spending-ledger", type=Path)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
     if not args.model:
@@ -164,6 +187,7 @@ def main(argv=None):
         iterations=args.iterations, solution_timeout=args.solution_timeout, variant=args.variant,
         max_completion_tokens=args.max_completion_tokens, resume=args.resume,
         anonymization_key_path=os.environ.get("MLE_ANONYMIZATION_KEY_PATH"),
+        spending_ledger_path=args.spending_ledger or os.environ.get("MLE_CNY_LEDGER_PATH") or None,
         protected_roots=(args.official_root or os.environ.get("MLE_OFFICIAL_ROOT"),
                          args.data_root or os.environ.get("MLE_DATA_ROOT")))
     print(json.dumps(summary, ensure_ascii=False))

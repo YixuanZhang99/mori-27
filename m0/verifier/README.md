@@ -78,3 +78,5 @@
 - v67 — S8 有界种群成员、可复算抽样、双亲文本 crossover 与公开 Framework 恢复验收；保留全部 v66 命令、超时及真实历史证据。elite 保留不等于 novelty/MAP-Elites，代码签名证明与真实外部 campaign 不由本阶段认证。见 [v67](v67/README.md)。
 
 - v68 — S9 将 MLE-Bench Lite 的公开训练数据评估、anchor、负反馈与种群搜索接入配置 Framework，并验收同模型同预算的小规模对照试跑协议；保留全部 v67 命令、超时与真实历史。离线 fixture 不代表真实 benchmark 成绩，子集试跑不代表 22 题全量成绩。见 [v68](v68/README.md)。
+
+- v69 — S9 private anonymous prediction order, pre-provider sandbox readiness and durable shared CNY campaign admission; preserves all v68 command groups and verified historical evidence.

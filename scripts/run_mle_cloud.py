@@ -77,12 +77,18 @@ def export_summary(output_root: Path, destination: Path) -> dict:
             "schema_version", "benchmark", "scope", "subset_only", "formal_benchmark_complete",
             "evidence_kind", "pilot_complete", "expected_runs", "failure_count",
             "statistical_significance_claimed", "host_parity_claimed", "spec_sha256",
-            "requested_model", "actual_models")}
+            "requested_model", "actual_models", "observed_response_models",
+            "response_identifier_evidence_complete", "immutable_snapshot_verified")}
+        currency_fields = ("limit_micro_cny", "settled_upper_bound_micro_cny", "reserved_micro_cny",
+                           "remaining_micro_cny", "invoice_verified", "complete")
+        currency = original.get("currency_campaign")
+        value["currency_campaign"] = ({key: currency.get(key) for key in currency_fields}
+                                      if isinstance(currency, dict) else None)
         value["source_commit"] = os.environ.get("GITHUB_SHA")
         spec = original.get("spec", {})
         value["plan"] = {key: spec.get(key) for key in (
             "model", "task_ids", "seeds", "arms", "budget", "iterations",
-            "solution_timeout", "provider_sampling", "official_revision", "execution_host")}
+            "solution_timeout", "provider_sampling", "official_model_mapping", "official_revision", "execution_host")}
         value["runs"] = []
         for row in original.get("runs", []):
             item = {key: row.get(key) for key in (
@@ -94,6 +100,9 @@ def export_summary(output_root: Path, destination: Path) -> dict:
                 "known_tokens", "receipt_count", "started_calls", "completed_calls",
                 "costs_complete", "complete", "actual_models")}
             item["unresolved_provider_calls"] = len(audit.get("unresolved_calls", []))
+            currency = audit.get("currency_audit")
+            item["currency_usage"] = ({key: currency.get(key) for key in currency_fields}
+                                       if isinstance(currency, dict) else None)
             failure_type = str(row.get("error", "")).split(":", 1)[0]
             item["failure_type"] = failure_type if failure_type in {
                 "ValueError", "UsageError", "RuntimeError", "OSError", "FileNotFoundError",
@@ -130,6 +139,7 @@ def main(argv=None) -> int:
         from zoo.mle_bench_lite.pilot import preflight_pilot, run_pilot
         kwargs = {key: plan[key] for key in ("model", "token_budget", "time_limit",
                   "solution_timeout", "iterations", "seeds", "task_ids")}
+        kwargs["spending_ledger_path"] = os.environ.get("MLE_CNY_LEDGER_PATH") or None
         if plan["mode"] == "preflight":
             result = preflight_pilot(args.official_root, args.data_root, **kwargs)
             args.public_report.mkdir(parents=True, exist_ok=True)

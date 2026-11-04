@@ -208,7 +208,8 @@ def _validate_plan(model, token_budget, time_limit, solution_timeout, iterations
         raise ValueError("a pilot requires 3–5 unique task IDs")
 
 
-def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks):
+def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
+          *, spending_ledger_path=None):
     _validate_plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks)
     endpoint = os.environ.get("OPENAI_API_BASE", os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
     parsed = urllib.parse.urlsplit(endpoint)
@@ -216,13 +217,15 @@ def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, 
             or parsed.scheme not in {"http", "https"}
             or (parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"})):
         raise ValueError("provider endpoint must be HTTPS without credentials/query (loopback HTTP fixtures excepted)")
-    return {"schema_version": 1, "protocol": PROTOCOL, "benchmark": "mle_bench_lite",
+    plan = {"schema_version": 1, "protocol": PROTOCOL, "benchmark": "mle_bench_lite",
             "scope": "task_subset_pilot", "subset_only": True,
             "formal_benchmark_complete": False,
             "official_revision": REVISION, "official_task_list_sha256": TASK_LIST_SHA256,
             "task_ids": list(tasks), "seeds": list(seeds), "arms": list(ARMS),
             "model": model, "provider_base_url": endpoint, "provider_timeout": max(30.0, solution_timeout),
-            "response_model_lock": "one actual snapshot across the complete pilot; stop on drift", "budget": {"token": token_budget, "wallclock": float(time_limit)},
+            "response_model_lock": "one returned model identifier across the pilot; stop on drift",
+            "immutable_snapshot_verified": False,
+            "budget": {"token": token_budget, "wallclock": float(time_limit)},
             "solution_timeout": float(solution_timeout), "iterations": iterations,
             "provider_sampling": {"temperature": 0.0, "max_completion_tokens": MAX_COMPLETION_TOKENS, "seed_sent_to_provider": False},
             "seed_scope": "local data split and search sampling only; provider output is not reproducible",
@@ -230,17 +233,59 @@ def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, 
             "wallclock_excludes_official_grading": True,
             "usd_budget_enforced": False,
             "expected_runs": len(tasks) * len(seeds) * len(ARMS)}
+    if parsed.hostname == "api.deepseek.com" or spending_ledger_path is not None:
+        plan["currency_ledger_required"] = True
+        plan["provider_sampling"].update(max_completion_tokens=16384, request_format="deepseek",
+            thinking={"type": "enabled"}, reasoning_effort="high", wire_output_field="max_tokens",
+            temperature_applied=False)
+        plan["official_model_mapping"] = {"api_id": "deepseek-flash", "display_name": "DeepSeek-V4.1-Flash-1017",
+            "verified_date": "2026-11-04", "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+            "immutable_snapshot_verified": False}
+    return plan
+
+
+def _bind_campaign(plan, path, *, output_root=None):
+    if not plan.get("currency_ledger_required"):
+        return None
+    if path is None:
+        raise ValueError("an explicitly configured existing campaign ledger is required")
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    path = Path(path).absolute()
+    SandboxRunner.validate_paths(path)
+    if output_root is not None:
+        output = Path(output_root).resolve()
+        if path.resolve() == output or output in path.resolve().parents:
+            raise ValueError("campaign ledger must stay outside replaceable pilot output_root")
+    ledger = CampaignBudget(path)
+    policy, snapshot = ledger.manifest_binding(), ledger.snapshot()
+    parsed = urllib.parse.urlsplit(plan["provider_base_url"])
+    if (plan["model"] != policy["model"] or (plan["provider_base_url"] != policy["provider_base_url"]
+            and parsed.hostname not in {"localhost", "127.0.0.1", "::1"})):
+        raise ValueError("pilot model or endpoint differs from the campaign price policy")
+    if snapshot["pending_calls"]:
+        raise ValueError("campaign has unresolved provider usage; no new paid run allowed")
+    allowance = min(plan["provider_sampling"]["max_completion_tokens"], plan["budget"]["token"])
+    if snapshot["remaining_micro_cny"] < policy["context_tokens"] * 2 + allowance * 8:
+        raise ValueError("campaign CNY budget exhausted before pilot execution")
+    plan["currency_campaign"] = policy
+    return ledger
 
 
 def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
                     model: str, token_budget: int, time_limit: float = 600,
                     solution_timeout: float = 60, iterations: int = 4,
                     seeds: tuple[int, ...] = (1,), task_ids=None,
-                    manifest_path: str | Path | None = None) -> dict:
+                    manifest_path: str | Path | None = None, spending_ledger_path=None) -> dict:
     """Read-only readiness report. No provider request or agent process is started."""
     tasks = list(DEFAULT_TASKS if task_ids is None else task_ids)
-    plan = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks)
+    plan = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
+                 spending_ledger_path=spending_ledger_path)
     missing = []
+    try:
+        _bind_campaign(plan, spending_ledger_path)
+    except (ValueError, OSError) as error:
+        missing.append({"requirement": "campaign_currency_budget", "reason": str(error)})
     if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
         missing.append({"requirement": "execution_host", "reason": "Linux x86_64 is required for the sandboxed real pilot"})
     if not shutil.which("bwrap"):
@@ -277,12 +322,15 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
             "missing": missing, "plan": plan, "plan_sha256": digest(plan)}
 
 
-def _command(model, token_budget, solution_timeout, iterations) -> str:
+def _command(model, token_budget, solution_timeout, iterations, *,
+             max_completion_tokens=MAX_COMPLETION_TOKENS, spending_ledger_path=None) -> str:
     argv = [sys.executable, "-m", "zoo.mle_bench_lite.composed_agent",
             "--workspace", "{workspace}", "--task", "{task}", "--seed", "{seed}",
             "--variant", "{arm}", "--model", model, "--token-budget", str(token_budget),
             "--solution-timeout", str(solution_timeout), "--iterations", str(iterations),
-            "--max-completion-tokens", str(MAX_COMPLETION_TOKENS)]
+            "--max-completion-tokens", str(max_completion_tokens)]
+    if spending_ledger_path is not None:
+        argv.extend(["--spending-ledger", str(Path(spending_ledger_path).absolute()).replace("{", "{{").replace("}", "}}")])
     # The shared runner expands its known placeholders after shlex parsing.
     # Escape braces in the user-supplied model, which is never a shell command.
     argv[argv.index("--model") + 1] = model.replace("{", "{{").replace("}", "}}")
@@ -290,7 +338,9 @@ def _command(model, token_budget, solution_timeout, iterations) -> str:
 
 
 def _validate_agent_summary(summary: dict, *, task, seed, arm, model, token_budget,
-                            profile: dict, public_data: dict, dataset: dict, iterations: int, solution_timeout: float) -> None:
+                            profile: dict, public_data: dict, dataset: dict, iterations: int, solution_timeout: float,
+                            max_completion_tokens=MAX_COMPLETION_TOKENS, currency_campaign=None,
+                            currency_audit=None) -> None:
     expected = {"task_id": task, "seed": seed, "variant": arm, "protocol": PROTOCOL,
                 "requested_model": model, "token_budget": token_budget,
                 "profile": profile, "profile_sha256": digest(profile)}
@@ -304,9 +354,14 @@ def _validate_agent_summary(summary: dict, *, task, seed, arm, model, token_budg
         raise ValueError("agent dataset manifest differs from the independently frozen splits")
     settings = summary.get("details", {})
     for field, value in {"iterations": iterations, "solution_timeout": solution_timeout,
-                         "temperature": 0.0, "max_completion_tokens": MAX_COMPLETION_TOKENS}.items():
+                         "temperature": 0.0, "max_completion_tokens": max_completion_tokens}.items():
         if settings.get(field) != value:
             raise ValueError(f"agent {field} differs from the frozen runtime settings")
+    if currency_campaign is not None:
+        if (summary.get("currency_campaign") != currency_campaign
+                or summary.get("currency_audit") != currency_audit
+                or settings.get("provider_request_format") != "deepseek"):
+            raise ValueError("agent currency evidence differs from the independently audited campaign")
     # The agent freezes precise selected CSVs and split membership. The runner
     # additionally binds the complete public input tree independently.
     if summary.get("public_data_sha256") != public_data["sha256"]:
@@ -316,7 +371,7 @@ def _validate_agent_summary(summary: dict, *, task, seed, arm, model, token_budg
 def _validate_provider_settings(run_dir: Path, spec: dict, *, fixture: bool):
     calls = run_dir / "agent_artifacts/token_usage_calls"
     starts = list(calls.glob("*.started.json"))
-    if not starts and fixture:
+    if not starts and fixture and not spec.get("currency_ledger_required"):
         return
     if not starts:
         raise ValueError("provider invocation settings are missing")
@@ -325,6 +380,10 @@ def _validate_provider_settings(run_dir: Path, spec: dict, *, fixture: bool):
                 "max_completion_tokens": spec["provider_sampling"]["max_completion_tokens"],
                 "timeout": spec["provider_timeout"], "token_budget": spec["budget"]["token"],
                 "retry_policy": "never", "response_model_required": True}
+    if spec.get("currency_ledger_required"):
+        expected.update(request_format="deepseek", campaign=spec["currency_campaign"],
+            thinking={"type": "enabled"}, reasoning_effort="high", wire_output_field="max_tokens",
+            temperature_applied=False, immutable_snapshot_verified=False)
     for path in starts:
         manifest = json.loads(path.read_text()).get("provider", {})
         for field, value in expected.items():
@@ -332,7 +391,7 @@ def _validate_provider_settings(run_dir: Path, spec: dict, *, fixture: bool):
                 raise ValueError(f"actual provider {field} differs from the frozen pilot settings")
 
 
-def _summary_report(spec, rows, fixture: bool):
+def _summary_report(spec, rows, fixture: bool, spending_ledger=None):
     complete = len(rows) == spec["expected_runs"] and all(row["status"] == "graded" for row in rows)
     actual_models = sorted({row["actual_model"] for row in rows if row.get("actual_model")})
     observed_models = sorted({model for row in rows for model in row.get("usage_audit", {}).get("actual_models", [])})
@@ -373,6 +432,14 @@ def _summary_report(spec, rows, fixture: bool):
                       "unknown_token_runs": sum(not row.get("usage_audit", {}).get("costs_complete", False) for row in arm_rows),
                       "incomplete_identity_runs": sum(not row.get("usage_audit", {}).get("complete", False) for row in arm_rows),
                       "known_wallclock": sum(cost.get("wallclock", 0) for cost in costs)}
+    currency = None
+    if spending_ledger is not None:
+        try:
+            currency = spending_ledger.snapshot()
+            currency["complete"] = not currency["pending_calls"]
+        except (ValueError, OSError) as error:
+            currency = {"complete": False, "invoice_verified": False, "error_type": type(error).__name__}
+        complete = complete and currency["complete"]
     return {"schema_version": 1, "benchmark": "mle_bench_lite", "scope": "task_subset_pilot",
             "subset_only": True, "formal_benchmark_complete": False,
             "official_benchmark_measurement": not fixture and any(row["status"] == "graded" for row in rows),
@@ -381,6 +448,8 @@ def _summary_report(spec, rows, fixture: bool):
             "expected_runs": spec["expected_runs"], "runs": rows, "pairs": pairs, "arms": totals,
             "requested_model": spec["model"], "actual_models": actual_models,
             "observed_response_models": observed_models, "backbone_evidence_complete": backbone_complete,
+            "response_identifier_evidence_complete": backbone_complete, "immutable_snapshot_verified": False,
+            "currency_campaign": currency,
             "statistical_significance_claimed": False, "host_parity_claimed": False,
             "failure_count": sum(row["status"] != "graded" for row in rows)}
 
@@ -390,10 +459,12 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
               solution_timeout: float = 60, iterations: int = 4,
               seeds: tuple[int, ...] = (1,), task_ids=None,
               manifest_path: str | Path | None = None, grader_factory: Callable | None = None,
-              _fixture_agent_command: str | None = None) -> dict:
+              _fixture_agent_command: str | None = None, spending_ledger_path=None) -> dict:
     """Run fixed paired variants. Test injections cannot emit production evidence."""
     tasks = list(DEFAULT_TASKS if task_ids is None else task_ids)
-    spec = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks)
+    spec = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
+                 spending_ledger_path=spending_ledger_path)
+    spending_ledger = _bind_campaign(spec, spending_ledger_path, output_root=output_root)
     if _fixture_agent_command is not None and grader_factory is None:
         raise ValueError("custom agent commands are reserved for labelled protocol fixtures")
     if grader_factory is None:
@@ -401,7 +472,8 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
             _protected_host_path(Path(protected_root))
         readiness = preflight_pilot(official_root, data_root, model=model,
             token_budget=token_budget, time_limit=time_limit, solution_timeout=solution_timeout,
-            iterations=iterations, seeds=seeds, task_ids=tasks, manifest_path=manifest_path)
+            iterations=iterations, seeds=seeds, task_ids=tasks, manifest_path=manifest_path,
+            spending_ledger_path=spending_ledger_path)
         if not readiness["ready"]:
             raise ValueError("pilot preflight failed: " + json.dumps(readiness["missing"]))
     official_root, data_root, output_root = map(lambda p: Path(p).resolve(),
@@ -428,7 +500,9 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
     spec["execution_host"] = {"system": platform.system(), "machine": platform.machine(),
                               "cpu_count": os.cpu_count(), "python": platform.python_version()}
     _atomic_json(output_root / "pilot_spec.json", {"spec": spec, "sha256": digest(spec)})
-    command = _fixture_agent_command or _command(model, token_budget, solution_timeout, iterations)
+    command = _fixture_agent_command or _command(model, token_budget, solution_timeout, iterations,
+        max_completion_tokens=spec["provider_sampling"]["max_completion_tokens"],
+        spending_ledger_path=spending_ledger_path)
     rows = []
     observed_backbones = set()
     stop_reason = None
@@ -449,10 +523,17 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                            "actual_models": [], "usage": None, "not_executed": True},
                        "evidence_kind": "protocol_fixture" if grader_factory else "official_task_subset"}
                 adapter = adapters[task]
+                currency_before = None
                 try:
                     if stop_reason is not None:
                         row["blocked_before_execution"] = True
                         raise ValueError(stop_reason)
+                    if spending_ledger is not None:
+                        currency_before = spending_ledger.snapshot()
+                        if currency_before["pending_calls"]:
+                            stop_reason = "campaign has unresolved usage; remaining paid runs are blocked"
+                            row["blocked_before_execution"] = True
+                            raise ValueError(stop_reason)
                     if grader_factory is None:
                         try:
                             identity = _official_prepared_identity(official_root, data_root, tasks, adapters)
@@ -476,6 +557,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                         "MLE_AUDIT_PATH": str(run_dir / "audit.jsonl"),
                         "MLE_TOKEN_BUDGET": str(token_budget),
                         "MLE_ANONYMIZATION_KEY_PATH": str(key_paths[(task, seed)]),
+                        "MLE_CNY_LEDGER_PATH": str(spending_ledger.path) if spending_ledger is not None else "",
                         "MLE_PILOT_SPEC_SHA256": digest(spec),
                         "MLE_PILOT_PUBLIC_DATA_SHA256": spec["public_data"][task]["sha256"],
                     })
@@ -483,7 +565,8 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                     # An unfinished second request cannot disappear behind the
                     # first request's valid receipt. Keep known and unknown costs separate.
                     usage_audit = audit_usage(run_dir / "agent_artifacts/token_usage",
-                                              allow_fixture_receipts=grader_factory is not None)
+                                              allow_fixture_receipts=grader_factory is not None,
+                                              spending_ledger=spending_ledger)
                     if not usage_audit["receipt_count"] and not usage_audit["started_calls"]:
                         usage_audit.update(costs_complete=False, complete=False)
                         usage_audit["errors"].append({"kind": "absence", "call_id": "",
@@ -515,7 +598,9 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                     _validate_agent_summary(summary, task=task, seed=seed, arm=arm, model=model,
                         token_budget=token_budget, profile=spec["profiles"][f"{seed}:{arm}"],
                         public_data=spec["public_data"][task], dataset=spec["datasets"][f"{task}:{seed}"],
-                        iterations=iterations, solution_timeout=solution_timeout)
+                        iterations=iterations, solution_timeout=solution_timeout,
+                        max_completion_tokens=spec["provider_sampling"]["max_completion_tokens"],
+                        currency_campaign=spec.get("currency_campaign"), currency_audit=usage_audit.get("currency_audit"))
                     if public_snapshot(workspace / "data") != spec["public_data"][task]:
                         raise ValueError("agent modified the public input snapshot")
                     row["dataset_identity"] = summary["dataset_identity"]
@@ -532,9 +617,20 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                                    run_dir / "agent_artifacts/agent_run.json"))
                 except Exception as error:
                     row.update(status="failed", error=f"{type(error).__name__}: {error}"[-2000:])
+                if spending_ledger is not None and currency_before is not None:
+                    try:
+                        currency_after = spending_ledger.snapshot()
+                        previous_ids = {item["call_id"] for item in currency_before["operations"]}
+                        row["currency_call_ids"] = [item["call_id"] for item in currency_after["operations"]
+                                                     if item["call_id"] not in previous_ids]
+                        if currency_after["pending_calls"]:
+                            stop_reason = "campaign has unresolved usage; remaining paid runs are blocked"
+                    except (ValueError, OSError):
+                        row.update(status="failed", currency_integrity_error=True)
+                        stop_reason = "campaign integrity failed; remaining paid runs are blocked"
                 _atomic_json(run_dir / "run.json", row)
                 rows.append(row)
-                _atomic_json(output_root / "pilot.json", _summary_report(spec, rows, grader_factory is not None))
+                _atomic_json(output_root / "pilot.json", _summary_report(spec, rows, grader_factory is not None, spending_ledger))
     # No official hidden score exists until every arm has stopped and selected.
     for row in rows:
         if row["status"] != "frozen":
@@ -567,7 +663,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
         except Exception as error:
             row.update(status="failed", error=f"{type(error).__name__}: {error}"[-2000:])
         _atomic_json(run_dir / "run.json", row)
-    report = _summary_report(spec, rows, grader_factory is not None)
+    report = _summary_report(spec, rows, grader_factory is not None, spending_ledger)
     _atomic_json(output_root / "pilot.json", report)
     return report
 
@@ -586,10 +682,12 @@ def main(argv=None) -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[1])
     parser.add_argument("--tasks", nargs="+", default=list(DEFAULT_TASKS))
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--spending-ledger", type=Path)
     args = parser.parse_args(argv)
     values = dict(model=args.model, token_budget=args.token_budget, time_limit=args.time_limit,
                   solution_timeout=args.solution_timeout, iterations=args.iterations,
-                  seeds=tuple(args.seeds), task_ids=args.tasks, manifest_path=args.manifest_path)
+                  seeds=tuple(args.seeds), task_ids=args.tasks, manifest_path=args.manifest_path,
+                  spending_ledger_path=args.spending_ledger or os.environ.get("MLE_CNY_LEDGER_PATH") or None)
     try:
         if args.preflight_only:
             report = preflight_pilot(args.official_root, args.data_root, **values)

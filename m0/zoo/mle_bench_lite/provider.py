@@ -42,7 +42,8 @@ class BenchmarkProvider:
     def __init__(self, model: str, base_url: str, usage_dir: str | Path,
                  token_budget: int, max_completion_tokens: int = 4096,
                  temperature: float = 0.0, timeout: float = 120.0,
-                 api_key: str | None = None):
+                 api_key: str | None = None, *, request_format: str | None = None,
+                 spending_ledger=None):
         if not isinstance(model, str) or not model.strip():
             raise ValueError("an explicit model is required")
         for name, value in (("token_budget", token_budget),
@@ -60,6 +61,25 @@ class BenchmarkProvider:
                 or (url.scheme == "http" and url.hostname not in {"localhost", "127.0.0.1", "::1"})):
             raise ValueError("provider URL requires HTTPS (HTTP is only for loopback fixtures)")
         self.model, self.base_url = model, base_url.rstrip("/")
+        self.request_format = request_format or ("deepseek" if url.hostname == "api.deepseek.com" else "openai")
+        if self.request_format not in {"openai", "deepseek"}:
+            raise ValueError("unsupported provider request format")
+        if url.hostname == "api.deepseek.com" and self.request_format != "deepseek":
+            raise ValueError("official DeepSeek calls require the campaign protocol")
+        self.spending_ledger = spending_ledger
+        self._campaign_binding = None
+        if self.request_format == "deepseek":
+            from zoo.mle_bench_lite.cny_budget import CampaignBudget
+            if not isinstance(spending_ledger, CampaignBudget):
+                raise ValueError("DeepSeek requires an existing campaign CNY ledger")
+            binding = spending_ledger.manifest_binding()
+            if (model != binding["model"] or max_completion_tokens > binding["max_output_tokens"]
+                    or (self.base_url != binding["provider_base_url"]
+                        and url.hostname not in {"localhost", "127.0.0.1", "::1"})):
+                raise ValueError("provider endpoint, model or output limit differs from campaign policy")
+            self._campaign_binding = binding
+        elif spending_ledger is not None:
+            raise ValueError("campaign CNY pricing requires the DeepSeek request format")
         self.usage_dir = Path(usage_dir)
         self.calls_dir = self.usage_dir.parent / (self.usage_dir.name + "_calls")
         self.token_budget, self.max_completion_tokens = token_budget, max_completion_tokens
@@ -73,18 +93,25 @@ class BenchmarkProvider:
         self._validate_existing()
 
     def manifest_binding(self) -> dict:
-        return {"schema_version": 1, "requested_model": self.model,
+        binding = {"schema_version": 1, "requested_model": self.model,
                 "base_url": self.base_url, "temperature": self.temperature,
                 "max_completion_tokens": self.max_completion_tokens,
                 "timeout": self.timeout, "token_budget": self.token_budget,
                 "retry_policy": "never", "response_model_required": True}
+        if self.request_format == "deepseek":
+            from zoo.mle_bench_lite.cny_budget import usage_run_id
+            binding.update(request_format="deepseek", thinking={"type": "enabled"},
+                           reasoning_effort="high", wire_output_field="max_tokens",
+                           temperature_applied=False, immutable_snapshot_verified=False,
+                           campaign=self._campaign_binding, currency_run_id=usage_run_id(self.usage_dir))
+        return binding
 
     def _validate_existing(self) -> None:
-        audit = audit_usage(self.usage_dir)
+        audit = audit_usage(self.usage_dir, spending_ledger=self.spending_ledger)
         if audit["unresolved_calls"]:
             raise UsageError("unfinished or modified provider operation; automatic retry is forbidden")
         if not audit["complete"]:
-            raise ValueError("provider receipt identity or model changed; evidence audit failed")
+            raise ValueError("provider receipt identity or model changed; campaign or evidence audit failed")
         usage = token_usage_summary(self.usage_dir, require_nonempty=False)
         if len(usage["models"]) > 1:
             raise ValueError("provider response model changed within a run")
@@ -94,6 +121,11 @@ class BenchmarkProvider:
             receipt = json.loads(path.read_text())
             if receipt.get("requested_model") != self.model:
                 raise ValueError("existing receipts have a different requested model")
+        for path in self.calls_dir.glob("*.started.json"):
+            previous = json.loads(path.read_text()).get("provider", {})
+            if ((self.request_format == "deepseek" or previous.get("request_format") == "deepseek")
+                    and previous != self.manifest_binding()):
+                raise ValueError("campaign or provider configuration differs from the original run")
 
     def __call__(self, prompt: str) -> str:
         # Before the HTTP request a refusal costs zero; after it starts, missing
@@ -110,20 +142,29 @@ class BenchmarkProvider:
         remaining = self.token_budget - used
         if remaining <= 0:
             raise ValueError("token budget exhausted before provider invocation")
+        allowance = min(self.max_completion_tokens, remaining)
         payload = {"model": self.model, "temperature": self.temperature,
-                   "max_completion_tokens": min(self.max_completion_tokens, remaining),
+                   "max_completion_tokens": allowance,
                    "messages": [{"role": "user", "content": prompt}]}
+        if self.request_format == "deepseek":
+            payload.pop("temperature")
+            payload.pop("max_completion_tokens")
+            payload.update(max_tokens=allowance, stream=False, thinking={"type": "enabled"},
+                           reasoning_effort="high")
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         call_id = uuid.uuid4().hex
         request_hash = hashlib.sha256(body).hexdigest()
-        _exclusive_json(self.calls_dir / f"{call_id}.started.json", {
-            "call_id": call_id, "request_sha256": request_hash,
-            "provider": self.manifest_binding(), "output_allowance": payload["max_completion_tokens"]})
-        self.last_usage = None
-        self._unresolved = True
         request = urllib.request.Request(
             self.base_url + "/chat/completions", data=body, method="POST",
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"})
+        if self.spending_ledger is not None:
+            from zoo.mle_bench_lite.cny_budget import usage_run_id
+            self.spending_ledger.reserve(call_id, request_hash, allowance, run_id=usage_run_id(self.usage_dir))
+        _exclusive_json(self.calls_dir / f"{call_id}.started.json", {
+            "call_id": call_id, "request_sha256": request_hash,
+            "provider": self.manifest_binding(), "output_allowance": allowance})
+        self.last_usage = None
+        self._unresolved = True
         try:
             with urllib.request.build_opener(_NoRedirect()).open(request, timeout=self.timeout) as response:
                 raw = response.read()
@@ -140,8 +181,30 @@ class BenchmarkProvider:
                    "requested_model": self.model, "model": returned_model if valid_model else "",
                    "pid": os.getpid(), "request_sha256": request_hash,
                    "response_sha256": hashlib.sha256(raw).hexdigest(), **usage}
+        if self.request_format == "deepseek":
+            from zoo.mle_bench_lite.cny_budget import validate_detailed_usage
+            # A known total survives even when component details cannot settle
+            # the monetary reservation. Never invent missing zero components.
+            try:
+                receipt.update(validate_detailed_usage(data.get("usage")))
+                receipt["usage_details_valid"] = True
+            except ValueError:
+                receipt["usage_details_valid"] = False
+            receipt.update(campaign_id=self._campaign_binding["campaign_id"],
+                currency_policy_sha256=self._campaign_binding["policy_sha256"],
+                immutable_snapshot_verified=False)
+            for field in ("system_fingerprint", "id", "created"):
+                if field in data and (data[field] is None or type(data[field]) in (str, int)):
+                    receipt[field] = data[field]
         # Even malformed content/identity must preserve the known bill.
         _exclusive_json(self.usage_dir / f"{call_id}.json", receipt)
+        if self.request_format == "deepseek" and returned_model != self._campaign_binding["model"]:
+            # The tokens are known, but a different/missing model has no valid
+            # price under this frozen policy. Keep the monetary reservation
+            # unresolved rather than pricing another model as Flash.
+            raise ValueError("provider response model differs from the frozen campaign price policy")
+        if self.spending_ledger is not None:
+            self.spending_ledger.settle(call_id, data.get("usage"), receipt["response_sha256"])
         _exclusive_json(self.calls_dir / f"{call_id}.completed.json", {
             "call_id": call_id, "usage_receipt_sha256": hashlib.sha256(
                 (self.usage_dir / f"{call_id}.json").read_bytes()).hexdigest()})
@@ -153,6 +216,13 @@ class BenchmarkProvider:
         self._unresolved = False
         if used + usage["total_tokens"] > self.token_budget:
             raise ValueError("actual provider usage exceeded the token budget")
+        if self.request_format == "deepseek":
+            try:
+                finish_reason = data["choices"][0]["finish_reason"]
+            except (KeyError, IndexError, TypeError):
+                finish_reason = None
+            if finish_reason != "stop":
+                raise ValueError("provider completion is incomplete; measured usage was retained")
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):

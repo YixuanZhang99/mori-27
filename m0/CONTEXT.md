@@ -68,6 +68,8 @@ used as aliases for `parent_sample`; `score` is display-only at the admission ga
 | `AgentRuntime` / `host_agent` / `governed_agent` | Shared public-data solution generation, Bubblewrap execution and official dev validity path for OpenEvolve host and governed prompt-only arms; local fixtures never become external scores | RUBRIC B2/SPEC §9 |
 | `MeteredOpenAICompatibleLLM` / `MeteredHostLLM` | Per-call immutable physical token receipts plus reset-interval cumulative metering for governed and OpenEvolve host calls; missing or inconsistent usage fails closed | RUBRIC B5/SPEC §9 |
 | `token_usage_summary` | Independent receipt-digest recomputation for agent/campaign agreement, actual backbone and declared token-budget enforcement; never an M9 input or USD price conversion | RUBRIC B5/SPEC §9 |
+| `CampaignBudget` | One explicitly authorized monetary allowance shared by all runs and retries in a campaign; unresolved provider usage retains its reservation and prevents further paid admission | RUBRIC B5/ZOO pilot |
+| `settled_upper_bound_micro_cny` / `reserved_micro_cny` | Known token usage priced under a frozen conservative policy versus money still reserved for unresolved calls; neither amount is a verified supplier invoice | RUBRIC B5/ZOO pilot |
 | `Candidate` / `ExecutorSpec` | M2 execution candidate and M7 role/hypothesis binding contract; `execution_ref` durably correlates a scheduler cohort | SPEC §1/§9 |
 | `EvalRequest` / `EvalStatus` | Fidelity, timeout, seed/resume request and first-class execution outcome | SPEC §1 |
 | `CostVec` / `actual_costs` | Explicit per-physical-unit execution cost and exact reserved-unit settlement projection; never an M9 input | M3-N1/SPEC §9 |

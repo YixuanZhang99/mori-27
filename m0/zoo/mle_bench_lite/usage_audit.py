@@ -9,7 +9,67 @@ from core.llm import validate_usage
 from zoo.mle_bench_lite.agent_common import token_usage_summary
 
 
-def audit_usage(usage_dir: str | Path, *, allow_fixture_receipts: bool = False) -> dict:
+def _audit_currency(root, starts, receipts, completions, ledger):
+    """Compare local evidence to the independently durable campaign journal."""
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget, validate_detailed_usage, usage_run_id
+    result = {"complete": False, "invoice_verified": False,
+              "settled_upper_bound_micro_cny": 0, "reserved_micro_cny": 0,
+              "pending_calls": [], "errors": [], "known_tokens": 0, "ledger_verified": False}
+    try:
+        if not isinstance(ledger, CampaignBudget):
+            raise ValueError("shared campaign ledger is required for currency audit")
+        policy = ledger.manifest_binding()
+        snapshot = ledger.snapshot()
+        result["ledger_verified"] = True
+        result.update(campaign_id=policy["campaign_id"], policy_sha256=policy["policy_sha256"])
+        operations = {row["call_id"]: row for row in snapshot["operations"]}
+        run_id = usage_run_id(root)
+        owned_ids = {key for key, row in operations.items() if row["run_id"] == run_id}
+        local_ids = set(starts) | set(receipts) | set(completions)
+        result["call_ids"] = sorted(owned_ids)
+        if owned_ids != local_ids:
+            result["errors"].append({"call_id": "", "reason": "run call set differs from the campaign journal"})
+        for call_id in sorted(owned_ids | local_ids):
+            try:
+                operation = operations.get(call_id)
+                if operation is None or operation["run_id"] != run_id:
+                    raise ValueError("local call has no campaign reservation")
+                if "usage" not in operation:
+                    result["reserved_micro_cny"] += operation["reserved_micro_cny"]
+                    result["pending_calls"].append(call_id)
+                    try:
+                        result["known_tokens"] += validate_usage(receipts.get(call_id))["total_tokens"]
+                    except (ValueError, RuntimeError, TypeError):
+                        pass
+                    raise ValueError("campaign call has unresolved monetary usage")
+                result["settled_upper_bound_micro_cny"] += operation["upper_bound_micro_cny"]
+                result["known_tokens"] += operation["usage"]["total_tokens"]
+                start, receipt = starts.get(call_id), receipts.get(call_id)
+                if not isinstance(start, dict) or not isinstance(receipt, dict):
+                    raise ValueError("campaign settlement lacks local call evidence")
+                provider = start.get("provider", {})
+                if (provider.get("request_format") != "deepseek" or provider.get("campaign") != policy
+                        or provider.get("currency_run_id") != run_id
+                        or receipt.get("campaign_id") != policy["campaign_id"]
+                        or receipt.get("currency_policy_sha256") != policy["policy_sha256"]
+                        or receipt.get("model") != policy["model"]):
+                    raise ValueError("local currency identity differs from campaign policy")
+                if (start.get("request_sha256") != operation["request_sha256"]
+                        or receipt.get("request_sha256") != operation["request_sha256"]
+                        or receipt.get("response_sha256") != operation["response_sha256"]
+                        or start.get("output_allowance") != operation["output_allowance"]
+                        or validate_detailed_usage(receipt) != operation["usage"]):
+                    raise ValueError("local receipt differs from independent currency settlement")
+            except (ValueError, TypeError, KeyError, AttributeError) as error:
+                result["errors"].append({"call_id": call_id, "reason": str(error)})
+        result["complete"] = not result["errors"]
+    except (ValueError, OSError) as error:
+        result["errors"].append({"call_id": "", "reason": str(error)})
+    return result
+
+
+def audit_usage(usage_dir: str | Path, *, allow_fixture_receipts: bool = False,
+                spending_ledger=None) -> dict:
     """Preserve known bills even when identity or another request is unresolved.
 
     ``costs_complete`` concerns unknown operations/usage; ``complete`` additionally
@@ -100,6 +160,18 @@ def audit_usage(usage_dir: str | Path, *, allow_fixture_receipts: bool = False) 
                      if isinstance(record.get('model'), str) and record['model'].strip()})
     if len(models) > 1:
         error('identity', '', 'actual response model changed within the run')
+    currency_required = spending_ledger is not None or any(
+        isinstance(row.get('provider'), dict) and row['provider'].get('request_format') == 'deepseek'
+        for row in starts.values()) or any('campaign_id' in row for row in receipts.values())
+    currency = _audit_currency(root, starts, receipts, completions, spending_ledger) if currency_required else None
+    if currency is not None:
+        if currency["ledger_verified"]:
+            known_tokens = currency["known_tokens"]
+        if currency["pending_calls"]:
+            unresolved.update(currency["pending_calls"])
+            costs_complete = False
+        for row in currency['errors']:
+            error('currency', row['call_id'], row['reason'])
     usage = None
     if not errors:
         try:
@@ -111,4 +183,5 @@ def audit_usage(usage_dir: str | Path, *, allow_fixture_receipts: bool = False) 
             'unresolved_calls': sorted(unresolved), 'errors': errors,
             'costs_complete': costs_complete, 'complete': not errors and costs_complete,
             'actual_models': models, 'usage': usage,
+            'currency_audit': currency,
             'fixture_legacy_receipts': fixture_without_calls}

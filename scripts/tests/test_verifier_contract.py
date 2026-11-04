@@ -26,6 +26,48 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def test_archived_v68_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v68/LAST_RUN.json":
+                "33f864e1c7e36ad7b19ffa461004176b32d9bbe210f90af5aaec4ce52cec457b",
+            "m0/verifier/runs/v68.jsonl":
+                "f603892915439fc04873a517fce67a7ca1ec92a5bd5932c8e7a3aeb8e8edeea7",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file(), 'verified v68 evidence must be archived')
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / 'm0/verifier/v68/LAST_RUN.json').read_text())
+        entries = [json.loads(line) for line in (ROOT / 'm0/verifier/runs/v68.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['command'], 'python3 verifier/v68/verify.py')
+        self.assertEqual(entries[0]['exit_code'], 0)
+        self.assertEqual(entries[0]['checks'], certificate['checks'])
+        self.assertTrue(certificate['passed'])
+        self.assertEqual(len(certificate['checks']), 38)
+        self.assertTrue(all(item['passed'] for item in certificate['checks']))
+        self.assertFalse(certificate['mle_composed_stage_evidence']['external_provider_api_executed'])
+
+    def test_v69_keeps_every_v68_command_group_and_timeout(self):
+        self.assertTrue((ROOT / 'm0/verifier/v69/verify.py').is_file(), 'v69 verifier must preserve prior coverage')
+        previous, current = command_groups(verifier_tree('v68')), command_groups(verifier_tree('v69'))
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v69_executes_isolation_and_currency_boundaries_without_filters(self):
+        self.assertTrue((ROOT / 'm0/verifier/v69/verify.py').is_file(), 'v69 budget/isolation group is missing')
+        groups = command_groups(verifier_tree('v69'))
+        command = groups['mle_private_order_and_shared_currency_campaign_end_to_end'].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments[:2], ['-m', 'pytest'])
+        self.assertTrue({'tests/test_mle_isolation.py', 'tests/test_mle_cny_budget.py',
+                         'tests/test_mle_currency_integration.py', 'tests/test_mle_provider.py'} <= set(arguments))
+        self.assertNotIn('-m', arguments[2:])
+        self.assertNotIn('--markexpr', arguments)
+
     def test_archived_v67_is_exact_verified_linux_evidence(self):
         expected = {
             "m0/verifier/v67/LAST_RUN.json":

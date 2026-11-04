@@ -73,6 +73,8 @@ R = (C * 2 + O * 8) / 1_000_000 CNY
 
 ## 当前代码接缝与优先改动
 
+2026-11-04 实施审查补充：上文“有效 usage 先结算，再验证模型身份”仅适用于返回身份仍受冻结定价 policy 覆盖的情况。不同或缺失的 DeepSeek alias 可能对应不同价格，必须先持久保存已知 token 回执，再拒绝并保留货币预留未结；不能按 Flash 价格结算未知模型。正确模型上的内容/截断失败仍须先结算。这一差异已有本地 HTTP 回归，未调用真实模型。
+
 1. [provider.py](../m0/zoo/mle_bench_lite/provider.py)：`__call__()` 当前发送 `max_completion_tokens`；`manifest_binding()` 也冻结该通用字段。DeepSeek 路径需冻结实际 wire 参数、thinking/effort、人民币账本身份/费率；HTTP 前在此处预扣。现有 started/completed/receipt、无自动重试和未知用量停机值得保留。`validate_usage()` 当前只保留 total/prompt/completion，应在此边界独立补保存 cache/reasoning 明细，避免无关修改通用核心。
 2. [pilot.py](../m0/zoo/mle_bench_lite/pilot.py)：`_plan()` 固定 temperature=0、4096 上限，并把 response model 描述为 actual snapshot；应改成真实模式及有限身份声明。`_command()`、`_validate_agent_summary()`、`_validate_provider_settings()` 同步冻结新参数；同一人民币账本传至全部 run。当前 output_root 要求为空，并非整份 pilot 已支持 resume；不要新增 resume 文案而无实现。
 3. [composed_agent.py](../m0/zoo/mle_bench_lite/composed_agent.py)：provider 构造、agent contract 和 resume 身份必须绑定同一配置/账本；账本路径是配置引用，不是 API key 或其内容。

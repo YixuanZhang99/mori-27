@@ -22,6 +22,8 @@ def endpoint():
         def do_POST(self):
             state.requests.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
             assert self.headers['Authorization'] == 'Bearer provider-test-secret'
+            if hasattr(state, 'observe_dispatch'):
+                state.observe_dispatch()
             value = state.replies.pop(0)
             if value == 'redirect':
                 self.send_response(307)
@@ -174,4 +176,136 @@ def test_reopened_provider_rejects_changed_call_evidence_without_paid_retry(tmp_
         path.write_text(json.dumps(value))
     with pytest.raises((ValueError, UsageError)):
         provider(tmp_path, endpoint)
+    assert len(endpoint.requests) == 1
+
+
+def deepseek_response(*, finish_reason='stop', content='print(42)'):
+    return {'id': 'response-1', 'created': 1793775000, 'model': 'deepseek-flash',
+        'system_fingerprint': 'backend-fixture',
+        'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120,
+                  'prompt_cache_hit_tokens': 80, 'prompt_cache_miss_tokens': 20,
+                  'completion_tokens_details': {'reasoning_tokens': 15}},
+        'choices': [{'finish_reason': finish_reason, 'message': {'content': content}}]}
+
+
+def deepseek_provider(tmp_path, endpoint, ledger, **options):
+    return BenchmarkProvider('deepseek-flash', endpoint.url, tmp_path / 'token_usage',
+        60000, max_completion_tokens=16384, api_key='provider-test-secret',
+        request_format='deepseek', spending_ledger=ledger, **options)
+
+
+def test_deepseek_wire_contract_and_durable_charge(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    observed = []
+    endpoint.observe_dispatch = lambda: observed.append(CampaignBudget(ledger.path).snapshot())
+    endpoint.replies.append(deepseek_response())
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    assert p('one') == 'print(42)'
+    request = endpoint.requests[0]
+    assert request['max_tokens'] == 16384 and 'max_completion_tokens' not in request
+    assert request['thinking'] == {'type': 'enabled'} and request['reasoning_effort'] == 'high'
+    assert request['stream'] is False and 'temperature' not in request
+    receipt = json.loads(next(p.usage_dir.glob('*.json')).read_text())
+    assert receipt['completion_tokens_details'] == {'reasoning_tokens': 15}
+    assert receipt['system_fingerprint'] == 'backend-fixture'
+    assert receipt['immutable_snapshot_verified'] is False
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 360
+    assert ledger.snapshot()['pending_calls'] == []
+    assert take_usage(p) == 120
+    operation = ledger.snapshot()['operations'][0]
+    assert operation['call_id'] == receipt['usage_id']
+    assert operation['request_sha256'] == receipt['request_sha256']
+    assert operation['response_sha256'] == receipt['response_sha256']
+    assert observed[0]['reserved_micro_cny'] == 2228224
+    assert observed[0]['pending_calls'] == [receipt['usage_id']]
+
+
+def test_budget_refusal_performs_zero_http_and_writes_no_local_call(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db', limit_micro_cny=1000)
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    with pytest.raises(ValueError, match='exhausted'):
+        p('one')
+    assert endpoint.requests == [] and take_usage(p) == 0
+    assert list(p.calls_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize('finish_reason', ['length', 'content_filter', None])
+def test_incomplete_deepseek_output_is_charged_before_rejection(tmp_path, endpoint, finish_reason):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append(deepseek_response(finish_reason=finish_reason))
+    p = deepseek_provider(tmp_path, endpoint, ledger)
+    with pytest.raises(ValueError, match='completion'):
+        p('one')
+    assert take_usage(p) == 120
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 360
+    assert ledger.snapshot()['pending_calls'] == []
+    assert token_usage_summary(p.usage_dir)['total_tokens'] == 120
+
+
+def test_missing_detailed_usage_blocks_paid_requests_in_fresh_run(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append(response(model='deepseek-flash', total=120))
+    p = deepseek_provider(tmp_path / 'first', endpoint, ledger)
+    with pytest.raises(ValueError, match='integer'):
+        p('one')
+    assert take_usage(p) == 120  # known total is not erased by missing components
+    assert ledger.snapshot()['reserved_micro_cny'] == 2228224
+    other = deepseek_provider(tmp_path / 'other', endpoint, CampaignBudget(ledger.path))
+    with pytest.raises(ValueError, match='unresolved'):
+        other('two')
+    assert len(endpoint.requests) == 1 and take_usage(other) == 0
+
+
+def test_deepseek_endpoint_cannot_silently_use_unbudgeted_generic_protocol(tmp_path):
+    with pytest.raises(ValueError, match='campaign'):
+        BenchmarkProvider('deepseek-flash', 'https://api.deepseek.com', tmp_path / 'usage', 60000)
+
+
+def test_different_campaign_resume_refused_before_http(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'one.db')
+    endpoint.replies.append(deepseek_response())
+    deepseek_provider(tmp_path, endpoint, ledger)('one')
+    other = CampaignBudget.create(tmp_path / 'two.db')
+    with pytest.raises(ValueError, match='campaign|provider configuration'):
+        deepseek_provider(tmp_path, endpoint, other)
+    assert len(endpoint.requests) == 1
+
+
+def test_deepseek_http_failure_reservation_survives_a_fresh_provider(tmp_path, endpoint):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    endpoint.replies.append('redirect')
+    p = deepseek_provider(tmp_path / 'first', endpoint, ledger)
+    with pytest.raises(UsageError, match='unknown usage'):
+        p('one')
+    assert p.last_usage is None
+    other = deepseek_provider(tmp_path / 'other', endpoint, CampaignBudget(ledger.path))
+    with pytest.raises(ValueError, match='unresolved'):
+        other('two')
+    assert len(endpoint.requests) == 1
+    assert ledger.snapshot()['reserved_micro_cny'] == 2228224
+
+
+@pytest.mark.parametrize('returned_model', ['deepseek-pro', '', None])
+def test_wrong_deepseek_model_preserves_tokens_but_cannot_settle_flash_prices(tmp_path, endpoint, returned_model):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
+    value = deepseek_response(); value['model'] = returned_model
+    endpoint.replies.append(value)
+    p = deepseek_provider(tmp_path / 'first', endpoint, ledger)
+    with pytest.raises(ValueError, match='model'):
+        p('one')
+    assert take_usage(p) == 120
+    receipt = json.loads(next(p.usage_dir.glob('*.json')).read_text())
+    assert receipt['total_tokens'] == 120
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 0
+    assert ledger.snapshot()['reserved_micro_cny'] == 2228224
+    other = deepseek_provider(tmp_path / 'other', endpoint, CampaignBudget(ledger.path))
+    with pytest.raises(ValueError, match='unresolved'):
+        other('two')
     assert len(endpoint.requests) == 1

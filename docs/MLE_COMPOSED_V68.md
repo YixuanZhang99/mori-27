@@ -1,5 +1,7 @@
 # S9 MLE-Bench Lite：配置路径与同预算试跑
 
+后续 DeepSeek 本地试跑增加了跨运行累计人民币账本、16384 输出上限和独立货币对账，见 [DeepSeek 费用与运行说明](DEEPSEEK_CAMPAIGN_BUDGET.md)。本文原始 v68 参数和验收记录保留，不能当成新协议或真实试跑已完成的证据。
+
 本阶段把公开训练数据上的真实评分接入 `Framework.from_profile()`，使 S6 的 anchor、秩相关监控和负反馈与 S8 种群搜索在同一任务上运行。旧 `governed_agent` 的 M0/提交合法性入口保留；新的入口是 `zoo.mle_bench_lite.composed_agent`。它们不是同一个实验协议，不能混合成绩。
 
 v68 验收使用离线数据与本地模型服务 fixture 检查机制。它不代表已经调用真实外部模型或获得 MLE-Bench 成绩。真正的试跑必须准备官方数据、真实模型凭据和 Linux 执行环境，单独保存证据。

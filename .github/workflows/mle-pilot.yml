@@ -11,7 +11,7 @@ on:
       model:
         type: string
         required: true
-        description: Explicit model; returned snapshot must remain identical across all arms
+        description: Explicit model; returned identifier must remain consistent (immutable weights are not verified)
       token_budget:
         type: string
         required: true

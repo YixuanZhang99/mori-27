@@ -13,6 +13,25 @@ spec.loader.exec_module(cloud)
 
 
 class CloudPilotTests(unittest.TestCase):
+    def test_export_keeps_currency_bounds_but_excludes_operation_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'pilot.json').write_text(json.dumps({
+                'immutable_snapshot_verified': False,
+                'currency_campaign': {'limit_micro_cny': 200000000,
+                    'settled_upper_bound_micro_cny': 2160, 'reserved_micro_cny': 0,
+                    'invoice_verified': False, 'complete': True,
+                    'operations': [{'private': 'PRIVATE_OPERATION_CANARY'}]},
+                'runs': [{'usage_audit': {'currency_audit': {
+                    'settled_upper_bound_micro_cny': 360, 'reserved_micro_cny': 0,
+                    'invoice_verified': False, 'complete': True,
+                    'errors': ['PRIVATE_ERROR_CANARY']}}}]}))
+            result = cloud.export_summary(root, root / 'public')
+            self.assertEqual(result['currency_campaign']['settled_upper_bound_micro_cny'], 2160)
+            self.assertFalse(result['currency_campaign']['invoice_verified'])
+            self.assertEqual(result['runs'][0]['currency_usage']['settled_upper_bound_micro_cny'], 360)
+            self.assertNotIn('CANARY', (root / 'public/summary.json').read_text())
+
     def test_explicit_budget_defaults_to_no_model_execution(self):
         plan = cloud.request_from_environment({'PILOT_MODEL': 'model', 'PILOT_TOKEN_BUDGET': '10000'})
         self.assertEqual(plan['mode'], 'preflight')
