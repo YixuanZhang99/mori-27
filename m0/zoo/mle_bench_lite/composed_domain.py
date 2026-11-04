@@ -157,6 +157,51 @@ class PublicTrainDomain:
                 "artifact_sha256": hashlib.sha256(proposal.artifact.encode()).hexdigest(),
                 "dataset_identity": self.bundle.identity, "runner_identity": self.runner_identity}
 
+    def checkpoint_state(self):
+        """Bind cached outcomes to the durable native evaluation terminal."""
+        self.validate_context()
+        entries = {}
+        for candidate_id, record in self._frozen.items():
+            path = self.root / hashlib.sha256(candidate_id.encode()).hexdigest()
+            outcome = path / "outcome.json"
+            if not outcome.is_file() or outcome.is_symlink() or json.loads(outcome.read_text()) != record:
+                raise ValueError("candidate outcome differs from frozen state")
+            entries[candidate_id] = {"record": copy.deepcopy(record), "outcome_sha256": file_digest(outcome)}
+        return {"schema_version": 1, "dataset_identity": self.bundle.identity,
+                "runner_identity": self.runner_identity, "entries": entries}
+
+    def restore_state(self, state):
+        """Restore only state supplied by the original durable terminal."""
+        self.validate_context()
+        if type(state) is not dict or set(state) != {"schema_version", "dataset_identity", "runner_identity", "entries"} or \
+                type(state["schema_version"]) is not int or state["schema_version"] != 1 or \
+                state["dataset_identity"] != self.bundle.identity or state["runner_identity"] != self.runner_identity or \
+                type(state["entries"]) is not dict:
+            raise ValueError("invalid public-train terminal state")
+        restored = {}
+        for candidate_id, entry in state["entries"].items():
+            if type(candidate_id) is not str or not candidate_id or type(entry) is not dict or \
+                    set(entry) != {"record", "outcome_sha256"} or type(entry["record"]) is not dict:
+                raise ValueError("invalid frozen candidate state")
+            record = entry["record"]
+            identity = record.get("identity")
+            if type(identity) is not dict or identity.get("candidate_id") != candidate_id or \
+                    identity.get("dataset_identity") != self.bundle.identity or \
+                    identity.get("runner_identity") != self.runner_identity:
+                raise ValueError("frozen candidate identity differs")
+            path = self.root / hashlib.sha256(candidate_id.encode()).hexdigest()
+            outcome = path / "outcome.json"
+            if path.is_symlink() or outcome.is_symlink() or not outcome.is_file() or \
+                    file_digest(outcome) != entry["outcome_sha256"] or json.loads(outcome.read_text()) != record:
+                raise ValueError("candidate outcome differs from terminal")
+            prediction = record.get("prediction_sha256")
+            if prediction is not None:
+                file = path / "predictions.csv"
+                if file.is_symlink() or not file.is_file() or file_digest(file) != prediction:
+                    raise ValueError("frozen candidate predictions changed")
+            restored[candidate_id] = copy.deepcopy(record)
+        self._frozen = restored
+
     def restore_evidence(self, records):
         """Rebind cached bytes to original Framework evidence, not cache claims."""
         for row in records:
