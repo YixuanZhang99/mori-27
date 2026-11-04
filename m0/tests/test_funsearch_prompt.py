@@ -77,3 +77,33 @@ def test_unselected_candidate_never_appears_in_prompt_or_binding():
     result = build_prompt(TEMPLATE, 'priority', ['simple'], selected)
     assert 'PRIVATE_SENTINEL' not in repr(result)
     assert result == build_prompt(TEMPLATE, 'priority', ['simple'], {'simple': CANDIDATES['simple']})
+
+
+def test_bound_prompt_rejects_program_substitution_and_preserves_sample_order():
+    import hashlib
+    from core.funsearch_population import FunSearchPopulation
+    from core.funsearch_selection import draw_selection
+    from core.funsearch_prompt import build_bound_prompt
+    p = FunSearchPopulation(case_ids=['a', 'b'], islands=2, seed=7,
+                            prompt_size=2, temperature=10, temperature_period=10)
+    for candidate, source, score in [('recursive', CANDIDATES['recursive'], 0.0), ('simple', CANDIDATES['simple'], 1.0)]:
+        p.register(candidate, source, {'a': score, 'b': score}, island=0, epoch=0)
+    before = p.checkpoint_state()
+    selection = draw_selection(p, 0, eligible=set(CANDIDATES), max_parents=2)
+    after = p.checkpoint_state()
+    projections = {candidate: {'candidate_id': candidate, 'program_ref': 'sha256:' + hashlib.sha256(source.encode()).hexdigest(),
+        'program_length': len(source), 'scores': p.candidate(candidate)['scores'], 'evidence_ref': 'sha256:' + 'b' * 64}
+        for candidate, source in CANDIDATES.items()}
+    result = build_bound_prompt(TEMPLATE, 'priority', selection, before, after,
+        eligible=set(CANDIDATES), max_parents=2, sources=CANDIDATES, projections=projections)
+    assert result['samples'] == selection['samples']
+    assert result['selection_ref'].startswith('sha256:')
+    substituted = dict(CANDIDATES)
+    substituted[selection['samples'][0]] += '\n# substitution'
+    with pytest.raises(ValueError, match='artifact'):
+        build_bound_prompt(TEMPLATE, 'priority', selection, before, after,
+            eligible=set(CANDIDATES), max_parents=2, sources=substituted, projections=projections)
+    projections[selection['samples'][0]]['scores']['a'] += .5
+    with pytest.raises(ValueError, match='evidence'):
+        build_bound_prompt(TEMPLATE, 'priority', selection, before, after,
+            eligible=set(CANDIDATES), max_parents=2, sources=CANDIDATES, projections=projections)

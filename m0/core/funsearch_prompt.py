@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
+import re
 from core.x1.checkpoint import payload_digest
 
 
@@ -96,3 +98,46 @@ def build_prompt(template, function_name, samples, candidates):
     return {'prompt': prompt, 'prompt_header_version': len(samples),
             'reference_version_generated': len(samples) + 1, 'samples': list(samples),
             'input_ref': 'sha256:' + payload_digest(binding), 'prompt_ref': 'sha256:' + payload_digest(prompt)}
+
+
+def build_bound_prompt(template, function_name, selection, before, after, *, eligible, max_parents,
+                       sources, projections):
+    """Build a prompt from a replayed selection and its bound public projections.
+
+    The caller must independently compare projections to the original journal;
+    this function checks consistency, not the authenticity of supplied evidence.
+    """
+    from core.funsearch_population import FunSearchPopulation
+    from core.funsearch_selection import verify_selection
+    verify_selection(selection, before, after, eligible=eligible, max_parents=max_parents)
+    if type(sources) is not dict or type(projections) is not dict:
+        raise ValueError('candidate sources and public evidence projections are required')
+    population = FunSearchPopulation.from_checkpoint(before)
+    selected_sources, evidence_refs = {}, {}
+    for candidate_id in selection['ancestry']:
+        source, projection = sources.get(candidate_id), projections.get(candidate_id)
+        if type(source) is not str or not source:
+            raise ValueError('selected artifact is missing')
+        try:
+            digest = 'sha256:' + hashlib.sha256(source.encode('utf-8')).hexdigest()
+        except UnicodeEncodeError as exc:
+            raise ValueError('selected artifact is not UTF-8') from exc
+        if (type(projection) is not dict or set(projection) !=
+                {'candidate_id', 'scores', 'evidence_ref', 'program_ref', 'program_length'} or
+                projection['candidate_id'] != candidate_id or type(projection['evidence_ref']) is not str or
+                not re.fullmatch(r'sha256:[0-9a-f]{64}', projection['evidence_ref'])):
+            raise ValueError('invalid public evidence projection')
+        record = population.candidate(candidate_id)
+        if (payload_digest({k: projection[k] for k in ('program_ref', 'program_length', 'scores')}) !=
+                payload_digest(record)):
+            raise ValueError('public evidence differs from population state')
+        if digest != record['program_ref'] or len(source) != record['program_length']:
+            raise ValueError('selected artifact differs from evaluated program')
+        selected_sources[candidate_id] = source
+        evidence_refs[candidate_id] = projection['evidence_ref']
+    result = build_prompt(template, function_name, selection['samples'], selected_sources)
+    selection_ref = 'sha256:' + payload_digest(selection)
+    binding = {'selection_ref': selection_ref, 'input_ref': result['input_ref'],
+               'prompt_ref': result['prompt_ref'], 'evidence_refs': evidence_refs}
+    return {**result, 'selection_ref': selection_ref, 'evidence_refs': evidence_refs,
+            'binding_ref': 'sha256:' + payload_digest(binding)}
