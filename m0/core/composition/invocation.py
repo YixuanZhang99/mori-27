@@ -143,7 +143,6 @@ class InvocationLifecycle:
                     evidence, measured_elapsed = await operation.invoke(recorded)
                 else:
                     evidence = await operation.invoke(invoke)
-                    measured_elapsed = elapsed() if elapsed is not None else None
             except MeasuredCommandError as error:
                 if self.governance is None and elapsed is None:
                     # Legacy native executors have no supervisor attestation.
@@ -159,6 +158,9 @@ class InvocationLifecycle:
                     self.store.append("governed_integrity_failure", {"intent_id": receipt.intent_id,
                         "reason": "measured_evaluation_rejected"})
                 raise
+            if self.governance is None and elapsed is not None:
+                # Timing retrieval cannot attest a replacement executor bill.
+                measured_elapsed = elapsed()
             if not isinstance(evidence, EvidenceRecord):
                 raise UsageError("executor returned no measurable canonical evidence")
             operation.check_floor(evidence.eval_result.cost)

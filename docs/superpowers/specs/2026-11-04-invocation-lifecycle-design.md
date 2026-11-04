@@ -24,3 +24,5 @@ The implementation choice is made under the user's continuing autonomous-develop
 Direct lifecycle tests use the real hierarchical authority and inspect settled/reserved amounts across all three phases. Existing public Framework suites cover native/worktree, physical units, failed samples, actual SIGKILL, protected currency and recorded replay. Add a cross-commit resume rehearsal from the installed 75f397e wheel. Full project verification and clean same-SHA v73 acceptance remain separate evidence from architecture quality.
 
 Implementation clarification: the existing runtime wall-clock adapter is explicitly injected so the old wall measurement seam and tests remain valid. Ungoverned native executors do not gain supervisor attestation merely by raising MeasuredCommandError; only the already supported governed or durable-executor paths settle that typed failure.
+
+A timing supplier is outside the executor measured-error catch: failure to retrieve time must not replace already returned evidence with an exception-carried bill. Direct and public registered-executor regressions pin this distinction.

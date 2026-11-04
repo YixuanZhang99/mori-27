@@ -155,3 +155,80 @@ def test_legacy_native_exception_does_not_attest_a_supervisor_measurement(tmp_pa
         asyncio.run(owner.evaluation(receipt, provider, unsupported, identity={}, domain=Domain()))
     assert [row['event'] for row in operation_events(runtime, receipt)] == ['start', 'unresolved']
     assert runtime.budget.state()['global']['reserved'] == receipt.amounts
+
+
+def test_timing_supplier_cannot_replace_evaluation_cost_with_its_exception_bill(tmp_path):
+    from core.composition.worktree import MeasuredCommandError
+    runtime, owner, provider, candidate, request, receipt = prepare(tmp_path, 'evaluation')
+    domain = Domain()
+    proposal = Proposal(candidate, 'valid artifact', CostVec(), ('token', 'node', 'eval_count'))
+
+    async def execute():
+        provider('actual evaluation request')
+        # Canonical domain evidence reports seven tokens; the timing reader has
+        # no authority to replace that bill with its own exception payload.
+        return EvidenceRecord(candidate.id, await domain.evaluate(proposal, request))
+
+    def timing():
+        raise MeasuredCommandError('timing metadata unavailable', CostVec(tokens_in=1, eval_count=1),
+                                   ('token', 'eval_count', 'node'),
+                                   raw_response_path='metadata.json', wall_seconds=0.1)
+
+    before = runtime.budget.state()['global']['used']
+    with pytest.raises(MeasuredCommandError, match='timing metadata'):
+        asyncio.run(owner.evaluation(receipt, provider, execute, identity={}, domain=domain, elapsed=timing))
+    assert [row['event'] for row in operation_events(runtime, receipt)] == ['start', 'unresolved']
+    assert runtime.budget.state()['global']['used'] == before
+    assert runtime.budget.state()['global']['reserved'] == receipt.amounts
+
+
+@pytest.mark.parametrize('origin', ['timing', 'executor'])
+def test_public_durable_executor_distinguishes_execution_bill_from_timing_error(tmp_path, origin):
+    from core.composition.defaults import composed_profile, default_registry
+    from core.composition.worktree import MeasuredCommandError
+    from core.loop import Framework, LoopConfig
+    from test_composed_budget import Provider, options
+
+    class DurableDomain(Domain):
+        manifest_binding = {'fixture': 'durable-domain-v1'}
+        required_executor = 'timing_fixture'
+
+    class DurableExecutor:
+        durable_operation_recovery = True
+        manifest_binding = {'fixture': 'durable-executor-v1'}
+
+        def validate_domain(self, domain):
+            assert isinstance(domain, DurableDomain)
+
+        async def execute(self, proposal, request, domain):
+            return EvidenceRecord(proposal.candidate.id, await domain.evaluate(proposal, request))
+
+        async def execute_bound(self, proposal, request, domain, operation):
+            evidence = await self.execute(proposal, request, domain)
+            if origin == 'executor':
+                raise MeasuredCommandError('executor rejected measured result', evidence.eval_result.cost,
+                    ('token', 'node', 'eval_count'), raw_response_path='result.json', wall_seconds=0.1)
+            return evidence
+
+        def operation_metadata(self, operation):
+            raise MeasuredCommandError('timing read failed', CostVec(tokens_in=1, eval_count=1),
+                ('token', 'node', 'eval_count'), raw_response_path='timing.json', wall_seconds=0.1)
+
+    registry = default_registry()
+    registry.register('domain', 'timing_domain', lambda ctx, opts: DurableDomain())
+    registry.register('executor', 'timing_fixture', lambda ctx, opts: DurableExecutor())
+    profile = composed_profile()
+    profile['domain'] = {'name': 'timing_domain'}
+    profile['executor'] = {'name': 'timing_fixture'}
+    profile['budget'] = {'name': 'hierarchical', 'options': options()}
+    framework = Framework.from_profile(profile, Provider(), None,
+        LoopConfig(max_generations=0, total_budget=100000, intent_cost=2000), str(tmp_path),
+        component_registry=registry)
+    with pytest.raises(MeasuredCommandError, match='timing read' if origin == 'timing' else 'executor rejected'):
+        framework.evolve(TASK)
+    state = framework._composed.budget.state()['global']
+    assert state['used'] == {'token': 5 if origin == 'timing' else 12,
+                             'node': 1, 'eval_count': int(origin == 'executor')}
+    assert state['reserved'] == {'token': 10 if origin == 'timing' else 0,
+                                 'node': 0, 'eval_count': int(origin == 'timing')}
+    assert framework._composed.parts['provider'].raw_provider.calls == 1
