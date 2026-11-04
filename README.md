@@ -21,6 +21,7 @@
 - [S7 worktree 与进程接管](docs/WORKTREE_RECOVERY_V66.md)：真实命令执行、保护输入、持久进程身份和主循环恢复边界。
 - [S8 种群与双亲交叉](docs/POPULATION_RUNTIME_V67.md)：有界成员、可复算父代抽样、独立 M9 晋升和恢复。
 - [S9 MLE 配置评估与试跑](docs/MLE_COMPOSED_V68.md)：公开训练数据的独立校准、负反馈、种群搜索和同模型同预算子集对照；真实试跑证据与机制验收分开。
+- [配置式常驻对照与七账户治理](docs/GOVERNED_CONTROLS.md)：可运行的离线示例、固定对照计划、保护额度、隔离会话及零新调用的证据回放。
 - [2026-10-29 代码包详细梳理与审查](docs/CODEBASE_REVIEW_2026-10-29.md)：架构、模块支持矩阵、运行验证、可复现问题及后续优先级。
 - [原始接续开发说明](接续开发说明.md)：交接时的状态声明和环境说明。
 - [M0 代码文档](m0/README.md)与[术语及契约](m0/CONTEXT.md)。
@@ -40,7 +41,7 @@
 
 **完成度不能由测试数量代替。** 原包 v57 历史记录为 490 项通过，但证书同时明确真实外部 API 与 benchmark campaign 未执行。导入时发现的样本身份、预算账本、成本计量及 seccomp ABI 问题已纳入 v58 修复与回归测试，详见 [修复说明](docs/SAFETY_FIXES_V58.md)。
 
-v59 继续修复数据集内容绑定、进程身份写入、配置前置校验、完整判定回执与 replay 隔离。旧回执兼容边界、适配器契约及验证范围见 [v59 修复说明](docs/EVALUATION_FIXES_V59.md)。`replay()` 会重新执行适配器，可能再次产生提供方费用。
+v59 继续修复数据集内容绑定、进程身份写入、配置前置校验、完整判定回执与 replay 隔离。旧回执兼容边界、适配器契约及验证范围见 [v59 修复说明](docs/EVALUATION_FIXES_V59.md)。旧模式的 `replay()` 会重新执行适配器，可能再次产生提供方费用；新的 `composed-v7-governed` 模式只采用已记录结果，缺失证据时拒绝回放。
 
 ## 配置组装入口
 
@@ -62,13 +63,15 @@ S6 周期 anchor/代理有效性回流已按同 SHA CI 封板。S7 新增 `comma
 
 S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最新 anchor、负反馈与种群接到三个公开 CSV 任务。旧 M0 benchmark 入口保留；新试跑的 baseline/full 使用同一模型、数据和资源上限，所有提交冻结后才调用官方 grader。接口通过测试不等于真实模型实验已完成，具体使用和结果边界见 [S9 指南](docs/MLE_COMPOSED_V68.md)。
 
+显式配置 `governance` 可启用 `composed-v7-governed`：主搜索和独立对照共用物理结算权威，七账户是同一实际费用的投影；未来对照额度预先保护，主搜索可见预算固定，避免从对照花费推断结果。调用回执绑定 run、lane、slot、intent、ordinal 和适配器参数，恢复及回放核验原始结果而不重新调用。Native 和真实 worktree 路径均有例子与测试；[使用指南](docs/GOVERNED_CONTROLS.md)说明当前支持范围。人民币账本已有独立的未来额度保护机制，但与模型适配器的桥接尚未完成；当前治理模式会拒绝外部货币能力，不能据此宣称真实付费 IID-RS 已达标。
+
 ## 目录
 
 ```text
 m0/                 Python 内核、配置、回归测试、v1–v70 历史及 v71 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
   config/profiles/  三种经典 profile、composed_prompt 与 population_prompt
-  examples/         四个不需要模型 API key 的示例
+  examples/         不需要模型 API key 的示例与常驻治理入门流程
   zoo/              MLE-Bench Lite 与 RE-Bench 适配器
   vendor/           OpenEvolve 普通源码快照
 autoresearch-fw/    规格、愿景、RUBRIC、各模块统一设计

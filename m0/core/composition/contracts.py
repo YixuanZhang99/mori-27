@@ -71,6 +71,77 @@ _SINGLE_COMPONENTS = ("provider", "domain", "policy", "frontier", "memory",
                       "executor", "admission", "budget")
 
 
+@dataclass(frozen=True, init=False)
+class GovernanceConfig:
+    """Strict opt-in configuration held as immutable canonical JSON."""
+
+    schema_version: int
+    _controls_json: str
+
+    def __init__(self, schema_version: int, controls: dict[str, Any]):
+        if type(schema_version) is not int or schema_version != 1:
+            raise ValueError("governance schema_version must be integer 1")
+        controls = json_copy(controls, label="governance controls")
+        required = {"after_main_cycles", "seed", "provider", "domain", "operator",
+                    "request", "reservations"}
+        if type(controls) is not dict or set(controls) != required:
+            raise ValueError("governance controls require exactly the declared schedule, factories, request and reservations")
+        schedule = controls["after_main_cycles"]
+        if type(schedule) is not list or not schedule or any(
+                type(value) is not int or value < 0 for value in schedule) or schedule[0] != 0 \
+                or any(a >= b for a, b in zip(schedule, schedule[1:])):
+            raise ValueError("control schedule must start at zero and contain strictly increasing integers")
+        if type(controls["seed"]) is not int or controls["seed"] < 0:
+            raise ValueError("control seed must be a nonnegative integer")
+        for kind in ("provider", "domain", "operator"):
+            controls[kind] = ComponentSpec.from_dict(controls[kind]).to_dict()
+        request = controls["request"]
+        if type(request) is not dict or set(request) - {
+                "fidelity", "split_id", "seed_set", "time_limit", "budget_token"} \
+                or not {"fidelity", "split_id"} <= set(request):
+            raise ValueError("control request requires frozen fidelity/split without resume_from")
+        EvalRequest(**request).validate()
+        if request["fidelity"] != "dev" or request["split_id"] != "dev":
+            raise ValueError("control request must use the frozen dev split and fidelity")
+        reservations = controls["reservations"]
+        if type(reservations) is not dict or set(reservations) != {"operator", "evaluation"}:
+            raise ValueError("control reservations require operator and evaluation baskets")
+        units = None
+        for phase, basket in reservations.items():
+            if type(basket) is not dict or not basket or set(basket) - {
+                    "token", "node", "eval_count", "wallclock", "gpu_hours", "usd"}:
+                raise ValueError("control reservations require physical units")
+            if units is not None and set(basket) != units:
+                raise ValueError("control reservations must explicitly cover the same units")
+            units = set(basket)
+            for unit, value in basket.items():
+                if type(value) not in (int, float) or value < 0 or \
+                        unit in {"token", "node", "eval_count"} and type(value) is not int:
+                    raise ValueError("control reservations require finite nonnegative physical quantities")
+        if "node" in reservations["operator"] and reservations["operator"]["node"] < 1:
+            raise ValueError("control operator reservation must cover at least one created node")
+        if "eval_count" in reservations["evaluation"] and reservations["evaluation"]["eval_count"] < 1:
+            raise ValueError("control evaluation reservation must cover at least one evaluation")
+        if reservations["evaluation"].get("node", 0) != 0:
+            raise ValueError("control evaluation node reservation must be zero; evaluation creates no node")
+        object.__setattr__(self, "schema_version", schema_version)
+        object.__setattr__(self, "_controls_json", json.dumps(controls, sort_keys=True,
+                           ensure_ascii=False, separators=(",", ":"), allow_nan=False))
+
+    @property
+    def controls(self) -> dict[str, Any]:
+        return json.loads(self._controls_json)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GovernanceConfig":
+        if type(data) is not dict or set(data) != {"schema_version", "controls"}:
+            raise ValueError("governance requires schema_version and controls only")
+        return cls(data["schema_version"], data["controls"])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"schema_version": self.schema_version, "controls": self.controls}
+
+
 @dataclass(frozen=True)
 class AssemblyConfig:
     schema_version: int
@@ -87,6 +158,7 @@ class AssemblyConfig:
     skills: tuple[ComponentSpec, ...] = ()
     mode: str = "benchmark"
     knowledge: ComponentSpec | None = None
+    governance: GovernanceConfig | None = None
 
     def __post_init__(self) -> None:
         if type(self.schema_version) is not int or self.schema_version != 1:
@@ -113,10 +185,29 @@ class AssemblyConfig:
             if self.mode != "research":
                 raise ValueError("knowledge requires research mode; benchmark access is disabled")
 
+        if self.governance is not None:
+            if not isinstance(self.governance, GovernanceConfig):
+                raise ValueError("assembly governance must be a GovernanceConfig")
+            if self.budget.name != "hierarchical":
+                raise ValueError("governance requires a hierarchical physical budget")
+            all_limits = self.budget.options.get("limits")
+            if type(all_limits) is not dict or type(all_limits.get("global")) is not dict:
+                raise ValueError("governance budget limits require a global physical basket")
+            limits = all_limits["global"]
+            controls = self.governance.controls
+            baskets = controls["reservations"]
+            if not limits or any(set(basket) != set(limits) for basket in baskets.values()):
+                raise ValueError("control reservations must explicitly cover configured physical units")
+            for unit, limit in limits.items():
+                if type(limit) not in (int, float) or limit < 0:
+                    raise ValueError("governance requires finite nonnegative global limits")
+                if len(controls["after_main_cycles"]) * sum(basket[unit] for basket in baskets.values()) > limit:
+                    raise ValueError("control holdback exceeds global physical capacity")
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AssemblyConfig":
         required = {"schema_version", "name", "operators", *_SINGLE_COMPONENTS}
-        allowed = required | {"skills", "mode", "knowledge"}
+        allowed = required | {"skills", "mode", "knowledge", "governance"}
         if type(data) is not dict:
             raise ValueError("assembly configuration must be an object")
         data = json_copy(data, label="assembly configuration")
@@ -134,6 +225,7 @@ class AssemblyConfig:
             operators=tuple(ComponentSpec.from_dict(item) for item in data["operators"]),
             skills=tuple(ComponentSpec.from_dict(item) for item in data.get("skills", [])),
             mode=data.get("mode", "benchmark"),
+            governance=GovernanceConfig.from_dict(data["governance"]) if "governance" in data else None,
             knowledge=ComponentSpec.from_dict(data["knowledge"]) if data.get("knowledge") is not None else None,
             **{key: ComponentSpec.from_dict(data[key]) for key in _SINGLE_COMPONENTS})
 
@@ -143,7 +235,8 @@ class AssemblyConfig:
             **{key: getattr(self, key).to_dict() for key in _SINGLE_COMPONENTS},
             "operators": [item.to_dict() for item in self.operators],
             "skills": [item.to_dict() for item in self.skills],
-            "mode": self.mode, "knowledge": self.knowledge.to_dict() if self.knowledge else None}
+            "mode": self.mode, "knowledge": self.knowledge.to_dict() if self.knowledge else None,
+            **({"governance": self.governance.to_dict()} if self.governance is not None else {})}
 
 
 @dataclass(frozen=True)
@@ -156,6 +249,8 @@ class BuildContext:
     workdir: str | Path
     accounting_stamp: Any = None
     mode: str = "benchmark"
+    invocation_scope: dict[str, Any] | None = None
+    governance: Any = None
 
 
 class OperatorFailure(RuntimeError):

@@ -17,7 +17,7 @@ from core.composition.proxy_runtime import ProxyRuntime
 from core.composition.evaluation import (EvaluationContract, comparison_projection,
     encode_evidence, measured_costs, public_projection, validate_evidence)
 from core.executor.types import Candidate, CostVec, EvalRequest, EvalResult, EvalStatus, EvidenceRecord
-from core.llm import UsageError
+from core.llm import ProviderBudgetExhausted, UsageError
 from core.policy.types import MutationOp, StateMutation
 from core.x1.checkpoint import payload_digest
 
@@ -89,7 +89,7 @@ class HierarchicalRuntime(ProxyRuntime):
             direction, operation, request=request, depth=depth)
 
     def _settle_physical(self, receipt, cost, coverage, elapsed, *, evaluation=False, operator=False):
-        if getattr(self, "durable_executor", False):
+        if getattr(self, "continuation_enabled", False):
             if not evaluation and "wallclock" in self.budget.units \
                     and receipt.intent_id in self.store.replayed_starts and self.store.peek() is None:
                 raise UsageError("interrupted local operation has no durable wall-time measurement")
@@ -125,16 +125,20 @@ class HierarchicalRuntime(ProxyRuntime):
             covered.add("wallclock")
         if not set(self.budget.units).issubset(covered):
             raise UsageError("operation does not measure every configured physical unit")
+        proof = {}
+        if getattr(self, "governed", None):
+            from core.composition.provider_evidence import evidence_reference
+            proof["provider_evidence_ref"] = evidence_reference(self.store, receipt.intent_id)
         self.budget.settle_operation(receipt.intent_id,
             {unit: values[unit] for unit in self.budget.units},
-            measured_units=tuple(covered), fingerprint=receipt.fingerprint)
+            measured_units=tuple(covered), fingerprint=receipt.fingerprint, **proof)
 
     def _unresolved_physical(self, receipt, error):
         self.budget.mark_unresolved(receipt.intent_id, fingerprint=receipt.fingerprint,
                                     reason=type(error).__name__ + ": " + str(error))
 
-    def _check_provider_floor(self, receipt, before, cost):
-        observed = self.parts["provider"].usage_total - before
+    def _check_provider_floor(self, receipt, before, cost, *, provider=None):
+        observed = (provider or self.parts["provider"]).usage_total - before
         reported = _physical(cost)["token"]
         if reported < observed:
             self.store.append("composed_usage_discrepancy", {"intent_id": receipt.intent_id,
@@ -143,8 +147,15 @@ class HierarchicalRuntime(ProxyRuntime):
 
     def _halt_physical(self, cycle, reason, *, started=False):
         self._halted_reason = reason
+        if getattr(self, "governed", None):
+            from core.composition.governed import StopDisposition
+            self._stop_disposition = (StopDisposition.ORDINARY if self.budget.audit_governance()["protection_valid"]
+                                      else StopDisposition.INTEGRITY)
         self.store.append("composed_cycle_aborted" if started else "composed_stopped",
                           {"cycle": cycle, "reason": reason})
+        if getattr(self, "governed", None):
+            self.store.append("governed_main_stopped", {"main_cycles": self.next_cycle,
+                "disposition": self._stop_disposition.value})
         self._save()
         return False
 
@@ -165,55 +176,112 @@ class HierarchicalRuntime(ProxyRuntime):
                 self._unresolved_physical(receipt, error)
                 raise
         try:
-            result = await function()
+            if getattr(self, "governed", None):
+                with self.governed.meter(self.parts["provider"], receipt):
+                    result = await function()
+            else:
+                result = await function()
         except UsageError as error:
             self._unresolved_physical(receipt, error)
             raise
         except Exception:
             settle()
+            if getattr(self, "governed", None):
+                self.governed.check_integrity(receipt)
             raise
         settle()
+        if getattr(self, "governed", None):
+            self.governed.check_integrity(receipt)
         return result
 
-    async def _evaluate_physical(self, proposal, request, receipt):
-        self._validate_domain(request)
-        expected = self._binding(proposal, request)
+    async def _evaluate_physical(self, proposal, request, receipt, *, parts=None, lane="main", control_slot=None):
+        parts = self.parts if parts is None else parts
+        domain = parts["domain"]
+        if lane == "main":
+            self._validate_domain(request)
+            expected = self._binding(proposal, request)
+        else:
+            from core.composition.evaluation import binding_for
+            domain.validate_request(copy.deepcopy(request))
+            context_for = getattr(domain, "evaluation_context_for", None)
+            expected = binding_for(proposal, request, evaluator_version=domain.evaluator_version,
+                evaluation_context=context_for(request) if callable(context_for) else domain.evaluation_context)
         self.budget.start_operation(receipt.intent_id, fingerprint=receipt.fingerprint)
         started, settled = time.monotonic(), False
-        before = self.parts["provider"].usage_total
+        before = parts["provider"].usage_total
         try:
             elapsed = None
-            if getattr(self, "durable_executor", False):
+            if getattr(self, "governed", None):
+                async def invoke_governed():
+                    if self.durable_executor:
+                        operation = {"run_id": self._logical_run_id,
+                            "cycle": getattr(self, "_active_cycle", 0), "phase": request.split_id,
+                            "intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
+                            "manifest_sha256": "sha256:" + payload_digest(self.manifest)}
+                        return await parts["executor"].execute_bound(
+                            copy.deepcopy(proposal), copy.deepcopy(request), domain, operation)
+                    return await parts["executor"].execute(
+                        copy.deepcopy(proposal), copy.deepcopy(request), domain)
+                identity = {"intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
+                    "binding": asdict(expected), "lane": lane, "control_slot": control_slot}
                 from core.composition.worktree import MeasuredCommandError
-                operation = {"run_id": self._logical_run_id, "cycle": self._active_cycle,
-                    "phase": request.split_id, "intent_id": receipt.intent_id,
-                    "fingerprint": receipt.fingerprint,
-                    "manifest_sha256": "sha256:" + payload_digest(self.manifest)}
                 try:
-                    evidence = await self.parts["executor"].execute_bound(
-                        copy.deepcopy(proposal), copy.deepcopy(request), self.parts["domain"], operation)
+                    with self.governed.meter(parts["provider"], receipt, lane=lane, slot_id=control_slot):
+                        evidence, elapsed = await self.store.evaluation_call(identity, invoke_governed,
+                                                                            provider=parts["provider"], domain=domain)
                 except MeasuredCommandError as error:
-                    self._check_provider_floor(receipt, before, error.cost)
+                    self._check_provider_floor(receipt, before, error.cost, provider=parts["provider"])
+                    self.store.append("governed_evaluation_failure", {"intent_id": receipt.intent_id,
+                        "fingerprint": receipt.fingerprint, "cost": asdict(error.cost),
+                        "measured_cost_units": list(error.measured_cost_units), "reason": "MeasuredCommandError"})
                     self._settle_physical(receipt, error.cost, error.measured_cost_units,
                                           error.wall_seconds, evaluation=True)
                     settled = True
+                    self.store.append("governed_integrity_failure", {"intent_id": receipt.intent_id,
+                        "reason": "measured_evaluation_rejected"})
                     raise
-                elapsed = self.parts["executor"].operation_metadata(operation)["wall_seconds"]
             else:
-                evidence = await self.parts["executor"].execute(
-                    copy.deepcopy(proposal), copy.deepcopy(request), self.parts["domain"])
+                if getattr(self, "durable_executor", False):
+                    from core.composition.worktree import MeasuredCommandError
+                    operation = {"run_id": self._logical_run_id, "cycle": getattr(self, "_active_cycle", 0),
+                        "phase": request.split_id, "intent_id": receipt.intent_id,
+                        "fingerprint": receipt.fingerprint,
+                        "manifest_sha256": "sha256:" + payload_digest(self.manifest)}
+                    try:
+                        evidence = await parts["executor"].execute_bound(
+                            copy.deepcopy(proposal), copy.deepcopy(request), parts["domain"], operation)
+                    except MeasuredCommandError as error:
+                        self._check_provider_floor(receipt, before, error.cost, provider=parts["provider"])
+                        self._settle_physical(receipt, error.cost, error.measured_cost_units,
+                                              error.wall_seconds, evaluation=True)
+                        settled = True
+                        raise
+                    elapsed = parts["executor"].operation_metadata(operation)["wall_seconds"]
+                else:
+                    async def execute():
+                        return await parts["executor"].execute(
+                            copy.deepcopy(proposal), copy.deepcopy(request), parts["domain"])
+                    if getattr(self, "governed", None):
+                        identity = {"intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
+                            "binding": asdict(expected), "lane": lane, "control_slot": control_slot}
+                        evidence, elapsed = await self.store.evaluation_call(identity, execute)
+                    else:
+                        evidence = await execute()
             if not isinstance(evidence, EvidenceRecord):
                 raise UsageError("executor returned no measurable canonical evidence")
-            self._check_provider_floor(receipt, before, evidence.eval_result.cost)
+            self._check_provider_floor(receipt, before, evidence.eval_result.cost, provider=parts["provider"])
             measured_costs(evidence.eval_result)
             self._settle_physical(receipt, evidence.eval_result.cost,
                 evidence.eval_result.contract.measured_cost_units,
                 elapsed if elapsed is not None else time.monotonic() - started,
                 evaluation=True)
             settled = True
+            if getattr(self, "governed", None):
+                self.governed.check_integrity(receipt)
             if evidence.eval_result.cost.eval_count < 1:
                 raise ValueError("evaluation count is below the actual domain invocation")
-            self._validate_domain(request)
+            if lane == "main":
+                self._validate_domain(request)
             validate_evidence(evidence, expected_binding=expected)
             self.store.append("composed_physical_evidence", {"intent_id": receipt.intent_id,
                 "request": asdict(request), "evidence": encode_evidence(evidence)})
@@ -270,8 +338,13 @@ class HierarchicalRuntime(ProxyRuntime):
             return self._halt_physical(cycle, planning.reason)
         self.store.append("composed_cycle_started", {"cycle": cycle, "intent": planning.intent_id})
         self._policy_tokens, self._known_cost = 0, 0
-        operator, selected, parents, context, request = await self._planning_physical(planning,
-            lambda: self._prepare_cycle(task, cycle, identifier))
+        try:
+            operator, selected, parents, context, request = await self._planning_physical(planning,
+                lambda: self._prepare_cycle(task, cycle, identifier))
+        except ProviderBudgetExhausted as error:
+            if not getattr(self, "governed", None):
+                raise
+            return self._halt_physical(cycle, str(error), started=True)
         candidate = Candidate(identifier, parents, operator=selected, created_cycle=cycle,
                               context_pack_ref=context["context_pack_ref"])
         direction, depth = self._candidate_scope(candidate)
@@ -281,30 +354,34 @@ class HierarchicalRuntime(ProxyRuntime):
         operation = self._reserve_physical(candidate, "operator", cycle)
         if not operation.granted:
             return self._halt_physical(cycle, operation.reason, started=True)
-        self.budget.start_operation(operation.intent_id, fingerprint=operation.fingerprint)
         request = replace(request, context={**request.context, "budget": {
-            "state": self.budget.state(), "allocated_request": asdict(evaluation_request),
+            "state": self.budget.main_state() if self.governed else self.budget.state(), "allocated_request": asdict(evaluation_request),
             "direction_id": direction, "depth": depth}})
-        started, settled, failure = time.monotonic(), False, None
-        before = self.parts["provider"].usage_total
-        try:
+        if getattr(self, "governed", None):
+            proposal, failure = await self.governed.operator(operator, request, candidate, operation,
+                                                            provider=self.parts["provider"])
+        else:
+            self.budget.start_operation(operation.intent_id, fingerprint=operation.fingerprint)
+            started, settled, failure = time.monotonic(), False, None
+            before = self.parts["provider"].usage_total
             try:
-                proposal = await operator.propose(request)
-            except OperatorFailure as error:
-                failure = error
-                proposal = Proposal(candidate, "", error.cost, error.measured_cost_units)
-            if not isinstance(proposal, Proposal):
-                raise UsageError("operator returned no measurable Proposal")
-            self._check_provider_floor(operation, before, proposal.cost)
-            self._settle_physical(operation, proposal.cost, proposal.measured_cost_units,
-                                  time.monotonic() - started, operator=True)
-            settled = True
-            if "node" in proposal.measured_cost_units and proposal.cost.node_count != 1:
-                raise ValueError("operator node measurement differs from the actual candidate attempt")
-        except Exception as error:
-            if not settled:
-                self._unresolved_physical(operation, error)
-            raise
+                try:
+                    proposal = await operator.propose(request)
+                except OperatorFailure as error:
+                    failure = error
+                    proposal = Proposal(candidate, "", error.cost, error.measured_cost_units)
+                if not isinstance(proposal, Proposal):
+                    raise UsageError("operator returned no measurable Proposal")
+                self._check_provider_floor(operation, before, proposal.cost)
+                self._settle_physical(operation, proposal.cost, proposal.measured_cost_units,
+                                      time.monotonic() - started, operator=True)
+                settled = True
+                if "node" in proposal.measured_cost_units and proposal.cost.node_count != 1:
+                    raise ValueError("operator node measurement differs from the actual candidate attempt")
+            except Exception as error:
+                if not settled:
+                    self._unresolved_physical(operation, error)
+                raise
         if request.context.get("retrieval") != context["retrieval"] or \
                 request.context.get("context_pack_ref") != context["context_pack_ref"]:
             raise ValueError("operator changed authoritative retrieval context")

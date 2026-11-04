@@ -344,7 +344,9 @@ def _hierarchical(context, options):
     stamp = context.accounting_stamp or AccountingStamp(
         getattr(context.llm, "supplier", "unavailable"),
         getattr(context.llm, "model", "unavailable"), "unavailable", "unavailable", "unavailable")
-    return HierarchicalBudget(options, stamp, context.store)
+    return HierarchicalBudget(options, stamp, context.store,
+        **({"governance": context.governance.to_dict() if hasattr(context.governance, "to_dict")
+            else context.governance} if context.governance is not None else {}))
 
 
 def default_registry():
@@ -363,7 +365,8 @@ def default_registry():
         ctx.scope_context, **opts), validate_options=population_policy_options)
     for name in ("draft", "reflective"):
         registry.register("operator", name, lambda ctx, opts, kind=name:
-                          PromptOperator(ctx.llm, kind, **opts), validate_options=_operator_options)
+                          PromptOperator(ctx.llm, kind, **opts), validate_options=_operator_options,
+                          governance={"schema_version": 1, "parentless": True} if name == "draft" else None)
     registry.register("operator", "crossover", lambda ctx, opts: CrossoverOperator(ctx.llm, **opts),
                       validate_options=crossover_options)
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),

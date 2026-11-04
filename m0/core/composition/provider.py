@@ -39,14 +39,25 @@ class MeteredProvider:
         return getattr(provider, name)
 
     def __call__(self, *args, **kwargs):
-        durable = self.__dict__.get("durable_store")
-        if durable is not None:
-            return durable.provider_call(self, self._invoke, args, kwargs)
-        return self._invoke(*args, **kwargs)
+        durable = self.__dict__.get("_governed_store", self.__dict__.get("durable_store"))
+        binding = self.__dict__.get("invocation_binding")
+        if binding is not None:
+            self.current_invocation_binding = {**binding, "ordinal": self.invocation_ordinal}
+            self.invocation_ordinal += 1
+        try:
+            if durable is not None:
+                return durable.provider_call(self, self._invoke, args, kwargs)
+            return self._invoke(*args, **kwargs)
+        finally:
+            self.__dict__.pop("current_invocation_binding", None)
 
     def _invoke(self, *args, **kwargs):
         if self._unresolved_usage:
             raise UsageError("provider has unresolved invocation usage")
+        guard = self.__dict__.get("admission_guard")
+        if guard is not None:
+            self.last_usage = {"total_tokens": 0}
+            guard()
         self.last_usage = None
         reset_usage(self._provider)
         try:
@@ -59,3 +70,6 @@ class MeteredProvider:
                 raise
             self._usage_total += used
             self.last_usage = {"total_tokens": used}
+            measurement = self.__dict__.get("governance_measurement")
+            if measurement is not None:
+                measurement(used)
