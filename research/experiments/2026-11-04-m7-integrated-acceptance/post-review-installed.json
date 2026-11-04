@@ -1,0 +1,49 @@
+{
+  "external_provider_requests": 0,
+  "isolated_python": true,
+  "outside_checkout": true,
+  "passed": true,
+  "reports": {
+    "construction_currency": {
+      "construction_artifacts": 4,
+      "controls_completed": 2,
+      "external_model_requests": 0,
+      "fixture_settled_micro_cny": 304,
+      "loopback_http_requests": 8,
+      "notice": "Synthetic usage on a new fixture ledger; no real spend or invoice certification.",
+      "recorded_replay_passed": true,
+      "replay_currency_events_changed": false,
+      "replay_new_http_requests": 0,
+      "runtime": "composed-v9-m7-governed-external",
+      "workdir": "/dev/shm/mori-installed-m7-tc11b8d6/construction_currency"
+    },
+    "git_native": {
+      "artifact_commits": [
+        "e9694fffe8df3a5d2d2c62e0758e79147a6e635c",
+        "97a3973bd992437bbbc914d64ca1ec6f247a9032"
+      ],
+      "artifacts": 2,
+      "evaluations": 5,
+      "external_provider_requests": 0,
+      "generation_calls": 2,
+      "notice": "Offline fixture scores and usage; not a benchmark result.",
+      "recorded_replay_passed": true,
+      "runtime": "composed-v9-m7",
+      "synthetic_generation_tokens": 10
+    },
+    "legacy_currency": {
+      "controls_completed": 2,
+      "external_model_requests": 0,
+      "fixture_settled_micro_cny": 152,
+      "loopback_http_requests": 4,
+      "notice": "Synthetic usage on a new fixture ledger; no real spend or invoice certification.",
+      "recorded_replay_passed": true,
+      "replay_currency_events_changed": false,
+      "replay_new_http_requests": 0,
+      "runtime": "composed-v8-governed-external",
+      "workdir": "/dev/shm/mori-installed-m7-tc11b8d6/legacy_currency"
+    }
+  },
+  "verified_installed_modules": 127,
+  "wheel_sha256": "37a559361bf3fce6da9e82725622f96291235c81e73f923bcfe0733fd0c4baca"
+}

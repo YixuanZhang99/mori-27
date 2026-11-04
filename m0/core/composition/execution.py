@@ -18,7 +18,7 @@ from core.composition.construction import (ConstructionIntegrityError, Construct
     ConstructionResult, decode_construction_outcome, _json, _ref)
 from core.composition.contracts import OperatorFailure, Proposal, json_copy
 from core.composition.defaults import InProcessExecutor
-from core.composition.evaluation import binding_for, decode_evidence
+from core.composition.evaluation import binding_for
 from core.composition.recovery import ContinuationStore
 from core.llm import UsageError
 from core.x1.checkpoint import payload_digest
@@ -291,7 +291,11 @@ class CandidateExecution:
             if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
                 raise ValueError("invalid durable native evaluation measurement")
             self._measurements[operation["intent_id"]] = (operation, elapsed)
-            return decode_evidence(data["evidence"])
+            from core.composition.evaluation import MeasuredEvaluationError, decode_evaluation_outcome
+            evidence = decode_evaluation_outcome(data["evidence"], elapsed)
+            if isinstance(evidence, MeasuredEvaluationError):
+                raise evidence
+            return evidence
         if any(row["payload"]["identity"].get("intent_id") == operation["intent_id"]
                for row in self.store.read("governed_evaluation_started")):
             raise UsageError("incomplete evaluation is outside the active continuation window")

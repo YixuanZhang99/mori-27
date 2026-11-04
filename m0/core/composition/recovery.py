@@ -335,7 +335,8 @@ class ContinuationStore(AppendOnlyStore):
     async def evaluation_call(self, identity, invoke, *, provider=None, domain=None,
                               recoverable_command=False, elapsed_reader=None):
         """Adopt canonical native evidence; never retry an opaque started call."""
-        from core.composition.evaluation import decode_evidence, encode_evidence
+        from core.composition.evaluation import (MeasuredEvaluationError,
+            decode_evaluation_outcome, encode_evaluation_outcome)
         identity = detached(identity)
         was_recorded = self.peek() is not None
         self.append("governed_evaluation_started", {"identity": identity})
@@ -353,13 +354,15 @@ class ContinuationStore(AppendOnlyStore):
                 elapsed = data.get("elapsed")
                 if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
                     raise ValueError("invalid durable native evaluation measurement")
-                evidence = decode_evidence(data["evidence"])
+                evidence = decode_evaluation_outcome(data["evidence"], elapsed)
                 if data.get("domain_state") is not None:
                     restore = getattr(domain, "restore_state", None)
                     if not callable(restore):
                         raise ValueError("native domain cannot restore its terminal state")
                     restore(data["domain_state"])
                 self.append("governed_evaluation_completed", data)
+                if isinstance(evidence, MeasuredEvaluationError):
+                    raise evidence
                 return evidence, elapsed
         started = time.monotonic()
         evidence = await invoke()
@@ -367,9 +370,13 @@ class ContinuationStore(AppendOnlyStore):
         if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
             raise ValueError("invalid original evaluation measurement")
         save = getattr(domain, "checkpoint_state", None)
+        outcome = encode_evaluation_outcome(evidence)
         self.append("governed_evaluation_completed", {"identity": identity,
-            "evidence": encode_evidence(evidence), "elapsed": elapsed,
+            "evidence": outcome, "elapsed": elapsed,
             "domain_state": detached(save()) if callable(save) else None})
+        decoded = decode_evaluation_outcome(outcome, elapsed)
+        if isinstance(decoded, MeasuredEvaluationError):
+            raise decoded
         return evidence, elapsed
 
 

@@ -19,6 +19,7 @@ _TERMINAL = _START | {'status', 'proposal', 'evidence', 'failure_type'}
 _OPERATOR = {'intent_id', 'fingerprint', 'proposal', 'failure_type'}
 _EVALUATION_FAILURE = {'intent_id', 'fingerprint', 'cost', 'measured_cost_units', 'reason'}
 _OPERATOR_FAILURES = {'OperatorFailure', 'OperatorBudgetExhausted'}
+_EVALUATION_FAILURES = {'MeasuredCommandError', 'MeasuredEvaluationError'}
 
 
 def _require(condition, message):
@@ -121,7 +122,7 @@ def audit_terminals(runtime, plan, sessions):
             put(physical, data['intent_id'], index, data, 'physical evidence')
         elif kind == 'governed_evaluation_failure':
             _shape(data, _EVALUATION_FAILURE, 'evaluation failure')
-            _require(data['reason'] == 'MeasuredCommandError', 'unrecognized measured evaluation failure')
+            _require(data['reason'] in _EVALUATION_FAILURES, 'unrecognized measured evaluation failure')
             put(failures, data['intent_id'], index, data, 'evaluation failure')
         elif kind == 'composed_operation_measurement':
             _shape(data, {'identity', 'elapsed'}, 'operation measurement')
@@ -225,10 +226,10 @@ def audit_terminals(runtime, plan, sessions):
                      'evaluation reservation precedes settled control proposal')
             if terminal['evidence'] is None:
                 _require(evaluation_id in failures and evaluation_id not in physical
-                         and failure_type == 'MeasuredCommandError' and terminal['status'] == 'failed',
+                         and failure_type in _EVALUATION_FAILURES and terminal['status'] == 'failed',
                          'missing evidence has no authoritative measured evaluation failure')
                 failure_index, failure = failures[evaluation_id]
-                _require(failure['fingerprint'] == evaluation_reserve['fingerprint']
+                _require(failure['reason'] == failure_type and failure['fingerprint'] == evaluation_reserve['fingerprint']
                          and evaluation_reserve_index < failure_index < terminal_index,
                          'measured evaluation failure differs from reservation')
                 settlement(evaluation_id, evaluation_reserve, failure['cost'], failure['measured_cost_units'],

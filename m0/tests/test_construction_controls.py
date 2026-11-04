@@ -89,3 +89,37 @@ def test_shared_control_constructor_is_rejected_before_paid_work(tmp_path):
     with pytest.raises(ValueError, match="constructor reused"):
         fw.evolve(TASK)
     assert main.calls == 0 and all(provider.calls == 0 for provider in providers)
+
+
+def test_invalid_control_evidence_settles_once_without_admission_or_replacement(tmp_path):
+    import pytest
+
+    forbid = {"value": False}
+    def construct(resume=False):
+        template, providers, domains, _, _ = governed(tmp_path, resume=resume,
+            provider_factory=lambda: FreshConstructor(forbidden=forbid["value"]),
+            domain_factory=lambda: ForbiddenDomain() if forbid["value"] else Domain(invalid_identity=True))
+        assembly = template._composed.assembly.to_dict()
+        assembly.update(schema_version=2, execution=profile()["execution"])
+        fw = Framework.from_profile(assembly, FreshConstructor(forbidden=forbid["value"]),
+            ForbiddenDomain() if forbid["value"] else Domain(), template._composed.cfg, str(tmp_path),
+            component_registry=template._composed.registry)
+        return fw, providers, domains
+
+    fw, providers, domains = construct()
+    with pytest.raises(ValueError, match="evaluation rejected"):
+        fw.evolve(TASK)
+    state = fw._composed.budget.state()
+    assert state["global"]["used"] == {"token": 12, "node": 1, "eval_count": 1}
+    assert not state["open_intents"] and not records(fw, "composed_decision")
+    assert fw.inspect()["governance"]["completed"] == 0
+    assert len(records(fw, "governed_evaluation_failure")) == 1
+    forbid["value"] = True
+    resumed, fresh, _ = construct(resume=True)
+    with pytest.raises(ValueError, match="evaluation rejected"):
+        resumed.evolve(TASK)
+    assert resumed._composed.budget.state()["global"] == state["global"]
+    assert len(records(resumed, "governed_evaluation_failure")) == 1
+    assert [p.calls for p in providers] == [1, 0, 0]
+    assert [len(d.calls) for d in domains] == [1, 0, 0]
+    assert all(p.calls == 0 for p in fresh)

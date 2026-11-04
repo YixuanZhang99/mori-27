@@ -1,6 +1,6 @@
 """Configured M7 constructs once through the public Framework entry point."""
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -106,6 +106,111 @@ def test_frozen_hypothesis_failure_keeps_cost_without_fabricating_evaluation(tmp
     assert sum(o["actual"]["node"] for o in operations) == 1
     assert sum(o["actual"]["eval_count"] for o in operations) == 0
     assert next(iter(fw._composed.frontier.nodes.values())).eval_status == "failed_to_run"
+
+
+@pytest.mark.parametrize("defect", ["deep_json", "artifact_surrogate", "hypothesis_surrogate"])
+@pytest.mark.parametrize("repair", [False, True])
+def test_malformed_text_settles_known_cost_and_resumes_without_replacement(tmp_path, defect, repair):
+    class Malformed(ConstructorProvider):
+        def __call__(self, prompt):
+            valid = super().__call__(prompt)
+            if self.calls > 1:
+                return valid
+            if defect == "deep_json":
+                return "[" * 10000 + "]" * 10000
+            payload = json.loads(valid)
+            payload[defect.removesuffix("_surrogate")] = "\ud800"
+            return json.dumps(payload)
+
+    assembly = profile(frozen=False)
+    assembly["execution"]["constructor"]["options"]["max_attempts"] = 2 if repair else 1
+    provider, domain = Malformed(), Domain()
+    fw = build(tmp_path, assembly=assembly, provider=provider, domain=domain, generations=0)
+    fw.evolve(TASK)
+    state = fw._composed.budget.state()
+    assert state["global"]["used"] == {"token": 17 if repair else 5,
+        "node": 1, "eval_count": 1 if repair else 0}
+    assert not state["open_intents"]
+    assert len(domain.calls) == int(repair)
+    assert len(records(fw, "construction_outcome")) == 1
+    assert len(records(fw, "materialization_completed")) == int(repair)
+    resumed = build(tmp_path, assembly=assembly, provider=ConstructorProvider(forbidden=True),
+                    domain=ForbiddenDomain(), generations=0, resume=True)
+    resumed.evolve(TASK)
+    assert resumed._composed.budget.state()["global"] == state["global"]
+    assert provider.calls == (2 if repair else 1)
+
+
+@pytest.mark.parametrize("defect", ["identity", "status", "nan_metric"])
+def test_invalid_native_evidence_settles_known_bill_and_adopts_rejection(tmp_path, defect):
+    class InvalidDomain(Domain):
+        async def evaluate(self, proposal, request):
+            result = await super().evaluate(proposal, request)
+            if defect == "status":
+                result = replace(result, status="not-a-status")
+            elif defect == "nan_metric":
+                result = replace(result, metrics={"dev/score": float("nan")})
+            return result
+
+    domain = InvalidDomain(invalid_identity=defect == "identity")
+    provider = ConstructorProvider()
+    fw = build(tmp_path, provider=provider, domain=domain, generations=0)
+    with pytest.raises(ValueError):
+        fw.evolve(TASK)
+    state = fw._composed.budget.state()
+    assert state["global"]["used"] == {"token": 12, "node": 1, "eval_count": 1}
+    assert not state["open_intents"] and not records(fw, "composed_decision")
+    assert len(records(fw, "governed_evaluation_completed")) == 1
+    original = fw.store.path.read_bytes()
+    resumed = build(tmp_path, provider=ConstructorProvider(forbidden=True),
+                    domain=ForbiddenDomain(), generations=0, resume=True)
+    with pytest.raises(ValueError):
+        resumed.evolve(TASK)
+    assert resumed._composed.budget.state()["global"] == state["global"]
+    assert resumed.store.path.read_bytes() == original
+    assert provider.calls == len(domain.calls) == 1
+
+
+def test_rejected_evaluation_terminal_cut_resumes_to_one_settlement(tmp_path, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+
+    class Crash(BaseException):
+        pass
+
+    original_write = ContinuationStore._write
+    def cut(store, row):
+        original_write(store, row)
+        if row["kind"] == "governed_evaluation_completed":
+            raise Crash()
+
+    provider, domain = ConstructorProvider(), Domain(invalid_identity=True)
+    fw = build(tmp_path, provider=provider, domain=domain, generations=0)
+    monkeypatch.setattr(ContinuationStore, "_write", cut)
+    with pytest.raises(Crash):
+        fw.evolve(TASK)
+    assert fw._composed.budget.state()["global"]["used"]["token"] == 5
+    monkeypatch.setattr(ContinuationStore, "_write", original_write)
+    resumed = build(tmp_path, provider=ConstructorProvider(forbidden=True),
+                    domain=ForbiddenDomain(), generations=0, resume=True)
+    with pytest.raises(ValueError, match="evaluation rejected"):
+        resumed.evolve(TASK)
+    state = resumed._composed.budget.state()
+    assert state["global"]["used"] == {"token": 12, "node": 1, "eval_count": 1}
+    assert not state["open_intents"]
+    assert len(records(resumed, "governed_evaluation_completed")) == 1
+    assert provider.calls == len(domain.calls) == 1
+
+
+def test_unmeasured_native_evaluation_stays_unresolved(tmp_path):
+    from core.llm import UsageError
+    fw = build(tmp_path, domain=Domain(missing_coverage=True), generations=0)
+    with pytest.raises(UsageError):
+        fw.evolve(TASK)
+    state = fw._composed.budget.state()
+    assert state["global"]["used"] == {"token": 5, "node": 1, "eval_count": 0}
+    assert state["global"]["reserved"] == {"token": 10, "node": 0, "eval_count": 1}
+    assert len(state["open_intents"]) == 1
+    assert not records(fw, "governed_evaluation_completed")
 
 
 def test_excluded_grounding_cannot_enter_through_echo_policy_or_static_skill(tmp_path):

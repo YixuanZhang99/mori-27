@@ -27,6 +27,11 @@ def _ref(value):
 def _text(value, label):
     if type(value) is not str or not value.strip():
         raise ValueError(f"{label} must be nonempty text")
+    # JSON permits escaped lone surrogates; durable artifacts require UTF-8.
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{label} must be valid UTF-8 text") from error
 
 
 @dataclass(frozen=True)
@@ -238,6 +243,8 @@ def _output(raw):
     _text(value["hypothesis"], "executed hypothesis")
     if "feedback" in value and type(value["feedback"]) is not str:
         raise ValueError("construction feedback must be text")
+    if "feedback" in value:
+        value["feedback"].encode("utf-8")
     return value
 
 
@@ -324,6 +331,7 @@ class PromptMaterializer:
         coverage = ("token", "node", "eval_count")
 
         def failed(detail, failure_type=OperatorFailure):
+            detail = detail.encode("utf-8", errors="backslashreplace").decode("utf-8")
             return failure_type(CostVec(tokens_in=used, node_count=1), detail,
                                 measured_cost_units=coverage)
 
@@ -345,7 +353,7 @@ class PromptMaterializer:
             used += take_usage(provider)
             try:
                 output = _output(raw)
-            except (TypeError, ValueError) as error:
+            except (TypeError, ValueError, RecursionError) as error:
                 feedback = [str(error)]
                 attempts.append({"attempt": index + 1, "status": "invalid_output",
                                  "known_tokens": used, "feedback": feedback})
@@ -357,6 +365,8 @@ class PromptMaterializer:
                 feedback = self.validator(output["artifact"]) if self.validator is not None else ()
                 if type(feedback) not in (list, tuple) or any(type(x) is not str or not x.strip() for x in feedback):
                     raise ValueError("local validator must return text issues")
+                for issue in feedback:
+                    _text(issue, "local validation issue")
                 feedback = list(feedback)
             except Exception as error:
                 raise failed(f"local construction validation failed: {type(error).__name__}: {error}") from error

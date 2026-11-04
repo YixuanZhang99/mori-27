@@ -11,7 +11,7 @@ import math
 import time
 
 from core.composition.contracts import OperatorFailure, Proposal
-from core.composition.evaluation import measured_costs
+from core.composition.evaluation import MeasuredEvaluationError, measured_costs
 from core.executor.types import CostVec, EvidenceRecord
 from core.llm import ProviderBudgetExhausted, UsageError
 
@@ -165,7 +165,7 @@ class InvocationLifecycle:
                     evidence, measured_elapsed = await operation.invoke(recorded)
                 else:
                     evidence = await operation.invoke(invoke)
-            except MeasuredCommandError as error:
+            except (MeasuredCommandError, MeasuredEvaluationError) as error:
                 if self.governance is None and elapsed is None:
                     # Legacy native executors have no supervisor attestation.
                     raise
@@ -173,7 +173,7 @@ class InvocationLifecycle:
                 if self.governance is not None:
                     self.store.append("governed_evaluation_failure", {"intent_id": receipt.intent_id,
                         "fingerprint": receipt.fingerprint, "cost": asdict(error.cost),
-                        "measured_cost_units": list(error.measured_cost_units), "reason": "MeasuredCommandError"})
+                        "measured_cost_units": list(error.measured_cost_units), "reason": type(error).__name__})
                 operation.finish(error.cost, error.measured_cost_units, error.wall_seconds,
                                  evaluation=True, integrity=False, supervised=supervised)
                 if self.governance is not None:

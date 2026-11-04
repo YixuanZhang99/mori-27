@@ -119,25 +119,32 @@ def measured_costs(result, required_cost_units=("token", "eval_count")):
     contract = result.contract
     if not isinstance(contract, EvaluationContract):
         raise UsageError("evaluation lacks measurement coverage")
-    coverage = contract.measured_cost_units
+    return _measured_values(result.cost, contract.measured_cost_units, contract.token_accounting,
+                            required_cost_units)
+
+
+def _measured_values(cost, coverage, token_accounting, required_cost_units=("token", "eval_count")):
+    """Validate the same measurement contract for accepted and rejected outcomes."""
+    if not isinstance(cost, CostVec):
+        raise UsageError("evaluation must return an explicit CostVec")
     if type(coverage) is not tuple or any(type(unit) is not str or unit not in COST_UNITS for unit in coverage) \
             or len(set(coverage)) != len(coverage):
         raise UsageError("evaluation measurement coverage is invalid")
     if not set(required_cost_units) <= COST_UNITS or not set(required_cost_units) <= set(coverage):
         raise UsageError("evaluation does not measure every required cost unit")
     try:
-        for name, value in asdict(result.cost).items():
+        for name, value in asdict(cost).items():
             _finite(value, f"cost.{name}", minimum=0)
             if name in {"tokens_in", "tokens_out", "eval_count", "node_count"} and type(value) is not int:
                 raise ValueError("token/count measurements must be integers")
     except ValueError as error:
         raise UsageError(str(error)) from error
-    if type(contract.token_accounting) is not str or contract.token_accounting not in {"split", "total_only"} \
-            or contract.token_accounting == "total_only" and result.cost.tokens_out != 0:
+    if type(token_accounting) is not str or token_accounting not in {"split", "total_only"} \
+            or token_accounting == "total_only" and cost.tokens_out != 0:
         raise UsageError("invalid total-only token storage convention")
-    values = {"token": result.cost.tokens_in + result.cost.tokens_out, "usd": result.cost.usd,
-              "eval_count": result.cost.eval_count, "node": result.cost.node_count,
-              "wallclock": result.cost.wall_seconds, "gpu_hours": result.cost.gpu_hours}
+    values = {"token": cost.tokens_in + cost.tokens_out, "usd": cost.usd,
+              "eval_count": cost.eval_count, "node": cost.node_count,
+              "wallclock": cost.wall_seconds, "gpu_hours": cost.gpu_hours}
     # A nonzero value cannot be passed off as an unmeasured default.
     if any(value != 0 and unit not in coverage for unit, value in values.items()):
         raise UsageError("nonzero cost lacks measurement coverage")
@@ -288,6 +295,53 @@ def encode_evidence(evidence):
     validate_evidence(evidence)
     return json.loads(json.dumps({"schema_version": 1, "evidence": asdict(evidence)},
                                  ensure_ascii=False, allow_nan=False, sort_keys=True))
+
+
+class MeasuredEvaluationError(ValueError):
+    """Original rejected native outcome with a trustworthy bill, never scored evidence."""
+    def __init__(self, detail, cost, coverage, token_accounting, wall_seconds):
+        _measured_values(cost, coverage, token_accounting)
+        _finite(wall_seconds, "rejected evaluation elapsed time", minimum=0)
+        _text(detail, "rejected evaluation detail")
+        detail.encode("utf-8")
+        super().__init__(detail)
+        self.cost, self.measured_cost_units = cost, coverage
+        self.wall_seconds = wall_seconds
+
+
+def encode_evaluation_outcome(evidence):
+    """Retain a known bill even when the producer's identity or content is invalid."""
+    if not isinstance(evidence, EvidenceRecord):
+        raise UsageError("executor returned no measurable canonical evidence")
+    measured_costs(evidence.eval_result)
+    try:
+        payload = encode_evidence(evidence)
+        json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        return payload
+    except (TypeError, ValueError, RecursionError, OverflowError) as error:
+        contract = evidence.eval_result.contract
+        detail = ("evaluation rejected: " + str(error)).encode(
+            "utf-8", errors="backslashreplace").decode("utf-8")
+        return {"schema_version": 1, "rejected": {
+            "detail": detail, "cost": asdict(evidence.eval_result.cost),
+            "measured_cost_units": list(contract.measured_cost_units),
+            "token_accounting": contract.token_accounting}}
+
+
+def decode_evaluation_outcome(payload, elapsed):
+    """Decode terminal evidence or a measured rejection without validating it as a score."""
+    if type(payload) is dict and "rejected" in payload:
+        if set(payload) != {"schema_version", "rejected"} or type(payload["schema_version"]) is not int \
+                or payload["schema_version"] != 1:
+            raise ValueError("invalid rejected evaluation schema")
+        value = payload["rejected"]
+        if type(value) is not dict or set(value) != {"detail", "cost", "measured_cost_units", "token_accounting"} \
+                or type(value["measured_cost_units"]) is not list:
+            raise ValueError("invalid rejected evaluation outcome")
+        cost = CostVec(**_object(value["cost"], CostVec))
+        return MeasuredEvaluationError(value["detail"], cost, tuple(value["measured_cost_units"]),
+                                       value["token_accounting"], elapsed)
+    return decode_evidence(payload)
 
 
 def decode_evidence(payload, *, expected_binding=None, required_cost_units=("token", "eval_count"),

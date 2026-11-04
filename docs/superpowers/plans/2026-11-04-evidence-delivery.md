@@ -39,7 +39,7 @@
 
 **Files:** Existing docs/superpowers/plans/2026-11-04-m7-execution.md Task 6; its review ledger; research/experiments/2026-11-04-m7-integrated-acceptance/.
 
-- [ ] Finish the same fresh whole-branch review of f7ab273..8b5e018. Reproduce and fix Important/Critical findings; record decisions and deferred minors.
+- [x] Finish the same fresh whole-branch review of f7ab273..8b5e018. Reproduce and fix Important/Critical findings; record decisions and deferred minors.
 - [ ] Run required checks on the final source and clean v74 acceptance. Expected: all 55 checks, fresh certificate/journal, exact committed/executed source binding and unchanged historical evidence.
 - [ ] Push the existing branch; independently verify same-SHA hosted artifacts; preserve a rollback bundle. Keep main and full-framework status separate.
 
