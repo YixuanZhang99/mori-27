@@ -175,3 +175,74 @@ def test_invalid_frozen_evaluator_identity_is_rejected_before_any_action(tmp_pat
         with pytest.raises(ValueError):
             FunSearchCoordinator(policy(), store, **invalid)
     assert not list(store.read())
+
+
+def test_materialization_journal_rejects_template_substitution_and_is_idempotent(tmp_path):
+    store = ContinuationStore(tmp_path / 'journal.jsonl')
+    store.append('composed_evidence', original_row())
+    coord = FunSearchCoordinator(policy(), store, **FROZEN)
+    coord.record_evaluated('candidate-1')
+    asyncio.run(coord.select('child-1', frontier('candidate-1'), {}))
+    first = coord.materialize('child-1', SOURCE, 'priority')
+    second = coord.materialize('child-1', SOURCE, 'priority')
+    assert first == second and len(list(store.read('funsearch_materialization'))) == 1
+    with pytest.raises(ValueError, match='materialization'):
+        coord.materialize('child-1', '# changed\n' + SOURCE, 'priority')
+    assert len(list(store.read('funsearch_materialization'))) == 1
+
+
+def test_materialization_write_failure_stops_before_returning_prompt(tmp_path, monkeypatch):
+    store = ContinuationStore(tmp_path / 'journal.jsonl')
+    store.append('composed_evidence', original_row())
+    coord = FunSearchCoordinator(policy(), store, **FROZEN)
+    coord.record_evaluated('candidate-1')
+    asyncio.run(coord.select('child-1', frontier('candidate-1'), {}))
+    append = store.append
+    def fail(kind, payload):
+        if kind == 'funsearch_materialization':
+            raise OSError('simulated prompt journal failure')
+        return append(kind, payload)
+    monkeypatch.setattr(store, 'append', fail)
+    with pytest.raises(OSError):
+        coord.materialize('child-1', SOURCE, 'priority')
+    assert not list(store.read('funsearch_materialization'))
+
+
+def test_crash_after_materialization_journal_replays_same_prompt_once(tmp_path, monkeypatch):
+    from core.x1.checkpoint import RunCheckpoint
+    store = ContinuationStore(tmp_path / 'journal.jsonl')
+    store.append('composed_evidence', original_row())
+    p = policy(); coord = FunSearchCoordinator(p, store, **FROZEN)
+    coord.record_evaluated('candidate-1')
+    asyncio.run(coord.select('child-1', frontier('candidate-1'), {}))
+    saved = p.checkpoint_state()
+    checkpoint = RunCheckpoint.create({'git_state': {}, 'inflight_executor': [], 'messages': [], 'policy': saved})
+    store.append('composed_checkpoint', {'sha256': checkpoint.payload_sha256})
+    append = store.append
+    def crash_after_write(kind, payload):
+        append(kind, payload)
+        if kind == 'funsearch_materialization':
+            raise OSError('simulated post-write crash')
+    monkeypatch.setattr(store, 'append', crash_after_write)
+    with pytest.raises(OSError):
+        coord.materialize('child-1', SOURCE, 'priority')
+    restored_policy = policy(); restored_policy.restore_state(saved)
+    restored_store = ContinuationStore(store.path, checkpoint); restored_store.resume()
+    restored = FunSearchCoordinator(restored_policy, restored_store, **FROZEN)
+    result = restored.materialize('child-1', SOURCE, 'priority')
+    assert 'priority_v0' in result['prompt']
+    assert len(list(restored_store.read('funsearch_materialization'))) == 1
+
+
+def test_evaluated_child_requires_durable_materialization_first(tmp_path):
+    store = ContinuationStore(tmp_path / 'journal.jsonl')
+    store.append('composed_evidence', original_row())
+    coord = FunSearchCoordinator(policy(), store, **FROZEN)
+    coord.record_evaluated('candidate-1')
+    asyncio.run(coord.select('child-1', frontier('candidate-1'), {}))
+    store.append('composed_evidence', original_row('child-1'))
+    with pytest.raises(ValueError, match='materialization'):
+        coord.record_evaluated('child-1')
+    coord.materialize('child-1', SOURCE, 'priority')
+    coord.record_evaluated('child-1')
+    assert len(list(store.read('funsearch_public_candidate'))) == 2

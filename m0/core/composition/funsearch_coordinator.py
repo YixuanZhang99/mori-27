@@ -6,6 +6,9 @@ This module performs no provider or evaluator calls.
 """
 from __future__ import annotations
 
+import hashlib
+import re
+
 from core.composition.evaluation import decode_evidence
 from core.composition.funsearch_policy import FunSearchPolicy
 from core.composition.recovery import ContinuationStore
@@ -73,7 +76,15 @@ class FunSearchCoordinator:
             raise ValueError('candidate identity is required')
         if self.policy.pending_selection() is not None:
             self._audit()
-            self._event(candidate_id)
+            selection = self._event(candidate_id)['selection']
+            records = [row for row in self._rows('funsearch_materialization') if row.get('candidate_id') == candidate_id]
+            if (len(records) != 1 or set(records[0]) != {'candidate_id', 'function_name', 'template_ref',
+                    'selection_ref', 'input_ref', 'prompt_ref', 'binding_ref'} or
+                    type(records[0]['function_name']) is not str or not records[0]['function_name'].isidentifier() or
+                    records[0]['selection_ref'] != 'sha256:' + payload_digest(selection['receipt']) or
+                    any(type(records[0][key]) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', records[0][key])
+                        for key in ('template_ref', 'input_ref', 'prompt_ref', 'binding_ref'))):
+                raise ValueError('candidate lacks its durable materialization record')
         if any(row.get('candidate_id') == candidate_id for row in self._rows('funsearch_public_candidate')):
             raise ValueError('candidate was already recorded')
         _row, projection = self._projection(candidate_id)
@@ -116,6 +127,17 @@ class FunSearchCoordinator:
         pairs = {name: self._projection(name) for name in identifiers}
         sources = {name: pair[0]['proposal']['artifact'] for name, pair in pairs.items()}
         projections = {name: pair[1] for name, pair in pairs.items()}
-        return build_journal_bound_prompt(template, function_name, selection['receipt'], selection['before'],
+        result = build_journal_bound_prompt(template, function_name, selection['receipt'], selection['before'],
             selection['after'], eligible=set(selection['receipt']['eligible']), max_parents=2,
             sources=sources, projections=projections, evidence_rows=self._rows('composed_evidence'), **self.frozen)
+        record = {'candidate_id': candidate_id, 'function_name': function_name,
+                  'template_ref': 'sha256:' + hashlib.sha256(template.encode('utf-8')).hexdigest(),
+                  'selection_ref': result['selection_ref'], 'input_ref': result['input_ref'],
+                  'prompt_ref': result['prompt_ref'], 'binding_ref': result['binding_ref']}
+        existing = [row for row in self._rows('funsearch_materialization') if row.get('candidate_id') == candidate_id]
+        if existing:
+            if len(existing) != 1 or payload_digest(existing[0]) != payload_digest(record):
+                raise ValueError('materialization differs from its original journal event')
+        else:
+            self.store.append('funsearch_materialization', record)
+        return result
