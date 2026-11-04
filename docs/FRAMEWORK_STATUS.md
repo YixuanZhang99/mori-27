@@ -14,6 +14,9 @@
 最新 CI 状态应以 GitHub Actions 为准，不能由前一提交的通过结果代替。
 为缩短验收临时文件的 I/O，后续 CI 优先使用可执行且剩余至少 1 GiB 的
 `/dev/shm`，不可用时回退到 runner 临时目录；测试内容和原时限不变。
+`586dd1f` 本机 v74 的 55 项检查及源码绑定通过；其 [GitHub Actions 推送验收](https://github.com/YixuanZhang99/mori-27/actions/runs/41911091797)
+再次因完整回归的单项 600 秒时限失败，快速临时目录未消除这一远端计时问题。
+失败证据已保留；尚不能将该提交标记为远端验收通过。
 
 开发分支 `codex/m7-construction` 的 `a6b5826` 已完成本机完整项目检查、
 本机 v74 验收以及同提交 GitHub Actions 验收，并完成三项真实 MLE 任务的
@@ -61,7 +64,7 @@ baseline/full 三个本地 seed 试跑：两个冻结批次的 18 份提交均�
 | 工作块 | 当前实际完成范围 | 验证与未完成范围 |
 | --- | --- | --- |
 | 主线 S1–S8 | 配置组装、统一评估、记忆回流、分层准入/预算、proxy 校准、命令 worktree 恢复、种群与 crossover | 已在 main；具体限制见原阶段记录，不能理解为原设计全部实现 |
-| MLE 接入与费用保护 | 三任务适配、官方评分接入、隔离、请求容量检查、跨运行费用账本 | 两轮真实试跑保留失败与部分成功；没有完整有效的同任务 baseline/full 配对 |
+| MLE 接入与费用保护 | 三任务适配、官方评分接入、隔离、请求容量检查、跨运行费用账本 | 三任务 × baseline/full × 三个本地 seed 均已获得官方评分；批次和可比性限制见上方报告 |
 | 常驻治理 / v72 | 独立对照会话、未来容量保护、七账户投影、原始结果接管及记录回放 | `ff5c441` [同 SHA CI 通过](https://github.com/YixuanZhang99/mori-27/actions/runs/41816499445)，46 项版本验收；尚未合入 main |
 | 外部费用桥 / v73 | 物理与人民币双重准入、独立费用审计、已知结果恢复、回放不新增请求 | `75f397e` [同 SHA CI 通过](https://github.com/YixuanZhang99/mori-27/actions/runs/41820454246)，50 项版本验收；新路径使用 loopback 验证，未迁移真实账本 |
 | 调用生命周期收拢 | planning/operator/evaluation 共用调用与结算顺序，保留真实计费权威 | `f7ab273`：2,132 Linux tests、76 tooling、本地 v73 50 项和[同 SHA CI](https://github.com/YixuanZhang99/mori-27/actions/runs/41827376262)通过；不等于 A7 全仓关闭 |
