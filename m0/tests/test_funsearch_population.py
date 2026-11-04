@@ -106,3 +106,19 @@ def test_enormous_integer_scores_are_rejected_as_invalid():
     p = population()
     with pytest.raises(ValueError):
         p.register('bad', 'x', {'a': 0, 'b': 10 ** 1000}, island=0, epoch=0)
+
+
+def test_selection_conditions_on_eligible_candidates_without_sampling_pruned():
+    p = population(seed=31)
+    p.register('base', 'x', {'a': 0, 'b': 0}, island=None)
+    p.register('short', 'a', {'a': 1, 'b': 1}, island=0, epoch=0)
+    p.register('long', 'a' * 40, {'a': 1, 'b': 1}, island=0, epoch=0)
+    for _ in range(30):
+        draw = p.sample(0, eligible={'base', 'long'})
+        assert set(draw['candidates']) <= {'base', 'long'}
+    before = p.checkpoint_state()
+    with pytest.raises(ValueError, match='eligible'):
+        p.sample(0, eligible={'outside'})
+    assert p.checkpoint_state() == before
+    with pytest.raises(ValueError):
+        p.sample(0, eligible=['base'])

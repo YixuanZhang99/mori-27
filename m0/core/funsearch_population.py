@@ -108,31 +108,44 @@ class FunSearchPopulation:
                 'clusters': [{'signature': list(sig), 'score': sig[-1], 'candidates': list(ids)}
                              for sig, ids in state['clusters'].items()]}
 
-    def cluster_probabilities(self, index):
-        state = self._island(index)
-        if not state['clusters']:
-            raise ValueError('island is empty')
-        temp = self.temperature * (1 - (state['count'] % self.temperature_period) / self.temperature_period)
-        return _softmax([signature[-1] for signature in state['clusters']], temp)
+    def _eligible_clusters(self, index, eligible):
+        if eligible is not None and (type(eligible) not in (set, frozenset) or
+                any(type(candidate) is not str or not candidate for candidate in eligible)):
+            raise ValueError('eligible candidates must be an explicit identity set')
+        clusters = self._island(index)['clusters']
+        return {signature: [candidate for candidate in members if eligible is None or candidate in eligible]
+                for signature, members in clusters.items()
+                if eligible is None or any(candidate in eligible for candidate in members)}
 
-    def program_probabilities(self, index, signature):
+    def cluster_probabilities(self, index, *, eligible=None):
+        state = self._island(index)
+        clusters = self._eligible_clusters(index, eligible)
+        if not clusters:
+            raise ValueError('island has no eligible candidates')
+        temp = self.temperature * (1 - (state['count'] % self.temperature_period) / self.temperature_period)
+        if temp <= 0:
+            raise ValueError('sampling temperature underflowed')
+        return _softmax([signature[-1] for signature in clusters], temp)
+
+    def program_probabilities(self, index, signature, *, eligible=None):
         try:
-            ids = self._island(index)['clusters'][tuple(signature)]
+            ids = self._eligible_clusters(index, eligible)[tuple(signature)]
         except (KeyError, TypeError) as exc:
             raise ValueError('unknown signature') from exc
         lengths = [len(self._candidates[candidate]['program']) for candidate in ids]
         shortest, longest = min(lengths), max(lengths)
         return _softmax([-(length - shortest) / (longest + 1e-6) for length in lengths], 1.0)
 
-    def sample(self, index):
+    def sample(self, index, *, eligible=None):
         state = self._island(index)
-        signatures = list(state['clusters'])
-        weights = self.cluster_probabilities(index)
+        clusters = self._eligible_clusters(index, eligible)
+        signatures = list(clusters)
+        weights = self.cluster_probabilities(index, eligible=eligible)
         choices = self._rng.choices(signatures, weights=weights, k=min(len(signatures), self.prompt_size))
         selected = []
         for signature in choices:
-            ids = state['clusters'][signature]
-            selected.append(self._rng.choices(ids, weights=self.program_probabilities(index, signature), k=1)[0])
+            ids = clusters[signature]
+            selected.append(self._rng.choices(ids, weights=self.program_probabilities(index, signature, eligible=eligible), k=1)[0])
         return {'island': index, 'epoch': state['epoch'],
                 'candidates': sorted(selected, key=lambda candidate: self._candidates[candidate]['scores'][self.case_ids[-1]])}
 
