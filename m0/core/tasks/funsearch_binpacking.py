@@ -4,7 +4,7 @@ import json
 
 
 def score_partition(instances, priority):
-    """Score a complete partition; caller must sandbox the supplied priority."""
+    """Score a complete partition using a trusted priority callback."""
     if type(instances) is not dict or len(instances) != 10 or any(
             type(key) is not str or not key.strip() for key in instances):
         raise ValueError('OR3 partition requires 10 named instances')
@@ -13,7 +13,7 @@ def score_partition(instances, priority):
 
 
 def score_instance(instance, priority):
-    """Return negative used-bin count; execute priority only in a caller's sandbox."""
+    """Return negative used-bin count using a trusted priority callback."""
     import numpy as np
     if (not callable(priority) or type(instance) is not dict or
             set(instance) != {'capacity', 'num_items', 'items'} or
