@@ -88,3 +88,5 @@
 - v72 (2026-11-04): opt-in resident controls, seven protected physical accounts, isolated sessions, native/worktree recovery and recorded replay, additive protected currency migration and semantic audit; all v71 commands/timeouts and authentic history retained.
 
 - v73 (2026-11-04): external governed CNY bridge with strict invocation identity, hard capacity admission, independent shared-authority audit, process-crash adoption, and native/worktree loopback Framework replay; preserves every v72 command and timeout.
+
+- v74 — Configured M7 construction, immutable Git artifacts, isolated controls, protected external currency, installed examples and actual process-crash recovery; retains all v73 checks.

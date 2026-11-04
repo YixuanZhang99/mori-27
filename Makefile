@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON ?= 3.12
 export PYTHONDONTWRITEBYTECODE := 1
 
-.PHONY: help setup test test-linux axioms examples tooling check accept-linux build verify-import
+.PHONY: accept-linux-v73 help setup test test-linux axioms examples tooling check accept-linux build verify-import
 
 help:
 	@echo 'make setup        Install the locked Python 3.12 development environment'
@@ -43,6 +43,10 @@ tooling:
 check: axioms test examples tooling
 
 accept-linux:
+	$(UV) run --project m0 --locked python scripts/check_linux.py
+	$(UV) run --project m0 --locked python scripts/run_acceptance_v74.py
+
+accept-linux-v73:
 	$(UV) run --project m0 --locked python scripts/check_linux.py
 	$(UV) run --project m0 --locked python scripts/run_acceptance.py
 

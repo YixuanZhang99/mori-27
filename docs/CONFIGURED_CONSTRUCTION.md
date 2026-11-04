@@ -104,3 +104,17 @@ python -I /path/outside/checkout/governed_cny_offline.py --construction --workdi
 ```
 
 复制的脚本来自 [governed_cny_offline.py](../m0/examples/governed_cny_offline.py)。它以本机 HTTP 和新的临时账本演示 4 个 Git 产物、每个产物一次修复、共 8 次请求，暂停/恢复后记录回放不增加请求或账本事件。304 微元完全来自合成 fixture 用量，不是实际供应商消费。省略 `--construction` 仍演示旧 v8 路径。
+
+
+## 实现职责与验收入口
+
+| 模块 | 所有权 |
+| --- | --- |
+| `construction.py`、`construction_recipes.py` | 冻结角色/假设/投影、声明式配方与实际构造/修复 |
+| `configured_execution.py`、`execution.py` | 公开配置接入、候选生产生命周期及原始材料化结果复用 |
+| `artifacts.py`、`git_artifacts.py`、`construction_workspace.py` | 原生/Git 产物发布、字节/提交身份和评估工作区 |
+| `invocation.py`、`governed.py`、`recovery.py` | 调用开始/计量/结算顺序、独立对照、原结果接管 |
+| `external_provider.py`、`construction_audit.py` | v9 冻结费用上下文、原请求/返回/产物的独立关联审计 |
+| `zoo/mle_bench_lite/governed_currency.py` | 既有人民币账本的双重准入、私有证据与费用核对 |
+
+[v74](../m0/verifier/v74/README.md) 在保留全部 v73 命令的基础上增加五组验收。`make accept-linux` 要求干净提交的实际源码身份成立；`make check` 仍是原有 Mac 门槛。版本定义、单项测试、本机全量、独立审查和同 SHA 远端结果分别记录，不互相替代。
