@@ -30,17 +30,22 @@ class OR3DevDomain:
         self.evaluator_version = 'or3-dev-v1:' + hashlib.sha256(
             json.dumps(configuration, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         self.evaluation_context = 'sha256:' + expected_sha256
-        self.validate_context()
-        data = json.loads(self.path.read_bytes())
+        data = json.loads(self._read_dataset())
         if type(data) is not dict or len(data) != 10 or any(type(key) is not str or not key.strip() for key in data):
             raise ValueError('OR3 dataset requires ten named development cases')
         self.funsearch_binding = {'case_ids': sorted(data), 'metric': 'score',
                                   'template_ref': 'sha256:' + hashlib.sha256(template.encode()).hexdigest()}
 
     def validate_context(self):
-        if (self.path.is_symlink() or not self.path.is_file() or
-                hashlib.sha256(self.path.read_bytes()).hexdigest() != self.expected_sha256):
+        self._read_dataset()
+
+    def _read_dataset(self):
+        if self.path.is_symlink() or not self.path.is_file():
             raise ValueError('OR3 dataset differs from its frozen digest')
+        raw = self.path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != self.expected_sha256:
+            raise ValueError('OR3 dataset differs from its frozen digest')
+        return raw
 
     def validate_request(self, request):
         request.validate()
@@ -50,7 +55,7 @@ class OR3DevDomain:
 
     async def evaluate(self, proposal, request):
         self.validate_request(request)
-        data = json.loads(self.path.read_bytes())
+        data = json.loads(self._read_dataset())
         bound = binding_for(proposal, request, evaluator_version=self.evaluator_version,
                             evaluation_context=self.evaluation_context)
         timeout = min(self.timeout, request.time_limit) if request.time_limit else self.timeout

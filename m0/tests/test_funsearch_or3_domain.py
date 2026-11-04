@@ -80,3 +80,25 @@ def test_timeout_returns_billed_failure_without_candidate_output(tmp_path):
     result = asyncio.run(domain.evaluate(proposal, EvalRequest('dev')))
     assert result.status is EvalStatus.FAILED_TO_RUN and result.cost.eval_count == 1
     assert result.metrics == {} and result.text_feedback == 'Sandboxed OR3 candidate failed: TimeoutError'
+
+
+@pytest.mark.skipif(shutil.which('bwrap') is None, reason='requires bubblewrap')
+def test_dataset_bytes_are_checked_at_the_actual_read(tmp_path, monkeypatch):
+    import asyncio
+    from pathlib import Path
+    from core.composition.contracts import Proposal
+    from core.executor.types import Candidate, EvalRequest
+    data = {f'{i:02}': {'capacity': 10, 'num_items': 1, 'items': [1]} for i in range(10)}
+    path = tmp_path / 'dev.json'; path.write_text(json.dumps(data))
+    original = path.read_bytes()
+    domain = OR3DevDomain(path, expected_sha256=hashlib.sha256(original).hexdigest(),
+                          template='def priority(item, bins):\n    return bins\n', timeout=10)
+    altered = original.replace(b'"items": [1]', b'"items": [2]', 1)
+    real_read = Path.read_bytes
+    reads = iter([original, altered, original])
+    def changing_read(file):
+        return next(reads, original) if file == path else real_read(file)
+    monkeypatch.setattr(Path, 'read_bytes', changing_read)
+    with pytest.raises(ValueError, match='dataset'):
+        asyncio.run(domain.evaluate(Proposal(Candidate('candidate'),
+            'def priority(item, bins):\n    return bins\n'), EvalRequest('dev')))
