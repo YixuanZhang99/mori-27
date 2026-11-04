@@ -4,6 +4,8 @@
 
 后续按[实证交付计划](superpowers/plans/2026-11-04-evidence-delivery.md)推进：①三任务真实 MLE 报告；②有明确方法一致性边界的 GEPA、FunSearch 复现包；③同一搜索方法下的治理收益与开销对照。原完整 Goal 和 A/B/C 验收要求保留。工程测试、方法风格示例、真实诊断试跑和完整 benchmark 分开报告；旧 greedy/full 结果不能直接证明治理增益。
 
+批量进程内评估恢复依赖原始持久化日志：已结算候选的结果费用会与其账本结算核对；尚未结算的候选没有独立费用凭据，恢复会使用其日志中的已记录用量完成结算。因此不能把该路径描述为能独立识别所有结算前的日志篡改。外部费用治理的独立收据和不同的审计边界另见 [GOVERNED_CURRENCY.md](GOVERNED_CURRENCY.md)。
+
 M7 Task 6 的独立审查与候选验收是下一次真实试跑的前置工作。用户暂停时中止的 v74 运行不算通过；恢复后继续同一次独立审查并重新验证最终提交。下文分支表仍是已推送 ec47899 阶段的快照，不能将后续本地候选视为已经远端验收。
 
 本文是当前开发状态的统一入口，区分代码位置、实现范围和验收结果。设计依据仍是 [统一抽象对照表](ABSTRACTION_ALIGNMENT.md) 与 [RUBRIC](../autoresearch-fw/RUBRIC.md)，不以本页替换原验收门槛。以下分支快照于 2026-11-04 核对；本页随 M7 Task 5 功能提交同步，精确源码哈希和验证结果见[本阶段记录](../research/experiments/2026-11-04-m7-currency-construction-local/summary.json)。

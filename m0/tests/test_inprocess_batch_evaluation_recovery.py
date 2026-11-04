@@ -380,9 +380,19 @@ def test_batch_outcome_result_binding_is_refused(tmp_path):
 
 
 def test_batch_outcome_cost_must_match_settlement(tmp_path):
-    run_dir, _store = crashed_run(tmp_path, "cost-fork", "settle")
+    run_dir, store = crashed_run(tmp_path, "cost-fork", "settle")
+    settlements = [row['payload'] for row in store.read('ledger')
+                   if row['payload'].get('entry_kind') == 'settle'
+                   and row['payload'].get('account') == 'exploit']
+    assert len(settlements) == 1
+    cohorts = [row['payload'] for row in store.read('batch_cycle_started')]
+    assert len(cohorts) == 1
+    candidates = [intent['candidate_ref'] for intent in cohorts[0]['intents']
+                  if intent['intent_id'] == settlements[0]['intent_id']]
+    assert len(candidates) == 1
     rewrite_one(run_dir, lambda row: row["kind"] == "m0_evaluation_outcome"
-                and bool(row["payload"].get("execution_ref")),
+                and bool(row["payload"].get("execution_ref"))
+                and row['payload'].get('candidate_id') == candidates[0],
                 lambda row: row["payload"].update(token_usage={"total_tokens": 999}))
     with pytest.raises((RuntimeError, ValueError), match="cost|settlement"):
         recovered_framework(run_dir, forbidden=True).evolve(TASK)
