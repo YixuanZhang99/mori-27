@@ -40,3 +40,32 @@ def test_recipe_rejects_missing_or_changed_selection_and_parent_evidence():
     with pytest.raises(ValueError):
         FunSearchRecipeOperator().recipe(OperatorRequest(value.task_desc, value.candidate_id, 1,
             value.parents, (), value.context, value.strategy))
+
+
+def test_materializer_receives_bound_ordered_samples_with_metered_fixture_provider():
+    import asyncio
+    import json
+    from core.composition.construction import PromptMaterializer
+    from core.composition.provider import MeteredProvider
+    context, candidate, spec, _, request_value = request()
+    recipe = FunSearchRecipeOperator().recipe(request_value)
+    plan = ConstructionPlan.create(candidate, recipe, spec, context, roles=ROLES)
+    class Provider:
+        last_usage = None
+        def __call__(self, text):
+            self.request = json.loads(text)
+            self.last_usage = {'total_tokens': 7}
+            self.response = json.dumps({'artifact': 'def priority(x):\n    return x + 1\n', 'hypothesis': 'Improve'})
+            return self.response
+    provider = Provider()
+    result = asyncio.run(PromptMaterializer(ROLES).construct(plan, MeteredProvider(provider)))
+    assert provider.request['recipe']['funsearch_binding']['selection']['samples'] == ['p1', 'p1']
+    assert result.plan_ref == plan.ref and result.cost.tokens_in == 7
+    assert result.artifact.startswith('def priority')
+    from dataclasses import asdict
+    from core.composition.construction_audit import _validate_prompt_result
+    _validate_prompt_result(result.to_dict(), [{'prompt': provider.request, 'result': provider.response}], asdict(spec))
+    tampered = copy.deepcopy(provider.request)
+    tampered['recipe']['instructions'][0] += '# substituted'
+    with pytest.raises(ValueError):
+        _validate_prompt_result(result.to_dict(), [{'prompt': tampered, 'result': provider.response}], asdict(spec))
