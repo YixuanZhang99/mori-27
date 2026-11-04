@@ -46,3 +46,38 @@ def test_invalid_output_and_candidate_source_are_rejected():
     with SandboxedPriority(TEMPLATE, 'def priority(item, bins):\n    return [float("nan")]\n', timeout=3) as priority:
         with pytest.raises(ValueError):
             priority(1, np.array([5]))
+
+
+@pytest.mark.skipif(shutil.which('bwrap') is None, reason='requires bubblewrap')
+def test_priority_cannot_create_a_child_process():
+    code = '''def priority(item, bins):
+    import errno, os
+    try:
+        pid = os.fork()
+    except OSError as error:
+        if error.errno != errno.EPERM:
+            raise
+        return bins
+    if pid == 0:
+        os._exit(0)
+    os.waitpid(pid, 0)
+    raise RuntimeError('process creation was allowed')
+'''
+    with SandboxedPriority(TEMPLATE, code, timeout=5) as priority:
+        assert priority(1, np.array([5])).tolist() == [5]
+
+
+@pytest.mark.skipif(shutil.which('bwrap') is None, reason='requires bubblewrap')
+def test_priority_cannot_create_a_thread():
+    code = '''def priority(item, bins):
+    import threading
+    thread = threading.Thread(target=lambda: None)
+    try:
+        thread.start()
+    except RuntimeError:
+        return bins
+    thread.join()
+    raise RuntimeError('thread creation was allowed')
+'''
+    with SandboxedPriority(TEMPLATE, code, timeout=5) as priority:
+        assert priority(1, np.array([5])).tolist() == [5]

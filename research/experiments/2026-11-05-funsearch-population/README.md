@@ -51,7 +51,9 @@ and sends only the current item and eligible-bin capacities to a separate
 Bubblewrap/seccomp child. Its offline tests cover host-file and environment
 isolation, invalid output and a deadline; a trusted reference function scored
 the ten OR3 dev instances at -213.9, matching the split baseline. The child
-does not receive the dataset or scorer module. This is not yet connected to the
+does not receive the dataset or scorer module. On Linux x86-64, an additional
+seccomp filter denies child-process and thread creation before candidate code
+loads; this restriction is included in the evaluator identity. This is not yet connected to the
 Framework's durable evaluator or independently audited recovery protocol, and
 the underlying sandbox is not a complete resource policy or a hostile-kernel
 boundary. Do not treat this prototype as a model benchmark result.

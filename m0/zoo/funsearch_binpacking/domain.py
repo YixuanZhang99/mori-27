@@ -10,7 +10,7 @@ from core.composition.evaluation import EvaluationContract, ItemOutcome, binding
 from core.executor.types import CostVec, EvalResult, EvalStatus
 from core.executor.seccomp import build_seccomp_policy
 from core.tasks.funsearch_binpacking import score_partition
-from core.tasks.funsearch_priority_sandbox import SandboxedPriority
+from core.tasks.funsearch_priority_sandbox import PROCESS_CREATION_POLICY, SandboxedPriority
 
 
 class OR3DevDomain:
@@ -26,7 +26,8 @@ class OR3DevDomain:
         self.template, self.timeout = template, float(timeout)
         configuration = {'protocol': 'or3-sandbox-priority-dev-v1', 'timeout': self.timeout,
             'template_sha256': hashlib.sha256(template.encode()).hexdigest(),
-            'seccomp_sha256': build_seccomp_policy()['filter_sha256']}
+            'seccomp_sha256': build_seccomp_policy()['filter_sha256'],
+            'process_creation_policy': PROCESS_CREATION_POLICY}
         self.evaluator_version = 'or3-dev-v1:' + hashlib.sha256(
             json.dumps(configuration, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         self.evaluation_context = 'sha256:' + expected_sha256

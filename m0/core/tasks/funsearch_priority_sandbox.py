@@ -17,11 +17,29 @@ from core.executor.sandbox import BubblewrapSandbox
 from core.executor.seccomp import seccomp_arguments
 
 
-_RUNNER = '''import json,resource,runpy,sys
+PROCESS_CREATION_POLICY = 'deny-fork-clone-x86_64-v1'
+
+_RUNNER = '''import ctypes,errno,json,resource,runpy,sys
 resource.setrlimit(resource.RLIMIT_CPU, (__CPU_LIMIT__, __CPU_LIMIT__))
 resource.setrlimit(resource.RLIMIT_AS, (3 * 1024 ** 3, 3 * 1024 ** 3))
 resource.setrlimit(resource.RLIMIT_FSIZE, (1024 ** 2, 1024 ** 2))
 import numpy as np
+# The outer sandbox has already installed the x86-64 architecture/x32 guard.
+# Stack an irreversible filter before loading the candidate: no fork, vfork,
+# clone, or clone3 (including thread creation) is permitted.
+class Filter(ctypes.Structure):
+    _fields_ = [("code",ctypes.c_ushort),("jt",ctypes.c_ubyte),("jf",ctypes.c_ubyte),("k",ctypes.c_uint32)]
+class Program(ctypes.Structure):
+    _fields_ = [("len",ctypes.c_ushort),("filter",ctypes.POINTER(Filter))]
+rules=[Filter(0x20,0,0,0)]
+for number in (56,57,58,435):
+    rules.extend((Filter(0x15,0,1,number),Filter(0x06,0,0,0x00050000|errno.EPERM)))
+rules.append(Filter(0x06,0,0,0x7fff0000))
+filters=(Filter*len(rules))(*rules)
+program=Program(len(filters),filters)
+libc=ctypes.CDLL(None,use_errno=True)
+if libc.prctl(38,1,0,0,0)!=0 or libc.prctl(22,2,ctypes.byref(program))!=0:
+    raise RuntimeError("cannot install process-creation filter")
 priority=runpy.run_path("candidate.py",init_globals={"np":np})["priority"]
 for line in sys.stdin.buffer:
     request=json.loads(line)
