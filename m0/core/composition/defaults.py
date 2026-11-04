@@ -351,8 +351,10 @@ def _hierarchical(context, options):
 
 def default_registry():
     registry = Registry()
-    from core.composition.construction_recipes import RecipeOperator, register_construction
+    from core.composition.construction_recipes import (RecipeOperator, FunSearchRecipeOperator,
+        register_construction, register_funsearch_construction)
     register_construction(registry)
+    register_funsearch_construction(registry)
     from core.composition.construction_workspace import register_git_construction
     register_git_construction(registry)
     from core.composition.recovery import register_worktree
@@ -364,6 +366,11 @@ def default_registry():
     from core.composition.gepa_policy import GEPAInstancePolicy, gepa_policy_options
     registry.register("policy", "gepa_instance", lambda ctx, opts: GEPAInstancePolicy(ctx.scope_context, **opts),
                       validate_options=gepa_policy_options)
+    from core.composition.funsearch_policy import FunSearchPolicy, funsearch_policy_options
+    registry.register('policy', 'funsearch', lambda ctx, opts: FunSearchPolicy(ctx.scope_context,
+        **{key: opts[key] for key in ('case_ids', 'islands', 'seed', 'prompt_size',
+                                     'temperature', 'temperature_period', 'context_window') if key in opts}),
+        validate_options=funsearch_policy_options)
     registry.register("policy", "greedy", lambda ctx, opts: GreedyPolicy(ctx.scope_context, **opts),
                       validate_options=policy_options)
     registry.register("policy", "llm_cycles", lambda ctx, opts: LLMCyclesPolicy(
@@ -378,6 +385,9 @@ def default_registry():
     registry.register("operator", "crossover", lambda ctx, opts:
                       RecipeOperator("crossover", **opts) if ctx.execution else CrossoverOperator(ctx.llm, **opts),
                       validate_options=crossover_options, execution={"schema_version": 1, "contract": "recipe_v1"})
+    registry.register('operator', 'funsearch', lambda ctx, opts: FunSearchRecipeOperator(**opts),
+        validate_options=lambda opts: _options(opts, {'metric'}),
+        execution={'schema_version': 1, 'contract': 'recipe_v1'})
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),
                       validate_options=_skill_options, execution={"schema_version": 1, "contract": "projected_skill_v1"})
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(

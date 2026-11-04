@@ -83,3 +83,19 @@ def register_construction(registry):
     registry.register("constructor", "prompt", lambda ctx, opts: PromptMaterializer(DEFAULT_ROLES, **opts),
         validate_options=constructor_options,
         execution={"schema_version": 1, "roles": {key: asdict(role) for key, role in DEFAULT_ROLES.items()}})
+
+
+def funsearch_constructor_options(options):
+    if type(options) is not dict or set(options) != {'template', 'function_name'}:
+        raise ValueError('FunSearch constructor requires a frozen template and target')
+    from core.composition.funsearch_validator import program_validator
+    program_validator(options['template'], options['function_name'])
+
+
+def register_funsearch_construction(registry):
+    from core.composition.funsearch_validator import program_validator
+    registry.register('constructor', 'funsearch_prompt', lambda ctx, opts: PromptMaterializer(
+        DEFAULT_ROLES, validator=program_validator(opts['template'], opts['function_name']),
+        validator_version='funsearch-program-v1', validator_deterministic=True),
+        validate_options=funsearch_constructor_options,
+        execution={'schema_version': 1, 'roles': {key: asdict(role) for key, role in DEFAULT_ROLES.items()}})

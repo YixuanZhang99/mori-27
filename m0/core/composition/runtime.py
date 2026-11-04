@@ -199,6 +199,25 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.manifest["command_domain"] = self.parts["domain"].manifest_binding
             self.manifest["executor"] = self.parts["executor"].manifest_binding
         self.manifest["evaluation_contexts"] = {"dev": self.manifest["evaluation_context"]}
+        self.funsearch = None
+        if self.assembly.policy.name == 'funsearch':
+            from core.composition.funsearch_coordinator import FunSearchCoordinator
+            options = self.assembly.policy.options
+            constructor = self.assembly.execution.constructor if self.construction_enabled else None
+            if (not self.construction_enabled or self.assembly.governance is not None or self.durable_executor or
+                    [spec.name for spec in self.assembly.operators] != ['draft', 'funsearch'] or
+                    constructor.name != 'funsearch_prompt' or constructor.options != {
+                        'template': options['template'], 'function_name': options['function_name']} or
+                    options.get('comparison_metric', 'dev/score') != self.frontier.metric or
+                    self.assembly.operators[1].options.get('metric', 'dev/score') != self.frontier.metric):
+                raise ValueError('FunSearch requires its bounded M7 configuration')
+            self.funsearch = FunSearchCoordinator(self.parts['policy'], self.store,
+                case_ids=options['case_ids'], metric=options['metric'], logical_run_id=self._logical_run_id,
+                evaluator_version=self.manifest['domain_version'], evaluation_context=self.manifest['evaluation_context'],
+                template_ref=options['template_ref'], template=options['template'], function_name=options['function_name'])
+        elif (any(spec.name == 'funsearch' for spec in self.assembly.operators) or
+              self.construction_enabled and self.assembly.execution.constructor.name == 'funsearch_prompt'):
+            raise ValueError('FunSearch components require the FunSearch policy')
         if self.layered:
             contexts = self.layered.validate_domain(self.parts["domain"])
             self.manifest["evaluation_contexts"].update(contexts)
@@ -383,6 +402,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
+        if self.funsearch:
+            self.funsearch._audit()
         if self.proxy:
             self.proxy.restore_state(payload["proxy_state"])
             self.memory.verify_proxy_feedback(self.proxy)
@@ -613,7 +634,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             # sampling. The policy may choose another branch or a fresh draft.
             for identifier in unavailable:
                 selection_view.nodes[identifier].status = "pruned"
-        parents = await self._policy("select", selection_view, self.budget.main_account_summary() if self.governed else self.budget.account_summary())
+        selection_budget = self.budget.main_account_summary() if self.governed else self.budget.account_summary()
+        parents = await self.funsearch.select(candidate_id, selection_view, selection_budget) if self.funsearch \
+            else await self._policy("select", selection_view, selection_budget)
         eligible_parents = {node.id for node in self.frontier.nodes.values()
                             if node.status in {"done", "merged"}
                             and node.eval_status == EvalStatus.OK.value
@@ -647,6 +670,11 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if fixed is not None and hypotheses[0]["hypothesis"] != fixed:
                 raise ValueError("policy hypothesis conflicts with the frozen execution configuration")
         strategy = {**strategy, "hypotheses": hypotheses}
+        if self.funsearch and parents:
+            options = self.assembly.policy.options
+            materialized = self.funsearch.materialize(candidate_id, options['template'], options['function_name'])
+            strategy['funsearch'] = {'selection': self.parts['policy'].pending_selection()['receipt'],
+                                     'materialization': materialized}
         request = OperatorRequest(task, candidate_id, cycle,
                                   parent_inputs,
                                   tuple((comparison_projection if self.construction_enabled else public_projection)(
@@ -816,6 +844,14 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._finalize_frontier_admission(candidate_id, decision,
             decision.receipt_id if self.layered else event_id)
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
+        if self.funsearch:
+            if evidence.eval_result.status is EvalStatus.OK:
+                self.funsearch.record_evaluated(candidate_id)
+                count = len(list(self.store.read('funsearch_public_candidate')))
+                if count > 1 and count % self.assembly.policy.options['reset_interval'] == 0:
+                    self.funsearch.reset_weaker_half()
+            elif self.parts['policy'].pending_selection() is not None:
+                self.funsearch.abandon(candidate_id, 'evaluation_failed')
         if self.construction_enabled:
             # An explicitly configured GEPA selection policy receives only
             # public binary instance verdicts. Its separate planning session
