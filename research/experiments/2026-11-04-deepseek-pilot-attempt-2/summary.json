@@ -1,0 +1,392 @@
+{
+  "schema_version": 1,
+  "source_commit": "aedede3c2b78a5c2b57074c70d510af710f5af4e",
+  "source_archive_sha256": "815b283837705fd771c6e88d8477bbc4bcd441af62338d12ade5e1947e61d328",
+  "source_files_reverified": 1206,
+  "official_revision": "507f92e1138bb6e40dac5c6ee7a6758e6424bf97",
+  "attempt": 2,
+  "requested_model": "deepseek-flash",
+  "seed": 1,
+  "expected_runs": 6,
+  "terminal_runs": 6,
+  "valid_graded_runs": 3,
+  "failed_runs": 3,
+  "pilot_complete": false,
+  "formal_benchmark_complete": false,
+  "statistical_significance_claimed": false,
+  "host_parity_claimed": false,
+  "immutable_snapshot_verified": false,
+  "invoice_verified": false,
+  "total_calls": 24,
+  "total_tokens": 347357,
+  "attempt_settled_upper_bound_micro_cny": 2314780,
+  "cumulative_settled_upper_bound_micro_cny": 3242064,
+  "cumulative_limit_micro_cny": 200000000,
+  "remaining_micro_cny": 196757936,
+  "unresolved_calls": 0,
+  "reserved_micro_cny": 0,
+  "runs": [
+    {
+      "task_id": "spooky-author-identification",
+      "seed": 1,
+      "arm": "baseline",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 335.658040757,
+        "token": 62830
+      },
+      "calls": 5,
+      "settled_upper_bound_micro_cny": 405614,
+      "independent_usage_and_currency_audit": true,
+      "actual_models": [
+        "deepseek-flash"
+      ],
+      "unresolved_calls": 0,
+      "call_sequence": [
+        {
+          "used_before": 0,
+          "remaining_before": 60000,
+          "output_allowance": 16384,
+          "input_tokens": 1465,
+          "output_tokens": 8645,
+          "total_tokens": 10110
+        },
+        {
+          "used_before": 10110,
+          "remaining_before": 49890,
+          "output_allowance": 16384,
+          "input_tokens": 3021,
+          "output_tokens": 1776,
+          "total_tokens": 4797
+        },
+        {
+          "used_before": 14907,
+          "remaining_before": 45093,
+          "output_allowance": 16384,
+          "input_tokens": 3161,
+          "output_tokens": 11376,
+          "total_tokens": 14537
+        },
+        {
+          "used_before": 29444,
+          "remaining_before": 30556,
+          "output_allowance": 16384,
+          "input_tokens": 4044,
+          "output_tokens": 12299,
+          "total_tokens": 16343
+        },
+        {
+          "used_before": 45787,
+          "remaining_before": 14213,
+          "output_allowance": 14213,
+          "input_tokens": 4480,
+          "output_tokens": 12563,
+          "total_tokens": 17043
+        }
+      ],
+      "diagnosis": "Measured total token usage exceeded the 60000-token run limit; output-only request allowance omitted input."
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "seed": 1,
+      "arm": "full",
+      "status": "graded",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 208.61852296299912,
+        "token": 48227
+      },
+      "calls": 4,
+      "settled_upper_bound_micro_cny": 339802,
+      "independent_usage_and_currency_audit": true,
+      "actual_models": [
+        "deepseek-flash"
+      ],
+      "unresolved_calls": 0,
+      "call_sequence": [
+        {
+          "used_before": 0,
+          "remaining_before": 60000,
+          "output_allowance": 16384,
+          "input_tokens": 1519,
+          "output_tokens": 8189,
+          "total_tokens": 9708
+        },
+        {
+          "used_before": 9708,
+          "remaining_before": 50292,
+          "output_allowance": 16384,
+          "input_tokens": 1785,
+          "output_tokens": 10504,
+          "total_tokens": 12289
+        },
+        {
+          "used_before": 21997,
+          "remaining_before": 38003,
+          "output_allowance": 16384,
+          "input_tokens": 2052,
+          "output_tokens": 5481,
+          "total_tokens": 7533
+        },
+        {
+          "used_before": 29530,
+          "remaining_before": 30470,
+          "output_allowance": 16384,
+          "input_tokens": 2313,
+          "output_tokens": 16384,
+          "total_tokens": 18697
+        }
+      ],
+      "official_result": {
+        "score": 0.4546,
+        "valid_submission": true,
+        "above_median": false,
+        "any_medal": false
+      },
+      "submission_sha256": "sha256:62e95d336fec25c164d203b1c1e6cf9865d65b23774c2d03ac703dd6b101729d",
+      "official_report_sha256": "sha256:0fee2d277d30e7572c7d44115739019820b15cc4b7f0763cb480115dd44ba5d3",
+      "metric_direction": "minimize"
+    },
+    {
+      "task_id": "leaf-classification",
+      "seed": 1,
+      "arm": "full",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 231.48823694900057,
+        "token": 62856
+      },
+      "calls": 4,
+      "settled_upper_bound_micro_cny": 365544,
+      "independent_usage_and_currency_audit": true,
+      "actual_models": [
+        "deepseek-flash"
+      ],
+      "unresolved_calls": 0,
+      "call_sequence": [
+        {
+          "used_before": 0,
+          "remaining_before": 60000,
+          "output_allowance": 16384,
+          "input_tokens": 3191,
+          "output_tokens": 7838,
+          "total_tokens": 11029
+        },
+        {
+          "used_before": 11029,
+          "remaining_before": 48971,
+          "output_allowance": 16384,
+          "input_tokens": 3461,
+          "output_tokens": 9307,
+          "total_tokens": 12768
+        },
+        {
+          "used_before": 23797,
+          "remaining_before": 36203,
+          "output_allowance": 16384,
+          "input_tokens": 7612,
+          "output_tokens": 14465,
+          "total_tokens": 22077
+        },
+        {
+          "used_before": 45874,
+          "remaining_before": 14126,
+          "output_allowance": 14126,
+          "input_tokens": 8620,
+          "output_tokens": 8362,
+          "total_tokens": 16982
+        }
+      ],
+      "diagnosis": "Measured total token usage exceeded the 60000-token run limit; output-only request allowance omitted input."
+    },
+    {
+      "task_id": "leaf-classification",
+      "seed": 1,
+      "arm": "baseline",
+      "status": "graded",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 333.75527140600025,
+        "token": 58643
+      },
+      "calls": 4,
+      "settled_upper_bound_micro_cny": 389644,
+      "independent_usage_and_currency_audit": true,
+      "actual_models": [
+        "deepseek-flash"
+      ],
+      "unresolved_calls": 0,
+      "call_sequence": [
+        {
+          "used_before": 0,
+          "remaining_before": 60000,
+          "output_allowance": 16384,
+          "input_tokens": 3115,
+          "output_tokens": 10692,
+          "total_tokens": 13807
+        },
+        {
+          "used_before": 13807,
+          "remaining_before": 46193,
+          "output_allowance": 16384,
+          "input_tokens": 2954,
+          "output_tokens": 11505,
+          "total_tokens": 14459
+        },
+        {
+          "used_before": 28266,
+          "remaining_before": 31734,
+          "output_allowance": 16384,
+          "input_tokens": 3083,
+          "output_tokens": 9896,
+          "total_tokens": 12979
+        },
+        {
+          "used_before": 41245,
+          "remaining_before": 18755,
+          "output_allowance": 16384,
+          "input_tokens": 4098,
+          "output_tokens": 13300,
+          "total_tokens": 17398
+        }
+      ],
+      "official_result": {
+        "score": 0.88233,
+        "valid_submission": true,
+        "above_median": false,
+        "any_medal": false
+      },
+      "submission_sha256": "sha256:86a1277d2c758eca6a8035137a66b34e2f3062c82a32557bf63d061041088dbd",
+      "official_report_sha256": "sha256:230f71792e8faa7649323cd5f5c43131b1133a54e52ff08923aff53974d9fcc4",
+      "metric_direction": "minimize"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "baseline",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 279.1921885109987,
+        "token": 63502
+      },
+      "calls": 4,
+      "settled_upper_bound_micro_cny": 437720,
+      "independent_usage_and_currency_audit": true,
+      "actual_models": [
+        "deepseek-flash"
+      ],
+      "unresolved_calls": 0,
+      "call_sequence": [
+        {
+          "used_before": 0,
+          "remaining_before": 60000,
+          "output_allowance": 16384,
+          "input_tokens": 1584,
+          "output_tokens": 10490,
+          "total_tokens": 12074
+        },
+        {
+          "used_before": 12074,
+          "remaining_before": 47926,
+          "output_allowance": 16384,
+          "input_tokens": 3249,
+          "output_tokens": 11425,
+          "total_tokens": 14674
+        },
+        {
+          "used_before": 26748,
+          "remaining_before": 33252,
+          "output_allowance": 16384,
+          "input_tokens": 3370,
+          "output_tokens": 13487,
+          "total_tokens": 16857
+        },
+        {
+          "used_before": 43605,
+          "remaining_before": 16395,
+          "output_allowance": 16384,
+          "input_tokens": 3513,
+          "output_tokens": 16384,
+          "total_tokens": 19897
+        }
+      ],
+      "diagnosis": "Measured total token usage exceeded the 60000-token run limit; output-only request allowance omitted input."
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "full",
+      "status": "graded",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 269.2759818630002,
+        "token": 51299
+      },
+      "calls": 3,
+      "settled_upper_bound_micro_cny": 376456,
+      "independent_usage_and_currency_audit": true,
+      "actual_models": [
+        "deepseek-flash"
+      ],
+      "unresolved_calls": 0,
+      "call_sequence": [
+        {
+          "used_before": 0,
+          "remaining_before": 60000,
+          "output_allowance": 16384,
+          "input_tokens": 1623,
+          "output_tokens": 16384,
+          "total_tokens": 18007
+        },
+        {
+          "used_before": 18007,
+          "remaining_before": 41993,
+          "output_allowance": 16384,
+          "input_tokens": 1885,
+          "output_tokens": 12875,
+          "total_tokens": 14760
+        },
+        {
+          "used_before": 32767,
+          "remaining_before": 27233,
+          "output_allowance": 16384,
+          "input_tokens": 2148,
+          "output_tokens": 16384,
+          "total_tokens": 18532
+        }
+      ],
+      "official_result": {
+        "score": 0.06369,
+        "valid_submission": true,
+        "above_median": true,
+        "any_medal": true
+      },
+      "submission_sha256": "sha256:cc2660b467fe7491128c94f0b561259c306fe85e364e411f263741e056f810fc",
+      "official_report_sha256": "sha256:b0bda41b88a95f544e735bcffcbd7973a87f85243a337cc71cf99448de8bb494",
+      "metric_direction": "minimize"
+    }
+  ],
+  "pilot_json_sha256": "sha256:17dc2e3812b79375cb4a4c7746e80dbfb12db3a349da724079d766634329f342",
+  "launch_status_sha256": "sha256:9f7b71b40e96b69cc9b764a826a9c29bacec7cb595483d4305cad0f8a802a28c"
+}

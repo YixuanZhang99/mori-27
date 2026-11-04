@@ -1,0 +1,36 @@
+{
+  "command": [
+    "make",
+    "test-linux",
+    "examples",
+    "axioms",
+    "tooling",
+    "build",
+    "verify-import"
+  ],
+  "started_at": "2026-11-04T09:16:52.993132+00:00",
+  "elapsed_seconds": 376.032,
+  "exit_code": 0,
+  "source_unchanged": true,
+  "passed": true,
+  "log_sha256": "db81bcaddd0c0530355f1dd03fc66bf576d31d563c922119e23802be7fa898e9",
+  "implementation_commit": "c6179315d2b619d563ba89330ffbd515bd3b689a",
+  "pytest_passed": 1836,
+  "pytest_seconds": 373.13,
+  "tooling_passed": 60,
+  "executable_and_test_tree_matches_commit": true,
+  "precommit_fingerprint_scope": "full tracked and unignored source tree; documentation subsequently records results",
+  "versioned_v71_acceptance_completed": false,
+  "same_sha_hosted_ci": false,
+  "third_real_attempt_completed": false,
+  "input_estimate_is_hard_bound": false,
+  "independent_review": {
+    "critical": 0,
+    "important": 3,
+    "important_fixed_with_regressions": 3,
+    "minor_deferred": [
+      "dedicated crossover-refusal regression",
+      "custom multi-call operator-stop regression"
+    ]
+  }
+}
