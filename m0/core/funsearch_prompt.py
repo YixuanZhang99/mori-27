@@ -92,5 +92,6 @@ def build_prompt(template, function_name, samples, candidates):
     prefix = ''.join(template.splitlines(keepends=True)[:target.lineno - 1]).rstrip()
     prompt = (prefix + '\n\n' if prefix else '') + '\n\n'.join([*versions, header]) + '\n    '
     binding = {'template': template, 'function': function_name, 'samples': samples, 'sources': sources}
-    return {'prompt': prompt, 'version_generated': len(samples), 'samples': list(samples),
+    return {'prompt': prompt, 'prompt_header_version': len(samples),
+            'reference_version_generated': len(samples) + 1, 'samples': list(samples),
             'input_ref': 'sha256:' + payload_digest(binding), 'prompt_ref': 'sha256:' + payload_digest(prompt)}

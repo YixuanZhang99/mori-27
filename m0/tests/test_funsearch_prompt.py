@@ -12,7 +12,7 @@ CANDIDATES = {
 def test_versioned_prompt_preserves_repeated_samples_and_recursion():
     result = build_prompt(TEMPLATE, 'priority', ['recursive', 'simple', 'recursive'], CANDIDATES)
     assert result['samples'] == ['recursive', 'simple', 'recursive']
-    assert result['version_generated'] == 3
+    assert result['prompt_header_version'] == 3
     assert result['prompt'].startswith('import math\n\ndef helper(x):')
     tree = ast.parse(result['prompt'])
     names = [node.name for node in tree.body if isinstance(node, ast.FunctionDef)]
@@ -59,3 +59,9 @@ def test_recursive_name_shadowing_is_rejected_before_rewriting():
     for source in candidates:
         with pytest.raises(ValueError, match='shadows'):
             build_prompt(TEMPLATE, 'priority', ['a'], {'a': source})
+
+
+def test_reference_version_convention_is_reported_separately():
+    result = build_prompt(TEMPLATE, 'priority', ['simple'], CANDIDATES)
+    assert result['prompt_header_version'] == 1
+    assert result['reference_version_generated'] == 2
