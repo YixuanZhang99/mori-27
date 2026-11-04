@@ -35,6 +35,10 @@
 独立 Python 环境、移除外层嵌套挂载，原用例单独通过；原完整运行的失败
 记录仍保留。后续提交 `42e7a6a` 在该原生环境完成全部项目测试，2456 项
 通过；这不代替该提交的完整本机 v74 或远端 CI 验收。
+`42e7a6a` 的[推送工作流](https://github.com/YixuanZhang99/mori-27/actions/runs/41927107297)
+仍在 600 秒回归时限处失败；其[PR 工作流](https://github.com/YixuanZhang99/mori-27/actions/runs/41927115516)
+通过，完整回归用时约 596 秒。新 v75 保留旧版文件和全部检查，将该回归
+时限延长至 900 秒；本提交的 v75 验收结果需单独确认。
 
 开发分支 `codex/m7-construction` 的 `a6b5826` 已完成本机完整项目检查、
 本机 v74 验收以及同提交 GitHub Actions 验收，并完成三项真实 MLE 任务的

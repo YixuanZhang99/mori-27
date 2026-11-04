@@ -14,9 +14,9 @@ concurrency:
 
 jobs:
   linux-acceptance:
-    name: Linux x86_64 / Python 3.12 / full v74
+    name: Linux x86_64 / Python 3.12 / full v75
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       UV_PROJECT_ENVIRONMENT: /usr/local/share/mori27-venv
       UV_PYTHON: /usr/bin/python3.12

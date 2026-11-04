@@ -90,3 +90,5 @@
 - v73 (2026-11-04): external governed CNY bridge with strict invocation identity, hard capacity admission, independent shared-authority audit, process-crash adoption, and native/worktree loopback Framework replay; preserves every v72 command and timeout.
 
 - v74 — Configured M7 construction, immutable Git artifacts, isolated controls, protected external currency, installed examples and actual process-crash recovery; retains all v73 checks.
+
+- v75 — Preserve v74 checks and historical sources; extend the full regression time limit to 900 seconds.
