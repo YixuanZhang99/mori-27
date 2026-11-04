@@ -177,6 +177,15 @@ def _comparison_dependency_roots():
     return sorted({Path(sysconfig.get_path(name)).resolve() for name in ('purelib', 'platlib')}, key=str)
 
 
+def _comparison_sandbox_path():
+    """Keep the parent's selected sandbox executable in the child's minimal PATH."""
+    executable = shutil.which('bwrap')
+    if executable is None:
+        return os.defpath
+    directory = str(Path(executable).absolute().parent)
+    return os.pathsep.join((directory, os.defpath))
+
+
 def _comparison_frozen_runtime(spec):
     return (_comparison_runtime_source() == spec['source'] and
             _comparison_dependency_identity(_comparison_dependency_roots()) == spec['comparison_dependencies'])
@@ -1007,6 +1016,7 @@ def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_roo
                         "MLE_CNY_LEDGER_PATH": str(spending_ledger.path) if spending_ledger is not None else "",
                         "MLE_PILOT_SPEC_SHA256": digest(spec),
                         "MLE_PILOT_PUBLIC_DATA_SHA256": spec["public_data"][task]["sha256"],
+                        **({'PATH': _comparison_sandbox_path()} if comparison else {}),
                         **({'PYTHONPATH': os.pathsep.join((str(Path(__file__).resolve().parents[3] / 'm0'), str(official_root))),
                             'MLE_COMPARISON_SOURCE_COMMIT': spec['source']['commit'],
                             'MLE_COMPARISON_ENV_ONLY': '1', 'OPENAI_API_BASE': spec['provider_base_url']}

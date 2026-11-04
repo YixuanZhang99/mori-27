@@ -1,7 +1,9 @@
 """Same-search schedules retain all other frozen M7 settings."""
 import copy
+import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 
 import pytest
@@ -304,3 +306,27 @@ def test_fixture_child_does_not_inherit_unrelated_credentials(tmp_path, monkeypa
                             10, run_dir, {'MLE_FIXTURE_ENV_ONLY': '1'})
     assert result['agent_returncode'] == 0
     assert (run_dir / 'stdout.log').read_text().splitlines() == ['absent', 'fixture-only']
+
+
+def test_comparison_child_path_preserves_parent_selected_sandbox(tmp_path, monkeypatch):
+    from zoo.mle_bench_lite import pilot
+    sandbox_dir = tmp_path / 'sandbox-bin'
+    sandbox_dir.mkdir()
+    executable = sandbox_dir / 'bwrap'
+    executable.write_text('#!/bin/sh\nexit 0\n')
+    executable.chmod(0o755)
+    monkeypatch.setenv('PATH', str(sandbox_dir) + os.pathsep + os.defpath)
+    selected = getattr(pilot, '_comparison_sandbox_path', None)
+    assert callable(selected), 'comparison must preserve the selected sandbox executable'
+    child_path = selected()
+    assert child_path.split(os.pathsep)[0] == str(sandbox_dir)
+    assert shutil.which('bwrap', path=child_path) == str(executable)
+    from zoo.mle_bench_lite.runner import _execute_agent
+    workspace, run_dir = tmp_path / 'workspace', tmp_path / 'run'
+    workspace.mkdir(); run_dir.mkdir()
+    import sys
+    command = shlex.join([sys.executable, '-c', "import shutil;print(shutil.which('bwrap'))"])
+    result = _execute_agent(command, workspace, 'fixture', 1, 'one_control', 10, run_dir,
+                            {'MLE_FIXTURE_ENV_ONLY':'1', 'PATH':child_path})
+    assert result['agent_returncode'] == 0
+    assert (run_dir / 'stdout.log').read_text().strip() == str(executable)

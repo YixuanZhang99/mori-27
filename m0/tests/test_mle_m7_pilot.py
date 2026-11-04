@@ -113,6 +113,7 @@ with open("predictions.csv","w",newline="") as f:
         if comparison:
             command = shlex.split(_command)
             assert command[1:4] == ['-I', '-S', '-B']
+            assert agent_env['PATH'] == pilot._comparison_sandbox_path()
             assert command[command.index('--variant') + 1] == 'full'
             assert command[command.index('--control-cycles') + 1:] == [str(value) for value in schedule]
         run_governed_agent(workspace=workspace, task_id=task, model='deepseek-flash', api_base=endpoint,
@@ -241,7 +242,15 @@ with open("predictions.csv","w",newline="") as f:
             token_budget=5_000_000, time_limit=600, solution_timeout=120, iterations=3,
             seeds=(1,), manifest_path=manifest, grader_factory=grader,
             runtime='m7', comparison='governance-intensity')
-        assert result['pilot_complete'], result['runs']
+        failures = []
+        for row in result['runs']:
+            if row['status'] != 'failed':
+                continue
+            stderr = (tmp_path / 'pilot' / row['task_id'] / f"seed_{row['seed']}" /
+                      row['arm'] / 'stderr.log')
+            failures.append({'task':row['task_id'], 'arm':row['arm'], 'error':row.get('error'),
+                             'fixture_stderr':stderr.read_text()[-2000:] if stderr.is_file() else ''})
+        assert result['pilot_complete'], failures
         assert result['evidence_kind'] == 'protocol_fixture'
         assert len(calls) == 30
         assert all(row['usage_audit']['control_timing']['all_on_schedule'] for row in result['runs'])
