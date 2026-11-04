@@ -8,6 +8,9 @@
 
 ## 先读这里
 
+- [持续开发接续记录](docs/CONTINUATION_2026-11-04.md)：当前分支、已验证基线、真实试跑前置条件、提交与复审节奏。
+- [四个 RSI 项目源码比较](research/2026-11-04-rsi-comparison.md)：固定 SHA 的机制证据与可验证差异化实验。
+
 - [统一抽象](docs/AutoResearch模块化统一抽象.md)是当前开发基准；[逐项对照清单](docs/ABSTRACTION_ALIGNMENT.md)记录实现证据、各阶段边界和验收条件。
 - [S1 配置组装使用指南](docs/COMPOSED_RUNTIME.md)：推荐入口 `Framework.from_profile("composed_prompt", ...)`、组件替换、恢复与 replay 契约。
 - [S2 统一评估契约](docs/EVALUATION_CONTRACT_V61.md)：原生 domain、严格身份和计量覆盖、公开/私有视图、v2 检查点兼容边界。

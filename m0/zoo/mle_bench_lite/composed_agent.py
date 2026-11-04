@@ -15,7 +15,7 @@ from core.executor.types import Candidate
 from core.loop import Framework, LoopConfig
 from zoo.mle_bench_lite.agent_common import _atomic_json, add_common_arguments
 from zoo.mle_bench_lite.composed_domain import PublicTrainDomain, SandboxRunner
-from zoo.mle_bench_lite.public_train import PROTOCOL, PublicTrainBundle, digest
+from zoo.mle_bench_lite.public_train import PROTOCOL, PublicTrainBundle, digest, load_anonymization_key
 
 
 def build_profile(*, variant, token_budget, seed, iterations, anchor_every=1, capacity=4):
@@ -66,14 +66,25 @@ def task_description(bundle):
 
 def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1,
               iterations=3, solution_timeout=120, variant="full", max_completion_tokens=4096,
-              provider=None, runner=None, resume=False, protected_roots=()):
+              provider=None, runner=None, resume=False, protected_roots=(), anonymization_key_path=None):
     profile = build_profile(variant=variant, token_budget=token_budget, seed=seed, iterations=iterations)
     workspace = Path(workspace).resolve()
-    if runner is None or isinstance(runner, SandboxRunner):
+    if runner is None:
+        runner = SandboxRunner()
+    if isinstance(runner, SandboxRunner):
         SandboxRunner.validate_paths(workspace, *protected_roots)
+        runner.preflight()
     artifacts = workspace.parent / "agent_artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
-    bundle = PublicTrainBundle(workspace / "data", artifacts / "public_inputs", task_id, seed)
+    key_path = (Path(anonymization_key_path).absolute() if anonymization_key_path is not None
+                else artifacts / "anonymization.key")
+    if key_path == workspace or workspace in key_path.resolve().parents:
+        raise ValueError("anonymization key must stay outside the candidate workspace")
+    SandboxRunner.validate_paths(key_path)
+    key = load_anonymization_key(key_path,
+        create=anonymization_key_path is None and not resume and not (artifacts / "public_inputs").exists())
+    bundle = PublicTrainBundle(workspace / "data", artifacts / "public_inputs", task_id, seed,
+                              anonymization_key=key)
     domain = PublicTrainDomain(bundle, artifacts / "composed_candidates", solution_timeout=solution_timeout, runner=runner)
     if not model or type(model) is not str:
         raise ValueError("explicit model is required")
@@ -152,6 +163,7 @@ def main(argv=None):
         model=args.model, api_base=args.api_base, token_budget=args.token_budget, seed=args.seed,
         iterations=args.iterations, solution_timeout=args.solution_timeout, variant=args.variant,
         max_completion_tokens=args.max_completion_tokens, resume=args.resume,
+        anonymization_key_path=os.environ.get("MLE_ANONYMIZATION_KEY_PATH"),
         protected_roots=(args.official_root or os.environ.get("MLE_OFFICIAL_ROOT"),
                          args.data_root or os.environ.get("MLE_DATA_ROOT")))
     print(json.dumps(summary, ensure_ascii=False))

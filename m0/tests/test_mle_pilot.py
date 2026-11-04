@@ -32,7 +32,7 @@ def setup(tmp_path, monkeypatch):
     paths = fixtures(tmp_path)
     monkeypatch.setattr(pilot, '_profile', lambda variant, token_budget, seed, iterations: {
         'variant': variant, 'budget': token_budget, 'seed': seed, 'iterations': iterations})
-    monkeypatch.setattr(pilot, '_dataset_manifest', lambda root, task, seed: {
+    monkeypatch.setattr(pilot, '_dataset_manifest', lambda root, task, seed, **kwargs: {
         'task': task, 'seed': seed, 'test_fixture': True})
     return paths
 
@@ -71,7 +71,7 @@ if MODE == 'profile':
 dataset_manifest = {'task': task, 'seed': seed, 'test_fixture': True}
 if MODE == 'paired_dataset' and arm == 'full':
     dataset_manifest['seed'] = seed + 1
-summary = {'task_id': task, 'seed': seed, 'variant': arm, 'protocol': 'mle-public-train-composed-v1',
+summary = {'task_id': task, 'seed': seed, 'variant': arm, 'protocol': 'mle-public-train-composed-v2',
            'actual_model': model, 'requested_model': spec['model'], 'token_budget': spec['budget']['token'],
            'token_usage': token_usage_summary(usage_dir, require_nonempty=False),
            'profile': profile, 'profile_sha256': digest(profile),
@@ -478,6 +478,8 @@ def official_package_fixture(setup, monkeypatch):
     monkeypatch.setattr(pilot.platform, 'machine', lambda: 'x86_64')
     monkeypatch.setattr(pilot.shutil, 'which', lambda _: '/usr/bin/bwrap')
     monkeypatch.setenv('OPENAI_API_KEY', 'EXPLICIT-LOCAL-FIXTURE')
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    monkeypatch.setattr(SandboxRunner, 'preflight', lambda self, **kwargs: {'ready': True, 'fixture': True})
     return modules, grades
 
 
@@ -574,3 +576,42 @@ def test_official_checkout_requires_locked_head_and_clean_tracked_sources(tmp_pa
     monkeypatch.setattr(pilot.subprocess, 'run', git)
     with pytest.raises(ValueError, match='clean checkout'):
         pilot._verify_official_checkout(tmp_path)
+
+
+def test_pilot_shares_private_anonymization_key_within_pair_only(tmp_path, setup, monkeypatch):
+    original_execute = pilot._execute_agent
+    observed = {}
+    def execute(command, workspace, task, seed, arm, time_limit, run_dir, env):
+        key_path = Path(env['MLE_ANONYMIZATION_KEY_PATH'])
+        assert workspace not in key_path.resolve().parents
+        assert key_path.stat().st_mode & 0o777 == 0o600
+        observed[(task, seed, arm)] = (key_path, key_path.read_bytes())
+        return original_execute(command, workspace, task, seed, arm, time_limit, run_dir, env)
+    monkeypatch.setattr(pilot, '_execute_agent', execute)
+    report = run(tmp_path, setup)
+    assert report['pilot_complete']
+    assert len(observed) == 6
+    for task in TASKS:
+        assert observed[(task, 1, 'baseline')] == observed[(task, 1, 'full')]
+    assert len({value[1] for value in observed.values()}) == 3
+    for path in (tmp_path / 'output_normal').rglob('*.json*'):
+        assert all(value[1].hex() not in path.read_text() for value in observed.values())
+
+
+def test_pilot_runtime_probe_failure_prevents_any_paid_agent(tmp_path, setup, monkeypatch):
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    official_package_fixture(setup, monkeypatch)
+    def unavailable(self, **kwargs):
+        raise RuntimeError('sandbox interpreter/dependencies unavailable')
+    monkeypatch.setattr(SandboxRunner, 'preflight', unavailable, raising=False)
+    calls = []
+    monkeypatch.setattr(pilot, '_execute_agent', lambda *args, **kwargs: calls.append(args))
+    official, data, manifest = setup
+    report = pilot.preflight_pilot(official, data, model='fixture', token_budget=1000, manifest_path=manifest)
+    assert not report['ready']
+    assert 'candidate_runtime' in {item['requirement'] for item in report['missing']}
+    with pytest.raises(ValueError, match='preflight failed'):
+        pilot.run_pilot(official, data, tmp_path / 'blocked-run', model='fixture',
+                        token_budget=1000, manifest_path=manifest)
+    assert calls == []
+    assert not (tmp_path / 'blocked-run').exists()

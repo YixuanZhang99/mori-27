@@ -14,6 +14,7 @@ import json
 import math
 import os
 import platform
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -34,7 +35,7 @@ DEFAULT_TASKS = (
     "nomad2018-predict-transparent-conductors",
 )
 ARMS = ("baseline", "full")
-PROTOCOL = "mle-public-train-composed-v1"
+from zoo.mle_bench_lite.public_train import PROTOCOL, load_anonymization_key
 MAX_COMPLETION_TOKENS = 4096
 
 
@@ -180,10 +181,11 @@ def _official_prepared_identity(official_root: Path, data_root: Path, tasks: lis
     return {"revision": REVISION, "package_sources": sources, "prepared_tasks": prepared}
 
 
-def _dataset_manifest(public_root: Path, task: str, seed: int) -> dict:
+def _dataset_manifest(public_root: Path, task: str, seed: int, *, anonymization_key=None) -> dict:
     from zoo.mle_bench_lite.public_train import PublicTrainBundle
     with tempfile.TemporaryDirectory(prefix="mle-pilot-preflight-") as temporary:
-        return PublicTrainBundle(public_root, Path(temporary) / "inputs", task, seed).manifest
+        return PublicTrainBundle(public_root, Path(temporary) / "inputs", task, seed,
+            anonymization_key=anonymization_key if anonymization_key is not None else secrets.token_bytes(32)).manifest
 
 
 def _validate_plan(model, token_budget, time_limit, solution_timeout, iterations,
@@ -243,6 +245,12 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
         missing.append({"requirement": "execution_host", "reason": "Linux x86_64 is required for the sandboxed real pilot"})
     if not shutil.which("bwrap"):
         missing.append({"requirement": "bubblewrap", "reason": "bwrap executable is unavailable"})
+    if not any(item["requirement"] in {"execution_host", "bubblewrap"} for item in missing):
+        from zoo.mle_bench_lite.composed_domain import SandboxRunner
+        try:
+            plan["candidate_runtime"] = SandboxRunner().preflight(required_modules=("numpy", "pandas", "sklearn"))
+        except (RuntimeError, OSError, ValueError) as error:
+            missing.append({"requirement": "candidate_runtime", "reason": str(error)})
     if not os.environ.get("OPENAI_API_KEY"):
         missing.append({"requirement": "model_credentials", "reason": "OPENAI_API_KEY is not configured"})
     if importlib.util.find_spec("mlebench") is None:
@@ -403,17 +411,22 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
     if grader_factory is None:
         spec["official_prepared_identity"] = _official_prepared_identity(official_root, data_root, tasks, adapters)
     spec["public_data"] = {task: public_snapshot(data_root / task / "prepared/public") for task in tasks}
+    output_root.mkdir(parents=True, exist_ok=True)
+    if any(output_root.iterdir()):
+        raise FileExistsError("pilot output_root must be empty; evidence is not overwritten")
+    # One trusted key per paired dataset, never copied into a candidate mount.
+    key_paths = {(task, seed): output_root / "private" / task / f"seed_{seed}.key"
+                 for task in tasks for seed in seeds}
+    keys = {pair: load_anonymization_key(path, create=True) for pair, path in key_paths.items()}
     spec["datasets"] = {f"{task}:{seed}": _dataset_manifest(
-        data_root / task / "prepared/public", task, seed) for task in tasks for seed in seeds}
+        data_root / task / "prepared/public", task, seed, anonymization_key=keys[(task, seed)])
+        for task in tasks for seed in seeds}
     spec["official_manifest_sha256"] = file_digest(adapters[tasks[0]].manifest_path)
     spec["profiles"] = {f"{seed}:{arm}": _profile(arm, token_budget, seed, iterations)
                         for seed in seeds for arm in ARMS}
     spec["profile_sha256"] = {key: digest(value) for key, value in spec["profiles"].items()}
     spec["execution_host"] = {"system": platform.system(), "machine": platform.machine(),
                               "cpu_count": os.cpu_count(), "python": platform.python_version()}
-    output_root.mkdir(parents=True, exist_ok=True)
-    if any(output_root.iterdir()):
-        raise FileExistsError("pilot output_root must be empty; evidence is not overwritten")
     _atomic_json(output_root / "pilot_spec.json", {"spec": spec, "sha256": digest(spec)})
     command = _fixture_agent_command or _command(model, token_budget, solution_timeout, iterations)
     rows = []
@@ -462,6 +475,7 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                         "MLE_MANIFEST_PATH": str(adapter.manifest_path.resolve()),
                         "MLE_AUDIT_PATH": str(run_dir / "audit.jsonl"),
                         "MLE_TOKEN_BUDGET": str(token_budget),
+                        "MLE_ANONYMIZATION_KEY_PATH": str(key_paths[(task, seed)]),
                         "MLE_PILOT_SPEC_SHA256": digest(spec),
                         "MLE_PILOT_PUBLIC_DATA_SHA256": spec["public_data"][task]["sha256"],
                     })

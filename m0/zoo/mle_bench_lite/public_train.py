@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import hmac
 import json
 import math
+import os
 import random
+import secrets
+import stat
 from pathlib import Path
 
-PROTOCOL = "mle-public-train-composed-v1"
+PROTOCOL = "mle-public-train-composed-v2"
 TASK_SPECS = {
     "spooky-author-identification": {"kind": "classification", "target": "author"},
     "leaf-classification": {"kind": "classification", "target": "species"},
@@ -56,8 +60,39 @@ def write_csv(path, columns, rows):
         writer.writerows(rows)
 
 
+def load_anonymization_key(path, *, create=False):
+    """Read trusted private state; never regenerate missing resume evidence."""
+    path = Path(path)
+    if create:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            pass
+        else:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(secrets.token_bytes(32))
+                stream.flush()
+                os.fsync(stream.fileno())
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("anonymization key must be an existing private regular file")
+        with path.open("rb") as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077:
+                raise ValueError("anonymization key requires private file permissions")
+            key = stream.read(33)
+        if len(key) != 32:
+            raise ValueError("anonymization key must contain exactly 32 bytes")
+        return key
+    except OSError:
+        raise ValueError("anonymization key is unavailable") from None
+
+
 class PublicTrainBundle:
-    def __init__(self, public_root, output_root, task_id, seed):
+    def __init__(self, public_root, output_root, task_id, seed, *, anonymization_key):
+        if type(anonymization_key) is not bytes or len(anonymization_key) != 32:
+            raise ValueError("anonymization key must contain exactly 32 bytes")
         if task_id not in TASK_SPECS:
             raise ValueError("composed MLE pilot supports only the three declared CSV tasks")
         if type(seed) is not int or seed < 0:
@@ -117,7 +152,11 @@ class PublicTrainBundle:
         # nor order reveal which local score each row contributes to.
         mixed = [("local", index) for split in SPLITS for index in self.indices[split]]
         mixed += [("official", index) for index in range(len(test))]
-        rng.shuffle(mixed)
+        # The public split seed and class counts reveal the pre-shuffle class
+        # order. A separate private PRF prevents replaying that permutation.
+        mixed.sort(key=lambda item: hmac.new(anonymization_key,
+            f"{PROTOCOL}:{task_id}:{seed}:{item[0]}:{item[1]}".encode(),
+            hashlib.sha256).digest())
         self.local_ids, self.test_ids, evaluation_rows = {}, {}, []
         for number, (origin, index) in enumerate(mixed):
             row_id = f"r{number:08d}"

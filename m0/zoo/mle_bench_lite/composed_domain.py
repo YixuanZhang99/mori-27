@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -74,6 +75,24 @@ class SandboxRunner:
                     pass
         return {"returncode": returncode, "timed_out": timed_out,
                 "wall_seconds": time.monotonic() - started}
+
+    def preflight(self, *, required_modules=("numpy",)):
+        """Execute trusted imports with the exact candidate sandbox/interpreter."""
+        try:
+            with tempfile.TemporaryDirectory(prefix="mle-runtime-probe-") as directory:
+                workspace = Path(directory)
+                (workspace / "data").mkdir()
+                (workspace / "program.py").write_text(
+                    "import importlib\n"
+                    f"for name in {list(required_modules)!r}: importlib.import_module(name)\n"
+                    "print('mori27-sandbox-ready')\n")
+                result = self.execute(workspace, timeout=30)
+                if (result["timed_out"] or result["returncode"] != 0
+                        or (workspace / "stdout.log").read_text().strip() != "mori27-sandbox-ready"):
+                    raise RuntimeError("sandbox readiness failed: interpreter or runtime imports unavailable")
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise RuntimeError(f"sandbox readiness failed ({type(error).__name__})") from None
+        return {"ready": True, "python": self.interpreter, "modules": list(required_modules)}
 
 
 class PublicTrainDomain:

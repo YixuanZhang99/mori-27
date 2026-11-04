@@ -22,6 +22,15 @@ from zoo.mle_bench_lite.composed_domain import PublicTrainDomain, SandboxRunner
 from zoo.mle_bench_lite.public_train import PublicTrainBundle, SPLITS, TASK_SPECS, write_csv
 
 TASK = "spooky-author-identification"
+TEST_ANONYMIZATION_KEY = b"k" * 32
+
+
+@pytest.fixture
+def fixture_key(tmp_path):
+    path = tmp_path / "trusted-anonymization.key"
+    path.write_bytes(TEST_ANONYMIZATION_KEY)
+    path.chmod(0o600)
+    return path
 
 
 def fixture_public(path, task=TASK, *, duplicate_id=False, rows_per_class=20):
@@ -76,7 +85,8 @@ def program(bundle, cycle=0, *, forbidden_path=None):
             predictions[bundle.local_ids[index]] = values
     guard = f"assert not Path({str(forbidden_path)!r}).exists()\n" if forbidden_path else ""
     return ("import csv, os\nfrom pathlib import Path\n"
-            "assert 'OPENAI_API_KEY' not in os.environ\n" + guard +
+            "assert 'OPENAI_API_KEY' not in os.environ\n"
+            "assert 'MLE_ANONYMIZATION_KEY_PATH' not in os.environ\n" + guard +
             f"predictions = {predictions!r}\n"
             "with open('predictions.csv', 'w', newline='') as stream:\n"
             "    writer=csv.writer(stream)\n    writer.writerow(['row_id','A','B','C'])\n"
@@ -120,8 +130,8 @@ class CodeService:
 @pytest.mark.parametrize("task", list(TASK_SPECS))
 def test_public_training_split_is_disjoint_content_bound_and_handles_overlapping_official_ids(tmp_path, task):
     public = fixture_public(tmp_path / "public", task)
-    bundle = PublicTrainBundle(public, tmp_path / "inputs", task, 7)
-    reconstructed = PublicTrainBundle(public, tmp_path / "inputs", task, 7)
+    bundle = PublicTrainBundle(public, tmp_path / "inputs", task, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
+    reconstructed = PublicTrainBundle(public, tmp_path / "inputs", task, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
     assert bundle.identity == reconstructed.identity
     assert len(set(bundle.contexts.values())) == 4
     indices = [index for rows in bundle.indices.values() for index in rows]
@@ -148,9 +158,9 @@ def test_public_data_preflight_and_drift_fail_before_execution(tmp_path, problem
                             rows_per_class=4 if problem == "small_class" else 20)
     if problem in ("duplicate", "small_class"):
         with pytest.raises(ValueError):
-            PublicTrainBundle(public, tmp_path / "inputs", TASK, 1)
+            PublicTrainBundle(public, tmp_path / "inputs", TASK, 1, anonymization_key=TEST_ANONYMIZATION_KEY)
         return
-    bundle = PublicTrainBundle(public, tmp_path / "inputs", TASK, 1)
+    bundle = PublicTrainBundle(public, tmp_path / "inputs", TASK, 1, anonymization_key=TEST_ANONYMIZATION_KEY)
     target = public / "train.csv" if problem == "source_mutation" else bundle.output_root / "train.csv"
     if problem == "symlink":
         target.unlink(); target.symlink_to(public / "train.csv")
@@ -161,7 +171,7 @@ def test_public_data_preflight_and_drift_fail_before_execution(tmp_path, problem
 
 
 def test_native_domain_trains_once_scores_all_splits_and_detects_changed_predictions(tmp_path):
-    bundle = PublicTrainBundle(fixture_public(tmp_path / "public"), tmp_path / "inputs", TASK, 1)
+    bundle = PublicTrainBundle(fixture_public(tmp_path / "public"), tmp_path / "inputs", TASK, 1, anonymization_key=TEST_ANONYMIZATION_KEY)
     domain = PublicTrainDomain(bundle, tmp_path / "candidates", runner=TrustedFixtureRunner())
     proposal = Proposal(Candidate("candidate-1"), program(bundle))
     evidence = [asyncio.run(domain.evaluate(proposal, EvalRequest(fidelity="true" if split == "calibration" else split,
@@ -184,7 +194,7 @@ def test_native_domain_trains_once_scores_all_splits_and_detects_changed_predict
 
 @pytest.mark.parametrize("artifact", ["not python!", "raise RuntimeError('failed')", "open('predictions.csv','w').write('wrong')"])
 def test_invalid_or_failed_candidate_does_not_become_success_or_reexecute(tmp_path, artifact):
-    bundle = PublicTrainBundle(fixture_public(tmp_path / "public"), tmp_path / "inputs", TASK, 1)
+    bundle = PublicTrainBundle(fixture_public(tmp_path / "public"), tmp_path / "inputs", TASK, 1, anonymization_key=TEST_ANONYMIZATION_KEY)
     domain = PublicTrainDomain(bundle, tmp_path / "candidates", runner=TrustedFixtureRunner())
     proposal = Proposal(Candidate("broken"), artifact)
     result = asyncio.run(domain.evaluate(proposal, EvalRequest("dev")))
@@ -196,14 +206,14 @@ def test_invalid_or_failed_candidate_does_not_become_success_or_reexecute(tmp_pa
         domain.materialize(proposal, tmp_path / "submission.csv", expected_prediction_sha256=None)
 
 
-def test_full_framework_real_http_python_anchor_negative_feedback_crossover_and_resume(tmp_path, monkeypatch):
+def test_full_framework_real_http_python_anchor_negative_feedback_crossover_and_resume(tmp_path, monkeypatch, fixture_key):
     workspace = tmp_path / "run/workspace"
     fixture_public(workspace / "data")
-    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7)
+    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
     service = CodeService([program(bundle, cycle) for cycle in range(4)], require_feedback=True)
     monkeypatch.setenv("OPENAI_API_KEY", "fixture-secret-never-in-child")
     kwargs = dict(workspace=workspace, task_id=TASK, model="fixture-alias", api_base=service.url,
-                  token_budget=10000, seed=7, iterations=3, variant="full", runner=TrustedFixtureRunner())
+                  token_budget=10000, seed=7, iterations=3, variant="full", runner=TrustedFixtureRunner(), anonymization_key_path=fixture_key)
     try:
         summary = run_agent(**kwargs)
         resumed = run_agent(**kwargs, resume=True)
@@ -231,15 +241,15 @@ def test_full_framework_real_http_python_anchor_negative_feedback_crossover_and_
     assert summary["details"]["physical_ledger"]["global"]["used"]["eval_count"] == 12
 
 
-@pytest.mark.parametrize("tamper", ["prediction_and_cache", "cache_status", "provider_settings", "executor_settings"])
-def test_completed_resume_rejects_changed_original_evidence_or_contract_before_new_calls(tmp_path, monkeypatch, tamper):
+@pytest.mark.parametrize("tamper", ["prediction_and_cache", "cache_status", "provider_settings", "executor_settings", "missing_key", "changed_key"])
+def test_completed_resume_rejects_changed_original_evidence_or_contract_before_new_calls(tmp_path, monkeypatch, tamper, fixture_key):
     workspace = tmp_path / "run/workspace"
     fixture_public(workspace / "data")
-    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7)
+    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
     service = CodeService([program(bundle)])
     monkeypatch.setenv("OPENAI_API_KEY", "fixture-secret")
     options = dict(workspace=workspace, task_id=TASK, model="fixture-alias", api_base=service.url,
-                   token_budget=10000, seed=7, iterations=0, variant="full", runner=TrustedFixtureRunner())
+                   token_budget=10000, seed=7, iterations=0, variant="full", runner=TrustedFixtureRunner(), anonymization_key_path=fixture_key)
     try:
         summary = run_agent(**options)
         artifacts = workspace.parent / "agent_artifacts"
@@ -257,11 +267,15 @@ def test_completed_resume_rejects_changed_original_evidence_or_contract_before_n
         elif tamper == "cache_status":
             record["status"] = "failed_to_run"
             record_path.write_text(json.dumps(record))
+        elif tamper == "missing_key":
+            fixture_key.unlink()
+        elif tamper == "changed_key":
+            fixture_key.write_bytes(b"z" * 32)
         elif tamper == "provider_settings":
             options["max_completion_tokens"] = 12
         else:
             options["solution_timeout"] = 5
-        with pytest.raises(ValueError, match="original|contract"):
+        with pytest.raises(ValueError, match="original|contract|anonymization key|changed"):
             run_agent(**options, resume=True)
         assert len(service.requests) == 1
         assert journal_path.read_bytes() == journal_before
@@ -271,7 +285,7 @@ def test_completed_resume_rejects_changed_original_evidence_or_contract_before_n
 
 
 def test_integrity_change_during_training_propagates_instead_of_becoming_candidate_feedback(tmp_path):
-    bundle = PublicTrainBundle(fixture_public(tmp_path / "public"), tmp_path / "inputs", TASK, 1)
+    bundle = PublicTrainBundle(fixture_public(tmp_path / "public"), tmp_path / "inputs", TASK, 1, anonymization_key=TEST_ANONYMIZATION_KEY)
     class MutatingFixtureRunner(TrustedFixtureRunner):
         def execute(self, workspace, timeout):
             result = super().execute(workspace, timeout)
@@ -291,13 +305,13 @@ def test_production_rejects_data_inside_system_trees_visible_to_the_sandbox(path
 
 
 @pytest.mark.linux
-def test_actual_composed_cli_uses_full_profile_http_and_bubblewrap(tmp_path, monkeypatch):
+def test_actual_composed_cli_uses_full_profile_http_and_bubblewrap(tmp_path, monkeypatch, fixture_key):
     workspace = tmp_path / "run/workspace"
     fixture_public(workspace / "data")
-    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7)
+    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
     service = CodeService([program(bundle, cycle) for cycle in range(4)], require_feedback=True)
     env = dict(os.environ, OPENAI_API_KEY="cli-fixture-secret",
-               PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+               PYTHONPATH=str(Path(__file__).resolve().parents[1]), MLE_ANONYMIZATION_KEY_PATH=str(fixture_key))
     command = [sys.executable, "-m", "zoo.mle_bench_lite.composed_agent", "--workspace", str(workspace),
                "--task", TASK, "--seed", "7", "--model", "fixture-alias", "--api-base", service.url,
                "--token-budget", "10000", "--iterations", "3", "--variant", "full"]
@@ -314,15 +328,15 @@ def test_actual_composed_cli_uses_full_profile_http_and_bubblewrap(tmp_path, mon
     assert summary["external_benchmark_score_produced"] is False
 
 
-def test_baseline_uses_same_data_budget_and_gate_without_population_or_anchor(tmp_path, monkeypatch):
+def test_baseline_uses_same_data_budget_and_gate_without_population_or_anchor(tmp_path, monkeypatch, fixture_key):
     workspace = tmp_path / "run/workspace"
     fixture_public(workspace / "data")
-    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7)
+    bundle = PublicTrainBundle(workspace / "data", tmp_path / "preview", TASK, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
     service = CodeService([program(bundle, cycle) for cycle in range(4)])
     monkeypatch.setenv("OPENAI_API_KEY", "fixture-secret")
     try:
         summary = run_agent(workspace=workspace, task_id=TASK, model="fixture-alias", api_base=service.url,
-            token_budget=10000, seed=7, iterations=3, variant="baseline", runner=TrustedFixtureRunner())
+            token_budget=10000, seed=7, iterations=3, variant="baseline", runner=TrustedFixtureRunner(), anonymization_key_path=fixture_key)
     finally:
         service.close()
     assert summary["dataset_identity"] == bundle.identity
@@ -338,7 +352,7 @@ def test_linux_actual_bubblewrap_keeps_original_labels_credentials_and_private_f
     public = fixture_public(tmp_path / "official-public")
     secret = tmp_path / "official-private/answers.txt"
     secret.parent.mkdir(); secret.write_text("PRIVATE_BENCHMARK_CANARY")
-    bundle = PublicTrainBundle(public, tmp_path / "inputs", TASK, 7)
+    bundle = PublicTrainBundle(public, tmp_path / "inputs", TASK, 7, anonymization_key=TEST_ANONYMIZATION_KEY)
     monkeypatch.setenv("OPENAI_API_KEY", "SECRET_API_CANARY")
     code = program(bundle, forbidden_path=secret) + f"assert not Path({str(public / 'train.csv')!r}).exists()\n"
     domain = PublicTrainDomain(bundle, tmp_path / "candidates")
