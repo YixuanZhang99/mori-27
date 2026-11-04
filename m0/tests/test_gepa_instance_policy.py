@@ -67,16 +67,19 @@ def test_m7_policy_consumes_only_public_verdicts_and_replays(tmp_path):
     class PrivateDomain(ItemDomain):
         async def evaluate(self, proposal, request):
             result = await super().evaluate(proposal, request)
-            return replace(result, contract=replace(result.contract, items=result.contract.items +
+            return replace(result, text_feedback='SECRET_RAW_FEEDBACK', contract=replace(result.contract, items=result.contract.items +
                 (ItemOutcome('SECRET_PRIVATE_ITEM', 1, visibility='private'),)))
-    assembly = construction_profile()
-    assembly['policy'] = {'name': 'gepa_instance', 'options': {'items': ['left', 'right'], 'seed': 9}}
+    assembly = construction_profile(projection=[])
+    assembly['policy'] = {'name': 'gepa_instance', 'options': {'items': ['left', 'right'], 'seed': 1}}
     provider = ConstructorProvider()
     fw = construction_build(tmp_path, assembly=assembly, provider=provider, domain=PrivateDomain(), generations=3)
     fw.evolve(TASK)
     policy = fw._composed.parts['policy']
     assert len(policy.instance_frontier.checkpoint_state()['candidates']) == 4
-    assert all('SECRET_PRIVATE_ITEM' not in prompt for prompt in provider.prompts)
+    records = [row['payload'] for row in fw.store.read('composed_evidence')]
+    assert records[2]['proposal']['candidate']['parents'] == [records[0]['proposal']['candidate']['id']]
+    assert records[1]['evidence']['eval_result']['metrics']['dev/score'] > records[0]['evidence']['eval_result']['metrics']['dev/score']
+    assert all('SECRET_PRIVATE_ITEM' not in prompt and 'SECRET_RAW_FEEDBACK' not in prompt for prompt in provider.prompts)
     assert 'SECRET_PRIVATE_ITEM' not in str(policy.checkpoint_state())
     public_events = [row['payload'] for row in fw.store.read('gepa_public_verdicts')]
     assert len(public_events) == 4
@@ -87,3 +90,28 @@ def test_m7_policy_consumes_only_public_verdicts_and_replays(tmp_path):
     resumed.evolve(TASK)
     assert resumed._composed.parts['policy'].checkpoint_state() == policy.checkpoint_state()
     assert resumed.replay(TASK, adapter_factory=lambda p, s: (ConstructorProvider(forbidden=True), ForbiddenDomain()))['replay_certificate']['passed']
+
+
+def test_m7_rejects_coherently_rehashed_policy_score_tampering_on_resume(tmp_path):
+    import json
+    from core.x1.checkpoint import payload_digest
+    from test_configured_construction import profile as construction_profile, ConstructorProvider, build as construction_build
+    assembly = construction_profile(projection=[])
+    assembly['policy'] = {'name': 'gepa_instance', 'options': {'items': ['left', 'right'], 'seed': 9}}
+    fw = construction_build(tmp_path, assembly=assembly, provider=ConstructorProvider(), domain=ItemDomain(), generations=1)
+    fw.evolve(TASK)
+    path = tmp_path / 'checkpoint.json'
+    envelope = json.loads(path.read_text())
+    candidate = envelope['payload']['module_states']['policy:0']['instance_frontier']['candidates'][0]
+    candidate['scores']['left'] = 1.0 - candidate['scores']['left']
+    envelope['payload_sha256'] = payload_digest(envelope['payload'])
+    path.write_text(json.dumps(envelope))
+    journal = tmp_path / 'x1.jsonl'
+    rows = [json.loads(line) for line in journal.read_text().splitlines()]
+    boundary = [row for row in rows if row['kind'] == 'composed_checkpoint'][-1]
+    boundary['payload']['sha256'] = envelope['payload_sha256']
+    journal.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    resumed = construction_build(tmp_path, assembly=assembly, provider=ConstructorProvider(forbidden=True),
+                                 domain=ForbiddenDomain(), generations=1, resume=True)
+    with pytest.raises(ValueError, match='public verdict evidence'):
+        resumed.evolve(TASK)

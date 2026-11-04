@@ -392,6 +392,37 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.memory.verify_proxy_feedback(None)
         if self.governed is None:
             self.frontier.store = self.store
+        if self.construction_enabled:
+            from core.composition.gepa_policy import GEPAInstancePolicy
+            policy = self.parts['policy']
+            if type(policy) is GEPAInstancePolicy:
+                saved = {item['id']: item['scores'] for item in
+                         policy.instance_frontier.checkpoint_state()['candidates']}
+                recorded = [row['payload'] for row in self.store.read('gepa_public_verdicts')]
+                journal_evidence = {row['payload']['proposal']['candidate']['id']: row['payload']
+                                    for row in self.store.read('composed_evidence')}
+                expected = {}
+                for candidate_id, evidence in evidence_by_id.items():
+                    if evidence.eval_result.status is not EvalStatus.OK:
+                        continue
+                    public_items = public_projection(evidence).eval_result.contract.items or ()
+                    verdicts = {item.item_id: item.verdict for item in public_items
+                                if item.visibility == 'public' and item.seed is None}
+                    row = journal_evidence.get(candidate_id)
+                    if len(verdicts) != len(public_items) or row is None or \
+                            row['evidence'] != encode_evidence(evidence)['evidence']:
+                        raise ValueError('GEPA public verdict evidence differs from original journal')
+                    expected[candidate_id] = (verdicts, row['evidence_ref'])
+                if len(recorded) != len(expected) or len(saved) != len(expected):
+                    raise ValueError('GEPA public verdict evidence coverage differs')
+                for row in recorded:
+                    candidate_id = row.get('candidate_id')
+                    if set(row) != {'candidate_id', 'verdicts', 'evidence_ref'} or candidate_id not in expected \
+                            or (row['verdicts'], row['evidence_ref']) != expected.pop(candidate_id) \
+                            or saved.get(candidate_id) != row['verdicts']:
+                        raise ValueError('GEPA public verdict evidence differs from checkpoint')
+                if expected:
+                    raise ValueError('GEPA public verdict evidence is missing')
         self.proposals, self.evidence = proposals, evidence_by_id
         self.eval_requests = evaluation_requests
         self._halted_reason = payload["halted_reason"]
