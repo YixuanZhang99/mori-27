@@ -80,9 +80,12 @@ def test_policy_blocks_overlapping_selection_and_rejects_tampered_pending():
     saved['pending']['receipt']['samples'][0] = 'tampered'
     with pytest.raises(ValueError):
         build().restore_state(saved)
-    policy.audit_original_evidence([row], selection_rows=[policy.pending_selection()], **args)
+    selection = policy.pending_selection()
+    policy.audit_original_evidence([row], selection_rows=[selection], **args)
     abandoned = policy.abandon_selection('evaluation_failed')
-    assert abandoned['receipt']['samples'] == ['a'] and policy.pending_selection() is None
+    assert abandoned['reason'] == 'evaluation_failed' and policy.pending_selection() == selection
+    policy.audit_original_evidence([row], selection_rows=[selection], abandonment_rows=[abandoned], **args)
+    assert policy.pending_selection() is None
     assert asyncio.run(policy.select(frontier('a'), {})) == ['a']
 
 
@@ -144,3 +147,18 @@ def test_island_reset_requires_replay_and_original_journal_before_further_select
     corrupted['pending_reset']['events'][0]['founder'] = 'tampered'
     with pytest.raises(ValueError):
         build().restore_state(corrupted)
+
+
+def test_failed_selection_disposition_must_survive_recovery_before_retry():
+    policy = build(); row, args = audited_seed(policy)
+    asyncio.run(policy.select(frontier('a'), {}))
+    selection = policy.pending_selection()
+    policy.audit_original_evidence([row], selection_rows=[selection], **args)
+    failure = policy.abandon_selection('evaluation_failed')
+    assert policy.pending_selection() == selection
+    restored = build(); restored.restore_state(policy.checkpoint_state())
+    with pytest.raises(ValueError, match='abandon'):
+        restored.audit_original_evidence([row], selection_rows=[selection], **args)
+    restored.audit_original_evidence([row], selection_rows=[selection], abandonment_rows=[failure], **args)
+    assert restored.pending_selection() is None
+    assert asyncio.run(restored.select(frontier('a'), {})) == ['a']

@@ -26,6 +26,7 @@ class FunSearchPolicy(GreedyPolicy):
         self._evidence_refs = {}
         self._pending = None
         self._pending_reset = None
+        self._pending_abandonment = None
         self._verified = False
 
     async def select(self, frontier, budget):
@@ -56,6 +57,8 @@ class FunSearchPolicy(GreedyPolicy):
     def record_evaluated(self, projection):
         if self._pending_reset is not None:
             raise ValueError('pending island reset must be audited first')
+        if self._pending_abandonment is not None:
+            raise ValueError('pending abandonment must be audited first')
         if self._pending is not None and not self._verified:
             raise ValueError('original evidence audit is required before settling selection')
         if type(projection) is not dict or set(projection) != {
@@ -80,11 +83,11 @@ class FunSearchPolicy(GreedyPolicy):
         self._verified = False
 
     def abandon_selection(self, reason):
-        if self._pending is None or not self._verified or reason not in {'evaluation_failed', 'stale_epoch'}:
+        if self._pending is None or self._pending_abandonment is not None or not self._verified or reason not in {'evaluation_failed', 'stale_epoch'}:
             raise ValueError('pending selection and explicit failure reason are required')
-        previous = copy.deepcopy(self._pending)
-        self._pending = None
-        return {**previous, 'reason': reason}
+        self._pending_abandonment = {'selection_ref': 'sha256:' + payload_digest(self._pending), 'reason': reason}
+        self._verified = False
+        return copy.deepcopy(self._pending_abandonment)
 
     def reset_weaker_half(self):
         if self._pending_reset is not None:
@@ -103,7 +106,7 @@ class FunSearchPolicy(GreedyPolicy):
         return copy.deepcopy(self._pending_reset)
 
     def audit_original_evidence(self, rows, *, metric, logical_run_id, evaluator_version, evaluation_context,
-                                selection_rows=None, reset_rows=None):
+                                selection_rows=None, reset_rows=None, abandonment_rows=None):
         """Check every retained candidate against authenticated main-lane rows."""
         from core.funsearch_public_evidence import verify_selected_projections
         self._verified = False
@@ -124,18 +127,24 @@ class FunSearchPolicy(GreedyPolicy):
                                                    for row in reset_rows) != 1:
                 raise ValueError('pending reset lacks its original journal record')
             self._pending_reset = None
+        if self._pending_abandonment is not None:
+            if type(abandonment_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending_abandonment)
+                                                         for row in abandonment_rows) != 1:
+                raise ValueError('pending abandonment lacks its original journal record')
+            self._pending = None
+            self._pending_abandonment = None
         self._verified = True
         return True
 
     def checkpoint_state(self):
-        return {'schema_version': 2, 'base': super().checkpoint_state(),
+        return {'schema_version': 3, 'base': super().checkpoint_state(),
                 'population': self.population.checkpoint_state(),
                 'evidence_refs': dict(self._evidence_refs), 'pending': self.pending_selection(),
-                'pending_reset': self.pending_reset()}
+                'pending_reset': self.pending_reset(), 'pending_abandonment': copy.deepcopy(self._pending_abandonment)}
 
     def restore_state(self, state):
-        if (type(state) is not dict or set(state) != {'schema_version', 'base', 'population', 'evidence_refs', 'pending', 'pending_reset'}
-                or type(state['schema_version']) is not int or state['schema_version'] != 2
+        if (type(state) is not dict or set(state) != {'schema_version', 'base', 'population', 'evidence_refs', 'pending', 'pending_reset', 'pending_abandonment'}
+                or type(state['schema_version']) is not int or state['schema_version'] != 3
                 or type(state['evidence_refs']) is not dict):
             raise ValueError('invalid FunSearch policy checkpoint')
         population = FunSearchPopulation.from_checkpoint(state['population'])
@@ -148,8 +157,14 @@ class FunSearchPolicy(GreedyPolicy):
             raise ValueError('FunSearch evidence coverage differs')
         pending = state['pending']
         reset = state['pending_reset']
+        abandonment = state['pending_abandonment']
         if pending is not None and reset is not None:
             raise ValueError('selection and reset cannot both be pending')
+        if abandonment is not None and (pending is None or type(abandonment) is not dict or
+                set(abandonment) != {'selection_ref', 'reason'} or
+                abandonment['reason'] not in {'evaluation_failed', 'stale_epoch'} or
+                abandonment['selection_ref'] != 'sha256:' + payload_digest(pending)):
+            raise ValueError('invalid pending selection abandonment')
         if pending is not None:
             if type(pending) is not dict or set(pending) != {'receipt', 'before', 'after'}:
                 raise ValueError('invalid pending FunSearch selection')
@@ -173,4 +188,5 @@ class FunSearchPolicy(GreedyPolicy):
         super().restore_state(state['base'])
         self.population, self._evidence_refs, self._pending = population, dict(refs), copy.deepcopy(pending)
         self._pending_reset = copy.deepcopy(reset)
+        self._pending_abandonment = copy.deepcopy(abandonment)
         self._verified = False
