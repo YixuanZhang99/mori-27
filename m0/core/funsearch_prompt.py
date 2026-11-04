@@ -141,3 +141,21 @@ def build_bound_prompt(template, function_name, selection, before, after, *, eli
                'prompt_ref': result['prompt_ref'], 'evidence_refs': evidence_refs}
     return {**result, 'selection_ref': selection_ref, 'evidence_refs': evidence_refs,
             'binding_ref': 'sha256:' + payload_digest(binding)}
+
+
+def build_journal_bound_prompt(template, function_name, selection, before, after, *, eligible,
+                               max_parents, sources, projections, evidence_rows, case_ids, metric,
+                               logical_run_id, evaluator_version, evaluation_context):
+    """Verify original main-lane evidence before producing a selected prompt.
+
+    The caller must obtain evidence_rows from the authenticated run journal.
+    No model, evaluator, or sandbox operation is issued by this function.
+    """
+    from core.funsearch_public_evidence import verify_selected_projections
+    from core.funsearch_selection import verify_selection
+    verify_selection(selection, before, after, eligible=eligible, max_parents=max_parents)
+    selected = set(selection['ancestry'])
+    verify_selected_projections(evidence_rows, projections, selected, case_ids=case_ids, metric=metric,
+        logical_run_id=logical_run_id, evaluator_version=evaluator_version, evaluation_context=evaluation_context)
+    return build_bound_prompt(template, function_name, selection, before, after, eligible=eligible,
+                              max_parents=max_parents, sources=sources, projections=projections)

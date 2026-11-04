@@ -103,3 +103,36 @@ def test_selected_projection_requires_original_committed_evidence_and_artifact()
         verify_selected_projections([corrupt], {'candidate-1': projection}, {'candidate-1'}, **args)
     with pytest.raises(ValueError):
         verify_selected_projections([row, row], {'candidate-1': projection}, {'candidate-1'}, **args)
+
+
+def test_journal_bound_prompt_checks_evidence_before_materialization():
+    import copy
+    import hashlib
+    from core.funsearch_population import FunSearchPopulation
+    from core.funsearch_selection import draw_selection
+    from core.funsearch_public_evidence import project_program_candidate
+    from core.funsearch_prompt import build_journal_bound_prompt
+    source = 'def priority(x):\n    return x\n'
+    original = evidence()
+    binding = replace(original.eval_result.contract.binding, artifact_sha256=hashlib.sha256(source.encode()).hexdigest())
+    original = replace(original, eval_result=replace(original.eval_result,
+        contract=replace(original.eval_result.contract, binding=binding)))
+    projection = project_program_candidate(original, source, case_ids=['a', 'b'], metric='score', logical_run_id='run')
+    population = FunSearchPopulation(case_ids=['a', 'b'], islands=2, seed=1, prompt_size=2, temperature=1, temperature_period=10)
+    population.register_projection('candidate-1', program_ref=projection['program_ref'], program_length=projection['program_length'],
+                                   scores=projection['scores'], island=0, epoch=0)
+    before = population.checkpoint_state()
+    selection = draw_selection(population, 0, eligible={'candidate-1'}, max_parents=2)
+    after = population.checkpoint_state()
+    row = {'cycle': 0, 'proposal': {'candidate': {'id': 'candidate-1'}, 'artifact': source},
+           'evidence_ref': projection['evidence_ref'], 'evidence': encode_evidence(original)['evidence']}
+    args = dict(eligible={'candidate-1'}, max_parents=2, sources={'candidate-1': source},
+                projections={'candidate-1': projection}, evidence_rows=[row],
+                case_ids=['a', 'b'], metric='score', logical_run_id='run',
+                evaluator_version='eval-v1', evaluation_context='sha256:' + 'c' * 64)
+    result = build_journal_bound_prompt(source, 'priority', selection, before, after, **args)
+    assert result['samples'] == ['candidate-1'] and 'priority_v0' in result['prompt']
+    altered = copy.deepcopy(row); altered['evidence']['eval_result']['contract']['items'][0]['metrics']['score'] = .9
+    args['evidence_rows'] = [altered]
+    with pytest.raises(ValueError):
+        build_journal_bound_prompt(source, 'priority', selection, before, after, **args)
