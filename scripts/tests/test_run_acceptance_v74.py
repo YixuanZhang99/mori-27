@@ -15,7 +15,7 @@ class V74RunnerTests(unittest.TestCase):
     def run_fixture(self, mutation=None, *, dirty=False):
         with tempfile.TemporaryDirectory(prefix='mori-v74-runner-') as d:
             root = Path(d)
-            for name in ('scripts/run_acceptance.py', 'scripts/run_acceptance_v74.py'):
+            for name in ('scripts/run_acceptance.py', 'scripts/run_acceptance_v74.py', 'scripts/setup_ci_tmpdir.sh'):
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / name, target)
@@ -36,6 +36,8 @@ with Path('verifier/runs/v74.jsonl').open('a') as f:
                 body += "Path('core/fixture.py').write_text('VALUE = 2\\n')\n"
             if mutation == 'source':
                 body += f"Path({str(root / 'm0/core/fixture.py')!r}).write_text('VALUE = 2\\n')\n"
+            if mutation == 'ci_control':
+                body += f"Path({str(root / 'scripts/setup_ci_tmpdir.sh')!r}).write_text('changed\\n')\n"
             (root / 'm0/verifier/v74/verify.py').write_text(body)
             subprocess.run(['git', 'init', '-q', str(root)], check=True)
             subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
@@ -81,4 +83,10 @@ with Path('verifier/runs/v74.jsonl').open('a') as f:
         code, report = self.run_fixture('execution')
         self.assertEqual(code, 1)
         self.assertFalse(report['execution_source_unchanged'])
+        self.assertFalse(report['passed'])
+
+    def test_mutated_ci_temporary_directory_setup_cannot_publish_success(self):
+        code, report = self.run_fixture('ci_control')
+        self.assertEqual(code, 1)
+        self.assertFalse(report['source_binding']['unchanged'])
         self.assertFalse(report['passed'])

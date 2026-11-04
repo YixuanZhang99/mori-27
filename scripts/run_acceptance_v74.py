@@ -13,7 +13,7 @@ VERIFIER_VERSION = "v74"
 runner.VERIFIER_VERSION = VERIFIER_VERSION
 runner.HISTORY = ("verifier/v74/LAST_RUN.json", "verifier/runs/v74.jsonl")
 runner.VERIFIER_COMMAND = "python3 verifier/v74/verify.py"
-runner.CONTROL_FILES = (*runner.CONTROL_FILES, "scripts/run_acceptance_v74.py")
+runner.CONTROL_FILES = (*runner.CONTROL_FILES, "scripts/run_acceptance_v74.py", "scripts/setup_ci_tmpdir.sh")
 IGNORED = {'.git', '.venv', '__pycache__', '.pytest_cache', 'build', 'dist'}
 GENERATED = {'m0/' + name for name in runner.HISTORY}
 

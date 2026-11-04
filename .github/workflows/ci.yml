@@ -45,6 +45,8 @@ jobs:
         run: make tooling
       - name: Offline examples
         run: make examples
+      - name: Prepare fast private temporary directory for acceptance
+        run: bash scripts/setup_ci_tmpdir.sh
       - name: Full acceptance with no skipped tests
         run: make accept-linux
       - name: Confirm historical certificates were not modified
