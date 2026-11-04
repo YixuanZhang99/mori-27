@@ -63,3 +63,18 @@
 goal 曾由用户在界面暂停；用户后续明确要求继续本轮工作，但工具仍显示 paused。工具不能替用户恢复状态；跨轮自动工作需要用户在 goal 控件点击继续。每周复审须尊重用户暂停，暂停期间仅做用户新授权的操作。
 
 用户随后确认三个 Kaggle 竞赛规则均已接受。离开前一次性配置脚本已提供：导入 legacy Kaggle 凭据，创建系统路径下本任务环境目录，安装 Git LFS；用户完成标记出现后继续依赖安装和数据验证。尚无付费调用。
+
+## 一次性本地配置完成后的状态
+
+2026-11-04 后续核验更新（覆盖上文关于环境不可用和 goal 暂停的旧状态）：
+
+- goal 工具确认 `active`，无需用户再次点击继续。
+- 仓库外两份私有配置均存在、非符号链接、权限 0600；只在本地进程内使用，未显示密钥或提交到 Git。
+- DeepSeek 官方 `/models` 认证成功，返回列表包含 `deepseek-flash`；没有发起付费生成请求。
+- Kaggle 三个竞赛的文件列表均可访问；官方固定 revision 的数据准备命令全部退出 0，未关闭校验或覆盖官方 checksum。
+- 系统路径下分别安装锁定开发环境和 hash-locked CPU pilot 环境；实际 Bubblewrap/seccomp 内的 Python、NumPy、pandas、scikit-learn 导入通过。
+- 官方三个任务的注册、protected snapshot 和合成 CSV 评分 smoke 通过。真实 prepared 数据的完整 pilot 环境预检 `ready=true`，无缺失项；这仍不代表模型实验已运行。
+- 非秘密的本地路径、候选六次运行参数与准备证据保存于聊天工作目录的 `outputs/local-run-settings.json`、`local-model-readiness.json`、`local-kaggle-readiness.json`、`local-mle-runtime.json`、`local-mle-preflight.json`。这些记录不包含密钥。
+- GitHub API 仍报告当前账号 `push=false`、`admin=false`；本地工作继续，尚不能声称远端备份完成。
+
+用户所需的人工配置已完成。下一步是软件工作：按 DeepSeek 研究记录实现 `max_tokens` 请求兼容和跨任务、跨输出目录的累计人民币账本，先验证请求前预留、已知用量结算、未知调用阻断与恢复，再启动已授权的真实试跑。配置文件中明确保留 `paid_generation_enabled=false` 和 `currency_controller_implemented=false`，不能以环境预检通过替代费用控制验收。
