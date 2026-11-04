@@ -17,6 +17,10 @@
 `586dd1f` 本机 v74 的 55 项检查及源码绑定通过；其 [GitHub Actions 推送验收](https://github.com/YixuanZhang99/mori-27/actions/runs/41911091797)
 再次因完整回归的单项 600 秒时限失败，快速临时目录未消除这一远端计时问题。
 失败证据已保留；尚不能将该提交标记为远端验收通过。
+同一开发提交对应的 [PR 合并检查](https://github.com/YixuanZhang99/mori-27/actions/runs/41911103180)
+则通过 55 项检查：实际验收对象是 GitHub 合并提交 `c7b11cb`，其 Git 树与
+`586dd1f` 完全相同，1159 个源码与验收文件也已独立核验。这支持相同源码在
+另一远端运行中通过，但不抹去推送验收的超时失败，也不能保证下一次不会超时。
 
 开发分支 `codex/m7-construction` 的 `a6b5826` 已完成本机完整项目检查、
 本机 v74 验收以及同提交 GitHub Actions 验收，并完成三项真实 MLE 任务的
