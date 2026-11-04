@@ -1,0 +1,12 @@
+{
+  "source_commit": "5fabd073ceeb00f3a0d1efb7113a11036a817e7c",
+  "script_sha256": "2aa4723e601cc67a6d32b8f5572f7269d38fa94b5ab4f0b117cc9bf51e3840c3",
+  "passed": true,
+  "runner": "bubblewrap-seccomp",
+  "runtime": "composed-v9-m7-governed-external",
+  "loopback_calls": 3,
+  "external_model_requests": 0,
+  "synthetic_currency_micro_cny": 114,
+  "official_benchmark": false,
+  "evidence_note": "Observed from the no-paid local fixture command; not an official benchmark or supplier invoice."
+}
