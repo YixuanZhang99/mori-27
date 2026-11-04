@@ -368,3 +368,12 @@ def test_profile_rejects_invalid_configuration(argument, value):
     options[argument] = value
     with pytest.raises(ValueError):
         build_profile(**options)
+
+
+def test_task_instructions_address_multiclass_solver_compatibility():
+    from types import SimpleNamespace
+    from zoo.mle_bench_lite.composed_agent import task_description
+    task = task_description(SimpleNamespace(protocol={'kind': 'classification'}))
+    assert 'multiclass' in task.lower()
+    assert 'lbfgs' in task.lower()
+    assert 'OneVsRestClassifier' in task

@@ -187,3 +187,17 @@ def test_changed_role_definition_cannot_execute_an_old_plan():
     with pytest.raises(ValueError):
         asyncio.run(PromptMaterializer(changed).construct(plan(), raw))
     assert not raw.requests
+
+
+def test_frozen_hypothesis_output_contract_requests_verbatim_copy():
+    raw = Scripted([(response(), 3)])
+    construct(plan(frozen=True), raw)
+    contract = raw.requests[0]['output_contract']
+    assert contract['hypothesis'] == 'Copy the input hypothesis exactly, without any changes.'
+    assert raw.requests[0]['hypothesis'] == 'Use caching'
+
+
+def test_unfrozen_hypothesis_output_contract_allows_revision():
+    raw = Scripted([(response(hypothesis='A revised hypothesis'), 3)])
+    construct(plan(frozen=False), raw)
+    assert raw.requests[0]['output_contract']['hypothesis'] == 'nonempty text'

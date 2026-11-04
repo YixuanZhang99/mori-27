@@ -61,6 +61,8 @@ def task_description(bundle):
         "The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. "
         "Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output "
         "must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, "
+        "For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a "
+        "binary estimator in OneVsRestClassifier. "
         "and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. "
         "Do not read other directories or launch persistent processes.\nPROTOCOL:\n" + json.dumps(bundle.protocol, sort_keys=True))
 

@@ -340,7 +340,9 @@ class PromptMaterializer:
                 "recipe": value["recipe"], "context": value["projection"], "hypothesis": hypothesis,
                 "hypothesis_frozen": value["spec"]["hypothesis_frozen"], "attempt": index + 1,
                 "repair_feedback": feedback,
-                "output_contract": {"artifact": "nonempty text", "hypothesis": "nonempty text"}}
+                "output_contract": {"artifact": "nonempty text", "hypothesis":
+                    "Copy the input hypothesis exactly, without any changes."
+                    if value["spec"]["hypothesis_frozen"] else "nonempty text"}}
             reset_usage(provider)
             try:
                 raw = provider(_json(request))
