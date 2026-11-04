@@ -99,6 +99,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.governed = None
         self._stop_disposition = None
         self.construction_enabled = self.assembly.execution is not None
+        if self.assembly.policy.name == 'funsearch' and (
+                not self.construction_enabled or self.assembly.governance is not None or
+                self.assembly.executor.name != 'inprocess'):
+            raise ValueError('FunSearch requires its bounded M7 configuration')
         self.construction = None
         self.continuation_enabled = self.construction_enabled or self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
         self.runtime_identity = "composed-v7-governed" if self.assembly.governance is not None else "composed-v6"
@@ -204,7 +208,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             from core.composition.funsearch_coordinator import FunSearchCoordinator
             options = self.assembly.policy.options
             constructor = self.assembly.execution.constructor if self.construction_enabled else None
-            if (not self.construction_enabled or self.assembly.governance is not None or self.durable_executor or
+            if (not self.construction_enabled or self.assembly.governance is not None or
+                    self.assembly.executor.name != 'inprocess' or self.durable_executor or
                     [spec.name for spec in self.assembly.operators] != ['draft', 'funsearch'] or
                     constructor.name != 'funsearch_prompt' or constructor.options != {
                         'template': options['template'], 'function_name': options['function_name']} or

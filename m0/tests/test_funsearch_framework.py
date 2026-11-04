@@ -83,6 +83,15 @@ def test_funsearch_requires_matching_constructor_before_provider_call(tmp_path):
     assert provider.calls == 0
 
 
+def test_funsearch_rejects_unverified_git_artifact_executor_before_setup(tmp_path):
+    configured = assembly()
+    configured['executor'] = {'name': 'git_artifact'}
+    provider = CodeProvider()
+    with pytest.raises(ValueError, match='bounded M7'):
+        build(tmp_path, assembly=configured, provider=provider, domain=NumericDomain())
+    assert provider.calls == 0
+
+
 def test_funsearch_resume_uses_checkpointed_selection_state(tmp_path):
     provider, domain = CodeProvider(), NumericDomain()
     first = build(tmp_path, assembly=assembly(), provider=provider, domain=domain,
