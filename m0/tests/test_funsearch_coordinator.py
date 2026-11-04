@@ -15,7 +15,7 @@ from test_funsearch_public_evidence import evidence
 SOURCE = 'def priority(x):\n    return x\n'
 FROZEN = dict(case_ids=['a', 'b'], metric='score', logical_run_id='run', evaluator_version='eval-v1',
               evaluation_context='sha256:' + 'c' * 64,
-              template_ref='sha256:' + hashlib.sha256(SOURCE.encode()).hexdigest(), function_name='priority')
+              template_ref='sha256:' + hashlib.sha256(SOURCE.encode()).hexdigest(), template=SOURCE, function_name='priority')
 
 
 def policy():
@@ -258,3 +258,17 @@ def test_changed_template_is_rejected_before_first_materialization(tmp_path):
     with pytest.raises(ValueError, match='template'):
         coord.materialize('child-1', '# changed\n' + SOURCE, 'priority')
     assert not list(store.read('funsearch_materialization'))
+
+
+def test_child_rejects_rehashed_but_forged_materialization(tmp_path):
+    store = ContinuationStore(tmp_path / 'journal.jsonl')
+    store.append('composed_evidence', original_row())
+    coord = FunSearchCoordinator(policy(), store, **FROZEN)
+    coord.record_evaluated('candidate-1')
+    asyncio.run(coord.select('child-1', frontier('candidate-1'), {}))
+    coord.materialize('child-1', SOURCE, 'priority')
+    row = next(row for row in store.rows if row['kind'] == 'funsearch_materialization')
+    row['payload']['prompt_ref'] = 'sha256:' + '0' * 64
+    store.append('composed_evidence', original_row('child-1'))
+    with pytest.raises(ValueError, match='materialization'):
+        coord.record_evaluated('child-1')

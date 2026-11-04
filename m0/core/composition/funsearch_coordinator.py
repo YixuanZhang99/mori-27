@@ -19,7 +19,7 @@ from core.x1.checkpoint import payload_digest
 
 class FunSearchCoordinator:
     def __init__(self, policy, store, *, case_ids, metric, logical_run_id, evaluator_version, evaluation_context,
-                 template_ref, function_name):
+                 template_ref, template, function_name):
         if type(policy) is not FunSearchPolicy or not isinstance(store, ContinuationStore):
             raise ValueError('durable FunSearch policy and continuation store are required')
         if any(type(value) is not str or not value.strip() for value in
@@ -28,10 +28,17 @@ class FunSearchCoordinator:
         if case_ids != policy.population.checkpoint_state()['config']['case_ids']:
             raise ValueError('frozen case identities differ from policy')
         if (type(template_ref) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', template_ref) or
+                type(template) is not str or not template or
                 type(function_name) is not str or not function_name.isidentifier()):
             raise ValueError('frozen template reference and function identity are required')
+        try:
+            actual_ref = 'sha256:' + hashlib.sha256(template.encode('utf-8')).hexdigest()
+        except UnicodeEncodeError as exc:
+            raise ValueError('frozen template must be valid UTF-8') from exc
+        if actual_ref != template_ref:
+            raise ValueError('frozen template reference differs from its source')
         self.policy, self.store = policy, store
-        self.template_ref, self.function_name = template_ref, function_name
+        self.template_ref, self.template, self.function_name = template_ref, template, function_name
         self.frozen = dict(case_ids=list(case_ids), metric=metric, logical_run_id=logical_run_id,
                            evaluator_version=evaluator_version, evaluation_context=evaluation_context)
 
@@ -90,6 +97,7 @@ class FunSearchCoordinator:
                     any(type(records[0][key]) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', records[0][key])
                         for key in ('template_ref', 'input_ref', 'prompt_ref', 'binding_ref'))):
                 raise ValueError('candidate lacks its durable materialization record')
+            self.materialize(candidate_id, self.template, self.function_name)
         if any(row.get('candidate_id') == candidate_id for row in self._rows('funsearch_public_candidate')):
             raise ValueError('candidate was already recorded')
         _row, projection = self._projection(candidate_id)
