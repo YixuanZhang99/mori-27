@@ -51,7 +51,9 @@ def test_m7_preflight_reports_missing_campaign_without_launch(tmp_path, monkeypa
     assert not (tmp_path / 'missing.db').exists()
 
 
-def test_synthetic_m7_six_slot_pilot_freezes_before_grading(tmp_path, monkeypatch):
+@pytest.mark.parametrize('scenario', [None, 'governance-intensity', 'comparison-failure',
+                                      'comparison-pending', 'comparison-tamper'])
+def test_synthetic_m7_six_slot_pilot_freezes_before_grading(tmp_path, monkeypatch, scenario):
     import json
     import shutil
     import threading
@@ -62,14 +64,16 @@ def test_synthetic_m7_six_slot_pilot_freezes_before_grading(tmp_path, monkeypatc
     from zoo.mle_bench_lite.composed_agent import run_governed_agent
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
 
+    comparison = 'governance-intensity' if scenario else None
     official, data, manifest = fixtures(tmp_path)
     for task in pilot.DEFAULT_TASKS:
         public = data / task / 'prepared/public'
         shutil.rmtree(public)
         fixture_public(public, task)
-    ledger = CampaignBudget.create(tmp_path / 'campaign.db')
-    ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
-                             expected_head=ledger.snapshot()['journal_head'])
+    ledger = None if comparison else CampaignBudget.create(tmp_path / 'campaign.db')
+    if ledger is not None:
+        ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                                 expected_head=ledger.snapshot()['journal_head'])
     code = '''import csv,json
 p=json.load(open("data/protocol.json"))
 with open("data/predict.csv", newline="") as f: rows=list(csv.DictReader(f))
@@ -86,7 +90,7 @@ with open("predictions.csv","w",newline="") as f:
             calls.append(content)
             result = json.dumps({'artifact': code, 'hypothesis': content['hypothesis']})
             raw = json.dumps({'model': 'deepseek-flash', 'usage': {'prompt_tokens': 3,
-                'completion_tokens': 4, 'total_tokens': 7}, 'choices': [{'finish_reason': 'length' if len(calls) == 2 else 'stop',
+                'completion_tokens': 4, 'total_tokens': 7}, 'choices': [{'finish_reason': 'length' if comparison is None and len(calls) == 2 else 'stop',
                 'message': {'content': result}}]}).encode()
             self.send_response(200); self.end_headers(); self.wfile.write(raw)
         def log_message(self, *_args):
@@ -96,21 +100,80 @@ with open("predictions.csv","w",newline="") as f:
     endpoint = f'http://127.0.0.1:{server.server_port}/v1'
     monkeypatch.setenv('OPENAI_API_BASE', endpoint)
     monkeypatch.setenv('OPENAI_API_KEY', 'fixture-only')
+    launches, grader_calls = [], []
     def execute(_command, workspace, task, seed, arm, limit, run_dir, agent_env):
+        nonlocal ledger
+        if comparison:
+            ledger = CampaignBudget(agent_env['MLE_CNY_LEDGER_PATH'])
+        launches.append(arm)
+        if scenario == 'comparison-failure' and len(launches) == 2:
+            raise OSError('fixture launch failure')
         start = time.monotonic()
+        schedule = ([0] if arm == 'one_control' else [0, 2]) if comparison else None
+        if comparison:
+            command = shlex.split(_command)
+            assert command[command.index('--variant') + 1] == 'full'
+            assert command[command.index('--control-cycles') + 1:] == [str(value) for value in schedule]
         run_governed_agent(workspace=workspace, task_id=task, model='deepseek-flash', api_base=endpoint,
-            token_budget=3_000_000, seed=seed, iterations=3, variant=arm, max_completion_tokens=16384,
+            token_budget=5_000_000 if comparison else 3_000_000, seed=seed, iterations=3,
+            variant='full' if comparison else arm, control_cycles=schedule, max_completion_tokens=16384,
             solution_timeout=120, runner=TrustedFixtureRunner(), api_key='fixture-only',
             anonymization_key_path=agent_env['MLE_ANONYMIZATION_KEY_PATH'], spending_ledger_path=ledger.path)
         return {'agent_returncode': 0, 'timed_out': False, 'actual_costs': {'wallclock': time.monotonic()-start}}
     monkeypatch.setattr(pilot, '_execute_agent', execute)
+    if scenario == 'comparison-pending':
+        original_gate = pilot._comparison_grading_ready
+        def inject_pending(spec, rows, output, authority):
+            run_id, plan_ref = '9' * 64, 'sha256:' + '8' * 64
+            bound = authority.quote_call(4)
+            authority.protect_run(run_id, plan_ref, [{'slot_id': 'control-0000', 'phase': 'operator',
+                                                       'ordinal': 0, 'bound': bound}])
+            authority.admit_call(run_id, 'control', 'control-0000',
+                {'call_id': 'pending-fixture', 'request_sha256': 'c' * 64, 'phase': 'operator', 'ordinal': 0}, bound)
+            return original_gate(spec, rows, output, authority)
+        monkeypatch.setattr(pilot, '_comparison_grading_ready', inject_pending)
+    if scenario == 'comparison-tamper':
+        original_gate = pilot._comparison_grading_ready
+        def tamper_after_freeze(spec, rows, output, authority):
+            result = original_gate(spec, rows, output, authority)
+            row = rows[0]
+            transcript = (output / row['task_id'] / f"seed_{row['seed']}" / row['arm'] /
+                          'agent_artifacts/composed/x1.jsonl')
+            records = [json.loads(line) for line in transcript.read_text().splitlines()]
+            next(record for record in records if record['kind'] == 'hierarchical_budget')['payload']['event_ref'] = '0' * 64
+            transcript.write_text(''.join(json.dumps(record) + '\n' for record in records))
+            return result
+        monkeypatch.setattr(pilot, '_comparison_grading_ready', tamper_after_freeze)
+    def tracked_grader(task):
+        grader_calls.append(task)
+        return grader(task)
     try:
         result = pilot.run_pilot(official, data, tmp_path / 'pilot', model='deepseek-flash',
-            token_budget=3_000_000, time_limit=600, solution_timeout=120, iterations=3, seeds=(1,),
-            manifest_path=manifest, spending_ledger_path=ledger.path, grader_factory=grader, runtime='m7')
+            token_budget=5_000_000 if comparison else 3_000_000,
+            time_limit=600, solution_timeout=120, iterations=3, seeds=(1,),
+            manifest_path=manifest, spending_ledger_path=ledger.path if ledger else None, grader_factory=tracked_grader, runtime='m7',
+            comparison=comparison)
+        if scenario == 'comparison-failure':
+            assert not result['pilot_complete'] and not grader_calls
+            assert result['runs'][0]['status'] == 'ungraded'
+            assert all(row['status'] == 'failed' for row in result['runs'][1:])
+            assert all('official_result' not in row for row in result['runs'])
+            assert len(calls) == 5 and len(launches) == 2
+            return
+        if scenario in {'comparison-pending', 'comparison-tamper'}:
+            assert not result['pilot_complete'] and not grader_calls
+            assert all(row['status'] == 'ungraded' and 'official_result' not in row for row in result['runs'])
+            assert len(calls) == 30 and len(launches) == 6
+            if scenario == 'comparison-pending':
+                assert ledger.snapshot()['pending_calls']
+            return
         assert result['pilot_complete'] and result['evidence_kind'] == 'protocol_fixture'
         assert len(result['runs']) == 6 and all(row['status'] == 'graded' for row in result['runs'])
         assert len(calls) == 30 and ledger.snapshot()['settled_upper_bound_micro_cny'] == 30 * 38
+        if comparison:
+            assert set(result['arms']) == {'one_control', 'two_controls'}
+            assert all(pair['complete'] and 'score_delta_two_minus_one' in pair for pair in result['pairs'])
+            assert all(row['usage_audit']['control_timing']['all_on_schedule'] for row in result['runs'])
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=5)
 

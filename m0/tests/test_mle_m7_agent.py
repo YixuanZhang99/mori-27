@@ -12,8 +12,10 @@ from zoo.mle_bench_lite.composed_agent import run_governed_agent
 
 
 @pytest.mark.parametrize("variant", ["baseline", "full"])
-@pytest.mark.parametrize("interrupted,iterations", [(False, 0), (True, 0), (False, 1), (False, 3)])
-def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path, monkeypatch, interrupted, variant, iterations):
+@pytest.mark.parametrize("interrupted,iterations,control_cycles", [
+    (False, 0, None), (True, 0, None), (False, 1, None), (False, 3, None),
+    (False, 3, [0]), (False, 3, [0, 2])])
+def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path, monkeypatch, interrupted, variant, iterations, control_cycles):
     workspace = tmp_path / 'run/workspace'
     fixture_public(workspace / 'data')
     preview = PublicTrainBundle(workspace / 'data', tmp_path / 'preview', TASK, 1,
@@ -40,9 +42,12 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     try:
+        budget = 5_000_000 if control_cycles is not None else 3_000_000
+        count = 2 + iterations
         kwargs = dict(workspace=workspace, task_id=TASK, model='deepseek-flash',
-            api_base=f'http://127.0.0.1:{server.server_port}/v1', token_budget=3_000_000,
+            api_base=f'http://127.0.0.1:{server.server_port}/v1', token_budget=budget,
             seed=1, iterations=iterations, variant=variant, max_completion_tokens=4,
+            control_cycles=control_cycles,
             runner=TrustedFixtureRunner(), anonymization_key_path=key_path,
             spending_ledger_path=ledger.path, api_key='fixture-only')
         if interrupted:
@@ -60,24 +65,25 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
             kwargs['resume'] = True
         summary = run_governed_agent(**kwargs)
         from zoo.mle_bench_lite.composed_agent import build_governed_profile
-        assert summary['profile'] == build_governed_profile(variant=variant, token_budget=3_000_000, seed=1,
-            iterations=iterations, max_completion_tokens=4)
+        assert summary['profile'] == build_governed_profile(variant=variant, token_budget=budget, seed=1,
+            iterations=iterations, max_completion_tokens=4, control_cycles=control_cycles)
         assert summary['runtime'] == 'composed-v9-m7-governed-external'
         assert summary['submission_materialized'] and (workspace / 'submission.csv').is_file()
-        assert len(calls) == 2 + iterations and summary['token_usage']['total_tokens'] == 7 * (2 + iterations)
+        assert len(calls) == count and summary['token_usage']['total_tokens'] == 7 * count
         if iterations == 3:
             assert ('crossover' if variant == 'full' else 'reflective') in [call['recipe']['kind'] for call in calls]
-        assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 38 * (2 + iterations)
-        assert summary['details']['training_invocations'] == 1 + iterations
-        assert summary['details']['controls_completed'] == 1
+        assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 38 * count
+        extra_controls = len(control_cycles) - 1 if control_cycles is not None else 0
+        assert summary['details']['training_invocations'] == 1 + iterations - extra_controls
+        assert summary['details']['controls_completed'] == 1 + extra_controls
         assert summary['recorded_replay']['passed'] and summary['recorded_replay']['external_calls'] == 0
         from zoo.mle_bench_lite.m7_pilot_audit import audit_currency_receipts
         audit = audit_currency_receipts(workspace.parent / 'agent_artifacts/composed', ledger, expected_model='deepseek-flash')
         assert audit['total_tokens'] == summary['token_usage']['total_tokens']
-        assert audit['construction']['provider_calls'] == 2 + iterations
+        assert audit['construction']['provider_calls'] == count
         assert any(link['candidate_id'] == summary['selected_candidate_id'] and link['lane'] == 'main'
                    for link in audit['construction']['artifact_links'])
-        assert audit['settled_micro_cny'] == 38 * (2 + iterations)
+        assert audit['settled_micro_cny'] == 38 * count
         from zoo.mle_bench_lite.m7_pilot_audit import audit_physical_and_submission
         independent = audit_physical_and_submission(workspace.parent / 'agent_artifacts/composed', preview,
             workspace / 'submission.csv', expected_tokens=audit['total_tokens'])
@@ -85,11 +91,14 @@ def test_m7_agent_materializes_frozen_predictions_and_accounts_controls(tmp_path
         assert independent['submission_sha256'] == summary['submission_sha256']
         from zoo.mle_bench_lite.pilot import _audit_m7_result, public_snapshot
         checked = _audit_m7_result(workspace.parent, preview, ledger, task=TASK, seed=1, arm=variant,
-            model='deepseek-flash', token_budget=3_000_000, iterations=iterations, solution_timeout=120,
+            model='deepseek-flash', token_budget=budget, iterations=iterations, solution_timeout=120,
             max_completion_tokens=4, expected_profile=summary['profile'],
             expected_public_data=public_snapshot(workspace / 'data'), expected_dataset=preview.manifest,
             expected_endpoint=f'http://127.0.0.1:{server.server_port}/v1')
-        assert checked['known_tokens'] == 7 * (2 + iterations)
+        assert checked['known_tokens'] == 7 * count
+        assert checked['control_timing']['all_on_schedule'] is True
+        assert [slot['actual_after_main_cycles'] for slot in checked['control_timing']['slots']] == \
+            (control_cycles or [0])
         submission = workspace / 'submission.csv'
         original_submission = submission.read_bytes()
         submission.write_bytes(original_submission + b'\n')

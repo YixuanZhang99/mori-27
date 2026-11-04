@@ -177,16 +177,26 @@ def run_agent(*, workspace, task_id, model, api_base, token_budget=60000, seed=1
 
 
 
-def build_governed_profile(*, variant, token_budget, seed, iterations, max_completion_tokens=4096):
+def build_governed_profile(*, variant, token_budget, seed, iterations, max_completion_tokens=4096,
+                           control_cycles=None):
     """Freeze M7 search, resident control and hard per-call reservations."""
     from zoo.mle_bench_lite.cny_budget import POLICY
     if type(token_budget) is not int or type(max_completion_tokens) is not int or max_completion_tokens <= 0:
         raise ValueError("hard provider capacity requires positive integer budgets")
     if max_completion_tokens > POLICY["max_output_tokens"]:
         raise ValueError("hard provider capacity exceeds maximum output")
+    cycles = [0] if control_cycles is None else control_cycles
+    if type(iterations) is not int or iterations < 0 or type(cycles) not in (list, tuple) or not cycles or \
+            any(type(cycle) is not int or cycle < 0 or cycle > iterations + 1 for cycle in cycles) or \
+            list(cycles) != sorted(set(cycles)) or cycles[0] != 0:
+        raise ValueError("control schedule must start at zero and contain unique ordered valid cycles")
+    cycles = list(cycles)
     bound = POLICY["context_tokens"] + max_completion_tokens
-    if token_budget < 2 * bound:
-        raise ValueError("hard provider capacity requires at least two call bounds")
+    required_main = max(1, cycles[-1])
+    if len(cycles) + required_main > iterations + 2:
+        raise ValueError("control schedule cannot reach its last planned cycle within node capacity")
+    if token_budget < (len(cycles) + required_main) * bound:
+        raise ValueError("hard provider capacity cannot protect controls and reach their planned cycle")
     profile = build_profile(variant=variant, token_budget=token_budget, seed=seed, iterations=iterations)
     profile.update(schema_version=2, executor={'name': 'git_artifact', 'options': {}},
         execution={'schema_version': 1, 'spec': {'role': 'general', 'hypothesis_frozen': True,
@@ -199,7 +209,7 @@ def build_governed_profile(*, variant, token_budget, seed, iterations, max_compl
     budget = profile['budget']['options']
     budget.pop('reservation_modes', None)
     budget['operation_reservations']['operator'] = {'token': bound, 'eval_count': 0, 'node': 1}
-    profile['governance'] = {'schema_version': 1, 'controls': {'after_main_cycles': [0], 'seed': seed,
+    profile['governance'] = {'schema_version': 1, 'controls': {'after_main_cycles': cycles, 'seed': seed,
         'provider': {'name': 'mle-cny'}, 'domain': {'name': 'mle-public-control'},
         'operator': {'name': 'draft'}, 'request': {'fidelity': 'dev', 'split_id': 'dev', 'seed_set': [seed]},
         'reservations': {'operator': {'token': bound, 'node': 1, 'eval_count': 0},
@@ -210,7 +220,7 @@ def build_governed_profile(*, variant, token_budget, seed, iterations, max_compl
 def run_governed_agent(*, workspace, task_id, model, api_base, token_budget, seed=1,
                        iterations=3, solution_timeout=120, variant="full", max_completion_tokens=4096,
                        runner=None, anonymization_key_path=None, spending_ledger_path=None, api_key=None,
-                       resume=False, protected_roots=()):
+                       resume=False, protected_roots=(), control_cycles=None):
     """Experimental M7 public-train entry; caller must supply the existing CNY ledger."""
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
     from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
@@ -218,7 +228,8 @@ def run_governed_agent(*, workspace, task_id, model, api_base, token_budget, see
     from core.composition.defaults import default_registry
 
     profile = build_governed_profile(variant=variant, token_budget=token_budget, seed=seed,
-                                     iterations=iterations, max_completion_tokens=max_completion_tokens)
+                                     iterations=iterations, max_completion_tokens=max_completion_tokens,
+                                     control_cycles=control_cycles)
     if spending_ledger_path is None:
         raise ValueError("existing shared campaign ledger required")
     workspace = Path(workspace).resolve()
@@ -345,10 +356,21 @@ def main(argv=None):
     parser.add_argument("--max-completion-tokens", type=int, default=4096)
     parser.add_argument("--spending-ledger", type=Path)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--control-cycles", type=int, nargs='+')
     args = parser.parse_args(argv)
     if not args.model:
         parser.error("--model is required for a frozen same-backbone comparison")
+    if args.control_cycles is not None and args.runtime != 'm7':
+        parser.error("--control-cycles requires the m7 runtime")
+    expected_source = os.environ.get('MLE_COMPARISON_SOURCE_COMMIT')
+    if expected_source:
+        if args.runtime != 'm7' or args.control_cycles is None:
+            parser.error('comparison source requires a governed control schedule')
+        from zoo.mle_bench_lite.pilot import _comparison_runtime_source
+        if _comparison_runtime_source()['commit'] != expected_source:
+            raise ValueError('comparison child source differs from the frozen commit')
     entry = run_governed_agent if args.runtime == "m7" else run_agent
+    schedule_options = {'control_cycles': args.control_cycles} if args.control_cycles is not None else {}
     summary = entry(workspace=args.workspace, task_id=args.task or os.environ.get("MLE_TASK_ID"),
         model=args.model, api_base=args.api_base, token_budget=args.token_budget, seed=args.seed,
         iterations=args.iterations, solution_timeout=args.solution_timeout, variant=args.variant,
@@ -356,7 +378,7 @@ def main(argv=None):
         anonymization_key_path=os.environ.get("MLE_ANONYMIZATION_KEY_PATH"),
         spending_ledger_path=args.spending_ledger or os.environ.get("MLE_CNY_LEDGER_PATH") or None,
         protected_roots=(args.official_root or os.environ.get("MLE_OFFICIAL_ROOT"),
-                         args.data_root or os.environ.get("MLE_DATA_ROOT")))
+                         args.data_root or os.environ.get("MLE_DATA_ROOT")), **schedule_options)
     print(json.dumps(summary, ensure_ascii=False))
     return 0
 

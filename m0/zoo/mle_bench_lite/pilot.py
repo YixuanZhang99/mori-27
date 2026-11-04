@@ -7,6 +7,8 @@ Offline injected graders/commands are labelled protocol fixtures throughout.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import importlib
 import importlib.util
@@ -14,9 +16,11 @@ import json
 import math
 import os
 import platform
+import re
 import secrets
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -35,6 +39,8 @@ DEFAULT_TASKS = (
     "nomad2018-predict-transparent-conductors",
 )
 ARMS = ("baseline", "full")
+GOVERNANCE_ARMS = ("one_control", "two_controls")
+GOVERNANCE_SCHEDULES = {"one_control": (0,), "two_controls": (0, 2)}
 from zoo.mle_bench_lite.public_train import PROTOCOL, load_anonymization_key
 MAX_COMPLETION_TOKENS = 4096
 
@@ -71,6 +77,63 @@ def public_snapshot(root: Path) -> dict:
     return {"files": files, "sha256": digest(files)}
 
 
+def _comparison_source_state(repo: Path) -> dict:
+    """Identify a clean committed checkout; not runtime attestation."""
+    root = Path(repo).resolve()
+    env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1',
+           'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_OPTIONAL_LOCKS': '0', 'GIT_NO_REPLACE_OBJECTS': '1'}
+    def git(*args):
+        result = subprocess.run(['git', '-C', str(root), *args], env=env, capture_output=True,
+                                text=True, timeout=15, check=True)
+        return result.stdout.strip()
+    try:
+        top, commit, tree = git('rev-parse', '--show-toplevel'), git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
+        dirty = git('status', '--porcelain=v1', '--untracked-files=normal')
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('comparison requires a verifiable clean source checkout') from error
+    if Path(top).resolve() != root or not re.fullmatch(r'[0-9a-f]{40}', commit) or \
+            not re.fullmatch(r'[0-9a-f]{40}', tree) or dirty:
+        raise ValueError('comparison requires a clean committed source checkout')
+    try:
+        entries = subprocess.run(['git', '-C', str(root), 'ls-tree', '-rz', '--full-tree', commit],
+                                 env=env, capture_output=True, timeout=15, check=True).stdout
+        for entry in entries.split(b'\0'):
+            if not entry:
+                continue
+            header, name = entry.split(b'\t', 1)
+            mode, kind, expected = header.split(b' ')
+            path = root / os.fsdecode(name)
+            if kind != b'blob' or mode not in (b'100644', b'100755', b'120000'):
+                raise ValueError('comparison requires a clean checkout without submodules')
+            info = path.lstat()
+            if mode == b'120000':
+                if not stat.S_ISLNK(info.st_mode):
+                    raise ValueError('comparison source file type changed')
+                content = os.fsencode(os.readlink(path))
+            else:
+                if not stat.S_ISREG(info.st_mode) or bool(info.st_mode & 0o111) != (mode == b'100755'):
+                    raise ValueError('comparison source file mode changed')
+                content = path.read_bytes()
+            actual = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest().encode()
+            if actual != expected:
+                raise ValueError('comparison requires clean committed source bytes')
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('comparison requires verifiable clean source bytes') from error
+    return {'commit': commit, 'tree': tree, 'scope': 'clean-checkout-not-runtime-attestation'}
+
+
+def _comparison_runtime_source() -> dict:
+    import core
+    import zoo
+    from zoo.mle_bench_lite import composed_agent
+    root = Path(__file__).resolve().parents[3]
+    for module, relative in ((core, 'm0/core/__init__.py'), (zoo, 'm0/zoo/__init__.py'),
+                             (composed_agent, 'm0/zoo/mle_bench_lite/composed_agent.py')):
+        if not getattr(module, '__file__', None) or Path(module.__file__).resolve() != root / relative:
+            raise ValueError('comparison imports differ from the clean source checkout')
+    return _comparison_source_state(root)
+
+
 def _profile(variant: str, token_budget: int, seed: int, iterations: int, *,
              runtime='legacy', max_completion_tokens=MAX_COMPLETION_TOKENS) -> dict:
     from zoo.mle_bench_lite.composed_agent import build_profile, build_governed_profile
@@ -88,6 +151,14 @@ def _runtime_profile(variant, token_budget, seed, iterations, *, runtime, max_co
         return _profile(variant, token_budget, seed, iterations)
     return _profile(variant, token_budget, seed, iterations, runtime=runtime,
                     max_completion_tokens=max_completion_tokens)
+
+
+def _comparison_profile(arm, token_budget, seed, iterations, *, max_completion_tokens):
+    from zoo.mle_bench_lite.composed_agent import build_governed_profile
+    if arm not in GOVERNANCE_SCHEDULES:
+        raise ValueError('unknown governance comparison arm')
+    return build_governed_profile(variant='full', token_budget=token_budget, seed=seed, iterations=iterations,
+        max_completion_tokens=max_completion_tokens, control_cycles=GOVERNANCE_SCHEDULES[arm])
 
 
 def _protected_host_path(path: Path) -> None:
@@ -222,14 +293,22 @@ def _validate_plan(model, token_budget, time_limit, solution_timeout, iterations
 
 
 def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
-          *, spending_ledger_path=None, runtime='legacy'):
+          *, spending_ledger_path=None, runtime='legacy', comparison=None):
     if runtime not in {'legacy', 'm7'}:
         raise ValueError('unknown pilot runtime')
+    if comparison not in (None, 'governance-intensity'):
+        raise ValueError('unknown pilot comparison')
+    if comparison is not None and runtime != 'm7':
+        raise ValueError('governance comparison requires m7 runtime')
     if runtime == 'm7':
         if spending_ledger_path is None:
             raise ValueError('m7 requires the existing campaign ledger')
         _profile('baseline', token_budget, seeds[0] if seeds else 0, iterations,
                  runtime='m7', max_completion_tokens=16384)
+        if comparison is not None:
+            for arm in GOVERNANCE_ARMS:
+                _comparison_profile(arm, token_budget, seeds[0] if seeds else 0, iterations,
+                                    max_completion_tokens=16384)
     _validate_plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks)
     endpoint = os.environ.get("OPENAI_API_BASE", os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
     parsed = urllib.parse.urlsplit(endpoint)
@@ -237,11 +316,12 @@ def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, 
             or parsed.scheme not in {"http", "https"}
             or (parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"})):
         raise ValueError("provider endpoint must be HTTPS without credentials/query (loopback HTTP fixtures excepted)")
+    arms = GOVERNANCE_ARMS if comparison is not None else ARMS
     plan = {"schema_version": 1, "protocol": PROTOCOL, "benchmark": "mle_bench_lite",
             "scope": "task_subset_pilot", "subset_only": True,
             "formal_benchmark_complete": False,
             "official_revision": REVISION, "official_task_list_sha256": TASK_LIST_SHA256,
-            "task_ids": list(tasks), "seeds": list(seeds), "arms": list(ARMS),
+            "task_ids": list(tasks), "seeds": list(seeds), "arms": list(arms),
             "model": model, "provider_base_url": endpoint, "provider_timeout": max(30.0, solution_timeout),
             "response_model_lock": "one returned model identifier across the pilot; stop on drift",
             "immutable_snapshot_verified": False,
@@ -252,7 +332,11 @@ def _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, 
             "grading_timing": "after_all_submissions_frozen",
             "wallclock_excludes_official_grading": True,
             "usd_budget_enforced": False,
-            "expected_runs": len(tasks) * len(seeds) * len(ARMS)}
+            "expected_runs": len(tasks) * len(seeds) * len(arms)}
+    if comparison is not None:
+        plan['comparison'] = {'kind': comparison, 'search_variant': 'full',
+            'control_schedules': {arm: list(GOVERNANCE_SCHEDULES[arm]) for arm in arms},
+            'interpretation': 'additional resident control under equal declared budgets; not no-governance'}
     if parsed.hostname == "api.deepseek.com" or spending_ledger_path is not None:
         plan["currency_ledger_required"] = True
         plan["provider_sampling"].update(max_completion_tokens=16384, request_format="deepseek",
@@ -290,6 +374,14 @@ def _bind_campaign(plan, path, *, output_root=None):
     allowance = min(plan["provider_sampling"]["max_completion_tokens"], plan["budget"]["token"])
     if snapshot["remaining_micro_cny"] < policy["context_tokens"] * 2 + allowance * 8:
         raise ValueError("campaign CNY budget exhausted before pilot execution")
+    if (plan.get('comparison') or {}).get('kind') == 'governance-intensity':
+        per_call = ledger.quote_call(plan['provider_sampling']['max_completion_tokens'])['reserved_micro_cny']
+        max_calls = (plan['iterations'] + 2) * plan['expected_runs']
+        upper = max_calls * per_call
+        if snapshot['remaining_micro_cny'] < upper:
+            raise ValueError('campaign cannot cover the comparison worst-case call bounds')
+        plan['comparison'].update(conservative_max_calls=max_calls,
+                                  conservative_max_currency_micro_cny=upper)
     plan["currency_campaign"] = policy
     return ledger
 
@@ -299,12 +391,19 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
                     solution_timeout: float = 60, iterations: int = 4,
                     seeds: tuple[int, ...] = (1,), task_ids=None,
                     manifest_path: str | Path | None = None, spending_ledger_path=None,
-                    runtime='legacy') -> dict:
+                    runtime='legacy', comparison=None) -> dict:
     """Read-only readiness report. No provider request or agent process is started."""
     tasks = list(DEFAULT_TASKS if task_ids is None else task_ids)
     plan = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
-                 spending_ledger_path=spending_ledger_path, runtime=runtime)
+                 spending_ledger_path=spending_ledger_path, runtime=runtime, comparison=comparison)
     missing = []
+    if comparison:
+        missing.append({'requirement': 'comparison_runtime_attestation',
+                        'reason': 'trusted pre-import bootstrap and dependency identity are not implemented'})
+        try:
+            plan['source'] = _comparison_runtime_source()
+        except (ValueError, OSError) as error:
+            missing.append({'requirement': 'comparison_source', 'reason': str(error)})
     try:
         campaign = _bind_campaign(plan, spending_ledger_path)
         if runtime == 'm7':
@@ -312,8 +411,9 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
             if snapshot.get('journal_schema_version') != 2 or snapshot.get('protection_breaches'):
                 raise ValueError('M7 requires an enabled and intact governance journal')
             per_call = campaign.quote_call(plan['provider_sampling']['max_completion_tokens'])['reserved_micro_cny']
-            if snapshot['remaining_micro_cny'] < 2 * per_call:
-                raise ValueError('campaign cannot reserve both main and control call bounds')
+            required_calls = 4 if comparison == 'governance-intensity' else 2
+            if snapshot['remaining_micro_cny'] < required_calls * per_call:
+                raise ValueError('campaign cannot reserve required main and control call bounds')
     except (ValueError, OSError) as error:
         missing.append({"requirement": "campaign_currency_budget", "reason": str(error)})
     if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
@@ -340,9 +440,12 @@ def preflight_pilot(official_root: str | Path, data_root: str | Path, *,
         plan["datasets"] = {f"{task}:{seed}": _dataset_manifest(
             Path(data_root) / task / "prepared/public", task, seed) for task in tasks for seed in seeds}
         plan["official_manifest_sha256"] = file_digest(adapters[tasks[0]].manifest_path)
-        plan["profiles"] = {f"{seed}:{arm}": _runtime_profile(arm, token_budget, seed, iterations,
-                            runtime=runtime, max_completion_tokens=plan['provider_sampling']['max_completion_tokens'])
-                            for seed in seeds for arm in ARMS}
+        plan["profiles"] = {f"{seed}:{arm}": (
+            _comparison_profile(arm, token_budget, seed, iterations,
+                                max_completion_tokens=plan['provider_sampling']['max_completion_tokens'])
+            if comparison else _runtime_profile(arm, token_budget, seed, iterations,
+                runtime=runtime, max_completion_tokens=plan['provider_sampling']['max_completion_tokens']))
+            for seed in seeds for arm in plan['arms']}
         if importlib.util.find_spec("mlebench") is not None:
             plan["official_prepared_identity"] = _official_prepared_identity(
                 Path(official_root), Path(data_root), tasks, adapters)
@@ -369,6 +472,17 @@ def _command(model, token_budget, solution_timeout, iterations, *,
     # The shared runner expands its known placeholders after shlex parsing.
     # Escape braces in the user-supplied model, which is never a shell command.
     argv[argv.index("--model") + 1] = model.replace("{", "{{").replace("}", "}}")
+    return shlex.join(argv)
+
+
+def _comparison_command(model, token_budget, solution_timeout, iterations, *, arm,
+                        spending_ledger_path, max_completion_tokens=16384):
+    if arm not in GOVERNANCE_SCHEDULES:
+        raise ValueError('unknown governance comparison arm')
+    argv = shlex.split(_command(model, token_budget, solution_timeout, iterations,
+        max_completion_tokens=max_completion_tokens, spending_ledger_path=spending_ledger_path, runtime='m7'))
+    argv[argv.index('--variant') + 1] = 'full'
+    argv.extend(['--control-cycles', *(str(cycle) for cycle in GOVERNANCE_SCHEDULES[arm])])
     return shlex.join(argv)
 
 
@@ -427,11 +541,14 @@ def _audit_m7_result(run_dir, bundle, ledger, *, task, seed, arm, model, token_b
             or summary.get('submission_materialized') is not True or bundle.manifest != expected_dataset:
         raise ValueError('M7 runtime, response model or dataset differs from pilot')
     checkpoint = RunCheckpoint.load(run_root / 'checkpoint.json').payload
-    if checkpoint['manifest']['assembly'] != AssemblyConfig.from_dict(expected_profile).to_dict():
+    assembly = AssemblyConfig.from_dict(expected_profile).to_dict()
+    if checkpoint['manifest']['assembly'] != assembly:
         raise ValueError('M7 checkpoint assembly differs from frozen pilot profile')
     preparation = _record(run_root / '.governed-cny/plan-prepared.json')
     manifests = preparation['manifests']
-    if set(manifests) != {'main', 'control-0000'}:
+    cycles = assembly['governance']['controls']['after_main_cycles']
+    expected_sessions = {'main'} | {f'control-{index:04d}' for index in range(len(cycles))}
+    if set(manifests) != expected_sessions:
         raise ValueError('M7 provider session coverage differs')
     for manifest in manifests.values():
         expected = {'requested_model': model, 'base_url': expected_endpoint.rstrip('/'),
@@ -441,6 +558,10 @@ def _audit_m7_result(run_dir, bundle, ledger, *, task, seed, arm, model, token_b
                     'temperature_applied': False, 'seed_applied': False, 'campaign': ledger.manifest_binding()}
         if any(manifest.get(key) != value for key, value in expected.items()):
             raise ValueError('M7 provider settings differ from frozen pilot')
+    from zoo.mle_bench_lite.governance_intensity import control_timing
+    timing_rows = list(AppendOnlyStore(run_root / 'x1.jsonl').read())
+    timing = control_timing(preparation['run']['physical_plan'], cycles, timing_rows,
+                            logical_run_id=preparation['run']['logical_run_id'])
     currency = audit_currency_receipts(run_root, ledger, expected_model=model)
     physical = audit_physical_and_submission(run_root, bundle, run_dir / 'workspace/submission.csv',
                                              expected_tokens=currency['total_tokens'])
@@ -459,7 +580,8 @@ def _audit_m7_result(run_dir, bundle, ledger, *, task, seed, arm, model, token_b
             'receipt_count': currency['construction']['provider_calls'],
             'currency_audit': currency, 'physical_submission_audit': physical,
             'complete': True, 'costs_complete': True, 'unresolved_calls': [],
-            'actual_models': [model], 'usage': {'total_tokens': currency['total_tokens']}}
+            'actual_models': [model], 'usage': {'total_tokens': currency['total_tokens']},
+            'control_timing': timing}
 
 
 def _validate_provider_settings(run_dir: Path, spec: dict, *, fixture: bool):
@@ -486,6 +608,8 @@ def _validate_provider_settings(run_dir: Path, spec: dict, *, fixture: bool):
 
 
 def _summary_report(spec, rows, fixture: bool, spending_ledger=None):
+    comparison = (spec.get('comparison') or {}).get('kind') == 'governance-intensity'
+    arms = GOVERNANCE_ARMS if comparison else ARMS
     complete = len(rows) == spec["expected_runs"] and all(row["status"] == "graded" for row in rows)
     actual_models = sorted({row["actual_model"] for row in rows if row.get("actual_model")})
     observed_models = sorted({model for row in rows for model in row.get("usage_audit", {}).get("actual_models", [])})
@@ -495,37 +619,67 @@ def _summary_report(spec, rows, fixture: bool, spending_ledger=None):
     pairs = []
     for task in spec["task_ids"]:
         for seed in spec["seeds"]:
-            by_arm = {row["arm"]: row for row in rows if row["task_id"] == task and row["seed"] == seed}
+            matched = [row for row in rows if row["task_id"] == task and row["seed"] == seed]
+            by_arm = {row["arm"]: row for row in matched}
             pair = {"task_id": task, "seed": seed, "complete": all(
-                by_arm.get(arm, {}).get("status") == "graded" for arm in ARMS)}
+                by_arm.get(arm, {}).get("status") == "graded" for arm in arms)}
+            if comparison and (len(matched) != len(arms) or set(by_arm) != set(arms)):
+                pair.update(complete=False, error='paired arm coverage differs')
+                complete = False
             if pair["complete"] and not same_backbone:
                 pair.update(complete=False, error="actual provider model differs across pilot runs")
             if pair["complete"]:
-                baseline, full = by_arm["baseline"], by_arm["full"]
+                baseline, full = (by_arm[arms[0]], by_arm[arms[1]])
+                if comparison and any(row.get('official_result', {}).get('valid_submission') is not True or
+                        row.get('usage_audit', {}).get('control_timing', {}).get('all_on_schedule') is not True or
+                        row.get('usage_audit', {}).get('complete') is not True or
+                        row.get('usage_audit', {}).get('costs_complete') is not True or
+                        row.get('usage_audit', {}).get('unresolved_calls')
+                        for row in (baseline, full)):
+                    pair.update(complete=False, error='invalid submission or control timing differs from plan')
+                    complete = False
                 if baseline["dataset_identity"] != full["dataset_identity"]:
                     pair.update(complete=False, error="paired dataset identities differ")
                     complete = False
-                else:
+                elif comparison and baseline['metric_direction'] != full['metric_direction']:
+                    pair.update(complete=False, error='paired metric directions differ')
+                    complete = False
+                elif pair['complete']:
                     scores = [row["official_result"]["score"] for row in (baseline, full)]
-                    pair.update(metric_direction=baseline["metric_direction"],
-                                baseline_score=scores[0], full_score=scores[1],
-                                score_delta_full_minus_baseline=(scores[1] - scores[0])
-                                    if all(score is not None for score in scores) else None,
-                                token_delta_full_minus_baseline=full["actual_costs"]["token"] - baseline["actual_costs"]["token"],
-                                wallclock_delta_full_minus_baseline=full["actual_costs"]["wallclock"] - baseline["actual_costs"]["wallclock"])
+                    if comparison and any(type(score) not in (int, float) or not math.isfinite(score) for score in scores):
+                        pair.update(complete=False, error='paired official scores are unavailable')
+                        complete = False
+                        pairs.append(pair)
+                        continue
+                    if comparison:
+                        pair.update(metric_direction=baseline['metric_direction'], one_control_score=scores[0],
+                            two_controls_score=scores[1], score_delta_two_minus_one=(scores[1] - scores[0])
+                            if all(score is not None for score in scores) else None,
+                            token_delta_two_minus_one=full['actual_costs']['token'] - baseline['actual_costs']['token'],
+                            wallclock_delta_two_minus_one=full['actual_costs']['wallclock'] - baseline['actual_costs']['wallclock'])
+                    else:
+                        pair.update(metric_direction=baseline["metric_direction"],
+                                    baseline_score=scores[0], full_score=scores[1],
+                                    score_delta_full_minus_baseline=(scores[1] - scores[0])
+                                        if all(score is not None for score in scores) else None,
+                                    token_delta_full_minus_baseline=full["actual_costs"]["token"] - baseline["actual_costs"]["token"],
+                                    wallclock_delta_full_minus_baseline=full["actual_costs"]["wallclock"] - baseline["actual_costs"]["wallclock"])
             pairs.append(pair)
     totals = {}
-    for arm in ARMS:
+    for arm in arms:
         arm_rows = [row for row in rows if row["arm"] == arm]
         graded = [row for row in arm_rows if row["status"] == "graded"]
         costs = [row.get("actual_costs", {}) for row in arm_rows]
         totals[arm] = {"planned_runs": len(spec["task_ids"]) * len(spec["seeds"]),
-                      "graded_runs": len(graded), "failed_runs": len(arm_rows) - len(graded),
+                      "graded_runs": len(graded), "failed_runs": (sum(row['status'] == 'failed' for row in arm_rows)
+                                                                     if comparison else len(arm_rows) - len(graded)),
                       "valid_submissions": sum(row["official_result"]["valid_submission"] for row in graded),
                       "known_tokens": sum(row.get("usage_audit", {}).get("known_tokens", 0) for row in arm_rows),
                       "unknown_token_runs": sum(not row.get("usage_audit", {}).get("costs_complete", False) for row in arm_rows),
                       "incomplete_identity_runs": sum(not row.get("usage_audit", {}).get("complete", False) for row in arm_rows),
                       "known_wallclock": sum(cost.get("wallclock", 0) for cost in costs)}
+        if comparison:
+            totals[arm]['ungraded_runs'] = sum(row['status'] == 'ungraded' for row in arm_rows)
     currency = None
     if spending_ledger is not None:
         try:
@@ -548,17 +702,128 @@ def _summary_report(spec, rows, fixture: bool, spending_ledger=None):
             "failure_count": sum(row["status"] != "graded" for row in rows)}
 
 
-def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str | Path, *,
+def _comparison_grading_ready(spec, rows, output_root, spending_ledger):
+    """Require every planned comparison submission to be frozen and intact."""
+    arms = tuple(spec['arms'])
+    if arms != GOVERNANCE_ARMS:
+        raise ValueError('comparison arm identities differ')
+    expected = {(task, seed, arm) for task in spec['task_ids'] for seed in spec['seeds'] for arm in arms}
+    identities = [(row['task_id'], row['seed'], row['arm']) for row in rows]
+    if len(rows) != spec['expected_runs'] or len(rows) != len(expected) or set(identities) != expected or \
+            len(set(identities)) != len(identities) or any(row['status'] != 'frozen' for row in rows):
+        raise ValueError('not every comparison slot is frozen')
+    root = Path(output_root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('comparison output root is unsafe')
+    if spending_ledger is None:
+        raise ValueError('comparison requires the original campaign ledger')
+    snapshot = spending_ledger.snapshot()
+    if snapshot.get('journal_schema_version') != 2 or snapshot.get('pending_calls') or \
+            snapshot.get('protection_breaches') or snapshot.get('reserved_micro_cny') or \
+            snapshot.get('protected_micro_cny'):
+        raise ValueError('comparison campaign has unresolved or protected currency')
+    for row in rows:
+        task, seed, arm = row['task_id'], row['seed'], row['arm']
+        if type(task) is not str or not task or Path(task).name != task or task in {'.', '..'} or \
+                type(seed) is not int or seed < 0:
+            raise ValueError('comparison slot identity is unsafe')
+        audit = row.get('usage_audit', {})
+        if audit.get('complete') is not True or audit.get('costs_complete') is not True or \
+                audit.get('unresolved_calls') or audit.get('control_timing', {}).get('all_on_schedule') is not True:
+            raise ValueError('comparison control timing or accounting is incomplete')
+        parts = (task, f'seed_{seed}', arm, 'frozen', 'submission.csv')
+        path = root
+        for part in parts:
+            path = path / part
+            if path.is_symlink():
+                raise ValueError('comparison submission path is unsafe')
+        if not path.is_file() or file_digest(path) != row['submission_sha256']:
+            raise ValueError('comparison frozen submission differs')
+    for task in spec['task_ids']:
+        for seed in spec['seeds']:
+            pair = [row for row in rows if row['task_id'] == task and row['seed'] == seed]
+            if pair[0]['dataset_identity'] != pair[1]['dataset_identity'] or \
+                    pair[0]['metric_direction'] != pair[1]['metric_direction']:
+                raise ValueError('comparison paired dataset or metric differs')
+
+
+def _comparison_reaudit(spec, rows, output_root, spending_ledger, keys):
+    """Recheck original run artifacts and authority immediately before scoring."""
+    from zoo.mle_bench_lite.public_train import PublicTrainBundle
+    for row in rows:
+        task, seed, arm = row['task_id'], row['seed'], row['arm']
+        run_dir = Path(output_root) / task / f'seed_{seed}' / arm
+        workspace = run_dir / 'workspace'
+        if public_snapshot(workspace / 'data') != spec['public_data'][task]:
+            raise ValueError('comparison public input changed before scoring')
+        bundle = PublicTrainBundle(workspace / 'data', run_dir / 'agent_artifacts/public_inputs',
+                                   task, seed, anonymization_key=keys[(task, seed)])
+        checked = _audit_m7_result(run_dir, bundle, spending_ledger, task=task, seed=seed,
+            arm='full', model=spec['model'], token_budget=spec['budget']['token'],
+            iterations=spec['iterations'], solution_timeout=spec['solution_timeout'],
+            max_completion_tokens=spec['provider_sampling']['max_completion_tokens'],
+            expected_profile=spec['profiles'][f'{seed}:{arm}'], expected_public_data=spec['public_data'][task],
+            expected_dataset=spec['datasets'][f'{task}:{seed}'], expected_endpoint=spec['provider_base_url'])
+        prior = row['usage_audit']
+        if any(checked[key] != prior[key] for key in ('known_tokens', 'actual_model', 'receipt_count',
+                'physical_submission_audit', 'control_timing')) or \
+                any(checked['currency_audit'][key] != prior['currency_audit'][key] for key in
+                    ('total_tokens', 'settled_micro_cny', 'model', 'invoice_verified', 'construction')) or \
+                checked['physical_submission_audit']['submission_sha256'] != row['submission_sha256']:
+            raise ValueError('comparison run evidence changed before scoring')
+
+
+@contextmanager
+def _comparison_campaign_lock(ledger_path):
+    """Hold the existing cooperative campaign lock for a complete comparison."""
+    if ledger_path is None:
+        raise ValueError('comparison requires the original campaign ledger')
+    ledger = Path(ledger_path).absolute()
+    parent = ledger.parent
+    _protected_host_path(parent)
+    if ledger.is_symlink() or not ledger.is_file() or parent.is_symlink() or not parent.is_dir() or \
+            parent.stat().st_uid != os.getuid() or stat.S_IMODE(parent.stat().st_mode) != 0o700:
+        raise ValueError('comparison requires a private existing campaign directory and ledger')
+    fd = os.open(parent / 'authorized-pilot.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+            raise ValueError('comparison campaign lock must be a private ordinary file')
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError('comparison campaign lock is already held') from error
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _run_pilot_impl(official_root: str | Path, data_root: str | Path, output_root: str | Path, *,
               model: str, token_budget: int, time_limit: float = 600,
               solution_timeout: float = 60, iterations: int = 4,
               seeds: tuple[int, ...] = (1,), task_ids=None,
               manifest_path: str | Path | None = None, grader_factory: Callable | None = None,
-              _fixture_agent_command: str | None = None, spending_ledger_path=None, runtime='legacy') -> dict:
+              _fixture_agent_command: str | None = None, spending_ledger_path=None, runtime='legacy',
+              comparison=None) -> dict:
     """Run fixed paired variants. Test injections cannot emit production evidence."""
     tasks = list(DEFAULT_TASKS if task_ids is None else task_ids)
     spec = _plan(model, token_budget, time_limit, solution_timeout, iterations, seeds, tasks,
-                 spending_ledger_path=spending_ledger_path, runtime=runtime)
+                 spending_ledger_path=spending_ledger_path, runtime=runtime, comparison=comparison)
+    if comparison and grader_factory is not None:
+        endpoint = urllib.parse.urlsplit(spec['provider_base_url'])
+        if (endpoint.hostname not in {'127.0.0.1', '::1'} or
+                os.environ.get('OPENAI_API_KEY') != 'fixture-only' or
+                spending_ledger_path is None or Path(spending_ledger_path).name != 'fixture-campaign.db'):
+            raise ValueError('comparison fixtures require loopback, fixture-only credentials and a fixture-campaign.db ledger')
     spending_ledger = _bind_campaign(spec, spending_ledger_path, output_root=output_root)
+    if comparison:
+        if grader_factory is None:
+            spec['source'] = _comparison_runtime_source()
+        else:
+            spec['comparison']['source_scope'] = 'synthetic-fixture-unverified'
     if _fixture_agent_command is not None and grader_factory is None:
         raise ValueError("custom agent commands are reserved for labelled protocol fixtures")
     if grader_factory is None:
@@ -567,9 +832,11 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
         readiness = preflight_pilot(official_root, data_root, model=model,
             token_budget=token_budget, time_limit=time_limit, solution_timeout=solution_timeout,
             iterations=iterations, seeds=seeds, task_ids=tasks, manifest_path=manifest_path,
-            spending_ledger_path=spending_ledger_path, runtime=runtime)
+            spending_ledger_path=spending_ledger_path, runtime=runtime, comparison=comparison)
         if not readiness["ready"]:
             raise ValueError("pilot preflight failed: " + json.dumps(readiness["missing"]))
+        if comparison and readiness['plan'].get('source') != spec['source']:
+            raise ValueError('comparison source changed during preflight')
     official_root, data_root, output_root = map(lambda p: Path(p).resolve(),
                                                (official_root, data_root, output_root))
     adapters = preflight(official_root, data_root, tasks,
@@ -588,9 +855,12 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
         data_root / task / "prepared/public", task, seed, anonymization_key=keys[(task, seed)])
         for task in tasks for seed in seeds}
     spec["official_manifest_sha256"] = file_digest(adapters[tasks[0]].manifest_path)
-    spec["profiles"] = {f"{seed}:{arm}": _runtime_profile(arm, token_budget, seed, iterations, runtime=runtime,
-                        max_completion_tokens=spec['provider_sampling']['max_completion_tokens'])
-                        for seed in seeds for arm in ARMS}
+    spec["profiles"] = {f"{seed}:{arm}": (
+        _comparison_profile(arm, token_budget, seed, iterations,
+                            max_completion_tokens=spec['provider_sampling']['max_completion_tokens'])
+        if comparison else _runtime_profile(arm, token_budget, seed, iterations, runtime=runtime,
+            max_completion_tokens=spec['provider_sampling']['max_completion_tokens']))
+        for seed in seeds for arm in spec['arms']}
     spec["profile_sha256"] = {key: digest(value) for key, value in spec["profiles"].items()}
     spec["execution_host"] = {"system": platform.system(), "machine": platform.machine(),
                               "cpu_count": os.cpu_count(), "python": platform.python_version()}
@@ -605,7 +875,8 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
         for seed in seeds:
             # Deterministically alternate which variant runs first to avoid one
             # always receiving the warm machine, while keeping paired seeds.
-            order = ARMS if (tasks.index(task) + seeds.index(seed)) % 2 == 0 else tuple(reversed(ARMS))
+            arms = tuple(spec['arms'])
+            order = arms if (tasks.index(task) + seeds.index(seed)) % 2 == 0 else tuple(reversed(arms))
             for arm in order:
                 run_dir = output_root / task / f"seed_{seed}" / arm
                 run_dir.mkdir(parents=True)
@@ -624,6 +895,14 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                     if stop_reason is not None:
                         row["blocked_before_execution"] = True
                         raise ValueError(stop_reason)
+                    if comparison and grader_factory is None:
+                        try:
+                            if _comparison_runtime_source() != spec['source']:
+                                raise ValueError('comparison source identity changed')
+                        except Exception as error:
+                            stop_reason = 'comparison source verification failed; remaining paid runs are blocked'
+                            row['blocked_before_execution'] = True
+                            raise ValueError(stop_reason) from error
                     if spending_ledger is not None:
                         currency_before = spending_ledger.snapshot()
                         if currency_before["pending_calls"]:
@@ -648,7 +927,11 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                     row["actual_costs"] = {}
                     row.pop("usage_audit")
                     execution_started = True
-                    execution = _execute_agent(command, workspace, task, seed, arm, time_limit, run_dir, {
+                    arm_command = (_comparison_command(model, token_budget, solution_timeout, iterations, arm=arm,
+                        spending_ledger_path=spending_ledger_path,
+                        max_completion_tokens=spec['provider_sampling']['max_completion_tokens'])
+                        if comparison and _fixture_agent_command is None else command)
+                    execution = _execute_agent(arm_command, workspace, task, seed, arm, time_limit, run_dir, {
                         "MLE_OFFICIAL_ROOT": str(official_root), "MLE_DATA_ROOT": str(data_root),
                         "MLE_MANIFEST_PATH": str(adapter.manifest_path.resolve()),
                         "MLE_AUDIT_PATH": str(run_dir / "audit.jsonl"),
@@ -657,8 +940,17 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                         "MLE_CNY_LEDGER_PATH": str(spending_ledger.path) if spending_ledger is not None else "",
                         "MLE_PILOT_SPEC_SHA256": digest(spec),
                         "MLE_PILOT_PUBLIC_DATA_SHA256": spec["public_data"][task]["sha256"],
+                        **({'PYTHONPATH': os.pathsep.join((str(Path(__file__).resolve().parents[3] / 'm0'), str(official_root))),
+                            'MLE_COMPARISON_SOURCE_COMMIT': spec['source']['commit']}
+                           if comparison and grader_factory is None else {}),
+                        **({'MLE_FIXTURE_ENV_ONLY': '1', 'OPENAI_API_BASE': spec['provider_base_url'],
+                            'PYTHONPATH': os.pathsep.join((str(Path(__file__).resolve().parents[3] / 'm0'), str(official_root)))}
+                           if comparison and grader_factory is not None else {}),
                     })
                     row.update(execution)
+                    if comparison and grader_factory is None and _comparison_runtime_source() != spec['source']:
+                        stop_reason = 'comparison source changed during execution; remaining paid runs are blocked'
+                        raise ValueError(stop_reason)
                     if runtime == 'm7':
                         # Any missing or inconsistent evidence stops all later paid slots.
                         row['usage_audit'] = {'complete': False, 'costs_complete': False,
@@ -672,13 +964,15 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                             bundle = PublicTrainBundle(workspace / 'data', run_dir / 'agent_artifacts/public_inputs',
                                 task, seed, anonymization_key=keys[(task, seed)])
                             checked = _audit_m7_result(run_dir, bundle, spending_ledger, task=task, seed=seed,
-                                arm=arm, model=model, token_budget=token_budget, iterations=iterations,
+                                arm='full' if comparison else arm, model=model, token_budget=token_budget, iterations=iterations,
                                 solution_timeout=solution_timeout,
                                 max_completion_tokens=spec['provider_sampling']['max_completion_tokens'],
                                 expected_profile=spec['profiles'][f'{seed}:{arm}'],
                                 expected_public_data=spec['public_data'][task],
                                 expected_dataset=spec['datasets'][f'{task}:{seed}'],
                                 expected_endpoint=spec['provider_base_url'])
+                            if comparison and not checked['control_timing']['all_on_schedule']:
+                                raise ValueError('control was drained before its frozen comparison schedule')
                         except Exception:
                             stop_reason = 'M7 execution or independent evidence is incomplete; remaining paid runs are blocked'
                             raise
@@ -765,12 +1059,30 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
                 _atomic_json(run_dir / "run.json", row)
                 rows.append(row)
                 _atomic_json(output_root / "pilot.json", _summary_report(spec, rows, grader_factory is not None, spending_ledger))
-    # No official hidden score exists until every arm has stopped and selected.
+    # Comparison mode reads no hidden score unless every planned submission is
+    # frozen, on schedule and rechecked before the first grader invocation.
+    grading_block = None
+    if comparison:
+        try:
+            _comparison_grading_ready(spec, rows, output_root, spending_ledger)
+            _comparison_reaudit(spec, rows, output_root, spending_ledger, keys)
+            if grader_factory is None and _comparison_runtime_source() != spec['source']:
+                raise ValueError('comparison source changed before scoring')
+            if grader_factory is None and _official_prepared_identity(
+                    official_root, data_root, tasks, adapters) != spec['official_prepared_identity']:
+                raise ValueError('official prepared identity changed before comparison scoring')
+            _comparison_grading_ready(spec, rows, output_root, spending_ledger)
+        except Exception as error:
+            grading_block = f'{type(error).__name__}: comparison pre-grading verification failed'
     for row in rows:
         if row["status"] != "frozen":
             continue
         task, seed, arm = row["task_id"], row["seed"], row["arm"]
         run_dir = output_root / task / f"seed_{seed}" / arm
+        if grading_block is not None:
+            row.update(status='ungraded', grading_blocked=grading_block)
+            _atomic_json(run_dir / 'run.json', row)
+            continue
         try:
             if grader_factory is None and _official_prepared_identity(
                     official_root, data_root, tasks, adapters) != spec["official_prepared_identity"]:
@@ -802,6 +1114,34 @@ def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str
     return report
 
 
+def run_pilot(official_root: str | Path, data_root: str | Path, output_root: str | Path, *,
+              model: str, token_budget: int, time_limit: float = 600,
+              solution_timeout: float = 60, iterations: int = 4,
+              seeds: tuple[int, ...] = (1,), task_ids=None,
+              manifest_path: str | Path | None = None, grader_factory: Callable | None = None,
+              _fixture_agent_command: str | None = None, spending_ledger_path=None, runtime='legacy',
+              comparison=None) -> dict:
+    options = dict(model=model, token_budget=token_budget, time_limit=time_limit,
+        solution_timeout=solution_timeout, iterations=iterations, seeds=seeds, task_ids=task_ids,
+        manifest_path=manifest_path, grader_factory=grader_factory, _fixture_agent_command=_fixture_agent_command,
+        spending_ledger_path=spending_ledger_path, runtime=runtime, comparison=comparison)
+    if comparison == 'governance-intensity':
+        if grader_factory is not None:
+            if spending_ledger_path is not None:
+                raise ValueError('comparison fixtures cannot use a caller-supplied campaign ledger')
+            from zoo.mle_bench_lite.cny_budget import CampaignBudget
+            parent = Path(output_root).absolute().parent
+            fixture_dir = Path(tempfile.mkdtemp(prefix='mori-comparison-fixture-', dir=parent))
+            fixture_ledger = CampaignBudget.create(fixture_dir / 'fixture-campaign.db')
+            fixture_ledger.enable_governance(expected_policy_sha256=fixture_ledger.manifest_binding()['policy_sha256'],
+                                             expected_head=fixture_ledger.snapshot()['journal_head'])
+            spending_ledger_path = fixture_ledger.path
+            options['spending_ledger_path'] = spending_ledger_path
+        with _comparison_campaign_lock(spending_ledger_path):
+            return _run_pilot_impl(official_root, data_root, output_root, **options)
+    return _run_pilot_impl(official_root, data_root, output_root, **options)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--official-root", type=Path, required=True)
@@ -817,13 +1157,14 @@ def main(argv=None) -> int:
     parser.add_argument("--tasks", nargs="+", default=list(DEFAULT_TASKS))
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--runtime", choices=("legacy", "m7"), default="legacy")
+    parser.add_argument("--comparison", choices=("governance-intensity",))
     parser.add_argument("--spending-ledger", type=Path)
     args = parser.parse_args(argv)
     values = dict(model=args.model, token_budget=args.token_budget, time_limit=args.time_limit,
                   solution_timeout=args.solution_timeout, iterations=args.iterations,
                   seeds=tuple(args.seeds), task_ids=args.tasks, manifest_path=args.manifest_path,
                   spending_ledger_path=args.spending_ledger or os.environ.get("MLE_CNY_LEDGER_PATH") or None,
-                  runtime=args.runtime)
+                  runtime=args.runtime, comparison=args.comparison)
     try:
         if args.preflight_only:
             report = preflight_pilot(args.official_root, args.data_root, **values)
