@@ -703,7 +703,15 @@ class CNYInvocationBridge:
         run_audit = {key: value for key, value in audit.items() if key not in {
             'journal_head', 'campaign_settled_upper_bound_micro_cny', 'campaign_outstanding_micro_cny',
             'campaign_pending_calls', 'admission_open'}}
-        return {'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
+        construction = {}
+        if 'construction' in self._run.FIELDS:
+            from core.composition.construction_audit import audit_construction
+            construction['construction'] = audit_construction(self._root_rows(),
+                self._run.construction, logical_run_id=self._run.logical_run_id,
+                provider_arguments={payload_digest(record['prepared']['context']):
+                    (json.loads(record['prepared']['wire_body'])['messages'][0]['content']
+                     if record['prepared']['wire_body'] is not None else None) for record in records})
+        return {**construction, 'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
             'authority': run_audit, 'invocations': len(records), 'main_currency_cap_micro_cny':
             self._ready.authority_binding['main_currency_cap_micro_cny'], 'invoice_verified': False,
             'protection_valid': audit['protection_valid'] and not integrity_violations,

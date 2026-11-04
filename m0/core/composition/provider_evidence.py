@@ -79,7 +79,8 @@ def audit_provider_receipts(runtime, sessions, main_binding):
                 if inv.get("schema_version") == 2:
                     context = inv["external_context"]
                     phase = intent["operation"] if intent["operation"] in {"operator", "planning"} else "evaluation"
-                    if context["candidate_id"] != intent["candidate"]["id"] or context["account"] != intent["account"] or \
+                    if context["runtime_id"] != runtime.governed.external_plan.runtime_id or \
+                            context["candidate_id"] != intent["candidate"]["id"] or context["account"] != intent["account"] or \
                             context["operation"] != intent["operation"] or context["phase"] != phase or \
                             context["physical_plan_ref"] != runtime.governed.plan["plan_ref"]:
                         raise ValueError("external provider context differs from physical intent")

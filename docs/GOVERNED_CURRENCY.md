@@ -1,6 +1,6 @@
 # Governed external-provider bridge
 
-`composed-v8-governed-external` connects an explicitly registered provider bridge to the existing physical and CNY authorities. It retains `Framework.evolve`, `inspect` and `replay`. V6 remains the legacy path; V7 remains the offline governed path. No checkpoint is silently converted between them.
+`composed-v8-governed-external` connects an explicitly registered provider bridge to the existing physical and CNY authorities. It retains `Framework.evolve`, `inspect` and `replay`. V6 remains the legacy path; V7 remains the offline governed path. No checkpoint is silently converted between them. Schema-2 construction uses the explicit `composed-v9-m7-governed-external` identity described in [Configured construction](CONFIGURED_CONSTRUCTION.md#外部费用保护与修复).
 
 This implementation has been exercised with temporary ledgers and loopback HTTP. It has not migrated the user's live campaign, made a new real model request, verified an invoice, or established IID sampling or a performance advantage. Current versioned and hosted acceptance status must be checked separately.
 
@@ -67,8 +67,20 @@ Public `Framework.replay()` first validates and captures the original live autho
 | `registry.py`, `governed.py`, `provider.py` | Explicit fresh bridge construction, physical context and per-request admission |
 | `invocation.py` | Shared planning/operator/evaluation lifecycle: start, metering, known settlement, unresolved retention and integrity ordering |
 | `recovery.py`, `provider_evidence.py` | Known-outcome adoption and independent physical receipt links |
+| `construction_audit.py` | V9 frozen construction, original paid prompt/response, receipt and materialization joins; no transport or ledger writes |
 | `zoo/mle_bench_lite/provider_protocol.py`, `governed_provider.py` | Exact request bytes, sanitized response parsing and one transport attempt |
 | `governed_currency.py` | Frozen monetary capacity, private evidence, dual admission, recovery and cross-record audit |
 | `cny_budget.py`, `governed_currency_audit.py` | One SQLite monetary authority; shared live/offline reducer and atomic read-only export |
 
 The broader framework gaps remain listed in [FRAMEWORK_STATUS.md](FRAMEWORK_STATUS.md). This bridge does not close the full benchmark matrix, all original abstractions or RUBRIC v1.0 requirements.
+
+
+## V9 construction evidence
+
+The same standalone script accepts `--construction`: four Git artifacts, one repair per artifact, eight loopback requests and 304 fixture micro-CNY. The original default remains v8. Both variants pause, resume and replay against the installed API.
+
+`ExternalConstructionRunContext` extends the immutable run port with exact execution configuration, main/control constructor and backend bindings, all role definitions, and the manifest digest excluding the external plan itself. The bridge preparation hashes that context, and every call carries the new runtime and bridge-plan identities. Monetary ledger schema and pricing reducers keep their previous meanings. Artifact references become auditable after publication; they are not claimed to exist at pre-call admission.
+
+Construction and repair use one physical operator intent and consecutive provider ordinals. Physical and CNY call caps remain additional limits even when `max_attempts` is larger. An ordinary main cap exhaustion stops further search and drains protected controls; an unknown response retains the full original physical reservation and unresolved monetary admission.
+
+The independent construction reducer joins original start/outcome/materialization records to paid provider contexts. For the built-in prompt constructor it also checks the actual wire prompt, projected content identity, original plan, complete role definition and returned artifact/hypothesis. Registered custom Python constructors remain trusted implementations; their arbitrary algorithms are not independently reproduced by this reducer. Existing cross-authority audit still validates original response and usage evidence before the construction joins. No new supplier call, live ledger migration or benchmark conclusion follows from these fixture checks.

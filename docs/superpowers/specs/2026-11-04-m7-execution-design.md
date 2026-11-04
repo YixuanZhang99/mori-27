@@ -1,6 +1,6 @@
 # M7 configured construction and immutable artifacts
 
-Status: Tasks 1–4 implemented and locally verified, including public schema-2 native integration, isolated controls, immutable Git publication and command recovery; v9 external currency support and integrated acceptance remain Tasks 5–6. No full M7 closure is claimed. Baseline f7ab27395b7907b851196ad7a88b38dd7bf5986d. User authorized autonomous development; choices below are engineering decisions, not new user approvals. Original alignment/RUBRIC remain binding.
+Status: Tasks 1–5 implemented and locally verified, including public schema-2 native integration, isolated controls, immutable Git publication and command recovery; V9 external currency support and original paid-prompt/artifact audit are integrated; whole-branch review and v74 acceptance remain Task 6. No full M7 closure is claimed. Baseline f7ab27395b7907b851196ad7a88b38dd7bf5986d. User authorized autonomous development; choices below are engineering decisions, not new user approvals. Original alignment/RUBRIC remain binding.
 
 ## Intent and current mismatch
 

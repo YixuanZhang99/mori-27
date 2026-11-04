@@ -134,8 +134,6 @@ class Registry:
             if kind in {"operator", "skill"} and entry.execution != {
                     "schema_version": 1, "contract": "recipe_v1" if kind == "operator" else "projected_skill_v1"}:
                 raise ValueError("component lacks the projected construction input contract")
-            if kind == "provider" and entry.governance and entry.governance.get("external_currency"):
-                raise ValueError("v9 external currency integration is not available yet")
 
     @staticmethod
     def _specs(config: AssemblyConfig):

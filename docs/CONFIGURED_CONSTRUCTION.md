@@ -1,6 +1,6 @@
 # M7 构造与 Git 产物：schema 2
 
-本页描述 M7 实施计划 Tasks 3–4 的公开接口。它提供 `composed-v9-m7` 和 `composed-v9-m7-governed`，包含原生 artifact 与 Git artifact，以及原生/命令评估接入；v9 外部货币桥仍待 Task 5。它不表示 M7 并发调度或整个框架验收完成。原有 schema 1 配置与历史检查点按原契约运行，不自动升级。
+本页描述 M7 实施计划 Tasks 3–5 的公开接口。它提供 `composed-v9-m7` 和 `composed-v9-m7-governed`，包含原生 artifact 与 Git artifact，以及原生/命令评估接入。显式安装费用桥后使用 `composed-v9-m7-governed-external`，保留物理与人民币双重准入。它不表示 M7 并发调度或整个框架验收完成。原有 schema 1 配置与历史检查点按原契约运行，不自动升级。
 
 ## 配置与调用
 
@@ -44,7 +44,7 @@ schema 2 将同一策略配置实例化为两个独立会话：一个规划，�
 
 每个对照槽位有独立 provider、constructor、domain、executor 和 artifact 空间，使用冻结的初始任务、空 memory/grounding 和无父候选配方。主线耗尽可用预算后，已保留的对照容量仍受保护。对照候选不进入主线选择和准入。
 
-实现与验证范围见 [M7 计划](superpowers/plans/2026-11-04-m7-execution.md)。Git/SIGKILL 与安装包示例是工程验证的一部分；v9 外部货币审计、整体独立审查与新版本验收仍未完成，不应把此增量当作完整发布证书。
+实现与验证范围见 [M7 计划](superpowers/plans/2026-11-04-m7-execution.md)。Git/SIGKILL 与安装包示例是工程验证的一部分；整体独立审查与新版本验收仍未完成，不应把此增量当作完整发布证书。
 
 
 ## 推荐的 Git 产物配置
@@ -87,3 +87,20 @@ python -I /path/outside/checkout/configured_execution_offline.py --workdir /new/
 ```
 
 也可在开发环境执行 `uv run --project m0 --locked python m0/examples/configured_execution_offline.py`，或运行 `make examples`。示例实际执行 2 次合成模型生成、5 次本地评估；暂停恢复后仍是原始 Git 产物，并使用会直接报错的 provider/domain 验证回放零新调用。10 个生成 token 是合成 fixture 用量；分数不是 benchmark 成绩。
+
+
+## 外部费用保护与修复
+
+在既有 [CNY 治理配置](GOVERNED_CURRENCY.md) 上启用上述 schema 2 和 execution，即进入显式 v9 外部运行。它不是旧 v8 检查点的自动升级。主线和各对照的构造器、角色完整定义、artifact backend、execution 配置及运行 manifest 都会冻结到费用桥计划中。该 manifest 摘要只排除随后生成的 external_governance 字段，避免循环摘要；最终完整 manifest 仍绑定每个构造操作。价格政策本身没有改写。
+
+`max_attempts` 是构造器的尝试上限；provider 的 `phase_call_limits.operator` 和原始物理预扣共同决定实际可调用次数。允许两次调用时，主线 operator 预扣和每个对照 operator 保护都必须覆盖两个完整的 provider 硬调用上界。修复沿用同一个 intent 和连续 ordinal，不会建立额外节点；一次失败也不会重置额度。主线耗尽后仍可执行已保护的对照。第一笔费用已知、第二笔未知时，人民币账本保留首笔结算和第二笔 pending，物理账本保留整个生产操作的未结预扣。
+
+`inspect()["governance"]["external_currency"]["construction"]` 提供构造费用审计：每份 artifact 关联原 materialization、candidate、lane/slot 和 provider context 引用。审计核对原始 run manifest、角色定义、构造终态、实际发送的 prompt、原始返回及计费回执；对内置 prompt constructor，还重建计划摘要，拒绝只修改产物、上下文投影或初始假设再重算哈希的替换。自定义 constructor 的内部输出算法仍属于受信任插件，其版本化绑定、费用和产物出处会核对，但不能借内置构造器的验证宣称任意插件已被独立证明。
+
+安装后的本机示例无需 API Key 或真实账户：
+
+```bash
+python -I /path/outside/checkout/governed_cny_offline.py --construction --workdir /new/empty/cny-run
+```
+
+复制的脚本来自 [governed_cny_offline.py](../m0/examples/governed_cny_offline.py)。它以本机 HTTP 和新的临时账本演示 4 个 Git 产物、每个产物一次修复、共 8 次请求，暂停/恢复后记录回放不增加请求或账本事件。304 微元完全来自合成 fixture 用量，不是实际供应商消费。省略 `--construction` 仍演示旧 v8 路径。

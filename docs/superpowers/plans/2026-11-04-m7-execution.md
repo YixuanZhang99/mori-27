@@ -82,11 +82,11 @@
 
 **Interfaces:** v9 external binding explicitly records candidate-production envelope and materialization references while retaining operator/evaluation physical baskets and phase call caps. Frozen CNY policy identity includes exact v9 runtime/config. Same schema may be retained only if authoritative meanings and reducers remain unchanged; otherwise version the changed contract and retain old decoder.
 
-- [ ] Add loopback tests for build+repair ordinals, main/control call caps and future obligations, known first/unknown second response, frozen-hypothesis rejection charged once, terminal provider adoption before materialization, no double physical/currency charge, replay no HTTP/ledger writes, tampered construction binding rejected.
-- [ ] Run new tests. Expected: RED from explicit v9 external rejection.
-- [ ] Extend bridge and independent audit with concrete v9 support; use fresh fixture ledgers only. Keep live campaign untouched and third pilot deferred.
-- [ ] Run all construction files and original v8 external/currency/recovery suites, then full project checks. Expected: GREEN, original compatibility unmodified.
-- [ ] Commit complete protected construction path.
+- [x] Add loopback tests for build+repair ordinals, main/control call caps and future obligations, known first/unknown second response, frozen-hypothesis rejection charged once, terminal provider adoption before materialization, no double physical/currency charge, replay no HTTP/ledger writes, tampered construction binding rejected.
+- [x] Run new tests. Expected: RED from explicit v9 external rejection.
+- [x] Extend bridge and independent audit with concrete v9 support; use fresh fixture ledgers only. Keep live campaign untouched and third pilot deferred.
+- [x] Run all construction files and original v8 external/currency/recovery suites, then full project checks. Expected: GREEN, original compatibility unmodified.
+- [x] Commit complete protected construction path.
 
 ### Task 6: Independent review, acceptance and public evidence
 

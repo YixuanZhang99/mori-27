@@ -106,8 +106,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.runtime_identity = "composed-v9-m7-governed" if self.assembly.governance is not None else "composed-v9-m7"
         self.external_bridge_name = registry.external_bridge_name(self.assembly)
         if self.external_bridge_name is not None:
-            from core.composition.external_provider import EXTERNAL_RUNTIME
-            self.runtime_identity = EXTERNAL_RUNTIME
+            from core.composition.external_provider import EXTERNAL_RUNTIME, CONSTRUCTION_EXTERNAL_RUNTIME
+            self.runtime_identity = CONSTRUCTION_EXTERNAL_RUNTIME if self.construction_enabled else EXTERNAL_RUNTIME
 
     def _build(self, task):
         scope = ScopeContext(self._logical_run_id, _id("task", task),

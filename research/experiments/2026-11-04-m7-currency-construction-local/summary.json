@@ -1,0 +1,79 @@
+{
+  "scope": "M7 Task 5: configured construction and external CNY protection",
+  "base_commit": "0eae23cadd9d6bab5c65febe2fa8eba37a9bc521",
+  "implementation_identity": "commit containing this summary; exact source hashes below",
+  "passed": true,
+  "full_validation": {
+    "started_at": "2026-11-04T14:18:56.043654+00:00",
+    "finished_at": "2026-11-04T14:24:26.776537+00:00",
+    "elapsed_seconds": 330.71,
+    "exit_code": 0,
+    "source_unchanged": true,
+    "external_provider_requests": 0
+  },
+  "command": "make axioms test-linux examples tooling build verify-import",
+  "linux_tests": 2257,
+  "tooling_tests": 76,
+  "axiom_checks": 11,
+  "new_currency_cases": 19,
+  "installed_wheel": {
+    "passed": true,
+    "wheel_sha256": "460599eb2f571fdff557834c0c4793d4b90586daa7f1678c295bf400313ecb07",
+    "example_sha256": "277918230203bea9a5ebe27c9a40b3aba1bea2088dc5703fd63c543ca9b3947c",
+    "import_path": "/usr/local/share/mori27-local/m7-currency-wheel/lib/python3.12/site-packages/core/composition/construction_audit.py",
+    "isolated_python": true,
+    "outside_checkout": true,
+    "reports": {
+      "legacy": {
+        "controls_completed": 2,
+        "external_model_requests": 0,
+        "fixture_settled_micro_cny": 152,
+        "loopback_http_requests": 4,
+        "notice": "Synthetic usage on a new fixture ledger; no real spend or invoice certification.",
+        "recorded_replay_passed": true,
+        "replay_currency_events_changed": false,
+        "replay_new_http_requests": 0,
+        "runtime": "composed-v8-governed-external",
+        "workdir": "/dev/shm/mori-currency-final-installed-2pidd8jb/legacy"
+      },
+      "construction": {
+        "construction_artifacts": 4,
+        "controls_completed": 2,
+        "external_model_requests": 0,
+        "fixture_settled_micro_cny": 304,
+        "loopback_http_requests": 8,
+        "notice": "Synthetic usage on a new fixture ledger; no real spend or invoice certification.",
+        "recorded_replay_passed": true,
+        "replay_currency_events_changed": false,
+        "replay_new_http_requests": 0,
+        "runtime": "composed-v9-m7-governed-external",
+        "workdir": "/dev/shm/mori-currency-final-installed-2pidd8jb/construction"
+      }
+    }
+  },
+  "source_sha256": {
+    "Makefile": "8485e43bb89b63e00fb0676a76234e72c48137cb392f794d0c58592e1134fe11",
+    "m0/core/composition/external_provider.py": "0719df5ee69e1376331005342b0e39f189f8bde6f5c52460355332a3c1c5398d",
+    "m0/core/composition/governed.py": "09c861cea6d5819f48ca1ff70dc1a079692d15c4492b4c7b6e830d161a4e9b48",
+    "m0/core/composition/provider_evidence.py": "1b779592c28018d994ad78d4ac7861efe1bff78cbcb85b2440909ba10d044e2d",
+    "m0/core/composition/registry.py": "b6ffb65e279dce5a2eb64cf225cfd1065649b1e6429a1b2b0c363121d4e099d9",
+    "m0/core/composition/runtime.py": "3023de6afde12b5cf95584bf01b195203aa79076b6b8a7e439a5af687d38a7fe",
+    "m0/examples/governed_cny_offline.py": "277918230203bea9a5ebe27c9a40b3aba1bea2088dc5703fd63c543ca9b3947c",
+    "m0/zoo/mle_bench_lite/governed_currency.py": "ba924ef3a90db2d34f68c730b3dce6da5d090d9b2152e7636bae693cf39f61b2",
+    "m0/core/composition/construction_audit.py": "b9af9308c608bdd2a05294eb9470f3b745ea662e831edc758901d49c50684946",
+    "m0/tests/test_construction_currency.py": "50aaada7e249ca6a5f2dabdd36ede780984da106546884e7096b9e196ad2740c"
+  },
+  "evidence_sha256": {
+    "m7-currency-construction-final-validation.json": "03eaa0f883b1b55be20fb232c471a1f981ee469ff9ba6007255521d6ae59ced2",
+    "m7-currency-construction-final-validation.log": "5f8664dd4e15d77b169ae44ce0d9ad20ca988d5ed84de3286b85f8d6ca33ccff",
+    "m7-currency-final-installed-wheel.json": "8bda03228c3dff05abf02a93bb60dc78acb690779bea1e138e4462b180679f0f"
+  },
+  "limitations": [
+    "Task 6 independent whole-branch review and v74 acceptance remain open",
+    "Same-commit hosted evidence pending for this increment",
+    "No paid provider calls or live ledger migration",
+    "Mac acceptance, configured concurrency, full A7 and B1-B5 remain open",
+    "Custom constructor algorithms remain trusted; prompt-specific audit applies to the built-in constructor",
+    "No claim of full framework completion or benchmark superiority"
+  ]
+}

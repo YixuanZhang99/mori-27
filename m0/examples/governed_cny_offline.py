@@ -66,7 +66,7 @@ def campaign_fixture(path):
                                expected_head=campaign.snapshot()['journal_head'])
     return campaign
 
-def framework(path, campaign, endpoint, *, pause=None, resume=False, tokens=10000000):
+def framework(path, campaign, endpoint, *, pause=None, resume=False, tokens=10000000, construction=False):
     bridge_type = CNYInvocationBridge
     registry = default_registry()
     registry.install_external_bridge('cny_invocation_v1', lambda: bridge_type(campaign))
@@ -75,7 +75,8 @@ def framework(path, campaign, endpoint, *, pause=None, resume=False, tokens=1000
     def fresh():
         value = CountedProvider('deepseek-flash', endpoint.url,
             campaign_binding=frozen_campaign, max_completion_tokens=4,
-            timeout=2, api_key='fixture-only-secret')
+            timeout=2, api_key='fixture-only-secret',
+            phase_call_limits={'operator': 2 if construction else 1, 'evaluation': 0})
         sessions.append(value)
         return value
     main = fresh()
@@ -102,6 +103,14 @@ def framework(path, campaign, endpoint, *, pause=None, resume=False, tokens=1000
         'request': {'fidelity': 'dev', 'split_id': 'dev', 'seed_set': [1]},
         'reservations': {'operator': {'token': BOUND, 'node': 1, 'eval_count': 0},
                          'evaluation': {'token': 0, 'node': 0, 'eval_count': 1}}}}
+    if construction:
+        profile.update(schema_version=2, executor={'name': 'git_artifact', 'options': {}},
+            execution={'schema_version': 1,
+                'spec': {'role': 'general', 'hypothesis_frozen': True,
+                         'context_projection': ['memory', 'grounding']},
+                'constructor': {'name': 'prompt', 'options': {'max_attempts': 2}}})
+        profile['budget']['options']['operation_reservations']['operator']['token'] = 2 * BOUND
+        profile['governance']['controls']['reservations']['operator']['token'] = 2 * BOUND
     config = LoopConfig(max_generations=1, total_budget=tokens, reeval_floor=0,
                         stop_after_generation=pause, resume_from_checkpoint=resume)
     fw = Framework.from_profile(profile, main, IntegerDomain(), config, str(path),
@@ -111,6 +120,8 @@ def framework(path, campaign, endpoint, *, pause=None, resume=False, tokens=1000
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workdir', type=Path, required=True)
+    parser.add_argument('--construction', action='store_true',
+                        help='Exercise v9 Git construction, one repair per artifact and linked CNY audit')
     args = parser.parse_args(argv)
     if args.workdir.exists() and any(args.workdir.iterdir()):
         parser.error('offline example requires a new empty workdir')
@@ -119,9 +130,14 @@ def main(argv=None):
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             requests.append(self.rfile.read(int(self.headers['Content-Length'])))
+            content = 'candidate_value=73'
+            if args.construction:
+                prompt = json.loads(json.loads(requests[-1])['messages'][0]['content'])
+                content = ('invalid JSON to exercise bounded repair' if prompt['attempt'] == 1 else
+                    json.dumps({'artifact': content, 'hypothesis': prompt['hypothesis']}))
             response = {'model': 'deepseek-flash',
                 'usage': {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7},
-                'choices': [{'finish_reason': 'stop', 'message': {'content': 'candidate_value=73'}}]}
+                'choices': [{'finish_reason': 'stop', 'message': {'content': content}}]}
             self.send_response(200)
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
@@ -133,23 +149,32 @@ def main(argv=None):
     try:
         endpoint = SimpleNamespace(url=f'http://127.0.0.1:{server.server_port}/v1')
         campaign = campaign_fixture(args.workdir)
-        paused, _ = framework(args.workdir / 'run', campaign, endpoint, pause=0)
+        paused, _ = framework(args.workdir / 'run', campaign, endpoint, pause=0, construction=args.construction)
         paused.evolve(TASK)
         assert paused.inspect()['governance']['pending'] == 1
-        resumed, _ = framework(args.workdir / 'run', campaign, endpoint, resume=True)
+        resumed, _ = framework(args.workdir / 'run', campaign, endpoint, resume=True, construction=args.construction)
         result = resumed.evolve(TASK)
         before = campaign.snapshot()
         count = len(requests)
         replay = resumed.replay(TASK)['replay_certificate']
         assert replay['passed'] and replay['external_calls'] == 0
-        assert count == len(requests) == 4
+        assert count == len(requests) == (8 if args.construction else 4)
         assert campaign.snapshot() == before
-        assert before['settled_upper_bound_micro_cny'] == 152
+        assert before['settled_upper_bound_micro_cny'] == (304 if args.construction else 152)
         assert not before['pending_calls']
         assert result['governance']['completed'] == 2
-        print(json.dumps({'runtime': result['runtime'], 'controls_completed': 2,
+        construction = {}
+        if args.construction:
+            audit = resumed.inspect()['governance']['external_currency']['construction']
+            assert audit['materializations'] == 4 and audit['provider_calls'] == 8
+            # Public report supplies the same artifact references as the independent fee audit.
+            reports = [result['execution']['main'], *result['execution']['controls'].values()]
+            assert {a['materialization_ref'] for r in reports for a in r['artifacts'].values()} == {
+                a['materialization_ref'] for a in audit['artifact_links']}
+            construction = {'construction_artifacts': audit['materializations']}
+        print(json.dumps({**construction, 'runtime': result['runtime'], 'controls_completed': 2,
             'loopback_http_requests': count, 'external_model_requests': 0,
-            'fixture_settled_micro_cny': 152, 'recorded_replay_passed': True,
+            'fixture_settled_micro_cny': before['settled_upper_bound_micro_cny'], 'recorded_replay_passed': True,
             'replay_new_http_requests': 0, 'replay_currency_events_changed': False,
             'workdir': str(args.workdir.resolve()),
             'notice': 'Synthetic usage on a new fixture ledger; no real spend or invoice certification.'},

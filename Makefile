@@ -35,6 +35,8 @@ examples:
 	cd m0 && $(UV) run --locked python -c "from examples.governed_controls import main; import tempfile; d=tempfile.TemporaryDirectory(prefix='mori-governed-example-'); main(['--workdir',d.name,'--pause-after','0']); main(['--workdir',d.name,'--resume']); main(['--workdir',d.name,'--replay']); d.cleanup()"
 	cd m0 && $(UV) run --locked python -c "from examples.governed_cny_offline import main; import tempfile; d=tempfile.TemporaryDirectory(prefix='mori-cny-example-'); main(['--workdir',d.name]); d.cleanup()"
 
+	cd m0 && $(UV) run --locked python -c "from examples.governed_cny_offline import main; import tempfile; d=tempfile.TemporaryDirectory(prefix='mori-cny-construction-example-'); main(['--workdir',d.name,'--construction']); d.cleanup()"
+
 tooling:
 	$(UV) run --project m0 --locked python -m unittest discover -s scripts/tests -v
 

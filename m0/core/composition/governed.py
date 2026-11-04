@@ -74,10 +74,23 @@ class GovernedInvocation:
             runtime.budget.protect_controls(self.plan)
 
         if expected_external is not None:
-            from core.composition.external_provider import ExternalRunContext
+            from core.composition.external_provider import ExternalRunContext, ExternalConstructionRunContext
             self.external = runtime.registry.external_bridge(expected_external)
             recorded = getattr(runtime, "_recorded_external_bundle", None)
-            context = ExternalRunContext(logical_run_id=runtime._logical_run_id,
+            context_type, extra = ExternalRunContext, {}
+            if runtime.construction_enabled:
+                context_type = ExternalConstructionRunContext
+                manifest = {**runtime.manifest, "governance": self.plan,
+                            "governance_provider": self.main_binding}
+                extra["construction"] = {"schema_version": 1, "envelope": "candidate_production_v1",
+                    "manifest_sha256": payload_digest(manifest),
+                    "execution": runtime.assembly.execution.to_dict(),
+                    "main": runtime.construction.manifest_binding,
+                    "roles": {key: {name: asdict(role) for name, role in parts["constructor"].roles.items()}
+                              for key, parts in {"main": runtime.parts, **self.sessions}.items()},
+                    "controls": {key: value["construction_execution"].manifest_binding
+                                 for key, value in self.sessions.items()}}
+            context = context_type(**extra, logical_run_id=runtime._logical_run_id,
                 runtime_id=runtime.runtime_identity, workdir=str(runtime.workdir.resolve()),
                 physical_plan=self.plan, main_provider_binding=self.main_binding,
                 control_provider_bindings={key: value["governance_binding"] for key, value in self.sessions.items()},

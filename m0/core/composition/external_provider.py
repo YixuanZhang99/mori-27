@@ -16,6 +16,7 @@ from typing import Any, ClassVar, Protocol
 from core.composition.contracts import json_copy
 
 EXTERNAL_RUNTIME = "composed-v8-governed-external"
+CONSTRUCTION_EXTERNAL_RUNTIME = "composed-v9-m7-governed-external"
 
 
 def _canonical(value):
@@ -39,8 +40,8 @@ def _hash(value, label, *, prefix=False, length=64):
 
 
 def _runtime(value):
-    if value != EXTERNAL_RUNTIME:
-        raise ValueError("external authority requires composed-v8-governed-external")
+    if value not in {EXTERNAL_RUNTIME, CONSTRUCTION_EXTERNAL_RUNTIME}:
+        raise ValueError("external authority requires an explicitly supported governed runtime")
 
 
 def external_session_id(logical_run_id, lane, slot_id, adapter_binding_sha256):
@@ -169,6 +170,12 @@ class ExternalRunContext(_JSONPort):
 
     @staticmethod
     def _validate(value):
+        if value["runtime_id"] != EXTERNAL_RUNTIME:
+            raise ValueError("v9 external run requires an explicit construction binding")
+        ExternalRunContext._validate_common(value)
+
+    @staticmethod
+    def _validate_common(value):
         _runtime(value["runtime_id"])
         _hash(value["logical_run_id"], "logical run", length=32)
         _text(value["workdir"], "work directory")
@@ -185,6 +192,47 @@ class ExternalRunContext(_JSONPort):
                 raise ValueError("recorded external run requires a private proof bundle")
         else:
             raise ValueError("external run mode must be live or recorded")
+
+
+@dataclass(frozen=True, init=False)
+class ExternalConstructionRunContext(ExternalRunContext):
+    """V9 freezes construction before dispatch; artifacts are linked after publication.
+
+    The manifest digest excludes external_governance to avoid a circular digest
+    between that plan and its construction configuration. All other fields remain.
+    """
+    FIELDS = ExternalRunContext.FIELDS | {"construction"}
+
+    @staticmethod
+    def _validate(value):
+        ExternalRunContext._validate_common(value)
+        if value["runtime_id"] != CONSTRUCTION_EXTERNAL_RUNTIME:
+            raise ValueError("construction authority requires the explicit v9 runtime")
+        binding = value["construction"]
+        if type(binding) is not dict or set(binding) != {
+                "schema_version", "envelope", "manifest_sha256", "execution", "main", "controls", "roles"} \
+                or type(binding["schema_version"]) is not int or binding["schema_version"] != 1 \
+                or binding["envelope"] != "candidate_production_v1":
+            raise ValueError("invalid external construction binding")
+        _hash(binding["manifest_sha256"], "construction manifest")
+        from core.composition.contracts import ExecutionConfig
+        ExecutionConfig.from_dict(binding["execution"])
+        if type(binding["main"]) is not dict or not binding["main"] or \
+                type(binding["controls"]) is not dict or \
+                set(binding["controls"]) != set(value["control_provider_bindings"]) or \
+                any(type(v) is not dict or not v for v in binding["controls"].values()):
+            raise ValueError("construction bindings must cover main and all controls")
+        from core.composition.construction import RoleDefinition
+        roles = binding["roles"]
+        if type(roles) is not dict or set(roles) != {"main", *binding["controls"]}:
+            raise ValueError("construction role bindings must cover every session")
+        for declarations in roles.values():
+            if type(declarations) is not dict or not declarations:
+                raise ValueError("construction requires frozen role definitions")
+            for name, definition in declarations.items():
+                if type(definition) is not dict or set(definition) != {"name", "version", "instructions"} or definition["name"] != name:
+                    raise ValueError("invalid frozen construction role")
+                RoleDefinition(**definition)
 
 
 @dataclass(frozen=True, init=False)
