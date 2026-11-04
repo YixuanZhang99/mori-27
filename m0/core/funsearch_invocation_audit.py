@@ -23,7 +23,8 @@ def audit_funsearch_invocation(rows, provider_index, request, *, case_ids, metri
     try:
         start = rows[provider_index]
         context = start['payload']['invocation']['external_context']
-        if start['kind'] != 'composed_provider_started' or context['phase'] != 'operator' or context['lane'] != 'main':
+        if start['kind'] != 'composed_provider_started' or context['phase'] != 'operator' or context['lane'] != 'main' \
+                or context['logical_run_id'] != logical_run_id:
             raise ValueError('FunSearch prompt requires an original main-lane provider start')
         candidate_id = context['candidate_id']
         if type(candidate_id) is not str or not candidate_id:

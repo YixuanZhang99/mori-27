@@ -13,6 +13,23 @@ from core.composition.external_provider import CONSTRUCTION_EXTERNAL_RUNTIME
 from core.x1.checkpoint import payload_digest
 
 
+def audit_funsearch_policy_binding(rows, provider_index, request, manifest, logical_run_id):
+    """Audit the optional FunSearch recipe against its frozen run manifest."""
+    from core.funsearch_invocation_audit import audit_funsearch_invocation
+    try:
+        policy = manifest['assembly']['policy']
+        if policy['name'] != 'funsearch' or type(policy['options']) is not dict:
+            raise ValueError('FunSearch recipe requires its frozen FunSearch policy')
+        options = policy['options']
+        return audit_funsearch_invocation(rows, provider_index, request,
+            case_ids=options['case_ids'], metric=options['metric'], logical_run_id=logical_run_id,
+            evaluator_version=manifest['domain_version'], evaluation_context=manifest['evaluation_contexts']['dev'],
+            template_ref=options['template_ref'], template=options['template'], function_name=options['function_name'],
+            comparison_metric=options.get('comparison_metric', 'dev/score'))
+    except (KeyError, TypeError) as error:
+        raise ValueError('FunSearch recipe lacks frozen manifest bindings') from error
+
+
 def _prompt_request(arguments, context, identity, frozen, spec):
     key = payload_digest(context)
     if key not in arguments:
@@ -84,7 +101,7 @@ def audit_construction(rows, frozen, *, logical_run_id, provider_arguments):
     manifest_ref = 'sha256:' + payload_digest(manifest)
     pending_call = None
     links = []
-    for row in rows:
+    for row_index, row in enumerate(rows):
         kind, data = row['kind'], row['payload']
         if kind == 'construction_started':
             identity = data['identity']
@@ -114,6 +131,9 @@ def audit_construction(rows, frozen, *, logical_run_id, provider_arguments):
                 raise ValueError('provider call differs from construction provenance')
             item = {'context': context, 'tokens': None, 'result': None,
                     'prompt': _prompt_request(provider_arguments, context, identity, frozen, spec)}
+            prompt_recipe = item['prompt'].get('recipe') if item['prompt'] is not None else None
+            if type(prompt_recipe) is dict and prompt_recipe.get('kind') == 'funsearch':
+                audit_funsearch_policy_binding(rows, row_index, item['prompt'], manifest, logical_run_id)
             calls.setdefault(key, []).append(item)
             if pending_call is not None:
                 raise ValueError('overlapping construction provider receipts')
