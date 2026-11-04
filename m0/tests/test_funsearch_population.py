@@ -37,7 +37,7 @@ def test_seeded_checkpoint_restores_sampling_and_retains_reset_history():
     assert events == [{'island': 0, 'founder_island': 1, 'founder': 'strong', 'epoch': 1}]
     assert p.inspect_island(0)['clusters'][0]['candidates'] == ['strong']
     assert p.history()[-1] == {'type': 'reset', **events[0]}
-    assert p.candidate('initial')['program'] == 'start'
+    assert p.candidate('initial')['program_length'] == len('start')
     with pytest.raises(ValueError, match='stale'):
         p.register('late', 'late', {'a': 1, 'b': 1}, island=0, epoch=0)
 
@@ -122,3 +122,20 @@ def test_selection_conditions_on_eligible_candidates_without_sampling_pruned():
     assert p.checkpoint_state() == before
     with pytest.raises(ValueError):
         p.sample(0, eligible=['base'])
+
+
+def test_planner_stores_only_bound_program_identity_and_length():
+    import hashlib
+    p = population()
+    source = 'def fn():\n    return "PRIVATE_SOURCE_SENTINEL"\n'
+    ref = 'sha256:' + hashlib.sha256(source.encode()).hexdigest()
+    p.register_projection('candidate', program_ref=ref, program_length=len(source),
+                          scores={'a': 0, 'b': 1}, island=0, epoch=0)
+    record = p.candidate('candidate')
+    assert record['program_ref'] == ref and record['program_length'] == len(source)
+    assert 'PRIVATE_SOURCE_SENTINEL' not in repr(p.checkpoint_state())
+    restored = FunSearchPopulation.from_checkpoint(p.checkpoint_state())
+    assert restored.candidate('candidate') == record
+    with pytest.raises(ValueError):
+        p.register_projection('bad', program_ref='sha256:invalid', program_length=10,
+                              scores={'a': 0, 'b': 1}, island=0, epoch=0)

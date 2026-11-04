@@ -45,7 +45,7 @@ for trial in range(200):
     actual = p.cluster_probabilities(0)
     maximum_error = max(maximum_error, max(abs(float(x) - y) for x, y in zip(reference, actual)))
     for cluster in clusters:
-        lengths = np.array([len(p.candidate(c)['program']) for c in cluster['candidates']])
+        lengths = np.array([p.candidate(c)['program_length'] for c in cluster['candidates']])
         normalized = (lengths - min(lengths)) / (max(lengths) + 1e-6)
         reference = namespace['_softmax'](-normalized, 1.0)
         actual = p.program_probabilities(0, cluster['signature'])

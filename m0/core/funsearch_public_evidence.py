@@ -5,6 +5,8 @@ original execution evidence; this projection is not an admission decision.
 """
 from __future__ import annotations
 
+import hashlib
+
 from core.composition.evaluation import encode_evidence, public_projection
 from core.executor.types import EvalStatus
 from core.funsearch_population import _finite
@@ -34,3 +36,17 @@ def project_program_scores(evidence, *, case_ids, metric, logical_run_id):
     evidence_ref = 'sha256:' + payload_digest({'logical_run_id': logical_run_id, 'evidence': encode_evidence(evidence)})
     return {'candidate_id': evidence.candidate_id, 'scores': {case: scores[case] for case in case_ids},
             'evidence_ref': evidence_ref}
+
+
+def project_program_candidate(evidence, artifact, *, case_ids, metric, logical_run_id):
+    if type(artifact) is not str or not artifact:
+        raise ValueError('evaluated artifact must be nonempty text')
+    try:
+        digest = hashlib.sha256(artifact.encode('utf-8')).hexdigest()
+    except UnicodeEncodeError as exc:
+        raise ValueError('evaluated artifact must be valid UTF-8') from exc
+    projection = project_program_scores(evidence, case_ids=case_ids, metric=metric,
+                                        logical_run_id=logical_run_id)
+    if digest != evidence.eval_result.contract.binding.artifact_sha256:
+        raise ValueError('artifact differs from original evaluation binding')
+    return {**projection, 'program_ref': 'sha256:' + digest, 'program_length': len(artifact)}

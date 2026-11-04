@@ -8,8 +8,10 @@ identical to upstream. Resets retain a replayable history and reject late writes
 from __future__ import annotations
 
 import copy
+import hashlib
 import math
 import random
+import re
 
 
 def _finite(value):
@@ -65,15 +67,28 @@ class FunSearchPopulation:
         return self._islands[index]
 
     def register(self, candidate_id, program, scores, *, island, epoch=None):
+        if type(program) is not str or not program:
+            raise ValueError('candidate program must be nonempty text')
+        try:
+            program_ref = 'sha256:' + hashlib.sha256(program.encode('utf-8')).hexdigest()
+        except UnicodeEncodeError as exc:
+            raise ValueError('candidate program must be valid UTF-8') from exc
+        return self.register_projection(candidate_id, program_ref=program_ref, program_length=len(program),
+                                        scores=scores, island=island, epoch=epoch)
+
+    def register_projection(self, candidate_id, *, program_ref, program_length, scores, island, epoch=None):
         if (island is None and epoch is not None) or (island is not None and epoch is None):
             raise ValueError('island-specific registration requires an epoch')
         if island is None and self._history:
             raise ValueError('global seed registration is only valid at initialization')
-        if (type(candidate_id) is not str or not candidate_id or type(program) is not str or not program or
+        if (type(candidate_id) is not str or not candidate_id or type(program_ref) is not str or
+                not re.fullmatch(r'sha256:[0-9a-f]{64}', program_ref) or
+                type(program_length) is not int or program_length < 1 or
                 type(scores) is not dict or set(scores) != set(self.case_ids) or
                 any(not _finite(v) for v in scores.values())):
             raise ValueError('candidate requires finite scores for all frozen cases')
-        record = {'program': program, 'scores': {key: float(scores[key]) for key in self.case_ids}}
+        record = {'program_ref': program_ref, 'program_length': program_length,
+                  'scores': {key: float(scores[key]) for key in self.case_ids}}
         existing = self._candidates.get(candidate_id)
         if existing is not None and existing != record:
             raise ValueError('candidate identity cannot be changed')
@@ -132,7 +147,7 @@ class FunSearchPopulation:
             ids = self._eligible_clusters(index, eligible)[tuple(signature)]
         except (KeyError, TypeError) as exc:
             raise ValueError('unknown signature') from exc
-        lengths = [len(self._candidates[candidate]['program']) for candidate in ids]
+        lengths = [self._candidates[candidate]['program_length'] for candidate in ids]
         shortest, longest = min(lengths), max(lengths)
         return _softmax([-(length - shortest) / (longest + 1e-6) for length in lengths], 1.0)
 
@@ -175,7 +190,7 @@ class FunSearchPopulation:
         return events
 
     def checkpoint_state(self):
-        return {'schema_version': 1, 'config': {'case_ids': list(self.case_ids), 'islands': self.islands,
+        return {'schema_version': 2, 'config': {'case_ids': list(self.case_ids), 'islands': self.islands,
                 'seed': self.seed, 'prompt_size': self.prompt_size, 'temperature': self.temperature,
                 'temperature_period': self.temperature_period}, 'candidates': copy.deepcopy(self._candidates),
                 'history': self.history(), 'random_state': _lists(self._rng.getstate())}
@@ -183,7 +198,7 @@ class FunSearchPopulation:
     @classmethod
     def from_checkpoint(cls, state):
         if (type(state) is not dict or set(state) != {'schema_version', 'config', 'candidates', 'history', 'random_state'} or
-                type(state['schema_version']) is not int or state['schema_version'] != 1 or
+                type(state['schema_version']) is not int or state['schema_version'] != 2 or
                 type(state['config']) is not dict or type(state['candidates']) is not dict or type(state['history']) is not list):
             raise ValueError('invalid population checkpoint')
         try:
@@ -193,9 +208,11 @@ class FunSearchPopulation:
                     raise ValueError('invalid history event')
                 if event.get('type') == 'register' and set(event) == {'type', 'island', 'candidate', 'epoch'}:
                     record = state['candidates'][event['candidate']]
-                    if type(record) is not dict or set(record) != {'program', 'scores'}:
+                    if type(record) is not dict or set(record) != {'program_ref', 'program_length', 'scores'}:
                         raise ValueError('invalid candidate record')
-                    result.register(event['candidate'], record['program'], record['scores'], island=event['island'], epoch=event['epoch'])
+                    result.register_projection(event['candidate'], program_ref=record['program_ref'],
+                        program_length=record['program_length'], scores=record['scores'],
+                        island=event['island'], epoch=event['epoch'])
                 elif event.get('type') == 'reset' and set(event) == {'type', 'island', 'founder_island', 'founder', 'epoch'}:
                     result._reset(event['island'], event['founder_island'], event['founder'], event['epoch'])
                 else:

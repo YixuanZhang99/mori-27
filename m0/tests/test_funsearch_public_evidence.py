@@ -58,3 +58,19 @@ def test_evidence_reference_binds_full_original_without_revealing_private_data()
     with pytest.raises(ValueError):
         project_program_scores(replace(original, candidate_id='different'),
                                case_ids=['a', 'b'], metric='score', logical_run_id='run')
+
+
+def test_candidate_program_identity_is_bound_without_exposing_source():
+    import hashlib
+    from core.funsearch_public_evidence import project_program_candidate
+    original = evidence()
+    source = 'def fn():\n    return "PRIVATE_SOURCE_SENTINEL"\n'
+    binding = replace(original.eval_result.contract.binding, artifact_sha256=hashlib.sha256(source.encode()).hexdigest())
+    contract = replace(original.eval_result.contract, binding=binding)
+    bound = replace(original, eval_result=replace(original.eval_result, contract=contract))
+    projection = project_program_candidate(bound, source, case_ids=['a', 'b'], metric='score', logical_run_id='run')
+    assert projection['program_ref'] == 'sha256:' + binding.artifact_sha256
+    assert projection['program_length'] == len(source)
+    assert 'PRIVATE_SOURCE_SENTINEL' not in repr(projection)
+    with pytest.raises(ValueError, match='artifact'):
+        project_program_candidate(bound, source + 'x', case_ids=['a', 'b'], metric='score', logical_run_id='run')
