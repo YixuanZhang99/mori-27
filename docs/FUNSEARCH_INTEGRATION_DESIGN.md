@@ -1,6 +1,6 @@
 # FunSearch integration design: pending implementation
 
-Status: implementation design, not a working reproduction or benchmark. The pinned reference is [`google-deepmind/funsearch` at `cc53f274237d7ab05c19df939edbc1f9616a7c19`](https://github.com/google-deepmind/funsearch/tree/cc53f274237d7ab05c19df939edbc1f9616a7c19). `core.funsearch_population` is a tested standalone population mechanism; it is not yet part of `Framework` or the M7 runtime. The overall delivery plan is `docs/superpowers/plans/2026-11-04-evidence-delivery.md` Task 4.
+Status: implementation design, not a working reproduction or benchmark. The pinned reference is [`google-deepmind/funsearch` at `cc53f274237d7ab05c19df939edbc1f9616a7c19`](https://github.com/google-deepmind/funsearch/tree/cc53f274237d7ab05c19df939edbc1f9616a7c19). `core.funsearch_population` is a tested standalone population mechanism; it is not yet part of `Framework` or the M7 runtime. `core.funsearch_selection` preserves ordered samples, distinct ancestry and before/after state references and can replay them; the runtime does not yet bind these receipts to its journal. The overall delivery plan is `docs/superpowers/plans/2026-11-04-evidence-delivery.md` Task 4.
 
 ## Existing seam and mismatch
 
