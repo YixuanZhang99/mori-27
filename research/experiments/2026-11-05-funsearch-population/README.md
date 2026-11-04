@@ -56,3 +56,13 @@ Framework's durable evaluator or independently audited recovery protocol, and
 the underlying sandbox is not a complete resource policy or a hostile-kernel
 boundary. Do not treat this prototype as a model benchmark result.
 
+`OR3DevDomain` is an experimental public-Framework adapter for this isolated
+priority process. It binds the development file digest, ten case IDs, metric,
+and function template before provider calls; it supports only unseeded dev
+evaluation and exposes per-case development scores. A local fixture using the
+ten pinned OR3 dev cases and a fixed best-fit function exercised construction,
+scoring and recorded replay at -213.9, without any external model request.
+It does not supply final held-out grading, durable child-process adoption, or
+real-model results; interruption may leave a running evaluator thread until
+its bounded deadline. Those are required before a reproduction claim.
+

@@ -3,7 +3,6 @@ import json
 import math
 import os
 from pathlib import Path
-import resource
 import selectors
 import signal
 import subprocess
@@ -18,7 +17,10 @@ from core.executor.sandbox import BubblewrapSandbox
 from core.executor.seccomp import seccomp_arguments
 
 
-_RUNNER = '''import json,runpy,sys
+_RUNNER = '''import json,resource,runpy,sys
+resource.setrlimit(resource.RLIMIT_CPU, (__CPU_LIMIT__, __CPU_LIMIT__))
+resource.setrlimit(resource.RLIMIT_AS, (3 * 1024 ** 3, 3 * 1024 ** 3))
+resource.setrlimit(resource.RLIMIT_FSIZE, (1024 ** 2, 1024 ** 2))
 import numpy as np
 priority=runpy.run_path("candidate.py",init_globals={"np":np})["priority"]
 for line in sys.stdin.buffer:
@@ -42,11 +44,7 @@ class SandboxedPriority:
         self.directory = tempfile.TemporaryDirectory(prefix='mori-priority-')
         root = Path(self.directory.name)
         (root / 'candidate.py').write_text(self.source)
-        (root / 'runner.py').write_text(_RUNNER)
-        def limits():
-            resource.setrlimit(resource.RLIMIT_CPU, (math.ceil(self.timeout) + 1, math.ceil(self.timeout) + 1))
-            resource.setrlimit(resource.RLIMIT_AS, (3 * 1024 ** 3, 3 * 1024 ** 3))
-            resource.setrlimit(resource.RLIMIT_FSIZE, (1024 ** 2, 1024 ** 2))
+        (root / 'runner.py').write_text(_RUNNER.replace('__CPU_LIMIT__', str(math.ceil(self.timeout) + 1)))
 
         try:
             sandbox = BubblewrapSandbox()
@@ -56,7 +54,7 @@ class SandboxedPriority:
             command[boundary:boundary] = ['--setenv', 'OPENBLAS_NUM_THREADS', '1']
             with seccomp_arguments(command, sandbox.seccomp_spec()) as (args, fds):
                 self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL, start_new_session=True, pass_fds=fds, preexec_fn=limits)
+                    stderr=subprocess.DEVNULL, start_new_session=True, pass_fds=fds)
             os.set_blocking(self.process.stdin.fileno(), False)
             os.set_blocking(self.process.stdout.fileno(), False)
             self.deadline = time.monotonic() + self.timeout

@@ -211,6 +211,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             from core.composition.funsearch_coordinator import FunSearchCoordinator
             from core.composition.command_domain import CommandDomain
             options = self.assembly.policy.options
+            domain_binding = getattr(self.parts['domain'], 'funsearch_binding', None)
+            if domain_binding is not None and domain_binding != {key: options[key] for key in
+                    ('case_ids', 'metric', 'template_ref')}:
+                raise ValueError('frozen FunSearch task differs from policy configuration')
             constructor = self.assembly.execution.constructor if self.construction_enabled else None
             funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
                 self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
