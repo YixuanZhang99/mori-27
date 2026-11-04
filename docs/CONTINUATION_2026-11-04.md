@@ -104,3 +104,11 @@ goal 曾由用户在界面暂停；用户后续明确要求继续本轮工作，
 最终预留/日志/v70 候选完整流水线通过：1,821 pytest、60 tooling、11 axioms、4 示例、打包与导入核验，374.25 秒且源码指纹未变；详细结果保存在本机 `outputs/remaining-x1-v70-validation.json` 和日志。三任务官方合成评分 smoke 通过。当前仍需在干净提交上完成 v70，不将本次流水线或首次失败试跑称为全量 benchmark 成功。
 
 v70 干净提交 `aedede3` 已完成本机 41 项验收（901.868 秒、1,821 pytest），原始证据独立核对通过；[公开摘要](../research/experiments/2026-11-04-v70-local-validation/README.md)包含安装可用性证据和局限。第二轮使用 `work/pilot-source-aedede3` 只读源码、原参数及原累计账本，于 08:39:18 UTC 启动；运行状态以本机 `outputs/local-pilot-attempt-2-launch-status.json` 为准，不重启已启动尝试。当前 `local-run-settings.json` 的旧 source_commit 字段未由早期启动器更新；源身份以第二轮 plan、launch-status 和只读 manifest 为权威，终态后同步修正此元数据。
+
+## 第二轮终态与 v71 接线（后续状态优先）
+
+第二轮 session94752 已终止（exit1），不是挂起进程。六个运行中3个有效评分、3个 token 超额失败；[公开报告](../research/experiments/2026-11-04-deepseek-pilot-attempt-2/README.md)与原始私有回执分别保留。共享账本累计33请求、3.242064元上界、预留0/未结0。`local-run-settings.json` 旧 source_commit 已在终态后修正为 `aedede3`。不要重启第二轮。
+
+`c617931` 请求容量/已知拒绝修复通过1,836完整测试；`bf6719e` 保存实验与治理设计。当前 v71 接线将归档原始 v70证据、保留全部32旧命令组并新增一组，64 tooling检查通过；完整干净提交验收待执行。第三轮必须在该验收之后使用新的只读源码、输出目录和独占启动标记，并核对原账本累计3,242,064微元与33个操作，不得新建或清零预算。模型/竞赛本地配置已齐；远端写权限仍未开放。
+
+完成本轮正式验收后，依据已提交常驻控制设计钉定具体 schema/接口任务计划，继续 C1/C3、真实 B 指标和 A/D 全部发布要求；不要把局部预算修复或3个有效提交当作项目完成。

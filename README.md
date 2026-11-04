@@ -2,7 +2,7 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v70**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v71**。它是开发中的 Python 框架原型：已实现较丰富的治理、恢复与互操作机制，真实外部 benchmark 和产品级验收仍未完成。
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -65,7 +65,7 @@ S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最�
 ## 目录
 
 ```text
-m0/                 Python 内核、配置、回归测试、v1–v69 历史及 v70 验收入口
+m0/                 Python 内核、配置、回归测试、v1–v70 历史及 v71 验收入口
   core/             调度、预算、准入、执行、恢复、记忆与知识等
   config/profiles/  三种经典 profile、composed_prompt 与 population_prompt
   examples/         四个不需要模型 API key 的示例
@@ -91,7 +91,7 @@ make check
 
 `make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v70，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v71，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
 
 ```bash
 make test          # Mac 可移植测试
@@ -100,7 +100,7 @@ make accept-linux  # Linux x86_64：全量版本化验收
 make verify-import # 核验初始导入 Git 快照
 ```
 
-详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60、v61 分别新增 S1 组装和 S2 评估契约组；v62 增加 S3 经验与知识回流端到端组；v63 增加 S4 三层准入与终审组；v64 增加 S5 分层预算组及完整离线 research 示例；v65 增加 S6 proxy 有效性回流组；v66 增加 S7 worktree 与公开 Framework 接管组；v67 增加 S8 种群组；[v68](m0/verifier/v68/README.md)保留全部旧组并增加 S9 MLE 配置评估与试跑组。[v69](m0/verifier/v69/README.md) 保留全部 v68 检查，增加私有匿名顺序、沙箱前置探针及[跨运行人民币预算](docs/DEEPSEEK_CAMPAIGN_BUDGET.md)。[v70](m0/verifier/v70/README.md) 保留全部 v69 检查，新增剩余物理预算预留与跨进程日志快照检查。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
+详见 [开发与测试指南](docs/DEVELOPMENT.md)。原 [代码审查报告](docs/CODEBASE_REVIEW_2026-10-29.md)记录导入时状态；开发环境、打包与 CI 已配置，v58 与 v59 的修复范围和兼容行为见各版本修复说明。v60、v61 分别新增 S1 组装和 S2 评估契约组；v62 增加 S3 经验与知识回流端到端组；v63 增加 S4 三层准入与终审组；v64 增加 S5 分层预算组及完整离线 research 示例；v65 增加 S6 proxy 有效性回流组；v66 增加 S7 worktree 与公开 Framework 接管组；v67 增加 S8 种群组；[v68](m0/verifier/v68/README.md)保留全部旧组并增加 S9 MLE 配置评估与试跑组。[v69](m0/verifier/v69/README.md) 保留全部 v68 检查，增加私有匿名顺序、沙箱前置探针及[跨运行人民币预算](docs/DEEPSEEK_CAMPAIGN_BUDGET.md)。[v70](m0/verifier/v70/README.md) 保留全部 v69 检查，新增剩余物理预算预留与跨进程日志快照检查。[v71](m0/verifier/v71/README.md) 继续保留全部旧组，增加请求输入容量、预算拒绝结算和已知拒绝恢复检查。当前提交是否通过验收，以其 Actions 日志和新证书为准。离线示例使用脚本模型，得分不代表真实外部 benchmark 成绩。
 
 ## 导入与许可
 

@@ -111,7 +111,7 @@ make accept-linux
 
 ## 证据和历史文件
 
-v70 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。v1–v69 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v68 的运行结果。新增历史证据必须来自其真实成功的阶段验收，归档前核对提交、摘要、证书与 journal；本地验收必须明确标记来源，不得称为远端 CI；不得在新的接线上重新运行旧 verifier 后把结果当成历史。
+v71 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。v1–v70 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v68 的运行结果。新增历史证据必须来自其真实成功的阶段验收，归档前核对提交、摘要、证书与 journal；本地验收必须明确标记来源，不得称为远端 CI；不得在新的接线上重新运行旧 verifier 后把结果当成历史。
 
 v60 成功证据已原样归档自提交 `06491ce5639dd33f7f89bc8e1288f881b54ecb8c` 的 [S1 CI 40889093796](https://github.com/YixuanZhang99/mori-27/actions/runs/40889093796)：1,131 项 pytest、29 个验收检查通过。其 SHA-256 与 artifact 来源见 [v61 归档说明](../m0/verifier/v61/README.md#archived-v60-evidence-provenance)，工具测试固定保护归档字节。
 
@@ -131,7 +131,7 @@ v67 成功证据已原样归档自提交 `49be71ec079f1412a4a8e74086064c4db121c3
 
 v68 成功证据已原样归档自提交 `dfe29cb4265fd939a203d587a57b523efbe52c36` 的 [S9 CI 41032740938](https://github.com/YixuanZhang99/mori-27/actions/runs/41032740938)：1,740 项 pytest、38 个检查通过。其来源和摘要见 [v69 归档说明](../m0/verifier/v69/README.md#archived-v68-evidence-provenance)。
 
-v60 保留 v59 所有命令组并加入 S1 三文件组；v61 加入 S2 两文件组；v62 加入 S3 三文件组；v63 加入 S4 两文件组；v64 加入 S5 两文件组和完整离线 research 示例；v65 加入 S6 两文件组；v66 加入 S7 四文件组；v67 加入 S8 三文件组；v68 加入 S9 三文件组；v69 保留全部 v68 命令与超时，增加匿名数据隔离和共享人民币预算组，历史验证扩展至 v68；v70 保留全部 v69 命令与超时，增加剩余预留和日志并发组，历史验证扩展至 v69。包装器回归逐版本保护 v58→v59→v60→v61→v62→v63→v64→v65→v66→v67→v68→v69→v70 的旧命令与超时设置，以及已经核实的历史归档字节来源。当前真正触发 Actions 的是仓库根级 workflow，其与 Makefile、包装器的实际调用链也接受检查。
+v60 保留 v59 所有命令组并加入 S1 三文件组；v61 加入 S2 两文件组；v62 加入 S3 三文件组；v63 加入 S4 两文件组；v64 加入 S5 两文件组和完整离线 research 示例；v65 加入 S6 两文件组；v66 加入 S7 四文件组；v67 加入 S8 三文件组；v68 加入 S9 三文件组；v69 保留全部 v68 命令与超时，增加匿名数据隔离和共享人民币预算组，历史验证扩展至 v68；v70 保留全部 v69 命令与超时，增加剩余预留和日志并发组，历史验证扩展至 v69。包装器回归逐版本保护 v58→v59→v60→v61→v62→v63→v64→v65→v66→v67→v68→v69→v70→v71 的旧命令与超时设置，以及已经核实的历史归档字节来源。当前真正触发 Actions 的是仓库根级 workflow，其与 Makefile、包装器的实际调用链也接受检查。
 
 每次新结果写入独立目录 `artifacts/linux-acceptance/<UTC-run-id>/`，包含控制台日志、新证书、journal 和结构化摘要；不会把上一轮成功当成本轮结果。包装器要求本次进程退出成功、有效新证书与本次 journal 检查成立，并确认源历史未被改动。CI 的临时 VM 负责最终清理隔离环境；指定进程崩溃恢复测试仍不等价于机器断电或真实远端服务 exactly-once 保证。
 
@@ -166,8 +166,16 @@ make check
 make build
 ```
 
-同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v70 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成。修复覆盖范围见版本修复说明，统一抽象的未完成项和阶段验收条件见 [对照清单](ABSTRACTION_ALIGNMENT.md)。
+同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v71 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成。修复覆盖范围见版本修复说明，统一抽象的未完成项和阶段验收条件见 [对照清单](ABSTRACTION_ALIGNMENT.md)。
 
 相关一手文档：[uv 锁定与同步](https://docs.astral.sh/uv/concepts/projects/sync/)、[uv GitHub Actions](https://docs.astral.sh/uv/guides/integration/github/)、[Ubuntu user namespace 限制](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)。
 
 本地 v69 的 39 项检查与 1,794 项测试在干净提交 `5fa85d3ab7c4f643550ecaa2223a65231d7f7a86` 上通过；原始证书和 journal 已归档，哈希与本地来源见 [v70 说明](../m0/verifier/v70/README.md#archived-v69-provenance)。这不替代同一 SHA 的远端 CI。
+
+### v71 请求容量与已知拒绝
+
+v71 保留全部 v70 命令及超时，增加完整 provider/currency-integration/composed-budget/composed-recovery 四文件组。成功时共有42项检查；wrapper 使用新的版本路径并要求新证书和 journal 对应同一次运行。v70 真实本地41项证据来自干净 `aedede3`，原始摘要与来源见 [v71 说明](../m0/verifier/v71/README.md#archived-v70-provenance)。
+
+请求容量修复的完整本地回归为1,836 pytest、60 tooling，以及示例、约束、打包和固定导入来源检查；[本地证据](../research/experiments/2026-11-04-token-admission-local-validation/README.md)不等于 v71 或 hosted CI。v71 接线的64项 tooling 检查通过，干净提交上的完整 v71 尚待执行。默认 UTF-8 输入容量是估算，服务容量上限模式单独声明；不把“未观察到超额”称为硬 token 保证。
+
+第二轮真实试跑终态为3个有效官方评分与3个总 token 超额失败；累计费用上界3.242064元，无未结调用。见[完整矩阵](../research/experiments/2026-11-04-deepseek-pilot-attempt-2/README.md)。下一轮复用原200元账本、原任务/seed/额度和新的只读源码，不能重置费用或覆盖失败证据。

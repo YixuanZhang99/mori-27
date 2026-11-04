@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import contextlib
+import importlib.util
+import io
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +30,82 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def test_v71_scope_requires_group_and_whole_run_success(self):
+        path = ROOT / 'm0/verifier/v71/verify.py'
+        self.assertTrue(path.is_file())
+        for failed_group in (None, 'provider_input_admission_refusal_and_durable_replay', 'static_axioms'):
+            with self.subTest(failed=failed_group):
+                spec = importlib.util.spec_from_file_location('v71_fixture', path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                captured = {}
+                def command(name, _args, timeout=300):
+                    module.check(name, name != failed_group, 'controlled command result')
+                def write(path, data, *args, **kwargs):
+                    captured[str(path)] = data
+                    return len(data)
+                original_open = Path.open
+                def open_file(path, mode='r', *args, **kwargs):
+                    if mode == 'a' and path == module.ROOT / 'verifier/runs/v71.jsonl':
+                        return io.StringIO()
+                    return original_open(path, mode, *args, **kwargs)
+                with patch.object(module, 'run_command', command), \
+                     patch.object(Path, 'write_text', write), patch.object(Path, 'open', open_file), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    result = module.main()
+                report = json.loads(captured[str(module.ROOT / 'verifier/v71/LAST_RUN.json')])
+                self.assertEqual(result, 0 if failed_group is None else 1)
+                scope = report['provider_admission_evidence']
+                self.assertEqual(scope['certified'], failed_group is None)
+                self.assertFalse(scope['estimated_input_is_hard_bound'])
+                self.assertFalse(scope['external_provider_api_executed'])
+                self.assertFalse(scope['supplier_invoice_verified'])
+                self.assertFalse(scope['arbitrary_native_crash_recovery_certified'])
+
+    def test_v71_preserves_every_v70_command_and_timeout(self):
+        self.assertTrue((ROOT / 'm0/verifier/v71/verify.py').is_file())
+        previous, current = command_groups(verifier_tree('v70')), command_groups(verifier_tree('v71'))
+        self.assertEqual(len(previous), 32)
+        self.assertEqual(len(current), 33)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v71_executes_provider_admission_and_stop_boundaries_unfiltered(self):
+        self.assertTrue((ROOT / 'm0/verifier/v71/verify.py').is_file())
+        group = command_groups(verifier_tree('v71'))['provider_input_admission_refusal_and_durable_replay']
+        arguments = [node.value for node in group.args[1].elts if isinstance(node, ast.Constant)]
+        for name in ('tests/test_mle_provider.py', 'tests/test_mle_currency_integration.py',
+                     'tests/test_composed_budget.py', 'tests/test_composed_recovery.py'):
+            self.assertIn(name, arguments)
+        self.assertNotIn('-k', arguments)
+        self.assertNotIn('-m', arguments[1:])
+        self.assertEqual(next(k.value.value for k in group.keywords if k.arg == 'timeout'), 480)
+
+    def test_archived_v70_is_exact_verified_local_linux_evidence(self):
+        expected = {
+            'm0/verifier/v70/LAST_RUN.json': '750a0ab259f0ba3648fe67a17b87d8e0ca4231c6cad80498445b95ae24d8a2d4',
+            'm0/verifier/runs/v70.jsonl': 'fd411c00b85d866bc9e3254cd564f8ddd7275736676c36364b49820edaf9737a',
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file())
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / 'm0/verifier/v70/LAST_RUN.json').read_text())
+        entries = [json.loads(line) for line in (ROOT / 'm0/verifier/runs/v70.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['command'], 'python3 verifier/v70/verify.py')
+        self.assertEqual(entries[0]['exit_code'], 0)
+        self.assertEqual(entries[0]['checks'], certificate['checks'])
+        self.assertTrue(certificate['passed'])
+        self.assertEqual(len(certificate['checks']), 41)
+        self.assertTrue(all(row['passed'] for row in certificate['checks']))
+        provenance = json.loads((ROOT / 'm0/verifier/v71/v70-provenance.json').read_text())
+        self.assertEqual(provenance['source_commit'], 'aedede3c2b78a5c2b57074c70d510af710f5af4e')
+        self.assertEqual(provenance['origin'], 'local_linux_acceptance')
+        self.assertFalse(provenance['same_sha_remote_ci'])
+
     def test_v70_executes_cooperating_process_journal_snapshot_boundaries(self):
         self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 journal group is missing')
         group = command_groups(verifier_tree('v70'))['cooperating_process_journal_snapshot_consistency']

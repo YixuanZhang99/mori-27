@@ -1,0 +1,48 @@
+{
+  "source_commit": "aedede3c2b78a5c2b57074c70d510af710f5af4e",
+  "source_clean_before": true,
+  "source_clean_after": true,
+  "version": "v70",
+  "passed": true,
+  "checks": 41,
+  "elapsed_seconds": 901.868,
+  "external_provider_requests_during_acceptance": 0,
+  "files": {
+    "new-runs.jsonl": "fd411c00b85d866bc9e3254cd564f8ddd7275736676c36364b49820edaf9737a",
+    "LAST_RUN.json": "750a0ab259f0ba3648fe67a17b87d8e0ca4231c6cad80498445b95ae24d8a2d4",
+    "console.log": "851d280425e76046c7d8c3bdc9af13894e3ac3705f8aece18ff42b410770fd26",
+    "summary.json": "292e67a166558d795007854a34be1f9e2706e7e804fac0a1888085df2deb7d2f",
+    "v70.jsonl": "fd411c00b85d866bc9e3254cd564f8ddd7275736676c36364b49820edaf9737a"
+  },
+  "same_sha_remote_ci": false,
+  "remaining_reservation_evidence": {
+    "certified": true,
+    "executed_group": "remaining_physical_reservation_and_mle_usage_end_to_end",
+    "scope": [
+      "atomic remaining operator allocation across physical scopes",
+      "fixed admission floors and truthful actual settlement",
+      "fractional quotes do not round above available headroom",
+      "event-prefix semantic recovery and rehashed tamper refusal",
+      "public Framework MLE variable reasoning usage regression"
+    ],
+    "external_provider_api_executed": false,
+    "supplier_invoice_verified": false,
+    "exact_pre_request_prompt_token_bound": false
+  },
+  "journal_snapshot_evidence": {
+    "certified": true,
+    "executed_group": "cooperating_process_journal_snapshot_consistency",
+    "scope": [
+      "cooperating process reader/writer record serialization",
+      "fixed-prefix iteration releases locks before caller code",
+      "persistent corruption remains a visible failure",
+      "original partial-start SIGKILL recovery regression"
+    ],
+    "noncooperating_writers_protected": false,
+    "crash_atomic_or_fsync_durability_claimed": false,
+    "windows_execution_certified": false,
+    "subscription_protocol_certified": false
+  },
+  "origin": "local_linux_acceptance",
+  "run_id": "20261104T082351.249747Z-i_v639my"
+}

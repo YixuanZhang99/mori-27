@@ -82,3 +82,5 @@
 - v69 — S9 private anonymous prediction order, pre-provider sandbox readiness and durable shared CNY campaign admission; preserves all v68 command groups and verified historical evidence.
 
 - v70 — Atomic remaining physical reservations, fractional quote floors and cooperating-process JSONL snapshots; preserves every v69 command and authentic local v69 evidence.
+
+- v71 (2026-11-04): provider input-capacity admission, measured refusal/overrun distinction and durable known-refusal replay; all v70 command groups/timeouts and authentic history retained.
