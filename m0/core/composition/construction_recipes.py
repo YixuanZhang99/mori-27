@@ -39,6 +39,46 @@ class RecipeOperator:
             "instructions": [instruction] if instruction else [], "comparison": comparisons}
 
 
+class FunSearchRecipeOperator:
+    """Bridge a driver-verified ordered program selection into a construction plan.
+
+    The runtime must obtain this payload from its durable coordinator, not an
+    untrusted policy. ConstructionPlan validates its shape and digests; the
+    invocation audit must independently bind it to original journal events.
+    """
+    measured_cost_units = ("token", "node", "eval_count")
+
+    def __init__(self, *, metric='dev/score'):
+        if type(metric) is not str or not metric:
+            raise ValueError('FunSearch comparison metric is required')
+        self.metric = metric
+
+    def recipe(self, request):
+        try:
+            data = request.strategy['funsearch']
+            if type(data) is not dict or set(data) != {'selection', 'materialization'}:
+                raise ValueError('FunSearch requires driver-bound selection and materialization')
+            selection, materialized = data['selection'], data['materialization']
+            if (type(selection) is not dict or type(materialized) is not dict or
+                    materialized['samples'] != selection['samples'] or
+                    selection['ancestry'] != [parent.candidate.id for parent in request.parents] or
+                    len(request.parents) != len(request.evidence) or not request.parents):
+                raise ValueError('FunSearch selected samples differ from parent inputs')
+            comparisons = {}
+            for parent, evidence in zip(request.parents, request.evidence):
+                if evidence.candidate_id != parent.candidate.id:
+                    raise ValueError('FunSearch parent differs from comparison evidence')
+                comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+            binding = {'selection': selection, **{key: materialized[key] for key in
+                ('selection_ref', 'input_ref', 'prompt_ref', 'evidence_refs', 'binding_ref')}}
+            return {'kind': 'funsearch', 'task_desc': request.task_desc,
+                'parent_artifacts': [{'candidate_id': parent.candidate.id, 'artifact': parent.artifact}
+                                     for parent in request.parents],
+                'instructions': [materialized['prompt']], 'comparison': comparisons, 'funsearch_binding': binding}
+        except (KeyError, TypeError) as exc:
+            raise ValueError('invalid FunSearch recipe inputs') from exc
+
+
 def register_construction(registry):
     registry.register("constructor", "prompt", lambda ctx, opts: PromptMaterializer(DEFAULT_ROLES, **opts),
         validate_options=constructor_options,
