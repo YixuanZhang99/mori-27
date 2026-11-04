@@ -58,8 +58,8 @@
 
 - [x] Run the frozen 3-task × 2-arm × 1-seed diagnostic matrix. Preserve all six terminal outcomes, receipts, actual model identity, selected submission hashes and official scores when valid. The completed `a6b5826` subset and both earlier failed attempts are documented under `research/experiments/`.
 - [x] Independently reconcile the run matrix, physical/provider usage and shared CNY authority. All six completed slots and official report hashes were rechecked without external requests; the shared ledger was unchanged. The provider identifier is a mutable alias, not a verified immutable snapshot.
-- [ ] Once diagnosed prerequisites are stable, extend the preregistered protocol to seeds 1, 2 and 3, totaling 18 slots. Retain seed 1 only if its protocol is identical; otherwise start a new named experiment and preserve the old one.
-- [ ] Publish per-task/per-seed scores, paired deltas where valid, failure rate, actual token/wallclock/currency coverage and reproduction command. Three seeds are preliminary evidence, not automatic statistical significance or a 22-task Lite certification.
+- [ ] Once diagnosed prerequisites are stable, extend the preregistered protocol to seeds 1, 2 and 3, totaling 18 slots. The 18 slots have now been run and independently audited, but as two separately frozen batches: the seed 2/3 batch was frozen after seed 1 results, and its arm order differs from a single `[1, 2, 3]` matrix. Preserve both batches and do not present them as one pre-result preregistration.
+- [x] Publish per-task/per-seed scores, paired deltas where valid, failure rate, actual token/wallclock/currency coverage and reproduction command. Three seeds are preliminary evidence, not automatic statistical significance or a 22-task Lite certification. See `research/experiments/2026-11-05-m7-real-mle-three-seeds/` for both batches and their limitations.
 
 ### Task 4: Deliver GEPA and FunSearch reproduction packages
 

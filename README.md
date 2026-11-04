@@ -4,17 +4,17 @@
 
 本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v74 候选**（实际通过状态见[统一进度页](docs/FRAMEWORK_STATUS.md)）。它仍在开发：部分真实任务已有成绩，完整 benchmark 与产品级验收尚未完成。
 
-## 真实任务结果：三任务单 seed 试跑
+## 真实任务结果：三任务、两个批次、三个 seed
 
-以下是 `a6b5826` 上的 M7 真实模型试跑，使用官方 MLE-bench grader；所有指标越低越好。baseline 与 full 的搜索方法不同，**不能作为治理收益的单变量对比**。
+以下是 `a6b5826` 上的 M7 真实模型试跑，使用官方 MLE-bench grader；表中是三个本地 seed 的描述性平均，所有指标越低越好。baseline 与 full 的搜索方法不同，**不能作为治理收益的单变量对比**。
 
 | 任务 / 指标 | baseline | full |
 | --- | ---: | ---: |
-| Spooky Author Identification / log loss | 0.40538 | 0.42521 |
-| Leaf Classification / log loss | 1.06263 | 0.26220 |
-| NOMAD / 两个 RMSLE 的平均值 | 0.06501 | 0.06403 |
+| Spooky Author Identification / log loss | 0.40732 | 0.42306 |
+| Leaf Classification / log loss | 0.84945 | 0.45621 |
+| NOMAD / 两个 RMSLE 的平均值 | 0.06393 | 0.06320 |
 
-全部 6 份提交有效。模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照；这里只覆盖三个任务、一个本地 seed，不代表完整 MLE-Bench Lite 或统计显著结果。方法、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-completed-seed1/README.md)。
+全部 18 份提交有效。seed 1 和 seed 2/3 分为两个冻结批次，第二批在看到第一批结果后启动；模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照。这里只覆盖三个任务，不代表完整 MLE-Bench Lite 或统计显著结果。逐 seed 成绩、批次差异、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md)。
 
 经典方法开发进展：GEPA 实例级选择和 FunSearch 种群机制已有可运行的离线示例；FunSearch 还可对固定 OR3 开发集执行隔离评分。它们目前均属于**机制与开发集验证**，并非完整论文复现或真实模型 benchmark 成绩。执行命令、参考版本及未完成范围分别见 [GEPA 实验记录](research/experiments/2026-11-05-gepa-frontier/README.md)和 [FunSearch 实验记录](research/experiments/2026-11-05-funsearch-population/README.md)。
 

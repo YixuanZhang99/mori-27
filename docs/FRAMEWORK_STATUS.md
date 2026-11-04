@@ -9,10 +9,14 @@
 核验。同提交的 GitHub Actions 推送验收也已通过，下载的证据经独立核对，
 同样绑定 1158 个源码文件和 55 项检查。
 
+后续仅改文档的 `ec25543` 在一次远端验收中，完整回归达到单项 600 秒
+时限而失败；其源码摘要与 `e4aa87e` 相同。这次失败记录保留，当前分支的
+最新 CI 状态应以 GitHub Actions 为准，不能由前一提交的通过结果代替。
+
 开发分支 `codex/m7-construction` 的 `a6b5826` 已完成本机完整项目检查、
 本机 v74 验收以及同提交 GitHub Actions 验收，并完成三项真实 MLE 任务的
-baseline/full 单 seed 试跑：6 份提交均通过官方评分。具体分数、方法差异、
-费用及限制见[已完成试跑报告](../research/experiments/2026-11-05-m7-real-mle-completed-seed1/)。
+baseline/full 三个本地 seed 试跑：两个冻结批次的 18 份提交均通过官方评分
+和独立核验。具体分数、批次差异、费用及限制见[已完成试跑报告](../research/experiments/2026-11-05-m7-real-mle-three-seeds/)。
 这不是完整 MLE-Bench Lite 成绩，也不能据此宣称治理带来提升；模型标识是
 可变的 `deepseek-flash` 别名，未验证不可变模型快照。前两次未完成的尝试
 仍保留在相邻实验目录中。
