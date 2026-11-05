@@ -169,3 +169,28 @@ def test_phase_schemas_do_not_conflict_with_shared_task_text(tmp_path):
     report = run(output=tmp_path / 'run', public_root=fixture_public(tmp_path / 'public'),
         task_id='spooky-author-identification', max_cycles=1, provider=SchemaAware(), runner=TrustedFixtureRunner())
     assert report['run_state'] == 'completed'
+
+
+@pytest.mark.parametrize('failed_target', ['global', 'leaf'])
+def test_failed_constructor_records_original_failure_before_synthesis(tmp_path, failed_target):
+    from zoo.mle_bench_lite.arbor_runner import run, FixtureProvider
+    class Broken(FixtureProvider):
+        def __call__(self, prompt):
+            answer = super().__call__(prompt)
+            request = json.loads(prompt)
+            if 'recipe' in request: return 'invalid constructor response'
+            if request.get('kind') == 'arbor_insight' and (
+                    failed_target == 'leaf' or request['target_id'] == 'global'): return '{}'
+            return answer
+    output = tmp_path / 'run'
+    report = run(output=output, public_root=fixture_public(tmp_path / 'public'),
+        task_id='spooky-author-identification', max_cycles=1, provider=Broken(), runner=TrustedFixtureRunner())
+    assert report['search']['incomplete'] == 1 and report['search']['successful'] == 0
+    assert report['training_invocations_this_process'] == 0
+    rows = [json.loads(line) for line in (output / 'composed/x1.jsonl').read_text().splitlines()]
+    failed = [r['payload'] for r in rows if r['kind'] == 'arbor_construction_failed']
+    assert len(failed) == 1
+    assert failed[0]['evidence']['evidence']['eval_result']['status'] == 'failed_to_run'
+    assert failed[0]['proposal']['artifact'] == ''
+    assert any(r['kind'] == 'construction_outcome' and r['payload']['outcome']['kind'] == 'failed' for r in rows)
+    assert not any(r['kind'] == 'composed_physical_evidence' for r in rows)

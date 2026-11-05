@@ -192,6 +192,65 @@ class ArborExportTests(unittest.TestCase):
         self.assertEqual(summary['uncommitted_development_ids'], ['a'])
 
 
+    def test_known_zero_refusal_is_bound_per_call_and_unresolved_is_not_free(self):
+        manifest = copy.deepcopy(self.manifest)
+        manifest.update(mode='live', source={'commit': 'source', 'dirty': False})
+        starts, ends = [], []
+        for n in (0, 1):
+            context = {'currency_run_id': 'run', 'lane': 'main', 'slot_id': None, 'phase': 'planning', 'ordinal': n}
+            invocation = {'external_context': context}
+            request = {'request_sha256': str(n) * 64, 'invocation': invocation}
+            binding = self.exporter.digest(request)[7:]
+            starts.append({'kind': 'composed_provider_started', 'payload': dict(request, binding=binding)})
+            end = {'binding': binding, 'tokens': 20 if n == 0 else 0, 'result': ''}
+            if n: end.update(outcome='budget_exhausted', result='currency capacity refused before dispatch')
+            ends.append({'kind': 'composed_provider_completed', 'payload': end})
+        wire = 'a' * 64
+        call = self.exporter.digest({'schema_version': 1,
+            'context': starts[0]['payload']['invocation']['external_context'], 'wire_request_sha256': wire})[7:]
+        receipt = {'reservation': {'call_id': call, 'run_id': 'run', 'lane': 'main', 'request_sha256': wire,
+            'phase': 'planning', 'slot_id': None, 'ordinal': 0, 'reserved_micro_cny': 100},
+            'settlement': {'call_id': call, 'bound_violation': False, 'upper_bound_micro_cny': 100,
+                'usage': {'prompt_tokens': 10, 'completion_tokens': 10, 'total_tokens': 20}}}
+        rows = self.rows + [starts[0], ends[0], starts[1], ends[1]]
+        result = self.exporter.summarize(manifest, rows, [receipt], None, None)[0]
+        self.assertEqual(result['currency']['cost_upper_micro_cny'], 100)
+        self.assertEqual(result['currency']['known_zero_refusals'], 1)
+        pending = self.exporter.summarize(manifest, rows[:-1], [receipt], None, None)[0]
+        self.assertIsNone(pending['currency']['cost_upper_micro_cny'])
+        changed = copy.deepcopy(receipt); changed['reservation']['request_sha256'] = 'b' * 64
+        with self.assertRaises(ValueError): self.exporter.summarize(manifest, rows, [changed], None, None)
+        forged = copy.deepcopy(rows); forged[-1]['payload']['tokens'] = 1
+        with self.assertRaises(ValueError): self.exporter.summarize(manifest, forged, [receipt], None, None)
+
+    def test_uncommitted_constructor_failure_requires_original_outcome(self):
+        evidence = copy.deepcopy(next(r['payload']['evidence'] for r in self.rows if r['kind'] == 'composed_evidence'))
+        result = evidence['eval_result']; result.update(status='failed_to_run', metrics={}, text_feedback='constructor failed')
+        result['contract']['binding']['artifact_sha256'] = self.exporter.sha(b'')
+        result['contract']['private']['data'] = {}
+        encoded = {'schema_version': 1, 'evidence': evidence}
+        outcome = {'identity': {'operation': {'lane': 'main', 'cycle': 0, 'run_id': 'run'}},
+            'outcome': {'kind': 'failed', 'failure_type': 'OperatorFailure', 'detail': 'constructor failed'}}
+        ref = self.exporter.digest({'logical_run_id': 'run', 'evidence': encoded})
+        failed = {'cycle': 0, 'logical_run_id': 'run', 'evidence': encoded, 'evidence_ref': ref,
+            'construction_outcome_ref': self.exporter.digest(outcome),
+            'proposal': {'candidate': {'id': 'a'}, 'artifact': ''}}
+        rows = [self.rows[0], {'kind': 'arbor_selected', 'payload': {'candidate_id': 'a', 'cycle': 0}},
+            {'kind': 'construction_outcome', 'payload': outcome},
+            {'kind': 'arbor_construction_failed', 'payload': failed},
+            {'kind': 'memory_receipt_binding', 'payload': {'receipt_ref': ref, 'candidate_id': 'a', 'cycle': 0,
+                'role': 'dev', 'context': {'run_id': 'run'}, 'evaluation_context': 'dev-context', 'status': 'failed_to_run'}}]
+        result = self.reduce(rows)
+        self.assertEqual(result['search']['incomplete'], 1)
+        self.assertEqual(result['search']['successful'], 0)
+        self.assertEqual(result['uncommitted_construction_failures'], ['a'])
+        for change in ('outcome', 'score'):
+            forged = copy.deepcopy(rows)
+            if change == 'outcome': forged[2]['payload']['outcome']['kind'] = 'returned'
+            else: forged[3]['payload']['evidence']['evidence']['eval_result']['status'] = 'ok'
+            with self.assertRaises(ValueError): self.reduce(forged)
+
+
     def test_gate_calls_over_budget_and_unknown_currency_cannot_pass(self):
         self.manifest['profile']['admission']['options']['call_budget'] = 1
         with self.assertRaises(ValueError): self.reduce()

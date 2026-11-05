@@ -25,7 +25,10 @@ strict configured margins, query cap, frozen predictions, summary projections,
 source-bound insight versions, declared/unrun cells, incomplete cycles and the
 original campaign's 2/8 micro-CNY token upper prices. Training that finished before
 an interrupted synthesis remains uncommitted evidence, not a successful search
-node. Pending usage retains its reservation and a null total cost.
+node. Failed construction is persisted before synthesis and checked against its
+original constructor outcome, even when no evaluator ran. Pending usage retains
+its reservation and a null total cost; a durable pre-dispatch budget refusal with
+zero tokens is counted separately from charged calls.
 
 Official scores require a separate original grading audit, pinned prepared-data
 identity and raw grader report. Original journals, programs, six-stage events,

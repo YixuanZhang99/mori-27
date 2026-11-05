@@ -300,6 +300,8 @@ class HierarchicalRuntime(ProxyRuntime):
                 contract=EvaluationContract(self._binding(proposal, evaluation_request),
                     ("token", "eval_count"), binding_source="invocation")),
                 executor_status="failed_to_run", result_text=str(failure))
+            if self.arbor:
+                self.arbor.record_construction_failure(proposal, evidence, cycle=cycle)
         else:
             if paired is not None:
                 receipt = self._reserve_physical(candidate, 'training', f'child:{identifier}',

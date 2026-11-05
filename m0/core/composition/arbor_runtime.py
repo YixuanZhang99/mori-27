@@ -107,6 +107,21 @@ class ArborCoordinator:
             for source in sources:
                 self.owner.frontier.add_reference(source, candidate_id, 'hypothesis source ' + ref)
 
+    def record_construction_failure(self, proposal, evidence, *, cycle):
+        """Persist the real failed constructor before any fallible synthesis."""
+        from core.composition.evaluation import encode_evidence
+        originals = [r['payload'] for r in self.owner.store.read('construction_outcome')
+            if r['payload']['identity']['operation']['lane'] == 'main'
+            and r['payload']['identity']['operation']['cycle'] == cycle]
+        if len(originals) != 1 or originals[0]['outcome']['kind'] != 'failed':
+            raise ValueError('Arbor construction failure lacks its original outcome')
+        encoded = encode_evidence(evidence)
+        self.owner.store.append('arbor_construction_failed', {'cycle': cycle,
+            'logical_run_id': self.owner._logical_run_id,
+            'proposal': json.loads(json.dumps(asdict(proposal), default=lambda v: v.value)),
+            'evidence': encoded, 'evidence_ref': _hash({'logical_run_id': self.owner._logical_run_id, 'evidence': encoded}),
+            'construction_outcome_ref': _hash(originals[0])})
+
     async def backpropagate(self, proposal, public_evidence, context, *, cycle, llm):
         owner, memory = self.owner, self.owner.memory
         ref = context['evidence_ref']

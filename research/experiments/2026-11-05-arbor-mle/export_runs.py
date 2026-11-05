@@ -63,6 +63,37 @@ def currency(receipts,run_ids):
         'tokens':dict(tokens),'cost_by_lane_micro_cny':dict(lanes),'invoice_verified':False}
 
 
+def reconcile_currency(starts, ends, receipts, cost):
+    """Bind each charged call or proven pre-dispatch refusal to its invocation."""
+    completed = {e['binding']: e for e in ends}
+    unmatched = {r['reservation']['call_id']: r for r in receipts}
+    known_zero, unresolved = 0, False
+    for start in starts:
+        invocation = start['invocation']; context = invocation['external_context']
+        require(start['binding'] == digest({'request_sha256': start['request_sha256'], 'invocation': invocation})[7:],
+                'provider invocation binding differs')
+        matches = [call for call, receipt in unmatched.items() if call == digest({'schema_version': 1,
+            'context': context, 'wire_request_sha256': receipt['reservation']['request_sha256']})[7:]]
+        require(len(matches) <= 1, 'multiple currency receipts for one invocation')
+        end = completed.get(start['binding'])
+        if matches:
+            receipt = unmatched.pop(matches[0]); r, settlement = receipt['reservation'], receipt['settlement']
+            require(r['run_id'] == context['currency_run_id'] and r['lane'] == context['lane']
+                and r['slot_id'] == context['slot_id'] and r['phase'] == context['phase'], 'currency lane or phase differs')
+            if end is not None and settlement is not None:
+                require(end['tokens'] == settlement['usage']['total_tokens'], 'provider tokens differ from currency receipt')
+            if end is None or settlement is None: unresolved = True
+        elif end is None:
+            unresolved = True
+        else:
+            require(end.get('outcome') == 'budget_exhausted' and type(end.get('tokens')) is int
+                and end['tokens'] == 0 and type(end.get('result')) is str, 'provider completion lacks currency or a known zero refusal')
+            known_zero += 1
+    require(not unmatched, 'currency receipt lacks matching provider invocation')
+    cost['known_zero_refusals'] = known_zero
+    if unresolved: cost['cost_upper_micro_cny'] = None
+
+
 def score(result,manifest,split):
     binding=result['contract']['binding']
     require(binding['split_id']==split and binding['seed_set']==[manifest['split_seed']] and
@@ -213,6 +244,8 @@ def verify_insights(rows, dev, evaluations):
         for r in rows if r['kind'] == 'composed_evidence' and r['payload'].get('evidence_ref')}
     physical = {r['payload']['evidence']['evidence']['candidate_id']: r['payload']['evidence'] for r in rows
         if r['kind'] == 'composed_physical_evidence' and r['payload']['request']['split_id'] == 'dev'}
+    original_refs.update({r['payload']['evidence_ref']: r['payload']['proposal']['candidate']['id']
+        for r in rows if r['kind'] == 'arbor_construction_failed'})
     def same_development(item, identifier):
         original = dev[identifier]; actual = item['eval_result']
         require(item['candidate_id'] == identifier and actual['status'] == original['status'] and
@@ -304,6 +337,26 @@ def summarize(manifest,rows,receipts,report,official):
         score(result, manifest, 'dev')
         require(identifier not in dev_results or dev_results[identifier] == result, 'conflicting uncommitted evaluation')
         dev_results[identifier] = result; programs[identifier] = materialized[identifier]
+    construction_failures = set()
+    outcomes = {digest(p): p for p in events('construction_outcome')}
+    for p in events('arbor_construction_failed'):
+        identifier = p['proposal']['candidate']['id']; result = p['evidence']['evidence']['eval_result']
+        original = outcomes.get(p['construction_outcome_ref'])
+        require(original is not None, 'construction failure lacks original outcome')
+        op, outcome = original['identity']['operation'], original['outcome']
+        require(op['lane'] == 'main' and op['cycle'] == p['cycle'] and op['run_id'] == p['logical_run_id']
+            and selected_cycles.get(p['cycle']) == identifier and outcome['kind'] == 'failed'
+            and outcome['failure_type'] == 'OperatorFailure', 'construction failure identity differs')
+        require(p['evidence_ref'] == digest({'logical_run_id': p['logical_run_id'], 'evidence': p['evidence']})
+            and p['evidence']['evidence']['candidate_id'] == identifier
+            and p['proposal']['artifact'] == '' and result['status'] == 'failed_to_run' and result['metrics'] == {}
+            and result['text_feedback'] == outcome['detail'] and result['contract']['binding']['candidate_id'] == identifier
+            and result['contract']['binding']['artifact_sha256'] == sha(b''), 'construction failure evidence changed')
+        score(result, manifest, 'dev')
+        require(identifier not in construction_failures and (identifier not in dev_results or dev_results[identifier] == result),
+                'duplicate or conflicting construction failure')
+        construction_failures.add(identifier)
+        dev_results[identifier] = result; programs[identifier] = ''
     aggregate_sources = verify_insights(rows, dev_results, evaluations)
     layered = layered_selection(manifest, rows, dev_results, programs)
     winner = layered['gate_selected_id']
@@ -322,8 +375,7 @@ def summarize(manifest,rows,receipts,report,official):
     cost=currency(receipts,run_ids)
     if manifest['mode']=='live':
         require(manifest['source']['commit'] and manifest['source']['dirty'] is False,'live source not clean')
-        require(len(ends)<=cost['settled_calls']<=len(receipts)<=len(starts),'currency coverage differs')
-        if ended!=started or len(receipts)!=len(starts):cost['cost_upper_micro_cny']=None
+        reconcile_currency(starts, ends, receipts, cost)
     submission=None
     if report is not None:
         for key in ('source','task_id','search_seed','split_seed','dataset_identity','dataset_manifest','mode'):
@@ -353,7 +405,8 @@ def summarize(manifest,rows,receipts,report,official):
     summary={'task_id':manifest['task_id'],'search_seed':manifest['search_seed'],'split_seed':manifest['split_seed'],
         'mode':manifest['mode'],'source':manifest['source'],'dataset_identity':manifest['dataset_identity'],
         'scoring':manifest['dataset_manifest']['scoring'],'run_state':report['run_state'] if report else 'report_missing',
-        'uncommitted_development_ids':sorted(set(dev_results)-committed_ids),
+        'uncommitted_development_ids':sorted(set(dev_results)-committed_ids-construction_failures),
+        'uncommitted_construction_failures':sorted(construction_failures-committed_ids),
         'search':counts,'best_development':best,'final_state':final_state,'final_loss':final_loss,
         'official_state':official_state,'official_score':official_score,'submission':submission,
         'independent_initial_controls':controls,'evaluations':evaluations,

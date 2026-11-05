@@ -120,3 +120,26 @@ def test_unknown_planning_usage_stays_pending_and_does_not_construct(tmp_path, a
     assert not records(fw, 'arbor_dispatched')
     assert len(ledger.snapshot()['pending_calls']) == 1
     assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 38
+
+
+def test_capacity_refused_ideation_resumes_without_retry(tmp_path, arbor_endpoint, monkeypatch):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    def controls_only(path):
+        ledger = CampaignBudget.create(path / 'campaign.db', limit_micro_cny=4456448)
+        ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                                 expected_head=ledger.snapshot()['journal_head'])
+        return ledger
+    monkeypatch.setattr(__import__(__name__), 'campaign_fixture', controls_only)
+    fw, ledger, _ = build(tmp_path, arbor_endpoint, monkeypatch, cycles=1)
+    result = fw.evolve('Fit public training priors.')
+    assert result['best_candidate_id'] is None
+    assert len(arbor_endpoint.requests) == 1
+    before = ledger.snapshot()
+    assert not before['pending_calls']
+    monkeypatch.undo()
+    resumed, _, domain = build(tmp_path, arbor_endpoint, monkeypatch, cycles=1, resume=True)
+    restored = resumed.evolve('Fit public training priors.')
+    assert restored['best_candidate_id'] is None and restored['stop_reason'] == result['stop_reason']
+    assert domain.training_invocations == 0 and len(arbor_endpoint.requests) == 1
+    assert ledger.snapshot() == before
+    assert resumed.replay()['replay_certificate']['passed']
