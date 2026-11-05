@@ -1,6 +1,6 @@
 # FunSearch OR3 pilot evidence
 
-Status: engineering and offline fixture validation; the three real seed attempts have not yet been run or published. This directory does not claim a benchmark gain.
+Status: v1 exposed an output-format conflict in real seed 0; its complete [failure record](format-conflict-v1/README.md) is retained. Corrected v2 three-seed validation is pending. This directory does not claim a benchmark gain.
 
 Frozen protocol: [C02 specification](../../../docs/specs/classic/FUNSEARCH.md). Seeds 0/1/2, two islands, initial construction plus at most ten proposals, output cap 16384, 30-second partition timeout, and the original cumulative CNY campaign. The fixed best-fit reference is separate from model search. The initial independent control is a sanity check, not a budget-matched comparator.
 

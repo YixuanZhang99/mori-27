@@ -225,8 +225,8 @@ class GovernedInvocation:
             candidate = replace(candidate, context_pack_ref=source_context["context_pack_ref"])
             control_context = session["construction_execution"].project(source_context)
             if runtime.funsearch:
-                control_context['instruction'] = ('Return exactly one Python function with the target name and '
-                    'signature in this frozen template. Do not include other top-level statements.\n' +
+                control_context['instruction'] = ('The JSON artifact field must contain exactly one Python function with the target name and '
+                    'signature in this frozen template. The artifact must not contain other top-level statements.\n' +
                     runtime.assembly.policy.options['template'])
             frozen_control_context = copy.deepcopy(control_context)
             request = replace(request, context=control_context)

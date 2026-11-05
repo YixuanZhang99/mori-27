@@ -15,4 +15,6 @@
 
 执行进度：分支收敛已完成，GEPA 的 [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 已于 2026-11-05 合入 main `b16b4c6`，两组最终候选 Mac/Linux/MLE 检查全部通过，合并树与候选相同。GEPA 远端方法分支已归档退役；真实结果及失败见 [GSM8K 交付记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)，尚无优化收益或论文复现结论。
 
-当前施工为 C02 FunSearch，唯一下一方法分支 `codex/classic-funsearch`。为利用 CI 等待时间，本地工程增量从 GEPA 最终候选开始；发布前须衔接新 main。已冻结 [C02 spec](specs/classic/FUNSEARCH.md) 和 [实施计划](superpowers/plans/2026-11-05-funsearch-delivery.md)，补齐有效程序供亲、原始岛屿历史校验、双 split 隔离评分及冻结终评入口。11-cycle 离线试跑和记录回放通过，三 seed 真实试跑与合入尚未完成。下一步完成审查修复及完整检查，然后沿原累计账本实测、保留全部失败、交付独立报告。Goal 保持 active，后续方法顺序不变。
+当前施工为 C02 FunSearch，唯一方法分支 `codex/classic-funsearch` 已衔接 main 并发布 [PR #6](https://github.com/YixuanZhang99/mori-27/pull/6)。本地完整检查、11-cycle 离线试跑和记录回放通过。真实 v1 seed 0 暴露函数输出要求与 JSON 外层格式的冲突：11次构造均失败（7格式错误、4输出截断），无有效程序或留出成绩；费用上界 ¥0.971870 已全部结算，原 campaign 累计 ¥18.695960。其余两个 v1 seed 在调用前停止，完整记录保留于 [失败档案](../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
+
+v2 已明确外层 JSON 与 artifact 内函数的边界，70项相关回归和架构检查通过；接下来从干净发布源码运行独立的 seeds0/1/2，继续原数据、预算和费用账本，保留所有失败。当前不宣称真实机制验收完成或优化收益。PR 最终候选通过 Mac/Linux/MLE 检查及真实结果核对后合入，随后推进 AIDE；Goal 保持 active。GEPA 合并后 Linux/MLE 复验通过，Mac 发现的故障注入时序问题已在 PR #6 修复，等待最终候选复验。

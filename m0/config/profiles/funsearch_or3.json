@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "name": "funsearch-or3-v1",
+  "name": "funsearch-or3-v2",
   "mode": "benchmark",
   "provider": {
     "name": "provided"

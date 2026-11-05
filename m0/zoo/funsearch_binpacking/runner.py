@@ -16,7 +16,7 @@ def build_profile(data, *, seed, max_proposals, call_token_bound, timeout=30):
             type(call_token_bound) is not int or call_token_bound <= 0 or
             type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0):
         raise ValueError('finite timeout and explicit nonnegative proposals/positive token bound required')
-    profile = composed_profile(name='funsearch-or3-v1')
+    profile = composed_profile(name='funsearch-or3-v2')
     profile.update(schema_version=2,
         domain={'name': 'funsearch_or3', 'options': {'dataset_identity': data.identity, 'timeout': float(timeout)}},
         policy={'name': 'funsearch', 'options': {'case_ids': data.ids('dev'), 'islands': 2, 'seed': seed,
@@ -253,7 +253,7 @@ def main(argv=None):
             if run_state == 'completed':
                 run_state, error_type = 'reporting_failed', campaign_snapshot_error
     report = {'method_id': 'FunSearch', 'reference_revision': 'cc53f274237d7ab05c19df939edbc1f9616a7c19',
-        'recipe_revision': 'funsearch-or3-v1', 'fidelity': 'adapted', 'mode': args.mode, 'seed': args.seed,
+        'recipe_revision': 'funsearch-or3-v2', 'fidelity': 'adapted', 'mode': args.mode, 'seed': args.seed,
         'source_commit': source_commit, 'source_dirty': source_dirty, 'dataset_identity': data.identity,
         'split_hashes': data.split_hashes, 'max_proposals': args.max_proposals, 'timeout': args.timeout,
         'deviations': ['two islands; bounded 10-proposal standard pilot; independent Python RNG',

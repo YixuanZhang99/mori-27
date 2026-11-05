@@ -74,3 +74,9 @@ C02 必须使用 capacity=max(2, max_proposals+1) 的 PopulationFrontier 保留�
 独立终评入口明确为同一 runner 的 `--resume --final-only`：只接受已存在的 `metric_final_frozen`，读取并验证原候选及绑定后执行未完成的终评；已完成则返回原报告。尚未冻结时立即拒绝，不能借终评命令生成候选、继续搜索、重新选择或调用模型。它复用 Framework 的持久化 final 恢复路径，不复制终选权威。
 
 恢复必须从冻结初始配置重建 FunSearch 岛屿状态并逐事件校验，不能仅验证每张凭证自带的 before/after；policy 完成恢复后还须核对最终 RNG/成员/reset/pending 状态。平台原有 generic population sampler 不变，FunSearch 的抽样通过独立等价验证接入。
+
+## 实测发现与格式修正（v2）
+
+v1 `f151dba` 的 seed 0 完成 11 次搜索，均未通过构造；无有效程序或留出分数。其中7次因外层格式错误、4次因供应商输出截断而失败；“只返回函数”的任务指令与 M7 JSON 外层格式冲突是已定位的实现缺陷。后两个 v1 seed 在调用前停止，原始记录与费用保留于 [格式冲突记录](../../../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
+
+`funsearch-or3-v2` 将函数限制明确限定为 JSON `artifact` 的内容，并用 version=2 的 FunSearch 专用角色指令要求 `artifact`/`hypothesis` JSON 外层；主搜索与独立 control 同步修正。不放宽解析器、不从裸代码补造成功、不改变算法/数据/提案数/输出上限/时间限额/原费用账本。新版本独立预声明 seeds 0/1/2，各初始加最多10提案，16384输出、30秒/partition；不得把两版样本混合报均值。

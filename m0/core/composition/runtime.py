@@ -680,8 +680,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                                          self._source_refs(context))
         producer_context = self.construction.project(context) if self.construction_enabled else context
         if self.funsearch and not parents:
-            producer_context['instruction'] = ('Return exactly one Python function with the target name and '
-                'signature in this frozen template. Do not include other top-level statements.\n' +
+            producer_context['instruction'] = ('The JSON artifact field must contain exactly one Python function with the target name and '
+                'signature in this frozen template. The artifact must not contain other top-level statements.\n' +
                 self.assembly.policy.options['template'])
         parent_inputs = tuple(self.construction.parent_view(self.proposals[p]) if self.construction_enabled
                               else copy.deepcopy(self.proposals[p]) for p in parents)
@@ -707,9 +707,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                                      'materialization': materialized}
         producer_task = task
         if self.funsearch:
-            producer_task += ('\nReturn one complete unversioned function named ' +
+            producer_task += ('\nThe JSON artifact field must contain one complete unversioned function named ' +
                 self.assembly.policy.options['function_name'] + ' with the frozen signature; '
-                'do not return versioned examples or other top-level statements.')
+                'do not put versioned examples or other top-level statements in the artifact.')
         request = OperatorRequest(producer_task, candidate_id, cycle,
                                   parent_inputs,
                                   tuple((comparison_projection if self.construction_enabled else public_projection)(

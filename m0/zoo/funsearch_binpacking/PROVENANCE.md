@@ -88,5 +88,12 @@ wall-clock schedule; M7 generates the initial program; editing is restricted to
 one function. Cluster sampling uses the final sorted case's score, while global
 selection uses development mean. These objectives are reported separately.
 
-Real three-seed delivery results remain pending. Fixture and loopback tests do
+The current recipe is `funsearch-or3-v2`. Version 1 exposed conflicting output
+instructions in its first real seed: all 11 constructions failed before scoring.
+Its other two planned seeds were not started after diagnosis. The full v1 record
+and cost remain in the experiment archive. Version 2 explicitly requires the M7
+JSON envelope and scopes the one-function restriction to its artifact field.
+The strict parser, data, search budget and scorer are unchanged.
+
+Corrected three-seed delivery results remain pending. Fixture and loopback tests do
 not establish benchmark performance or improvement over best-fit.
