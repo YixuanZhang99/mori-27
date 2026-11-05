@@ -167,8 +167,8 @@ def run(*, output, public_root, task_id, split_seed=7, search_seed=0, max_cycles
         registry = default_registry()
         profile = build_profile(split_seed=split_seed, search_seed=search_seed,
                                 max_cycles=max_cycles, call_token_bound=100)
-    task = task_description(bundle).replace('Return code only.',
-        'Return the complete executable code in artifact and your plan in hypothesis in the required JSON response.')
+    # Wire schemas belong to the planner/constructor phase, not shared task data.
+    task = task_description(bundle).replace('Return code only. ', '')
     task += '\nSelect by maximum ' + bundle.protocol['selection_metric'] + '; this is the negated task loss.'
     binding = getattr(provider, 'manifest_binding', None)
     manifest = {'schema_version': 1, 'recipe_revision': RECIPE, 'mode': 'live' if ledger else 'fixture',

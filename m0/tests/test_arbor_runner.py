@@ -152,3 +152,20 @@ def test_search_repetition_keeps_data_split_and_program_inputs_fixed(tmp_path):
     for name in ('train.csv', 'predict.csv', 'protocol.json'):
         assert (tmp_path / 'run0/public_inputs' / name).read_bytes() == (
             tmp_path / 'run2/public_inputs' / name).read_bytes()
+
+
+def test_phase_schemas_do_not_conflict_with_shared_task_text(tmp_path):
+    from zoo.mle_bench_lite.arbor_runner import run, FixtureProvider
+    class SchemaAware(FixtureProvider):
+        def __call__(self, prompt):
+            request = json.loads(prompt)
+            if request.get('kind') == 'arbor_ideation':
+                task = request['observation']['task']
+                assert 'Return code only' not in task
+                assert 'in artifact' not in task
+                assert 'required JSON response' not in task
+                assert 'new_ideas and selection' in request['instruction']
+            return super().__call__(prompt)
+    report = run(output=tmp_path / 'run', public_root=fixture_public(tmp_path / 'public'),
+        task_id='spooky-author-identification', max_cycles=1, provider=SchemaAware(), runner=TrustedFixtureRunner())
+    assert report['run_state'] == 'completed'

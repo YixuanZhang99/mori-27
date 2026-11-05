@@ -32,4 +32,6 @@ PYTHONPATH=m0 uv run --project m0 python -m zoo.mle_bench_lite.arbor_runner --ou
 
 本地验证已包含：实际 Linux 沙箱训练与跨 split 冻结预测、开发集赢家被准入集拒绝、经验消融、篡改恢复拒绝，以及本机 HTTP 下 planning/constructor/synthesis 的真实费用结算和零调用回放。独立 `arbor_grading` 入口只接受原始冻结 trunk 及原始预测重建的提交，评分单次执行并与搜索隔离。
 
-**交付边界：** 当前仍缺真实三任务矩阵、独立结果导出/重算、完整分支审查、最终 CI 和合入。fixture 的分数不是 benchmark 表现；性能结论与论文复现均未成立。
+独立 [导出与重算工具](../../../research/experiments/2026-11-05-arbor-mle/README.md) 已实现，分别核对开发集最优、准入 trunk、最终冻结评估、费用和经验来源；未完成尝试与未运行 cell 保留在分母中。真实结果尚未生成。
+
+**交付边界：** 当前仍缺真实三任务矩阵、完整分支审查、最终 CI 和合入。fixture 的分数不是 benchmark 表现；性能结论与论文复现均未成立。
