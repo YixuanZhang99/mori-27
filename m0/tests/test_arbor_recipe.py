@@ -21,6 +21,8 @@ class ArborProvider(Provider):
     def __call__(self, prompt):
         super().__call__(prompt)
         request = json.loads(prompt)
+        if request.get('kind') == 'arbor_insight':
+            return json.dumps({'summary': 'Development observation for ' + request['target_id']})
         if request.get('kind') != 'arbor_ideation':
             return json.dumps({'artifact': 'program:' + request['hypothesis'],
                                'hypothesis': request['hypothesis']})
@@ -56,9 +58,10 @@ def assembly():
     value['operators'] = [{'name': 'hypothesis_refine'}]
     value['frontier'] = {'name': 'tree', 'options': {'retain_rejected': True}}
     value['memory'] = {'name': 'scoped', 'options': {'context_scope': 'run',
-        'levels': ['L1', 'L2'], 'trust_floor': 'ungated', 'include_negative': True}}
+        'levels': ['L1', 'L2'], 'trust_floor': 'ungated', 'include_negative': True,
+        'top_k': 20, 'max_chars': 160000}}
     value['budget']['options']['operation_reservations']['planning']['token'] = 100
-    value['budget']['options']['operation_reservations']['operator']['token'] = 50
+    value['budget']['options']['operation_reservations']['operator']['token'] = 10
     value['admission'] = {'name': 'layered', 'options': {'call_budget': 6}}
     value['execution']['constructor']['options'] = {'max_attempts': 2}
     return value
@@ -92,7 +95,7 @@ def test_pending_idea_uses_new_trunk_without_changing_skeleton_parent(tmp_path):
     candidates = [row['proposal']['candidate'] for row in records(fw, 'composed_evidence')]
     assert [c['hypothesis'] for c in candidates] == ['baseline hypothesis', 'first child', 'pending sibling']
     assert candidates[2]['parents'] == [candidates[0]['id']]
-    requests = [json.loads(p) for p in provider.prompts if json.loads(p).get('kind') != 'arbor_ideation']
+    requests = [json.loads(p) for p in provider.prompts if 'recipe' in json.loads(p)]
     assert requests[2]['recipe']['parent_artifacts'] == [
         {'candidate_id': candidates[1]['id'], 'artifact': 'program:first child'}]
     assert requests[2]['recipe']['hypothesis_binding']['skeleton_parents'] == [candidates[0]['id']]
@@ -125,11 +128,12 @@ def test_invalid_or_exhausted_parent_is_not_dispatched(tmp_path, mode, generatio
 
 def test_exhausted_parent_budget_is_excluded_before_ideation(tmp_path):
     configured = assembly()
-    configured['budget']['options']['limits']['direction']['token'] = 12
-    configured['budget']['options']['operation_reservations']['operator']['token'] = 5
-    configured['budget']['options']['operation_reservations']['planning']['token'] = 5
+    configured['budget']['options']['limits']['direction']['token'] = 8
+    configured['budget']['options']['operation_reservations']['operator']['token'] = 1
+    configured['budget']['options']['operation_reservations']['planning']['token'] = 4
     configured['budget']['options']['reservation']['token'] = 7
     provider, domain = ArborProvider(), Domain()
+    provider.tokens = 1
     fw = build(tmp_path, assembly=configured, provider=provider, domain=domain, generations=1)
     with pytest.raises(ValueError, match='Arbor.*parent'):
         fw.evolve(TASK)
@@ -147,7 +151,7 @@ class RepairProvider(ArborProvider):
     def __call__(self, prompt):
         result = super().__call__(prompt)
         request = json.loads(prompt)
-        if request.get('kind') == 'arbor_ideation':
+        if request.get('kind') in {'arbor_ideation', 'arbor_insight'}:
             return result
         if request['attempt'] == 1:
             return 'malformed artifact envelope'
@@ -164,7 +168,7 @@ def test_same_hypothesis_format_repair_keeps_identity(tmp_path):
     result = records(fw, 'materialization_completed')[0]['construction_result']
     assert result['initial_hypothesis'] == result['effective_hypothesis'] == 'baseline hypothesis'
     assert [item['status'] for item in result['attempts']] == ['invalid_output', 'complete']
-    assert provider.calls == 3  # One ideation and two construction attempts.
+    assert provider.calls == 5  # Ideation, two construction attempts, leaf and global synthesis.
     assert sum(r['actual']['token'] for r in physical_operations(fw)) >= 15
 
 
@@ -175,8 +179,8 @@ def test_changed_hypothesis_repair_is_rejected_with_cost(tmp_path):
     assert result['best_candidate_id'] is None
     assert records(fw, 'materialization_completed') == []
     assert domain.calls == []
-    assert provider.calls == 3
-    assert sum(r['actual']['token'] for r in physical_operations(fw)) == 15
+    assert provider.calls == 5
+    assert sum(r['actual']['token'] for r in physical_operations(fw)) == 25
 
 
 def test_forged_trunk_binding_fails_before_construction(tmp_path):
@@ -199,7 +203,7 @@ def test_forged_trunk_binding_fails_before_construction(tmp_path):
     with pytest.raises(ValueError, match='Arbor request differs'):
         fw.evolve(TASK)
     assert len(records(fw, 'materialization_completed')) == 1
-    assert provider.calls == 3
+    assert provider.calls == 5
 
 
 def test_completed_cycle_resume_retains_unconsumed_hypothesis(tmp_path):
@@ -212,5 +216,5 @@ def test_completed_cycle_resume_retains_unconsumed_hypothesis(tmp_path):
     resumed.evolve(TASK)
     candidates = [row['proposal']['candidate'] for row in records(resumed, 'composed_evidence')]
     assert [c['hypothesis'] for c in candidates] == ['baseline hypothesis', 'first child', 'pending sibling']
-    assert provider.calls == prior_calls + 2
+    assert provider.calls == prior_calls + 5
     assert len([call for call in domain.calls if call['request']['split_id'] == 'dev']) == 3

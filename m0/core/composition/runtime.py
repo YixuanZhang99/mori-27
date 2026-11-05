@@ -433,6 +433,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
         self._validate_aide_restore(restored, payload['incumbent'], proposals, evidence_by_id)
+        if self.arbor:
+            self.arbor.restore(payload, list(self.store.read()))
         if self.funsearch:
             self.funsearch._audit()
         if self.proxy:
@@ -916,6 +918,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         if self.arbor:
             self.arbor.references(candidate_id)
         self.applier.apply_all(mutations)
+        if self.arbor:
+            self.arbor.commit_decision(candidate_id, decision)
         lessons = [entry for entry in self.memory.entries.values()
                    if entry.provenance.source_candidate_id == candidate_id and entry.level in {"L2", "L3"}
                    and entry.state == "active" and entry.time.superseded_by is None]

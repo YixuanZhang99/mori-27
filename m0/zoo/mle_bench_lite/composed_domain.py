@@ -137,10 +137,10 @@ class PublicTrainDomain:
 
     @property
     def evaluation_contexts(self):
-        # Task-metric selection bypasses layered/proxy adapters, so declare its
-        # two splits explicitly. Preserve the legacy adapters' context assembly.
+        # Task-metric recipes can use either development-only or layered
+        # admission. Bind each held-out split; retain legacy proxy assembly.
         if self.bundle.dev_scoring == "task_metric":
-            return {split: self.bundle.contexts[split] for split in ("dev", "final_audit")}
+            return {split: self.bundle.contexts[split] for split in ("dev", "admission", "final_audit")}
         return None
 
     @property
