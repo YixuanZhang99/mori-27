@@ -34,6 +34,13 @@ class PopulationRuntime:
                     or not isinstance(self.parts['admission'], MetricAdmission) \
                     or self.parts['admission'].margin != 0:
                 raise ValueError('AIDE requires retained tree, matching repair depth, M7 recipes and validation-best admission')
+            memory = self.assembly.memory.options
+            if memory.get('context_scope', 'ancestors') != 'run' or memory.get('levels') != ['L1'] \
+                    or memory.get('trust_floor', 'gated') != 'ungated' \
+                    or not memory.get('include_negative', True) or memory.get('include_imported', False) \
+                    or memory.get('imports') or self.parts.get('knowledge') is not None \
+                    or 'memory' not in self.assembly.execution.spec.context_projection:
+                raise ValueError('AIDE requires run-local L1 journal retrieval without imports or knowledge')
         if isinstance(policy, PopulationPolicy):
             from core.composition.construction_recipes import RecipeOperator
             crossover = self.parts['operators'][1] if len(self.parts['operators']) > 1 else None
@@ -87,6 +94,7 @@ class PopulationRuntime:
         physical = copy.copy(self.budget)
         physical._data = _empty_state()
         seen, chosen, best, cycle, pending = set(), None, None, None, None
+        journals = {}
 
         def direction(identifier):
             ancestors = set()
@@ -134,6 +142,10 @@ class PopulationRuntime:
                         or proposal.candidate.created_cycle != cycle:
                     raise ValueError('AIDE checkpoint differs from original evidence or lineage')
                 authority.add(proposal.candidate, public_projection(measured))
+                entry = self.memory.aide_journal_entry(proposal, public_projection(measured),
+                    value['evidence_ref'], cycle=cycle,
+                    materialization=self.construction.materializations.get(identifier))
+                journals[entry.id] = entry
                 node = authority.nodes[identifier]
                 node.result.update(memory_refs=[], evidence_ref=value['evidence_ref'],
                                    context_pack_ref=proposal.candidate.context_pack_ref)
@@ -151,6 +163,15 @@ class PopulationRuntime:
                     authority.nodes[identifier].status = 'merged'
                     best = identifier
                 pending = None
+        if set(journals) != set(self.memory.entries):
+            raise ValueError('AIDE journal coverage differs from original execution')
+        for identifier, expected in journals.items():
+            actual = self.memory.entries[identifier]
+            if actual.payload != expected.payload or actual.provenance != expected.provenance \
+                    or actual.context != expected.context or actual.scope != 'run' or actual.level != 'L1' \
+                    or actual.state != 'active' or actual.time.created_at != expected.time.created_at \
+                    or actual.time.superseded_by is not None or actual.time.ttl is not None:
+                raise ValueError('AIDE journal facts differ from original execution')
         if pending is not None or seen != set(proposals) or best != incumbent \
                 or authority.checkpoint() != restored.checkpoint() \
                 or chooser.checkpoint_state() != policy.checkpoint_state() \

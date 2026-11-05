@@ -35,7 +35,10 @@ class ScoredDomain(Domain):
 
 
 def assembly(*, debug_probability=0.0):
-    value = profile(frozen=False, projection=[])
+    value = profile(frozen=False, projection=['memory'])
+    value['memory'] = {'name': 'scoped', 'options': {
+        'context_scope': 'run', 'levels': ['L1'], 'trust_floor': 'ungated',
+        'include_negative': True, 'include_imported': False, 'top_k': 10, 'max_chars': 160000}}
     value['policy'] = {'name': 'aide', 'options': {
         'num_drafts': 3, 'debug_probability': debug_probability,
         'max_debug_depth': 2, 'seed': 7}}
@@ -199,19 +202,24 @@ def test_driver_refuses_forged_parent_capability_before_another_provider_call(tm
     from core.composition.defaults import default_registry
     from core.composition.strategies import GreedyPolicy
 
-    class ForgedChoice(GreedyPolicy):
-        async def select(self, frontier, budget):
-            nodes = sorted(frontier.nodes.values(), key=lambda n: n.created_cycle)
-            if not nodes:
-                return Selection([], 'draft')
-            if case == 'ordinary_failed':
-                return Selection([nodes[0].id], 'improve')
-            if case == 'debug_nonleaf':
-                return Selection([nodes[0].id], 'debug')
-            return Selection([nodes[-1].id], 'debug')
+    def forced_choice(frontier):
+        nodes = sorted(frontier.nodes.values(), key=lambda n: n.created_cycle)
+        if not nodes:
+            return Selection([], 'draft')
+        if case == 'ordinary_failed':
+            return Selection([nodes[0].id], 'improve')
+        if case == 'debug_nonleaf':
+            return Selection([nodes[0].id], 'debug')
+        return Selection([nodes[-1].id], 'debug')
+
+    from core.composition.aide_policy import AIDEPolicy
+    def create_policy(ctx, opts):
+        policy = AIDEPolicy(ctx.scope_context)
+        policy.choose = forced_choice
+        return policy
 
     registry = default_registry()
-    registry.register('policy', 'forged', lambda ctx, opts: ForgedChoice(ctx.scope_context))
+    registry.register('policy', 'forged', create_policy)
     configured = assembly(debug_probability=1.0)
     configured['policy'] = {'name': 'forged'}
     scores = [.4] if case == 'debug_success' else [None] * 4
@@ -288,3 +296,83 @@ def test_skill_cannot_switch_the_operator_after_parent_authorization(tmp_path):
     candidates = [r['proposal']['candidate'] for r in records(fw, 'composed_evidence')]
     assert candidates[-1]['operator'] == 'improve'
     assert json.loads(provider.prompts[-1])['recipe']['kind'] == 'improve'
+
+
+@pytest.mark.parametrize('defect', ['body', 'level', 'source', 'missing'])
+def test_aide_restore_rejects_rehashed_journal_facts_before_calls(tmp_path, defect):
+    configured = assembly(debug_probability=1)
+    fw = build(tmp_path, assembly=configured, provider=PlanProvider(),
+        domain=ScoredDomain([None, .6, .4, .8, .9]), generations=4, stop=3)
+    fw.evolve(TASK)
+    payload = RunCheckpoint.load(tmp_path / 'checkpoint.json').payload
+    entry = payload['memory']['entries'][0]
+    if defect == 'body':
+        entry['payload']['body']['generated_plan'] = 'FORGED_GENERATED_PLAN'
+    elif defect == 'level':
+        entry['level'] = 'L2'
+    elif defect == 'source':
+        entry['payload']['body']['artifact_sha256'] = 'sha256:' + 'f' * 64
+    else:
+        payload['memory']['entries'].pop()
+    rebind_checkpoint(tmp_path, payload)
+    provider, domain = PlanProvider(), ScoredDomain([None, .6, .4, .8, .9])
+    resumed = build(tmp_path, assembly=configured, provider=provider, domain=domain,
+                    generations=4, resume=True)
+    with pytest.raises(ValueError, match='AIDE journal'):
+        resumed.evolve(TASK)
+    assert provider.calls == 0 and domain.calls == []
+
+
+def test_selected_old_failed_parent_missing_from_small_context_refuses_generation(tmp_path):
+    configured = assembly(debug_probability=1)
+    configured['memory']['options']['max_chars'] = 1024
+    provider = PlanProvider()
+    fw = build(tmp_path, assembly=configured, provider=provider,
+               domain=ScoredDomain([None, .6, .4, .8]), generations=3)
+    with pytest.raises(ValueError, match='selected failed parent.*feedback'):
+        fw.evolve(TASK)
+    assert provider.calls == 3
+
+
+@pytest.mark.parametrize('defect', ['levels', 'scope', 'trust', 'imports', 'projection'])
+def test_aide_rejects_nonjournal_memory_configuration_before_calls(tmp_path, defect):
+    configured = assembly()
+    options = configured['memory']['options']
+    if defect == 'levels':
+        options['levels'] = ['L2']
+    elif defect == 'scope':
+        options['context_scope'] = 'ancestors'
+    elif defect == 'trust':
+        options['trust_floor'] = 'gated'
+    elif defect == 'imports':
+        options['include_imported'] = True
+    else:
+        configured['execution']['spec']['context_projection'] = []
+    provider = PlanProvider()
+    with pytest.raises(ValueError, match='AIDE.*journal'):
+        build(tmp_path, assembly=configured, provider=provider,
+              domain=ScoredDomain([.6]), generations=0).evolve(TASK)
+    assert provider.calls == 0
+
+
+def test_old_failed_parent_survives_eight_newer_journal_entries(tmp_path):
+    configured = assembly(debug_probability=1)
+    configured['policy']['options']['num_drafts'] = 9
+    provider = PlanProvider()
+    fw = build(tmp_path, assembly=configured, provider=provider,
+               domain=ScoredDomain([None] + [.6] * 8 + [.8]), generations=9)
+    fw.evolve(TASK)
+    evidence = records(fw, 'composed_evidence')
+    original = evidence[0]['proposal']['candidate']['id']
+    request = json.loads(provider.prompts[-1])
+    assert request['recipe']['kind'] == 'debug'
+    entries = request['context']['content']['memory']
+    assert len(entries) == 9
+    selected = next(e['body'] for e in entries if e['body']['candidate_id'] == original)
+    assert selected['public_feedback'] == 'SyntaxError: fixture broken program'
+    assert selected['generated_plan'] == 'generated plan 1'
+    second = next(e['body'] for e in entries if e['body']['candidate_id'] == evidence[1]['proposal']['candidate']['id'])
+    assert second['dev_metrics'] == {'dev/score': .6}
+    assert 'independent' in second['initial_intent']
+    assert all(e.level == 'L1' and e.state == 'active' for e in fw._composed.memory.entries.values())
+    assert fw.replay(TASK)['replay_certificate']['passed']

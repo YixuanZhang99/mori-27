@@ -21,12 +21,12 @@ Files: new m0/core/composition/aide_policy.py and m0/tests/test_aide_recipe.py; 
 
 Files: m0/core/composition/context.py, runtime.py, defaults.py; zoo/mle_bench_lite/composed_domain.py; new m0/tests/test_aide_delivery.py (Linux inventory) and related memory regression tests.
 
-- [ ] Write a real sandbox/public CSV fixture with a recognizable syntax error. Assert the subsequent debug request includes its original artifact and public traceback, then produces valid predictions.
-- [ ] Add bounded actual stderr to dev-only failure feedback, frozen in domain identity. Keep raw logs in original candidate artifacts; exclude private labels, prediction metadata and final scores from feedback.
-- [ ] M5 builds one bounded run-scoped journal entry from the authoritative proposal plus public dev evidence and original receipt. Reuse M7 hypothesis_frozen=False so the original materialization retains initial rule intent and effective generated plan; bind the scored proposal's effective hypothesis to the journal. No new docstring parser or extra model call.
-- [ ] Reuse ContextMemory.write, which already activates newly written validated L1 entries without L2 promotion. Keep writes through StateApplier; reject forged source bindings and journal payloads on restore. Do not add a new activation operation. AIDE absorb must avoid BestFirst's automatic L2 behavior.
-- [ ] Configure run scope, L1 only, no imports/knowledge, top_k covering the bounded node count and sufficient rendered context capacity. Test an older failed parent after multiple newer entries; missing selected-parent feedback must not silently become generic improve.
-- [ ] Assert actual later constructor consumption of plan marker, correct dev metric and failed traceback, plus absence of private/final/L2 material. Run memory/context/default-method regressions and actual sandbox fixture; commit.
+- [x] Write a real sandbox/public CSV fixture with a recognizable syntax error. Assert the subsequent debug request includes its original artifact and public traceback, then produces valid predictions.
+- [x] Add bounded actual stderr to dev-only failure feedback, frozen in domain identity. Keep raw logs in original candidate artifacts; exclude private labels, prediction metadata and final scores from feedback.
+- [x] M5 builds one bounded run-scoped journal entry from the authoritative proposal plus public dev evidence and original receipt. Reuse M7 hypothesis_frozen=False so the original materialization retains initial rule intent and effective generated plan; bind the scored proposal's effective hypothesis to the journal. No new docstring parser or extra model call.
+- [x] Reuse ContextMemory.write, which already activates newly written validated L1 entries without L2 promotion. Keep writes through StateApplier; reject forged source bindings and journal payloads on restore. Do not add a new activation operation. AIDE absorb must avoid BestFirst's automatic L2 behavior.
+- [x] Configure run scope, L1 only, no imports/knowledge, top_k covering the bounded node count and sufficient rendered context capacity. Test an older failed parent after multiple newer entries; missing selected-parent feedback must not silently become generic improve.
+- [x] Assert actual later constructor consumption of plan marker, correct dev metric and failed traceback, plus absence of private/final/L2 material. Run memory/context/default-method regressions and actual sandbox fixture; commit.
 
 ### Task 3: Named MLE runner, fixed data and complete evidence
 

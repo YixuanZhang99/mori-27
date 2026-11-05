@@ -640,6 +640,17 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                        if key in mutation.fields):
                     raise ValueError("policy execution metadata differs from evidence")
 
+    def _prepare_memory_mutations(self, mutations, proposal, evidence, receipt_ref, cycle):
+        from core.composition.aide_policy import AIDEPolicy
+        if type(self.parts['policy']) is AIDEPolicy:
+            if mutations:
+                raise ValueError('AIDE journal must come from authoritative execution, not policy mutations')
+            entry = self.memory.aide_journal_entry(proposal, public_projection(evidence), receipt_ref,
+                cycle=cycle, materialization=self.construction.materializations.get(proposal.candidate.id))
+            mutations = [StateMutation(MutationOp.WRITE_MEMORY, entry.id,
+                {'entry': entry, 'at': float(cycle)}, 'record source-bound AIDE execution journal')]
+        return self.memory.prepare_mutations(mutations, public_projection(evidence), receipt_ref, cycle=cycle)
+
     async def _prepare_cycle(self, task, cycle, candidate_id):
         selection_view = None
         if self.construction_enabled:
@@ -852,8 +863,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._validate_mutations(mutations, evidence)
         evidence_ref = "sha256:" + payload_digest({"logical_run_id": self._logical_run_id,
                                                    "evidence": encode_evidence(evidence)})
-        mutations = self.memory.prepare_mutations(mutations, public_projection(evidence),
-                                                 evidence_ref, cycle=cycle)
+        mutations = self._prepare_memory_mutations(mutations, proposal, evidence, evidence_ref, cycle)
         if self.layered:
             self.budget.settle(intent, self._known_cost + self._policy_tokens)
             self._current_intent = None

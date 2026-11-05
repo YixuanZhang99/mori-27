@@ -1,5 +1,6 @@
 """Pure built-in construction recipes and versioned role registration."""
 from dataclasses import asdict
+import hashlib
 
 from core.composition.construction import PromptMaterializer, RoleDefinition
 
@@ -33,6 +34,18 @@ class RecipeOperator:
                 raise ValueError("recipe parent differs from its comparison evidence")
             if self.kind != 'debug':
                 comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+            else:
+                entries = request.context.get('retrieval', {}).get('content', {}).get('memory', [])
+                matched = [item for item in entries if type(item.get('body')) is dict and item['body'].get('kind') == 'aide_journal_v1'
+                    and item['body'].get('candidate_id') == parent.candidate.id
+                    and item.get('level') == 'L1'
+                    and item.get('provenance', {}).get('source_candidate_id') == parent.candidate.id
+                    and item['body'].get('artifact_sha256') == 'sha256:' + hashlib.sha256(parent.artifact.encode()).hexdigest()
+                    and item['body'].get('status') in {'failed_to_run', 'timeout', 'invalid'}
+                    and type(item['body'].get('public_feedback')) is str
+                    and item['body']['public_feedback'].strip()]
+                if len(matched) != 1:
+                    raise ValueError('selected failed parent requires its source-bound public feedback')
         instruction = request.context.get("instruction", "")
         if type(instruction) is not str:
             raise ValueError("recipe instruction must be configured text")
