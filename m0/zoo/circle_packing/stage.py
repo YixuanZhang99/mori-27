@@ -17,6 +17,29 @@ _WRAPPER = '''import importlib.util, json, os, sys
 spec = importlib.util.spec_from_file_location("circle_evaluator", "data/evaluator.py")
 evaluator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluator)
+# The upstream evaluator uses pickle between its candidate subprocess and
+# evaluator process. Permit only NumPy's array representation; arbitrary
+# candidate-provided reduce globals must never execute in the evaluator.
+import io, pickle, pickletools
+class RestrictedUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        allowed = {("numpy", "ndarray"), ("numpy", "dtype"),
+                   ("numpy.core.multiarray", "_reconstruct"),
+                   ("numpy.core.multiarray", "scalar"),
+                   ("numpy._core.multiarray", "_reconstruct"),
+                   ("numpy._core.multiarray", "scalar")}
+        if (module, name) not in allowed:
+            raise pickle.UnpicklingError("candidate pickle global is not permitted")
+        return super().find_class(module, name)
+def safe_pickle_load(stream):
+    payload = stream.read(1024 * 1024 + 1)
+    if len(payload) > 1024 * 1024:
+        raise pickle.UnpicklingError("candidate pickle exceeds size limit")
+    for opcode, _, _ in pickletools.genops(payload):
+        if opcode.name in {"EXT1", "EXT2", "EXT4", "PERSID", "BINPERSID"}:
+            raise pickle.UnpicklingError("candidate pickle opcode is not permitted")
+    return RestrictedUnpickler(io.BytesIO(payload)).load()
+evaluator.pickle.load = safe_pickle_load
 original = evaluator.run_with_timeout
 captured = []
 def record(*args, **kwargs):
