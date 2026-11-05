@@ -71,6 +71,18 @@ def _operator_options(options):
     _text(options.get("metric", "dev/score"), "metric")
 
 
+def _tree_options(options):
+    _objective_options({k: v for k, v in options.items() if k != 'retain_rejected'})
+    if type(options.get('retain_rejected', False)) is not bool:
+        raise ValueError('retain_rejected must be boolean')
+
+
+def _debug_options(options):
+    _operator_options({k: v for k, v in options.items() if k != 'max_debug_depth'})
+    if type(options.get('max_debug_depth', 2)) is not int or options.get('max_debug_depth', 2) < 0:
+        raise ValueError('max_debug_depth must be a nonnegative integer')
+
+
 def _domain_options(options):
     _options(options, {"metric"})
     _text(options.get("metric", "dev/score"), "metric")
@@ -377,6 +389,9 @@ def default_registry():
     registry.register("domain", "legacy_prompt", lambda ctx, opts: LegacyPromptDomain(
         ctx.evaluator, ctx.llm, **opts), validate_options=_domain_options)
     registry.register("domain", "native", _native)
+    from core.composition.aide_policy import AIDEPolicy, aide_options
+    registry.register('policy', 'aide', lambda ctx, opts: AIDEPolicy(ctx.scope_context, **opts),
+                      validate_options=aide_options)
     from core.composition.gepa_policy import GEPAInstancePolicy, gepa_policy_options
     registry.register("policy", "gepa_instance", lambda ctx, opts: GEPAInstancePolicy(ctx.scope_context, **opts),
                       validate_options=gepa_policy_options)
@@ -399,6 +414,10 @@ def default_registry():
     registry.register("operator", "crossover", lambda ctx, opts:
                       RecipeOperator("crossover", **opts) if ctx.execution else CrossoverOperator(ctx.llm, **opts),
                       validate_options=crossover_options, execution={"schema_version": 1, "contract": "recipe_v1"})
+    for name in ('debug', 'improve'):
+        registry.register('operator', name, lambda ctx, opts, kind=name: RecipeOperator(kind, **opts),
+            validate_options=_debug_options if name == 'debug' else _operator_options,
+            execution={'schema_version': 1, 'contract': 'recipe_v1'})
     registry.register('operator', 'funsearch', lambda ctx, opts: FunSearchRecipeOperator(**opts),
         validate_options=lambda opts: _options(opts, {'metric'}),
         execution={'schema_version': 1, 'contract': 'recipe_v1'})
@@ -410,7 +429,7 @@ def default_registry():
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),
                       validate_options=_skill_options, execution={"schema_version": 1, "contract": "projected_skill_v1"})
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(
-        store=ctx.store, **opts), validate_options=_objective_options)
+        store=ctx.store, **opts), validate_options=_tree_options)
     registry.register("frontier", "population", lambda ctx, opts: PopulationFrontier(
         store=ctx.store, **opts), validate_options=population_options)
     registry.register("memory", "scoped", lambda ctx, opts: ContextMemory(

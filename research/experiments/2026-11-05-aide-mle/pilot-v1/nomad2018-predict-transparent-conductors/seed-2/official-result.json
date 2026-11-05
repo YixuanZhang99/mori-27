@@ -1,0 +1,31 @@
+{
+  "binding": {
+    "schema_version": 1,
+    "method_id": "AIDE",
+    "task_id": "nomad2018-predict-transparent-conductors",
+    "run_manifest_sha256": "sha256:04ab13e3e5d9358a6fe7fd7a88d691bca512a60c28eab1257c6f0a3775f5886d",
+    "selection": {
+      "candidate_id": "4d0b06a4295aa41cdf8ebb46ebab86e6a27892ab6db23400472a123ff34ba0b6",
+      "artifact_sha256": "6466215c1266a4d73df790c195c164c7abf7a2a09deb3c4f8023956ebc8c2fc5",
+      "prediction_sha256": "sha256:6822a13332b88801de07dc9618edcc07b6ed331ac7e68237a6cc5ae8d09270cf",
+      "submission_sha256": "sha256:6952f3ef8978f3658d5aa4e667143e802273d1836c36e3e27cf2601d8c469a9b"
+    },
+    "final_freeze_sha256": "sha256:777076ab2fbf2311ef61f46591df5385df8185ddaed2a5f1af9f9cc0cd84c046",
+    "prepared_identity_sha256": "sha256:3fb200edd3ef3c5483b815d69b5d70a98cd63006b622dae5ae2920385ede0ffc",
+    "fixture": false
+  },
+  "state": "completed",
+  "error_type": null,
+  "official_score": 0.06206,
+  "external_benchmark_score_produced": true,
+  "report": {
+    "competition_id": "nomad2018-predict-transparent-conductors",
+    "valid_submission": true,
+    "audit/score": 0.06206,
+    "audit/any_medal": true,
+    "audit/above_median": true,
+    "audit/gold_medal": false,
+    "audit/silver_medal": true,
+    "audit/bronze_medal": false
+  }
+}

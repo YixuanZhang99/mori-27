@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -96,8 +97,25 @@ class SandboxRunner:
 
 
 class PublicTrainDomain:
-    evaluator_version = PROTOCOL
+    evaluator_version = PROTOCOL + ':public-stderr-v1'
     measured_cost_units = ("token", "node", "eval_count", "wallclock")
+    stderr_tail_bytes = 4096
+
+    def _public_stderr(self, workspace):
+        # A worker may replace the log path. Never follow its symlink on the host
+        # or block on a FIFO, and never read an unbounded file into memory.
+        try:
+            fd = os.open(workspace / 'stderr.log', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                info = os.fstat(fd)
+                if not stat.S_ISREG(info.st_mode):
+                    return '[stderr unavailable]'
+                os.lseek(fd, max(0, info.st_size - self.stderr_tail_bytes), os.SEEK_SET)
+                return os.read(fd, self.stderr_tail_bytes).decode('utf-8', errors='replace')
+            finally:
+                os.close(fd)
+        except OSError:
+            return '[stderr unavailable]'
 
     def __init__(self, bundle, candidates_root, *, solution_timeout=120, runner=None):
         if type(solution_timeout) not in (int, float) or not 0 < solution_timeout < float("inf"):
@@ -118,6 +136,14 @@ class PublicTrainDomain:
         self._frozen = {}
 
     @property
+    def evaluation_contexts(self):
+        # Task-metric selection bypasses layered/proxy adapters, so declare its
+        # two splits explicitly. Preserve the legacy adapters' context assembly.
+        if self.bundle.dev_scoring == "task_metric":
+            return {split: self.bundle.contexts[split] for split in ("dev", "final_audit")}
+        return None
+
+    @property
     def evaluation_context(self):
         return self.bundle.contexts["dev"]
 
@@ -127,6 +153,7 @@ class PublicTrainDomain:
                 "dataset_manifest": self.bundle.manifest, "runner": self.runner.manifest_binding,
                 "implementation_sha256": self._implementation,
                 "solution_timeout": self.solution_timeout,
+                'public_dev_feedback': {'schema_version': 1, 'stderr_tail_bytes': self.stderr_tail_bytes},
                 "prediction_reuse": "one frozen candidate training run across all local splits"}
 
     def validate_context(self):
@@ -219,6 +246,15 @@ class PublicTrainDomain:
                     result.contract.binding.artifact_sha256 != expected["artifact_sha256"]:
                 raise ValueError("saved evaluation candidate identity differs")
             record_path = self.candidate_path(proposal) / "outcome.json"
+            if result.contract.binding_source == "invocation":
+                # M7 construction can fail before producing a program. Its
+                # original invocation/checkpoint is validated by Framework;
+                # there is no domain training output to restore or recreate.
+                if (proposal.artifact or result.status is not EvalStatus.FAILED_TO_RUN or
+                        result.metrics or result.cost != CostVec() or
+                        result.contract.private.data or record_path.parent.exists()):
+                    raise ValueError("invalid pre-training failure evidence")
+                continue
             record = json.loads(record_path.read_text())
             if record.get("identity") != expected or record.get("status") != result.status.value \
                     or record.get("prediction_sha256") != result.contract.private.data.get("prediction_sha256") \
@@ -258,6 +294,7 @@ class PublicTrainDomain:
             record["execution"] = execution
             if execution["timed_out"]:
                 record["status"] = "timeout"
+                record['error'] = 'candidate execution timed out\n' + self._public_stderr(workspace)
             elif execution["returncode"] == 0:
                 prediction_path = workspace / "predictions.csv"
                 # Validate before copying, and then bind the immutable saved bytes.
@@ -266,7 +303,7 @@ class PublicTrainDomain:
                 record["prediction_sha256"] = file_digest(path / "predictions.csv")
                 record["status"] = "ok"
             else:
-                record["error"] = "candidate program exited unsuccessfully"
+                record["error"] = "candidate program exited unsuccessfully\n" + self._public_stderr(workspace)
         except (SyntaxError, ValueError, OSError) as error:
             record["error"] = f"{type(error).__name__}: {error}"
         # An identity change is an integrity failure, never a normal candidate

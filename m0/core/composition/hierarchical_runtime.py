@@ -362,8 +362,7 @@ class HierarchicalRuntime(ProxyRuntime):
         self._validate_mutations(mutations, evidence)
         evidence_ref = "sha256:" + payload_digest({"logical_run_id": self._logical_run_id,
                                                    "evidence": encode_evidence(evidence)})
-        mutations = self.memory.prepare_mutations(mutations, public_projection(evidence),
-                                                 evidence_ref, cycle=cycle)
+        mutations = self._prepare_memory_mutations(mutations, proposal, evidence, evidence_ref, cycle)
         mutations.extend(proxy_mutations)
         if self.layered:
             decision = await self._admit_layered(proposal, evidence, context, rejection_reason=proxy_rejection)

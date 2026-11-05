@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "name": "aide-mle-v1",
+  "mode": "benchmark",
+  "provider": {
+    "name": "provided"
+  },
+  "domain": {
+    "name": "native"
+  },
+  "policy": {
+    "name": "aide",
+    "options": {
+      "num_drafts": 3,
+      "debug_probability": 0.5,
+      "max_debug_depth": 2,
+      "seed": 0
+    }
+  },
+  "operators": [
+    {
+      "name": "draft"
+    },
+    {
+      "name": "debug"
+    },
+    {
+      "name": "improve"
+    }
+  ],
+  "frontier": {
+    "name": "tree",
+    "options": {
+      "retain_rejected": true
+    }
+  },
+  "memory": {
+    "name": "scoped",
+    "options": {
+      "context_scope": "run",
+      "levels": [
+        "L1"
+      ],
+      "trust_floor": "ungated",
+      "include_negative": true,
+      "include_imported": false,
+      "top_k": 10,
+      "max_chars": 160000
+    }
+  },
+  "executor": {
+    "name": "git_artifact"
+  },
+  "admission": {
+    "name": "metric_final",
+    "options": {
+      "final_request": {
+        "fidelity": "final_audit",
+        "split_id": "final_audit",
+        "seed_set": [
+          7
+        ]
+      }
+    }
+  },
+  "budget": {
+    "name": "hierarchical",
+    "options": {
+      "limits": {
+        "global": {
+          "token": 10649600,
+          "node": 10,
+          "eval_count": 11
+        },
+        "direction": {
+          "token": 10649600,
+          "node": 10,
+          "eval_count": 11
+        },
+        "candidate": {
+          "token": 10649600,
+          "node": 10,
+          "eval_count": 11
+        }
+      },
+      "reservation": {
+        "token": 0,
+        "node": 0,
+        "eval_count": 1
+      },
+      "operation_reservations": {
+        "planning": {
+          "token": 0,
+          "node": 0,
+          "eval_count": 0
+        },
+        "operator": {
+          "token": 1064960,
+          "node": 1,
+          "eval_count": 0
+        }
+      },
+      "fidelity_rungs": [
+        {
+          "fidelity": "dev",
+          "split_id": "dev",
+          "seed_set": [
+            7
+          ]
+        }
+      ]
+    }
+  },
+  "skills": [],
+  "execution": {
+    "schema_version": 1,
+    "spec": {
+      "role": "general",
+      "hypothesis_frozen": false,
+      "context_projection": [
+        "memory"
+      ]
+    },
+    "constructor": {
+      "name": "prompt",
+      "options": {
+        "max_attempts": 1
+      }
+    }
+  }
+}

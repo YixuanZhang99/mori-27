@@ -1,5 +1,6 @@
 """Pure built-in construction recipes and versioned role registration."""
 from dataclasses import asdict
+import hashlib
 
 from core.composition.construction import PromptMaterializer, RoleDefinition
 
@@ -19,18 +20,32 @@ def constructor_options(options):
 class RecipeOperator:
     measured_cost_units = ("token", "node", "eval_count")
 
-    def __init__(self, kind, *, prompt_version="1", metric="dev/score"):
+    def __init__(self, kind, *, prompt_version="1", metric="dev/score", max_debug_depth=2):
         self.kind, self.prompt_version, self.metric = kind, prompt_version, metric
+        self.max_debug_depth = max_debug_depth
 
     def recipe(self, request):
-        if len(request.parents) != {"draft": 0, "reflective": 1, "crossover": 2}[self.kind] \
+        if len(request.parents) != {"draft": 0, "reflective": 1, "crossover": 2, 'debug': 1, 'improve': 1}[self.kind] \
                 or len(request.evidence) != len(request.parents):
             raise ValueError("construction recipe has invalid selected parent inputs")
         comparisons = {}
         for parent, evidence in zip(request.parents, request.evidence):
             if evidence.candidate_id != parent.candidate.id:
                 raise ValueError("recipe parent differs from its comparison evidence")
-            comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+            if self.kind != 'debug':
+                comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+            else:
+                entries = request.context.get('retrieval', {}).get('content', {}).get('memory', [])
+                matched = [item for item in entries if type(item.get('body')) is dict and item['body'].get('kind') == 'aide_journal_v1'
+                    and item['body'].get('candidate_id') == parent.candidate.id
+                    and item.get('level') == 'L1'
+                    and item.get('provenance', {}).get('source_candidate_id') == parent.candidate.id
+                    and item['body'].get('artifact_sha256') == 'sha256:' + hashlib.sha256(parent.artifact.encode()).hexdigest()
+                    and item['body'].get('status') in {'failed_to_run', 'timeout', 'invalid'}
+                    and type(item['body'].get('public_feedback')) is str
+                    and item['body']['public_feedback'].strip()]
+                if len(matched) != 1:
+                    raise ValueError('selected failed parent requires its source-bound public feedback')
         instruction = request.context.get("instruction", "")
         if type(instruction) is not str:
             raise ValueError("recipe instruction must be configured text")

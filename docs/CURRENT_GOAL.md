@@ -15,10 +15,12 @@
 
 执行进度：分支收敛已完成，GEPA 的 [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 已于 2026-11-05 合入 main `b16b4c6`，两组最终候选 Mac/Linux/MLE 检查全部通过，合并树与候选相同。GEPA 远端方法分支已归档退役；真实结果及失败见 [GSM8K 交付记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)，尚无优化收益或论文复现结论。
 
-当前施工为 C02 FunSearch，唯一方法分支 `codex/classic-funsearch` 已衔接 main 并发布 [PR #6](https://github.com/YixuanZhang99/mori-27/pull/6)。本地完整检查、11-cycle 离线试跑和记录回放通过。真实 v1 seed 0 暴露函数输出要求与 JSON 外层格式的冲突：11次构造均失败（7格式错误、4输出截断），无有效程序或留出成绩；费用上界 ¥0.971870 已全部结算，原 campaign 累计 ¥18.695960。其余两个 v1 seed 在调用前停止，完整记录保留于 [失败档案](../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
+C02 FunSearch 已通过 [PR #6](https://github.com/YixuanZhang99/mori-27/pull/6) 合入 main `da4e06c`。最终候选 `5196db9` 的 push/PR 两组 Mac/Linux/MLE 均通过，合并树与候选相同；方法分支已归档为 `archive/classic-funsearch-20261105` 并退役。本地完整检查、11-cycle 离线试跑和记录回放通过。真实 v1 seed 0 暴露函数输出要求与 JSON 外层格式的冲突：11次构造均失败（7格式错误、4输出截断），无有效程序或留出成绩；费用上界 ¥0.971870 已全部结算，原 campaign 累计 ¥18.695960。其余两个 v1 seed 在调用前停止，完整记录保留于 [失败档案](../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
 
 v2 已修正格式，但真实seed0的10次改进均在high推理下达到16384输出上限；初始程序dev213.9/held-out210.1箱，与best-fit持平。此批费用上界¥1.373084全部结算，原campaign累计¥20.069044。其余v2 seed在调用前停止，[完整记录](../research/experiments/2026-11-05-funsearch-or3/high-effort-v2/README.md)保留。
 
 v3 的三个 seed 已全部完成：有效候选 10/11、11/11、10/11；三组冻结 held-out 都为 210.1 箱，与 best-fit 持平。Seed 0 的 dev 改善至 213.8 箱，但没有体现留出收益。三组回放与独立重算通过，真实轨迹包含非最优父代选亲与弱岛重置。[完整结果及失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档；本批费用上界 ¥1.098926，原 campaign 累计 ¥21.167970，剩余 ¥178.832030，无未决调用或预留。
 
-下一步完成 PR #6 最终候选检查并合入，再从 main 开始 AIDE，依次打通 draft/debug/improve、真实 L1 摘要消费和 MLE 试跑。当前仅发布一个方法分支；AIDE 仍是规格准备，不冒称实现完成。Goal 保持 active。GEPA 合并后 Mac 故障注入修复已由 PR #6 的 fd02b5c、1462fb3 Mac 检查通过验证。
+C03 AIDE 的完整分支审查与修复、本地完整检查、三任务 × 三 seed 真实矩阵、冻结提交的官方评分均已完成。九组提交全部有效，主候选 70/90 有效、20 个失败、0 个未完成。nomad 的三个 seed 达到固定 MLE-Bench 评分器的铜/银/银历史阈值；另两个任务均高于历史中位数但未达奖牌阈值，不外推完整 benchmark 奖牌率。[完整证据和可重算报告](../research/experiments/2026-11-05-aide-mle/README.md)已归档；当前还需最终证据提交的 CI 和 PR #7 合入、归档分支。
+
+AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，剩余 ¥169.108794，无未决调用或保护违约。之后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。保持 main 加一条活跃方法分支；Arbor 离线施工成果须衔接 AIDE 合入后的实际 main 再发布和实测。Goal 保持 active，单项完成不代表八项总目标完成。

@@ -1,6 +1,6 @@
 # C02 — FunSearch 程序进化
 
-状态：施工规格冻结、工程与三 seed 小规模实测完成，待最终 CI/合入，2026-11-05；继承 [COMMON](COMMON.md)。目标：现有 OR3 开发集接入真实程序搜索和一次冻结留出评估。
+状态：规格、工程、三 seed 小规模实测和最终 CI 完成，PR #6 已于 2026-11-05 合入 main `da4e06c`；继承 [COMMON](COMMON.md)。目标：现有 OR3 开发集接入真实程序搜索和一次冻结留出评估。
 
 ## 来源与现状
 
@@ -90,3 +90,5 @@ v2 seed0 的初始程序与control可评分，但10次mutation均将16384 comple
 ## v3 交付证据
 
 `1462fb3` 的 seeds 0/1/2 已完整运行：有效候选 10/11、11/11、10/11；三组冻结 held-out 均为 210.1 箱，记录回放和原始证据重算通过。Seed 0 的 dev 改善至 213.8 箱，但未体现留出收益。真实轨迹包含非 incumbent/较差有效父代选亲以及每组两次弱岛重置；F1–F6 对应测试与原始记录见[结果报告](../../../research/experiments/2026-11-05-funsearch-or3/README.md)。本批费用上界 ¥1.098926，原 campaign 累计 ¥21.167970，无未决费用。最终检查与合入仍以 PR #6 为准；不声称论文区间复现。
+
+最终集成证据：候选 `5196db9` 的 [push 检查](https://github.com/YixuanZhang99/mori-27/actions/runs/41988128650) 与 [PR 检查](https://github.com/YixuanZhang99/mori-27/actions/runs/41988135259) 均通过 Mac/Linux/MLE；合并树与候选相同。回滚标签为 `archive/classic-funsearch-20261105`。

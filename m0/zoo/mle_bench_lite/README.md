@@ -112,3 +112,34 @@ binds the final submission candidate to evidence without fabricating a validatio
 Archive-best or best-single-chain callers must provide the full candidate pool, explicit
 validation split and chain-terminal evidence. Official medal/test results never enter
 selection replay, and comparison reports include every receipt digest.
+
+
+## AIDE adapted CSV entry
+
+`PYTHONPATH=m0 python -m zoo.mle_bench_lite.aide_runner --output /tmp/aide-fixture`
+
+The default is an offline, synthetic prior-learning fixture through the public Framework and Linux Bubblewrap sandbox. It has 10 main nodes, three independent drafts, seeded draft/debug/improve selection, task-metric validation, a frozen reporting-only final evaluation, and replay. No model key or Kaggle account is used. `--resume` reuses the original prediction files and does not train or call a provider again after a completed run. Use a fresh output directory for each experiment. The named profile is `config/profiles/aide_mle.json`; the live runner adds the independent initial control and existing CNY campaign bridge.
+
+Live uses the separate CPU environment installed from `scripts/requirements-mle-pilot.lock`, with its interpreter and packages inside the sandbox-visible system tree. Freeze all task/seed cells and official prepared-data identity before calls. Keep the shared anonymization key and existing campaign ledger outside generated workers; do not place credentials in the repository. The runner reads `OPENAI_API_KEY`, never its value from a CLI flag.
+
+```bash
+PYTHONPATH=m0 /path/to/mle-environment/bin/python -m zoo.mle_bench_lite.aide_runner \
+  --mode live --output /path/to/new-run --task spooky-author-identification \
+  --public-root /path/to/mle-data/spooky-author-identification/prepared/public \
+  --anonymization-key /path/to/shared-private-anonymization.key \
+  --spending-ledger /path/to/original-campaign.db --split-seed 7 --search-seed 0
+```
+
+All evaluation requests use split seed 7; search seed affects local policy/control RNG and is not sent as a reproducibility guarantee to the remote model. The pilot uses at most 10 main nodes, output cap 16384, low reasoning effort, and a 120-second candidate timeout. Classification selects maximum negative log loss; regression selects maximum negative mean target RMSLE. It does not use the legacy governance experiment's dev proxy metric. Only CSV features are used; this is not paper-budget or medal-rate reproduction.
+
+`method-report.json`, immutable per-attempt `reports/`, `run-manifest.json`, `composed/x1.jsonl`, generated programs, original predictions, and `submission.csv` retain evidence. All-failed search returns `no_valid_submission` with null final/submission. An unknown provider cost halts and leaves its reservation unresolved. A completed run can be graded later, once, with:
+
+```bash
+PYTHONPATH=m0:/path/to/pinned-mle-bench /path/to/mle-environment/bin/python \
+  -m zoo.mle_bench_lite.aide_grading --output /path/to/completed-run \
+  --official-root /path/to/pinned-mle-bench --data-root /path/to/mle-data \
+  --frozen-prepared-identity /path/to/predeclared-official-identity.json \
+  --anonymization-key /path/to/shared-private-anonymization.key
+```
+
+The identity JSON is the output of the existing `_official_prepared_identity` verifier frozen before search. The grader rechecks official source/prepared checksums, search public CSV hashes, selection and submission; its separate `official/result.json` never changes the winner. Grading failure and interrupted grading are retained without automatic re-execution. The predeclared three-task, three-seed AIDE matrix has completed all nine searches and official grades: 70/90 main candidates and all nine frozen submissions are valid. Original failures, source identities, costs and independent recalculation are published in the [AIDE evidence report](../../../research/experiments/2026-11-05-aide-mle/README.md). This adapted pilot does not establish full-benchmark medal rate or paper-equivalent performance.

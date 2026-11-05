@@ -4,11 +4,11 @@
 
 用户已批准按 [经典工作接入计划](CLASSIC_WORKS_PLAN.md) 收敛分支，并从 GEPA 起逐项施工；执行目标与 Goal 状态记录于 [CURRENT_GOAL](CURRENT_GOAL.md)。
 
-分支收敛已完成：[PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 整合历史开发链并通过合并后检查；GEPA [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 随后合入 `main=b16b4c6`。最终 `5fed770` 的 push/PR 两组 Mac、Linux v75、MLE 检查通过，合并树与候选相同。历史回滚 tag 和完整 bundle 保留；GEPA 方法分支已退役并归档为 `archive/classic-gepa-20261105`。下一条唯一方法分支是 `codex/classic-funsearch`，未推旧 WIP 不整体导入。
+分支收敛已完成：[PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 整合历史开发链并通过合并后检查；GEPA [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 随后合入 `main=b16b4c6`。最终 `5fed770` 的 push/PR 两组 Mac、Linux v75、MLE 检查通过，合并树与候选相同。历史回滚 tag 和完整 bundle 保留；GEPA 方法分支已退役并归档为 `archive/classic-gepa-20261105`。FunSearch [PR #6](https://github.com/YixuanZhang99/mori-27/pull/6) 也已合入 `main=da4e06c`，最终 `5196db9` 的 push/PR 两组 Mac/Linux/MLE 均通过，合并树相同；归档 `archive/classic-funsearch-20261105` 后已退役其方法分支。当前工作分支为 `codex/classic-aide`，未推旧 WIP 不整体导入。
 
 GEPA C01 已冻结规格并实现配对训练反思、完整 validation 的实例赢家保留、冻结后的 test、计量与记录回放；154 项针对性回归通过，独立审查发现的预算早停恢复问题已修复并单测通过，完整 `make check` 通过（2285 portable tests、188 Linux-dependent cases 显式排除；全部示例、架构检查及 106 tooling tests 通过），后补的运行 manifest/数据准备 2 项测试也通过。可运行命令及差异见 [GEPA provenance](../m0/zoo/gepa_gsm8k/PROVENANCE.md)。工程测试不能代替真实成绩；本轮实测见下段，等预算对照和论文公开区间复现仍未完成。
 
-当前 FunSearch 已完成有效非最优供亲保留、原始岛屿历史重建、冻结留出和独立终评入口，以及三 seed 真实 OR3 运行：31/33 候选有效，三组 held-out 均210.1箱，回放与重算通过。Seed 0 的 dev 为213.8箱，未体现留出收益。[结果与全部失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档，原 campaign 累计 ¥21.167970，无未决费用。PR #6 待最终候选 CI 和合入；完成后继续 AIDE → Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
+当前 FunSearch 已完成有效非最优供亲保留、原始岛屿历史重建、冻结留出和独立终评入口，以及三 seed 真实 OR3 运行：31/33 候选有效，三组 held-out 均210.1箱，回放与重算通过。Seed 0 的 dev 为213.8箱，未体现留出收益。[结果与全部失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档，原 campaign 累计 ¥21.167970，无未决费用。PR #6 已完成最终检查和合入。AIDE 的树选择/恢复已通过完整离线检查，真实沙箱错误与 L1 Journal 消费也已通过相关回归和完整离线检查；专用 MLE 入口及冻结提交后的评分已实现，146 项相关回归通过；完整分支审查及修复后的完整本地检查通过；真实九组矩阵及官方评分现已完成：70/90 主候选有效，九组提交均有效，[完整记录及独立重算](../research/experiments/2026-11-05-aide-mle/README.md)已归档；原 campaign 累计 ¥30.891206，余 ¥169.108794。最终证据提交 CI/合入仍以 PR #7 为准。随后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
 
 真实 GEPA/GSM8K 运行、逐题成绩、费用与失败记录见 [本轮交付报告](../research/experiments/2026-11-05-gepa-gsm8k/README.md)。它是 adapted 小规模运行验证；输出截断、无效构造等失败不删除，不据此宣称方法优化收益或论文成绩复现。
 
@@ -83,7 +83,7 @@ baseline/full 三个本地 seed 试跑：两个冻结批次的 18 份提交均�
 
 本文是当前开发状态的统一入口，区分代码位置、实现范围和验收结果。设计依据仍是 [统一抽象对照表](ABSTRACTION_ALIGNMENT.md) 与 [RUBRIC](../autoresearch-fw/RUBRIC.md)，不以本页替换原验收门槛。以下分支快照于 2026-11-04 核对；本页随 M7 Task 5 功能提交同步，精确源码哈希和验证结果见[本阶段记录](../research/experiments/2026-11-04-m7-currency-construction-local/summary.json)。
 
-## 当前应该看哪个分支
+## 历史分支快照（2026-11-04，已由页首状态取代）
 
 - **已合入主线：** `main`，`49be71e`，停在 S8 / v67 的配置种群与双亲 crossover。
 - **最近完成独立版本验收的工程节点：** `f7ab273`，v73，包含常驻对照、外部费用桥接及调用生命周期收拢；其本地和同 SHA Linux CI 均通过。它尚未合入 main，也不是正式发布。

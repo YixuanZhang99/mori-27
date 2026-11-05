@@ -1,0 +1,365 @@
+{
+  "schema_version": 1,
+  "recipe_revision": "aide-mle-v1",
+  "mode": "live",
+  "source": {
+    "commit": "40b1e88272c401397617b03f88792108e0ae43d4",
+    "dirty": false
+  },
+  "task_id": "leaf-classification",
+  "split_seed": 7,
+  "search_seed": 2,
+  "max_nodes": 10,
+  "solution_timeout": 120,
+  "profile": {
+    "schema_version": 2,
+    "name": "aide-mle-v1",
+    "mode": "benchmark",
+    "provider": {
+      "name": "provided"
+    },
+    "domain": {
+      "name": "native"
+    },
+    "policy": {
+      "name": "aide",
+      "options": {
+        "num_drafts": 3,
+        "debug_probability": 0.5,
+        "max_debug_depth": 2,
+        "seed": 2
+      }
+    },
+    "operators": [
+      {
+        "name": "draft"
+      },
+      {
+        "name": "debug"
+      },
+      {
+        "name": "improve"
+      }
+    ],
+    "frontier": {
+      "name": "tree",
+      "options": {
+        "retain_rejected": true
+      }
+    },
+    "memory": {
+      "name": "scoped",
+      "options": {
+        "context_scope": "run",
+        "levels": [
+          "L1"
+        ],
+        "trust_floor": "ungated",
+        "include_negative": true,
+        "include_imported": false,
+        "top_k": 10,
+        "max_chars": 160000
+      }
+    },
+    "executor": {
+      "name": "git_artifact"
+    },
+    "admission": {
+      "name": "metric_final",
+      "options": {
+        "final_request": {
+          "fidelity": "final_audit",
+          "split_id": "final_audit",
+          "seed_set": [
+            7
+          ]
+        }
+      }
+    },
+    "budget": {
+      "name": "hierarchical",
+      "options": {
+        "limits": {
+          "global": {
+            "token": 11714560,
+            "node": 11,
+            "eval_count": 12
+          },
+          "direction": {
+            "token": 10649600,
+            "node": 10,
+            "eval_count": 11
+          },
+          "candidate": {
+            "token": 10649600,
+            "node": 10,
+            "eval_count": 11
+          }
+        },
+        "reservation": {
+          "token": 0,
+          "node": 0,
+          "eval_count": 1
+        },
+        "operation_reservations": {
+          "planning": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 0
+          },
+          "operator": {
+            "token": 1064960,
+            "node": 1,
+            "eval_count": 0
+          }
+        },
+        "fidelity_rungs": [
+          {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          }
+        ]
+      }
+    },
+    "skills": [],
+    "execution": {
+      "schema_version": 1,
+      "spec": {
+        "role": "general",
+        "hypothesis_frozen": false,
+        "context_projection": [
+          "memory"
+        ]
+      },
+      "constructor": {
+        "name": "prompt",
+        "options": {
+          "max_attempts": 1
+        }
+      }
+    },
+    "governance": {
+      "schema_version": 1,
+      "controls": {
+        "after_main_cycles": [
+          0
+        ],
+        "seed": 2,
+        "provider": {
+          "name": "aide-control"
+        },
+        "domain": {
+          "name": "aide-control"
+        },
+        "operator": {
+          "name": "draft"
+        },
+        "request": {
+          "fidelity": "dev",
+          "split_id": "dev",
+          "seed_set": [
+            7
+          ]
+        },
+        "reservations": {
+          "operator": {
+            "token": 1064960,
+            "node": 1,
+            "eval_count": 0
+          },
+          "evaluation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          }
+        }
+      }
+    }
+  },
+  "dataset_identity": "sha256:cde6f1ee26e4914349cc1f56c49646f6d1b84cf8f0003d14fbd74138a0ff7ab0",
+  "dataset_manifest": {
+    "protocol": "mle-public-train-composed-v2",
+    "task_id": "leaf-classification",
+    "seed": 7,
+    "features": "CSV only; image/geometry auxiliary files excluded",
+    "source_sha256": {
+      "train.csv": "sha256:14a1f3f49692d0843d556f802b798b089e0d090752526d8a4b4fc476fa7429c3",
+      "test.csv": "sha256:0b5165de0f0fcae712900e2a4fae491ec8cd1d1a38b691cbaa59ee6d0b030f39",
+      "sample_submission.csv": "sha256:eda4dbc07a075c2bc5441e151e20927a7a06a16bdc03abe0d95a031e4f19079c"
+    },
+    "input_sha256": {
+      "predict.csv": "sha256:3af51349c15ce05d8deb7139da905760ee9306b6eb8882f54d1a51aa2e1fd715",
+      "protocol.json": "sha256:24ac513b09673a31052f860aa529de321647644056de447d96124cad654e1509",
+      "train.csv": "sha256:c7fa375e667062f34f7d0c87906e0b16c9b648f578ebff8a8d49ef06d78bd051"
+    },
+    "split_contexts": {
+      "dev": "sha256:d758ee8f3707f9c0a24e153754c9612efbf225375e1c48e393a8b506d4161e9a",
+      "calibration": "sha256:2582a1a798e0d0af3164ec1fde0f19b3582ec7321890ca89f038abac522307aa",
+      "admission": "sha256:19ea210765315aaccfaa240ad8273104e33945b641d5cfbcb74ee0a8e64e9fb3",
+      "final_audit": "sha256:11b5f289e0ec1196a874d976c72fcdb3c69df9985eec478eaace5572ab219cd9"
+    },
+    "split_counts": {
+      "train": 495,
+      "dev": 99,
+      "calibration": 99,
+      "admission": 99,
+      "final_audit": 99
+    },
+    "official_test_rows": 99,
+    "scoring": "negative_log_loss",
+    "dev_scoring": "task_metric"
+  },
+  "domain": {
+    "kind": "mle-public-train-composed-v2",
+    "dataset_identity": "sha256:cde6f1ee26e4914349cc1f56c49646f6d1b84cf8f0003d14fbd74138a0ff7ab0",
+    "dataset_manifest": {
+      "protocol": "mle-public-train-composed-v2",
+      "task_id": "leaf-classification",
+      "seed": 7,
+      "features": "CSV only; image/geometry auxiliary files excluded",
+      "source_sha256": {
+        "train.csv": "sha256:14a1f3f49692d0843d556f802b798b089e0d090752526d8a4b4fc476fa7429c3",
+        "test.csv": "sha256:0b5165de0f0fcae712900e2a4fae491ec8cd1d1a38b691cbaa59ee6d0b030f39",
+        "sample_submission.csv": "sha256:eda4dbc07a075c2bc5441e151e20927a7a06a16bdc03abe0d95a031e4f19079c"
+      },
+      "input_sha256": {
+        "predict.csv": "sha256:3af51349c15ce05d8deb7139da905760ee9306b6eb8882f54d1a51aa2e1fd715",
+        "protocol.json": "sha256:24ac513b09673a31052f860aa529de321647644056de447d96124cad654e1509",
+        "train.csv": "sha256:c7fa375e667062f34f7d0c87906e0b16c9b648f578ebff8a8d49ef06d78bd051"
+      },
+      "split_contexts": {
+        "dev": "sha256:d758ee8f3707f9c0a24e153754c9612efbf225375e1c48e393a8b506d4161e9a",
+        "calibration": "sha256:2582a1a798e0d0af3164ec1fde0f19b3582ec7321890ca89f038abac522307aa",
+        "admission": "sha256:19ea210765315aaccfaa240ad8273104e33945b641d5cfbcb74ee0a8e64e9fb3",
+        "final_audit": "sha256:11b5f289e0ec1196a874d976c72fcdb3c69df9985eec478eaace5572ab219cd9"
+      },
+      "split_counts": {
+        "train": 495,
+        "dev": 99,
+        "calibration": 99,
+        "admission": 99,
+        "final_audit": 99
+      },
+      "official_test_rows": 99,
+      "scoring": "negative_log_loss",
+      "dev_scoring": "task_metric"
+    },
+    "runner": {
+      "kind": "bubblewrap-seccomp-csv-v1",
+      "python": "/usr/local/share/mori27-local/pilot/bin/python",
+      "python_sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+      "threads": {
+        "OMP_NUM_THREADS": 2,
+        "OPENBLAS_NUM_THREADS": 2,
+        "MKL_NUM_THREADS": 2
+      },
+      "seccomp": {
+        "schema_version": 1,
+        "policy": "dangerous-syscall-denylist",
+        "policy_version": 2,
+        "architecture": "x86_64",
+        "action": "errno:EPERM",
+        "denied_syscall_bits": 1073741824,
+        "denied_syscall_ranges": [
+          [
+            512,
+            547
+          ]
+        ],
+        "denied_syscalls": [
+          "add_key",
+          "bpf",
+          "delete_module",
+          "finit_module",
+          "fsconfig",
+          "fsmount",
+          "fsopen",
+          "fspick",
+          "init_module",
+          "kexec_file_load",
+          "kexec_load",
+          "keyctl",
+          "mount",
+          "mount_setattr",
+          "move_mount",
+          "name_to_handle_at",
+          "open_by_handle_at",
+          "open_tree",
+          "perf_event_open",
+          "pivot_root",
+          "ptrace",
+          "reboot",
+          "request_key",
+          "setns",
+          "swapoff",
+          "swapon",
+          "umount2",
+          "unshare",
+          "userfaultfd"
+        ],
+        "filter_sha256": "1684831d295f154d29f8a57a61488baf0d73f80896e76fc31f1cc249a3d87bd7",
+        "filter_base64": "IAAAAAQAAAAVAAEAPgAAwAYAAAAAAACAIAAAAAAAAABFAAABAAAAQAYAAAABAAUANQAAAgACAAA1AAEAJAIAAAYAAAABAAUAFQAAAfgAAAAGAAAAAQAFABUAAAFBAQAABgAAAAEABQAVAAABsAAAAAYAAAABAAUAFQAAATkBAAAGAAAAAQAFABUAAAGvAQAABgAAAAEABQAVAAABsAEAAAYAAAABAAUAFQAAAa4BAAAGAAAAAQAFABUAAAGxAQAABgAAAAEABQAVAAABrwAAAAYAAAABAAUAFQAAAUABAAAGAAAAAQAFABUAAAH2AAAABgAAAAEABQAVAAAB+gAAAAYAAAABAAUAFQAAAaUAAAAGAAAAAQAFABUAAAG6AQAABgAAAAEABQAVAAABrQEAAAYAAAABAAUAFQAAAS8BAAAGAAAAAQAFABUAAAEwAQAABgAAAAEABQAVAAABrAEAAAYAAAABAAUAFQAAASoBAAAGAAAAAQAFABUAAAGbAAAABgAAAAEABQAVAAABZQAAAAYAAAABAAUAFQAAAakAAAAGAAAAAQAFABUAAAH5AAAABgAAAAEABQAVAAABNAEAAAYAAAABAAUAFQAAAagAAAAGAAAAAQAFABUAAAGnAAAABgAAAAEABQAVAAABpgAAAAYAAAABAAUAFQAAARABAAAGAAAAAQAFABUAAAFDAQAABgAAAAEABQAGAAAAAAD/fw=="
+      }
+    },
+    "implementation_sha256": {
+      "/home/neekyoung12/.codex/worktrees/governed-currency-bridge/mori-27/m0/zoo/mle_bench_lite/composed_domain.py": "sha256:a2437e411a30af1d0f58ec6a2c381da9e6ceb807b6af3e199a811bc477c39129",
+      "/home/neekyoung12/.codex/worktrees/governed-currency-bridge/mori-27/m0/zoo/mle_bench_lite/public_train.py": "sha256:1ff42f907c6cdf8f7bcb1a6019e2cd746f88d479833a1e3abcf56e418374c227",
+      "/home/neekyoung12/.codex/worktrees/governed-currency-bridge/mori-27/m0/zoo/mle_bench_lite/agent_common.py": "sha256:2c06df450f8170aaebfcf5ad21c98b3573bf7a85f5ccbf7b7e0e7fe1a5c2fdb7"
+    },
+    "solution_timeout": 120,
+    "public_dev_feedback": {
+      "schema_version": 1,
+      "stderr_tail_bytes": 4096
+    },
+    "prediction_reuse": "one frozen candidate training run across all local splits"
+  },
+  "task_description_sha256": "sha256:f7578391d93b0070a95bce441da3e500d61dea4ed8170b088d2a0e515246c755",
+  "provider": {
+    "schema_version": 1,
+    "requested_model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "max_completion_tokens": 16384,
+    "timeout": 120.0,
+    "request_format": "deepseek",
+    "retry_policy": "never",
+    "response_model_required": true,
+    "thinking": {
+      "type": "enabled"
+    },
+    "reasoning_effort": "low",
+    "temperature_applied": false,
+    "seed_applied": false,
+    "immutable_snapshot_verified": false,
+    "campaign": {
+      "cache_discount_applied": false,
+      "campaign_id": "18509cd4f3514d51ae79aa3aceaf1779",
+      "concurrency": "one_unresolved_operation",
+      "context_tokens": 1048576,
+      "currency": "CNY",
+      "input_micro_cny_per_token": 2,
+      "invoice_verified": false,
+      "limit_micro_cny": 200000000,
+      "max_output_tokens": 393216,
+      "model": "deepseek-flash",
+      "output_micro_cny_per_token": 8,
+      "policy_sha256": "00ee6005cda46ae0be0270b5daaff5a97821b173ec99aab9d3127f2a37184a18",
+      "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "price_verified_date": "2026-11-04",
+      "provider_base_url": "https://api.deepseek.com",
+      "schema_version": 1,
+      "unit": "micro_cny"
+    },
+    "token_admission": {
+      "mode": "model_capacity_v1",
+      "guarantee": "service_capacity_bound",
+      "input_capacity": 1048576
+    },
+    "phase_call_limits": {
+      "operator": 1,
+      "evaluation": 0
+    }
+  }
+}

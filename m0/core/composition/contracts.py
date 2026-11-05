@@ -347,10 +347,17 @@ class Decision:
             raise ValueError("decision requires a boolean admit and non-empty reason")
 
 
+@dataclass(frozen=True)
+class Selection:
+    """An atomic operator and lineage decision, validated by the driver."""
+    parents: list[str]
+    operator: str
+
+
 class Policy(Protocol):
     async def observe(self, state: Any, budget: Any) -> dict[str, Any]: ...
     async def ideate(self, context: dict[str, Any], parent: Any, k: int) -> list[Any]: ...
-    async def select(self, frontier: Any, budget: Any) -> list[str]: ...
+    async def select(self, frontier: Any, budget: Any) -> list[str] | Selection: ...
     async def absorb(self, evidence: EvidenceRecord) -> list[StateMutation]: ...
 
 

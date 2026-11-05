@@ -21,6 +21,26 @@ class PopulationRuntime:
     def _preflight_population(self):
         population = isinstance(self.frontier, PopulationFrontier)
         policy = self.parts['policy']
+        from core.composition.aide_policy import AIDEPolicy
+        if type(policy) is AIDEPolicy:
+            from core.composition.construction_recipes import RecipeOperator
+            from core.composition.defaults import MetricAdmission
+            operators = self.parts['operators']
+            if not self.construction_enabled or type(self.frontier) is not ResearchFrontier \
+                    or not self.frontier.retain_rejected or not self.hierarchical \
+                    or [s.name for s in self.assembly.operators] != ['draft', 'debug', 'improve'] \
+                    or any(type(o) is not RecipeOperator for o in operators) \
+                    or operators[1].max_debug_depth != policy.config['max_debug_depth'] \
+                    or not isinstance(self.parts['admission'], MetricAdmission) \
+                    or self.parts['admission'].margin != 0:
+                raise ValueError('AIDE requires retained tree, matching repair depth, M7 recipes and validation-best admission')
+            memory = self.assembly.memory.options
+            if memory.get('context_scope', 'ancestors') != 'run' or memory.get('levels') != ['L1'] \
+                    or memory.get('trust_floor', 'gated') != 'ungated' \
+                    or not memory.get('include_negative', True) or memory.get('include_imported', False) \
+                    or memory.get('imports') or self.parts.get('knowledge') is not None \
+                    or 'memory' not in self.assembly.execution.spec.context_projection:
+                raise ValueError('AIDE requires run-local L1 journal retrieval without imports or knowledge')
         if isinstance(policy, PopulationPolicy):
             from core.composition.construction_recipes import RecipeOperator
             crossover = self.parts['operators'][1] if len(self.parts['operators']) > 1 else None
@@ -54,7 +74,109 @@ class PopulationRuntime:
                     and not isinstance(self.frontier, PopulationFrontier):
                 return ResearchFrontier.restore(raw)
             raise ValueError('configured frontier does not implement portable restore')
-        return ResearchFrontier.restore(raw)
+        restored = ResearchFrontier.restore(raw)
+        if restored.retain_rejected != self.frontier.retain_rejected:
+            raise ValueError('tree retention configuration differs from the assembly')
+        return restored
+
+    def _validate_aide_restore(self, restored, incumbent, proposals, evidence):
+        """Rebuild tree decisions and RNG from original events, not saved hashes."""
+        from core.composition.aide_policy import AIDEPolicy
+        from core.composition.configured_execution import ConfiguredExecution
+        from core.composition.evaluation import comparison_projection
+        import json
+        policy = self.parts['policy']
+        if type(policy) is not AIDEPolicy:
+            return
+        authority = ResearchFrontier(metric=self.frontier.metric, direction=self.frontier.direction,
+                                     retain_rejected=True)
+        chooser = AIDEPolicy(self.memory.context, **policy.config)
+        physical = copy.copy(self.budget)
+        physical._data = _empty_state()
+        seen, chosen, best, cycle, pending = set(), None, None, None, None
+        journals = {}
+
+        def direction(identifier):
+            ancestors = set()
+            while proposals[identifier].candidate.parents:
+                if identifier in ancestors:
+                    raise ValueError('AIDE history contains cyclic ancestry')
+                ancestors.add(identifier)
+                identifier = proposals[identifier].candidate.parents[0]
+            return identifier
+
+        for row in self.store.read():
+            kind, value = row['kind'], row['payload']
+            if kind == 'hierarchical_budget':
+                physical._reduce(physical._data, value['event'], value['data'])
+            elif kind == 'composed_cycle_started':
+                if pending is not None:
+                    raise ValueError('AIDE history has an unfinished selection')
+                cycle, chosen = value['cycle'], None
+            elif kind == 'aide_selection':
+                if chosen is not None or cycle is None:
+                    raise ValueError('AIDE selection lacks a unique cycle')
+                view = ConfiguredExecution.selection_view(ResearchFrontier.restore(authority.checkpoint()))
+                compact = chooser._remember({'task': self.task, 'cycle': cycle,
+                    'frontier': json.loads(view.view('json')),
+                    'operators': [s.name for s in self.assembly.operators]})
+                chooser._strategy = {'node_count': compact['node_count']}
+                for identifier in seen:
+                    if not proposals[identifier].artifact.strip() or not physical.should_continue(direction(identifier)):
+                        view.nodes[identifier].status = 'pruned'
+                chosen = chooser.choose(view)
+                if value != {'candidate_id': value.get('candidate_id'), 'cycle': cycle,
+                             'parents': chosen.parents, 'operator': chosen.operator,
+                             'rng_state': chooser.checkpoint_state()['rng_state']}:
+                    raise ValueError('AIDE selection differs from original tree and budget')
+                pending = value['candidate_id']
+            elif kind == 'composed_cycle_aborted':
+                pending = None
+            elif kind == 'composed_evidence':
+                identifier = value['proposal']['candidate']['id']
+                if identifier not in proposals or identifier in seen or identifier != pending:
+                    raise ValueError('AIDE evidence lacks its original selection')
+                proposal, measured = proposals[identifier], evidence[identifier]
+                if value['proposal'] != _jsonable(proposal) or value['evidence'] != encode_evidence(measured)['evidence'] \
+                        or proposal.candidate.parents != chosen.parents or proposal.candidate.operator != chosen.operator \
+                        or proposal.candidate.created_cycle != cycle:
+                    raise ValueError('AIDE checkpoint differs from original evidence or lineage')
+                authority.add(proposal.candidate, public_projection(measured))
+                entry = self.memory.aide_journal_entry(proposal, public_projection(measured),
+                    value['evidence_ref'], cycle=cycle,
+                    materialization=self.construction.materializations.get(identifier))
+                journals[entry.id] = entry
+                node = authority.nodes[identifier]
+                node.result.update(memory_refs=[], evidence_ref=value['evidence_ref'],
+                                   context_pack_ref=proposal.candidate.context_pack_ref)
+                node.insight = None
+                seen.add(identifier)
+            elif kind == 'composed_decision':
+                identifier = value['candidate_id']
+                if identifier != pending or identifier not in seen:
+                    raise ValueError('AIDE decision precedes its evidence')
+                decision = self.parts['admission'].judge(comparison_projection(evidence[identifier]),
+                    comparison_projection(evidence[best]) if best else None)
+                if value['incumbent'] != best or value['decision'] != asdict(decision):
+                    raise ValueError('AIDE decision differs from validation-best evidence')
+                if decision.admit:
+                    authority.nodes[identifier].status = 'merged'
+                    best = identifier
+                pending = None
+        if set(journals) != set(self.memory.entries):
+            raise ValueError('AIDE journal coverage differs from original execution')
+        for identifier, expected in journals.items():
+            actual = self.memory.entries[identifier]
+            if actual.payload != expected.payload or actual.provenance != expected.provenance \
+                    or actual.context != expected.context or actual.scope != 'run' or actual.level != 'L1' \
+                    or actual.state != 'active' or actual.time.created_at != expected.time.created_at \
+                    or actual.time.superseded_by is not None or actual.time.ttl is not None:
+                raise ValueError('AIDE journal facts differ from original execution')
+        if pending is not None or seen != set(proposals) or best != incumbent \
+                or authority.checkpoint() != restored.checkpoint() \
+                or chooser.checkpoint_state() != policy.checkpoint_state() \
+                or self.parts['policy_absorber'].checkpoint_state() != AIDEPolicy(self.memory.context, **policy.config).checkpoint_state():
+            raise ValueError('AIDE checkpoint tree, incumbent or policy RNG/history differs from original events')
 
     def _validate_population_restore(self, restored, incumbent, proposals, evidence):
         # The checkpoint and its own hashes are not authority. Rebuild the
@@ -234,7 +356,7 @@ class PopulationRuntime:
                 {'admitted': decision.admit, 'reason': decision.reason,
                  'selected_id': candidate_id if decision.admit else self.incumbent,
                  'decision_ref': decision_ref}, 'apply M9 outcome and deterministic population retention'))
-        else:
+        elif decision.admit or not self.frontier.retain_rejected:
             self.applier.apply(StateMutation(MutationOp.MERGE if decision.admit else MutationOp.PRUNE,
                 candidate_id, {} if decision.admit else {'reason': decision.reason}, decision.reason))
 

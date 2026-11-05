@@ -40,6 +40,7 @@ uv run --project m0 --locked python -m zoo.funsearch_binpacking.runner \
 | 同搜索治理强度对照 | 三个公开任务、单 seed；M7 | [真实模型官方评分和总费用上界](research/experiments/2026-11-05-m7-governance-intensity/README.md) | 更大样本、候选接纳数与单独控制开销；不能直接视为有无治理的因果比较 |
 | GEPA 单组件 prompt 优化 | GSM8K train/validation/test；M7 | [真实试跑、逐题成绩与失败](research/experiments/2026-11-05-gepa-gsm8k/README.md)；[运行命令](m0/zoo/gepa_gsm8k/PROVENANCE.md) | 更充分的多提案搜索、同配置多 seed 等预算对照与公开区间复现 |
 | FunSearch 程序进化 | OR3 dev/held-out；M7 隔离执行 | [三 seed 真实搜索、全部失败与留出成绩](research/experiments/2026-11-05-funsearch-or3/README.md)；[运行命令](m0/zoo/funsearch_binpacking/PROVENANCE.md) | 更大规模、等预算对照与论文区间复现；本批无留出收益 |
+| AIDE 代码树搜索 | 三个 MLE 任务 × 三 seed；M7 | [九组官方评分、代码树、失败与费用](research/experiments/2026-11-05-aide-mle/README.md)；70/90 主候选有效，九组提交均有效 | 完整 MLE-Bench、等预算方法对照与论文区间复现；历史奖牌阈值不等于实际获奖 |
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -106,7 +107,7 @@ S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最�
 
 新增 [外部费用治理桥接](docs/GOVERNED_CURRENCY.md) 提供独立的 loopback HTTP 示例、双重准入和记录恢复；真实付费三任务试跑已使用该桥接，但尚未完成同搜索治理收益对照。
 
-**当前代码位置：** `main` 仍在 S8/v67；最新开发集中于 `codex/m7-construction`，包含治理、费用桥接、生命周期收拢及 M7 原生构造。新工作尚未合入 main。分支关系、已验证能力、具体合入门槛和未完成项统一见 [框架交付状态](docs/FRAMEWORK_STATUS.md)。
+**当前代码位置：** `main` 已包含历史治理/M7 开发链，以及 GEPA、FunSearch 的适配和真实小规模结果。当前按 spec 在 `codex/classic-aide` 接入 AIDE；其真实 MLE 矩阵尚未完成。最新实现范围、验证证据和缺口见 [框架交付状态](docs/FRAMEWORK_STATUS.md)。
 
 ## 目录
 

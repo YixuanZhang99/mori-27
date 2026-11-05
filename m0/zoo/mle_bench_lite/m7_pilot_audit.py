@@ -128,7 +128,7 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
             'coverage': 'currency and construction provenance; physical settlement and selected artifact require separate audit'}
 
 
-def audit_physical_and_submission(run_root, bundle, submission, *, expected_tokens):
+def audit_physical_and_submission(run_root, bundle, submission, *, expected_tokens, candidates_root=None):
     """Rebuild physical accounting and rederive the submission from frozen predictions."""
     import tempfile
     from core.budget.types import AccountingStamp
@@ -172,7 +172,8 @@ def audit_physical_and_submission(run_root, bundle, submission, *, expected_toke
     artifact_hash = hashlib.sha256(proposal['artifact'].encode()).hexdigest()
     if original['contract']['binding']['artifact_sha256'] != artifact_hash:
         raise ValueError('selected artifact differs from evaluation binding')
-    candidate_root = root.parent / 'composed_candidates' / hashlib.sha256(candidate_id.encode()).hexdigest()
+    candidate_root = (Path(candidates_root) if candidates_root is not None else
+                      root.parent / 'composed_candidates') / hashlib.sha256(candidate_id.encode()).hexdigest()
     outcome_path, prediction_path = candidate_root / 'outcome.json', candidate_root / 'predictions.csv'
     if candidate_root.is_symlink() or any(path.is_symlink() or not path.is_file() for path in (outcome_path, prediction_path)):
         raise ValueError('selected prediction evidence missing')

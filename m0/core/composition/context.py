@@ -34,6 +34,23 @@ def _text(value, label):
         raise ValueError(f"{label} must be nonempty text")
 
 
+def _journal_text(value, *, tail=False):
+    """Bound rendered JSON size so ten journal entries fit the declared context."""
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise ValueError('journal text must be a string or absent')
+    low, high = 0, min(len(value), 4096)
+    while low < high:
+        middle = (low + high + 1) // 2
+        part = value[-middle:] if tail else value[:middle]
+        if len(_json(part)) <= 4096:
+            low = middle
+        else:
+            high = middle - 1
+    return value[-low:] if tail and low else value[:low]
+
+
 def _scope(value):
     if not isinstance(value, ScopeContext):
         raise ValueError("memory requires a ScopeContext")
@@ -138,6 +155,34 @@ class ContextMemory(ScopedMemory):
         self.bindings = {}
         self.imports = {}
         self._imported_ids = set()
+
+    def aide_journal_entry(self, proposal, evidence, receipt_ref, *, cycle, materialization):
+        """Canonical run-local facts from the driver's original execution inputs."""
+        candidate = proposal.candidate
+        if candidate.id != evidence.candidate_id or evidence.eval_result.contract.binding.split_id != 'dev':
+            raise ValueError('AIDE journal requires the current proposal and dev evidence')
+        initial = None
+        if materialization is not None:
+            if materialization.proposal != proposal:
+                raise ValueError('AIDE journal plan differs from original materialization')
+            initial = materialization.to_dict()['construction_result']['initial_hypothesis']
+        elif proposal.artifact:
+            raise ValueError('AIDE journal artifact requires its original materialization')
+        body = {'kind': 'aide_journal_v1', 'candidate_id': candidate.id,
+            'parents': list(candidate.parents), 'operator': candidate.operator,
+            'artifact_sha256': 'sha256:' + hashlib.sha256(proposal.artifact.encode('utf-8')).hexdigest(),
+            'materialization_ref': materialization.ref if materialization is not None else None,
+            'initial_intent': _journal_text(initial), 'generated_plan': _journal_text(candidate.hypothesis),
+            'plan_sha256': _hash({'initial': initial, 'effective': candidate.hypothesis}),
+            'status': evidence.eval_result.status.value,
+            'dev_metrics': {k: v for k, v in evidence.eval_result.metrics.items() if k.startswith('dev/')},
+            'public_feedback': _journal_text(evidence.eval_result.text_feedback, tail=True)}
+        if len(_json(body)) > 14000:
+            raise ValueError('AIDE journal metadata exceeds the bounded context contract')
+        return MemoryEntry('aide-journal:' + candidate.id, Payload('structured', body, 'aide_journal/v1'),
+            Provenance(self.context.run_id, evidence_refs=[receipt_ref],
+                trust_tier='gated' if evidence.eval_result.status is EvalStatus.OK else 'ungated',
+                source_candidate_id=candidate.id), TimeMeta(float(cycle)), self.context, scope='run', level='L1')
 
     def bind_evidence(self, evidence, receipt_ref, *, cycle, role="dev"):
         if type(receipt_ref) is not str or not re.fullmatch(r"sha256:[0-9a-f]{64}", receipt_ref):
