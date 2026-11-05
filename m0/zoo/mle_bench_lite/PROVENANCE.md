@@ -10,3 +10,8 @@
 - Upstream announced on 2026-04-24 that new public leaderboard submissions are paused. Local official grading remains the comparison path; no new leaderboard standing is claimed.
 
 No prepared Kaggle data, private answers, external grading report, benchmark score, or hosted run is bundled here. Obtain the official snapshot at the revision above, accept the relevant competition rules, and run `mlebench prepare --lite` before execution.
+
+
+## C03 AIDE adapted recipe
+
+Algorithm reference: WecoAI/aideml, revision `ad73d227af481bea3de06f884f41b2993dd6453a` (`aide/agent.py`, `aide/journal.py`, `aide/utils/config.yaml`). The implementation reuses MORI's nine modules and source-bound M7 construction; no upstream optimizer loop is embedded. See `docs/specs/classic/AIDE.md` for exact ordering and deviations. Pilot deviations include three roots, ten total main nodes, debug depth two, independent Python RNG, one fixed local validation split, trusted CSV loss instead of model-reviewed metrics, and one isolated initial control. Provider sampling is not reproducible. The existing pinned MLE-Bench source/data adapter supplies post-selection official grading; labels and grader reports do not enter search. Current evidence is synthetic/offline only until a separately declared matrix is run and archived.

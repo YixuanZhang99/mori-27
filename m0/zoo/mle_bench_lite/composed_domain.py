@@ -136,6 +136,14 @@ class PublicTrainDomain:
         self._frozen = {}
 
     @property
+    def evaluation_contexts(self):
+        # Task-metric selection bypasses layered/proxy adapters, so declare its
+        # two splits explicitly. Preserve the legacy adapters' context assembly.
+        if self.bundle.dev_scoring == "task_metric":
+            return {split: self.bundle.contexts[split] for split in ("dev", "final_audit")}
+        return None
+
+    @property
     def evaluation_context(self):
         return self.bundle.contexts["dev"]
 
@@ -238,6 +246,15 @@ class PublicTrainDomain:
                     result.contract.binding.artifact_sha256 != expected["artifact_sha256"]:
                 raise ValueError("saved evaluation candidate identity differs")
             record_path = self.candidate_path(proposal) / "outcome.json"
+            if result.contract.binding_source == "invocation":
+                # M7 construction can fail before producing a program. Its
+                # original invocation/checkpoint is validated by Framework;
+                # there is no domain training output to restore or recreate.
+                if (proposal.artifact or result.status is not EvalStatus.FAILED_TO_RUN or
+                        result.metrics or result.cost != CostVec() or
+                        result.contract.private.data or record_path.parent.exists()):
+                    raise ValueError("invalid pre-training failure evidence")
+                continue
             record = json.loads(record_path.read_text())
             if record.get("identity") != expected or record.get("status") != result.status.value \
                     or record.get("prediction_sha256") != result.contract.private.data.get("prediction_sha256") \

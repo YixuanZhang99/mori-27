@@ -2,7 +2,7 @@
 
 状态：施工规格冻结，2026-11-05。工作分支已衔接 C02 合入后的实际 main `da4e06c`。继承 [COMMON](COMMON.md)。目标是让公开 Framework 完整执行 draft/debug/improve 和真实 MLE 评估，并保留可核对的失败、费用与树轨迹。
 
-本轮进度：Task 1 的原子选择、可修复代码树、配方和恢复核对，以及 Task 2 的真实沙箱报错与 L1 Journal 消费已实现。最新完整离线检查通过（2342 项 portable 测试、112 项工具测试及示例）；151 项相关回归包含实际 Linux 沙箱用例，真实执行记录回放也通过。Task 3 的专用入口和真实 MLE 矩阵尚未交付，不能据此宣称 AIDE 已完成 benchmark 交付。
+本轮进度：Task 1 的原子选择、可修复代码树、配方和恢复核对，以及 Task 2 的真实沙箱报错与 L1 Journal 消费已实现。最新完整离线检查通过（2342 项 portable 测试、112 项工具测试及示例）；151 项相关回归包含实际 Linux 沙箱用例，真实执行记录回放也通过。Task 3 的专用入口、固定切分、任务指标与冻结提交后的官方评分入口已实现；相关回归 143 项通过，包含真实 Linux 沙箱及独立费用/物理账本核对。完整分支审查和真实 MLE 矩阵仍待完成，不能据此宣称 AIDE 已完成 benchmark 交付。
 
 ## 来源和一致性边界
 
@@ -51,6 +51,8 @@
 - 每个 run 一份 manifest、原始树/构造/评分记录、method-report、冻结提交及费用凭证。context 必须容纳十个有界 L1 摘要，调试父代反馈缺失时在调用前拒绝；不默默降为普通改进。
 - 全部费用继续原累计 campaign。截至 C02 v3 结束为 ¥21.167970，实际开跑前重新读取原账本。不得复制或打印凭据内容。
 
+评分约定：AIDE dev 与 final 均采用任务指标（分类为负 log loss，回归为负 mean target RMSLE，统一最大化）；显式冻结 `PublicTrainBundle(dev_scoring="task_metric")`。旧 MLE 治理实验的 dev 代理指标继续作为默认，AIDE 不继承它。
+
 ## 验收
 
 - A1：从 Framework.from_profile 运行，前三个主节点是独立 roots；后续 improve 选择有效 validation best，同分不换 incumbent。
@@ -62,4 +64,12 @@
 - A7：完成候选后的恢复复用原训练输出，不重发 provider；记录 replay 不调用模型、训练或官方 grader。改变来源/数据/参数拒绝。
 - A8：真实 smoke/矩阵按预声明报告所有任务和 seeds，包括失败。公布逐任务成绩、valid/total、树轨迹、耗时、费用、模型身份限制和差异，不由小矩阵推断奖牌率或论文区间复现。
 
-验收必须经过公共 Framework 和真实数据流，不能用孤立 policy 私有方法测试代替。默认入口离线；live 显式启用。入口尚未实现，当前不提供可运行 AIDE 命令。实现后补命令、来源提交、关键证据路径和最终 CI/合入状态。
+验收必须经过公共 Framework 和真实数据流，不能用孤立 policy 私有方法测试代替。默认入口离线；live 显式启用。运行入口为 `zoo.mle_bench_lite.aide_runner`，安装配置见 [MLE README](../../../m0/zoo/mle_bench_lite/README.md)。默认离线：
+
+```bash
+PYTHONPATH=m0 python -m zoo.mle_bench_lite.aide_runner --output /tmp/aide-fixture
+```
+
+默认 10 个主节点（包含初始节点），固定 split_seed=7，search_seed=0；fixture 只学习可见训练数据的先验，验证程序流，不是 benchmark 成绩。命名配置 `m0/config/profiles/aide_mle.json` 是主搜索配置；live runner 追加一个独立初始 control、原 CNY authority 和对应预算。live 只接受干净提交、原账本、共享私有匿名化 key 和显式公共数据目录；不创建新的付费 campaign。`--resume` 核对冻结 manifest 并复用原预测。最终官方评分单独由 `zoo.mle_bench_lite.aide_grading` 执行，不进入搜索；已完成或失败的评分均不重发，未结束的评分拒绝自动重试。
+
+实现选择：`PublicTrainDomain` 在 task_metric 模式声明 dev/final 的独立 context；旧 layered/proxy 模式的 context 装配保持不变。构造在产出程序前失败时没有训练输出，恢复验证其空 artifact、invocation binding 和零评估费用，再由 Framework 核对原日志，不虚构 outcome.json。

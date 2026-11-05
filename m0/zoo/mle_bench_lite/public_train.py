@@ -90,13 +90,16 @@ def load_anonymization_key(path, *, create=False):
 
 
 class PublicTrainBundle:
-    def __init__(self, public_root, output_root, task_id, seed, *, anonymization_key):
+    def __init__(self, public_root, output_root, task_id, seed, *, anonymization_key, dev_scoring="proxy"):
         if type(anonymization_key) is not bytes or len(anonymization_key) != 32:
             raise ValueError("anonymization key must contain exactly 32 bytes")
         if task_id not in TASK_SPECS:
             raise ValueError("composed MLE pilot supports only the three declared CSV tasks")
         if type(seed) is not int or seed < 0:
             raise ValueError("split seed must be a nonnegative integer")
+        if dev_scoring not in ("proxy", "task_metric"):
+            raise ValueError("dev_scoring must be proxy or task_metric")
+        self.dev_scoring = dev_scoring
         self.task_id, self.seed = task_id, seed
         self.spec = TASK_SPECS[task_id]
         self.public_root, self.output_root = Path(public_root).resolve(), Path(output_root).resolve()
@@ -174,6 +177,9 @@ class PublicTrainBundle:
             "output_file": "predictions.csv", "row_id": "row_id", "features": self.features,
             "target_columns": ["target"] if self.spec["kind"] == "classification" else self.output_columns,
             "output_columns": ["row_id", *self.output_columns], "seed": seed}
+        if dev_scoring == "task_metric":
+            self.protocol["selection_metric"] = ("negative_log_loss" if self.spec["kind"] == "classification"
+                                                  else "negative_mean_target_RMSLE")
         self.output_root.mkdir(parents=True, exist_ok=True)
         expected = {"train.csv", "predict.csv", "protocol.json"}
         if set(path.name for path in self.output_root.iterdir()) - expected:
@@ -198,6 +204,8 @@ class PublicTrainBundle:
             "split_counts": {key: len(value) for key, value in self.indices.items()},
             "official_test_rows": len(test), "scoring": "accuracy/negative_log_loss" if self.spec["kind"] == "classification"
             else "negative_mean_absolute_log_error/negative_mean_target_RMSLE"}
+        if dev_scoring == "task_metric":
+            self.manifest.update(dev_scoring=dev_scoring, scoring=self.protocol["selection_metric"])
         self.identity = digest(self.manifest)
         self.expected_ids = {row["row_id"] for row in evaluation_rows}
 
@@ -238,12 +246,12 @@ class PublicTrainBundle:
         if self.spec["kind"] == "classification":
             positions = {name: index for index, name in enumerate(self.output_columns)}
             pairs = [(predictions[self.local_ids[index]], positions[self.labels[index]]) for index in indices]
-            if split == "dev":
+            if split == "dev" and self.dev_scoring == "proxy":
                 return sum(max(range(len(values)), key=values.__getitem__) == target for values, target in pairs) / len(pairs)
             return sum(math.log(max(values[target], 1e-15)) for values, target in pairs) / len(pairs)
         errors = [[math.log1p(actual) - math.log1p(predicted) for actual, predicted in
                    zip(self.labels[index], predictions[self.local_ids[index]])] for index in indices]
-        if split == "dev":
+        if split == "dev" and self.dev_scoring == "proxy":
             return -sum(abs(value) for row in errors for value in row) / (len(errors) * len(self.output_columns))
         return -sum(math.sqrt(sum(row[column] ** 2 for row in errors) / len(errors))
                     for column in range(len(self.output_columns))) / len(self.output_columns)
