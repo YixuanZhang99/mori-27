@@ -392,6 +392,9 @@ def default_registry():
     from core.composition.aide_policy import AIDEPolicy, aide_options
     registry.register('policy', 'aide', lambda ctx, opts: AIDEPolicy(ctx.scope_context, **opts),
                       validate_options=aide_options)
+    from core.composition.arbor_policy import ArborPolicy, arbor_options
+    registry.register('policy', 'arbor', lambda ctx, opts: ArborPolicy(ctx.scope_context, ctx.llm, **opts),
+                      validate_options=arbor_options)
     from core.composition.gepa_policy import GEPAInstancePolicy, gepa_policy_options
     registry.register("policy", "gepa_instance", lambda ctx, opts: GEPAInstancePolicy(ctx.scope_context, **opts),
                       validate_options=gepa_policy_options)
@@ -420,6 +423,10 @@ def default_registry():
             execution={'schema_version': 1, 'contract': 'recipe_v1'})
     registry.register('operator', 'funsearch', lambda ctx, opts: FunSearchRecipeOperator(**opts),
         validate_options=lambda opts: _options(opts, {'metric'}),
+        execution={'schema_version': 1, 'contract': 'recipe_v1'})
+    from core.composition.construction_recipes import HypothesisRecipeOperator
+    registry.register('operator', 'hypothesis_refine', lambda ctx, opts: HypothesisRecipeOperator(),
+        validate_options=lambda opts: _options(opts, set()),
         execution={'schema_version': 1, 'contract': 'recipe_v1'})
     from core.composition.gepa_recipe import GEPAReflectiveRecipe, gepa_recipe_options
     registry.register('operator', 'gepa_reflective', lambda ctx, opts: GEPAReflectiveRecipe(**opts),

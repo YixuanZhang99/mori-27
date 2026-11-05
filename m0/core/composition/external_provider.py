@@ -292,7 +292,7 @@ class ExternalCallOutcome(_JSONPort):
 def validate_external_ordinal(binding, phase, ordinal):
     """Finite call counts apply even when every earlier response used zero tokens."""
     caps = binding.get("phase_call_limits") if type(binding) is dict else None
-    if type(caps) is not dict or phase not in {"operator", "evaluation"} or \
+    if type(caps) is not dict or phase not in {"planning", "operator", "evaluation"} or \
             type(ordinal) is not int or ordinal < 0 or type(caps.get(phase)) is not int or ordinal >= caps[phase]:
         raise ValueError("external call ordinal exceeds its frozen phase limit")
 

@@ -1,0 +1,34 @@
+{
+  "total_tokens": 138647,
+  "settled_micro_cny": 686746,
+  "model": "deepseek-flash",
+  "journal_head": {
+    "seq": 2213,
+    "sha256": "e681a906ea2b4966c75c2d7cb34c77be4bd34b634526a67697dbb59058e8b77a"
+  },
+  "invoice_verified": false,
+  "provider_calls_by_phase": {
+    "operator": 12,
+    "planning": 15
+  },
+  "construction": {
+    "schema_version": 1,
+    "materializations": 1,
+    "provider_calls": 12,
+    "artifact_links": [
+      {
+        "intent_id": "a3843c2bf7b00666f82635f3adb9433fdeb76b93ecf635733b558b5bef4ac283",
+        "lane": "main",
+        "slot_id": null,
+        "candidate_id": "ecd1cc6ea6e0b4a12d2049b8a7909b25ee12adfb6799fdcccc32908f29190f8f",
+        "materialization_ref": "sha256:3f797602d997a98989c9722a7ad47b655b0e8d469282ac9ebb9c97247900cd35",
+        "artifact_ref": "sha256:c04b25299c59e6cd80123d78ec9325b5c477a01b295397e3af07241e2a9bbcef",
+        "provider_context_refs": [
+          "sha256:790d82c75f217bef120deeb718f5a4c710b7b573016640883434a324e4ff021c",
+          "sha256:f69c8efd954dc6f32b17e2ff6382de14925a07d35979d029eb4e19ded100168a"
+        ]
+      }
+    ]
+  },
+  "coverage": "currency and construction provenance; physical settlement and selected artifact require separate audit"
+}

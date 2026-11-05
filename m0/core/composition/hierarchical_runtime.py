@@ -300,6 +300,8 @@ class HierarchicalRuntime(ProxyRuntime):
                 contract=EvaluationContract(self._binding(proposal, evaluation_request),
                     ("token", "eval_count"), binding_source="invocation")),
                 executor_status="failed_to_run", result_text=str(failure))
+            if self.arbor:
+                self.arbor.record_construction_failure(proposal, evidence, cycle=cycle)
         else:
             if paired is not None:
                 receipt = self._reserve_physical(candidate, 'training', f'child:{identifier}',
@@ -357,12 +359,17 @@ class HierarchicalRuntime(ProxyRuntime):
                                        direction="coordination", depth=depth)
         if not absorb.granted:
             return self._halt_physical(cycle, absorb.reason, started=True)
-        mutations = await self.invocations.planning(absorb, self.parts["provider"],
-            lambda: self._policy("absorb", public_projection(evidence)))
-        self._validate_mutations(mutations, evidence)
         evidence_ref = "sha256:" + payload_digest({"logical_run_id": self._logical_run_id,
                                                    "evidence": encode_evidence(evidence)})
-        mutations = self._prepare_memory_mutations(mutations, proposal, evidence, evidence_ref, cycle)
+        if self.arbor:
+            mutations = await self.invocations.planning(absorb, self.parts['provider'],
+                lambda: self.arbor.backpropagate(proposal, public_projection(evidence),
+                    {'evidence_ref': evidence_ref}, cycle=cycle, llm=self.parts['policy_absorber'].llm))
+        else:
+            mutations = await self.invocations.planning(absorb, self.parts["provider"],
+                lambda: self._policy("absorb", public_projection(evidence)))
+            self._validate_mutations(mutations, evidence)
+            mutations = self._prepare_memory_mutations(mutations, proposal, evidence, evidence_ref, cycle)
         mutations.extend(proxy_mutations)
         if self.layered:
             decision = await self._admit_layered(proposal, evidence, context, rejection_reason=proxy_rejection)

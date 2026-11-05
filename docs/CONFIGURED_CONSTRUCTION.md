@@ -120,3 +120,7 @@ python -I /path/outside/checkout/governed_cny_offline.py --construction --workdi
 | `zoo/mle_bench_lite/governed_currency.py` | 既有人民币账本的双重准入、私有证据与费用核对 |
 
 [v74](../m0/verifier/v74/README.md) 在保留全部 v73 命令的基础上增加五组验收。`make accept-linux` 要求干净提交的实际源码身份成立；`make check` 仍是原有 Mac 门槛。版本定义、单项测试、本机全量、独立审查和同 SHA 远端结果分别记录，不互相替代。
+
+### 显式 JSON 输出指令
+
+`execution.constructor` 的 `prompt` 实现可选 `options.explicit_json_output: true`。开启后仅在构造请求中加入明确的 JSON 对象格式指令，要求 `artifact` 为完整产物字符串、`hypothesis` 遵守既有契约；不把该指令放入共享任务或规划提示。它不会放宽解析、改变修复次数或设置供应商 JSON mode。默认 false 保留旧请求和 manifest 字节；true 写入构造器的冻结配置。Arbor v3 显式启用此选项。

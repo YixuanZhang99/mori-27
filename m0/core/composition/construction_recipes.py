@@ -12,9 +12,11 @@ DEFAULT_ROLES = {name: RoleDefinition(name, "1", text) for name, text in (
 
 
 def constructor_options(options):
-    if type(options) is not dict or set(options) - {"max_attempts"} \
+    if type(options) is not dict or set(options) - {"max_attempts", "explicit_json_output"} \
             or type(options.get("max_attempts", 1)) is not int or options.get("max_attempts", 1) < 1:
         raise ValueError("prompt constructor requires a positive max_attempts")
+    if type(options.get("explicit_json_output", False)) is not bool:
+        raise ValueError("explicit_json_output must be boolean")
 
 
 class RecipeOperator:
@@ -52,6 +54,27 @@ class RecipeOperator:
         return {"kind": self.kind, "task_desc": request.task_desc,
             "parent_artifacts": [{"candidate_id": p.candidate.id, "artifact": p.artifact} for p in request.parents],
             "instructions": [instruction] if instruction else [], "comparison": comparisons}
+
+
+class HypothesisRecipeOperator:
+    """Use a driver-authorized trunk while retaining the hypothesis skeleton."""
+    measured_cost_units = ('token', 'node', 'eval_count')
+
+    def recipe(self, request):
+        from core.composition.construction import validate_hypothesis_binding
+        data = request.strategy['arbor']
+        binding = data['binding']
+        base = binding['execution_base']
+        parents = [] if base is None else [{'candidate_id': base['candidate_id'], 'artifact': data['artifact']}]
+        candidate = {'id': request.candidate_id, 'parents': [p.candidate.id for p in request.parents],
+            'hypothesis': request.strategy['hypotheses'][0]['hypothesis'],
+            'created_cycle': request.cycle, 'context_pack_ref': request.context['context_pack_ref']}
+        validate_hypothesis_binding(binding, parents, candidate)
+        return {'kind': 'hypothesis_refine', 'task_desc': request.task_desc,
+            'parent_artifacts': parents, 'instructions': [
+                'Implement this fixed hypothesis against the supplied current trunk. '
+                'The hypothesis skeleton records research ancestry, not a different executable base.'],
+            'comparison': {}, 'hypothesis_binding': binding}
 
 
 class FunSearchRecipeOperator:

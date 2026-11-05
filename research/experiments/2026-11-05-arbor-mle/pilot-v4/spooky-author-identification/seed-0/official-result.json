@@ -1,0 +1,31 @@
+{
+  "binding": {
+    "schema_version": 1,
+    "method_id": "Arbor",
+    "task_id": "spooky-author-identification",
+    "run_manifest_sha256": "sha256:6bb9ea671308717b32b47f64789d20bf4a0650f5395cafb4492d81ccb69ed8ea",
+    "selection": {
+      "candidate_id": "4770058e404630baabf7f7d10ead5aa93d0242ab00db2d5d17c101890fe257eb",
+      "artifact_sha256": "a47fbd6b7d7ce9db756ff59beb26ff955b243b9783037026aac52e76eaa01723",
+      "prediction_sha256": "sha256:4d5fe3462c565fb62729435c8ee647095a23528093ffc395f2fc7f0e5ccf8ee8",
+      "submission_sha256": "sha256:73c00c65331de878e775e810f66436bfbb3be88e8af1a65e141f955751a2c413"
+    },
+    "final_freeze_sha256": "sha256:b3136d8a20eb0a67b1d376b26fafaefa67fdd39b08cc62832162857d301bd9a7",
+    "prepared_identity_sha256": "sha256:3fb200edd3ef3c5483b815d69b5d70a98cd63006b622dae5ae2920385ede0ffc",
+    "fixture": false
+  },
+  "state": "completed",
+  "error_type": null,
+  "official_score": 0.46954,
+  "external_benchmark_score_produced": true,
+  "report": {
+    "competition_id": "spooky-author-identification",
+    "valid_submission": true,
+    "audit/score": 0.46954,
+    "audit/any_medal": false,
+    "audit/above_median": false,
+    "audit/gold_medal": false,
+    "audit/silver_medal": false,
+    "audit/bronze_medal": false
+  }
+}

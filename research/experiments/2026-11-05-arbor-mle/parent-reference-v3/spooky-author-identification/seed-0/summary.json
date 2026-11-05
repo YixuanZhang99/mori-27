@@ -1,0 +1,1756 @@
+{
+  "task_id": "spooky-author-identification",
+  "search_seed": 0,
+  "split_seed": 7,
+  "mode": "live",
+  "source": {
+    "commit": "7c47a39419d83d7bf9f1e8972f329fd356dc6f8f",
+    "dirty": false
+  },
+  "dataset_identity": "sha256:b85cb015e584931fabec76765deb2d047a1ec09e4674b3413df3b59e1f08d5b1",
+  "scoring": "negative_log_loss",
+  "run_state": "execution_failed",
+  "uncommitted_development_ids": [],
+  "uncommitted_construction_failures": [],
+  "search": {
+    "attempted": 4,
+    "successful": 3,
+    "failed": 0,
+    "incomplete": 1,
+    "failure_rate": 0.25
+  },
+  "best_development": {
+    "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+    "cycle": 2,
+    "operator": "hypothesis_refine",
+    "parents": [
+      "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+    ],
+    "status": "ok",
+    "validation_loss": 0.4146486693491035
+  },
+  "final_state": "not_frozen",
+  "final_loss": null,
+  "official_state": "not_graded",
+  "official_score": null,
+  "submission": null,
+  "independent_initial_controls": [
+    {
+      "state": "evaluated",
+      "validation_loss": 0.6039216248403494,
+      "evaluation_status": "ok"
+    }
+  ],
+  "evaluations": [
+    {
+      "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "cycle": 0,
+      "operator": "hypothesis_refine",
+      "parents": [],
+      "status": "ok",
+      "validation_loss": 0.4848067506859483
+    },
+    {
+      "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "cycle": 1,
+      "operator": "hypothesis_refine",
+      "parents": [
+        "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+      ],
+      "status": "ok",
+      "validation_loss": 0.43262714318100554
+    },
+    {
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "cycle": 2,
+      "operator": "hypothesis_refine",
+      "parents": [
+        "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+      ],
+      "status": "ok",
+      "validation_loss": 0.4146486693491035
+    }
+  ],
+  "tree_choices": [
+    {
+      "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "context_ref": "sha256:5ca0841be409e69f5f28b58ef362783b0aec0e955ca7c685c3aa443589850841",
+      "cycle": 0,
+      "execution_base": null,
+      "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+      "hypothesis_id": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+      "schema_version": 1,
+      "skeleton_parents": [],
+      "source_refs": []
+    },
+    {
+      "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "context_ref": "sha256:5dcaf6e78795d4d5a59b3251f781f228a6c0c890899f3c4d35a617dec74e2f08",
+      "cycle": 1,
+      "execution_base": {
+        "artifact_sha256": "367eb74edce86dc3f1965b7c73be23a378e51d79b1b8686b597a4a17d8f2c425",
+        "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "materialization_ref": "sha256:31bee90cf962a1a8c450a46f8c2ce6d1b9eab8f48156d3990388b08da6e28a4c"
+      },
+      "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+      "hypothesis_id": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+      "schema_version": 1,
+      "skeleton_parents": [
+        "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+      ],
+      "source_refs": [
+        "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+      ]
+    },
+    {
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "context_ref": "sha256:9388c9ebbccbfa39f29c3f27241911fdb46e175572178aa7c4efa0a0dacc11f6",
+      "cycle": 2,
+      "execution_base": {
+        "artifact_sha256": "9e69b8fd4d47549767089c7714365c1985ebab46ea849b69705669683a95d8ce",
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "materialization_ref": "sha256:e65979cfe9cbac8b563b8f188963988c45c27f1ad68e2c706b6d8ad51dd5c2cc"
+      },
+      "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+      "hypothesis_id": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+      "schema_version": 1,
+      "skeleton_parents": [
+        "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+      ],
+      "source_refs": [
+        "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+        "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c"
+      ]
+    }
+  ],
+  "gate_selected_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+  "gate_calls": 3,
+  "gate_pending_calls": 0,
+  "admission_decisions": [
+    {
+      "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "admit": true,
+      "receipt_id": "sha256:1ac01783ceff35c5cd1601c33dc5f47226b411e9db8061fff8d9e8463ba3976f"
+    },
+    {
+      "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "admit": true,
+      "receipt_id": "sha256:9ba90888946c4cb188d896615a8908ebed0c30e7779d629644af565cbae4ffb6"
+    },
+    {
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "admit": true,
+      "receipt_id": "sha256:017a346dd890d7d9eae8bda4154df9dc01e1673738f232ae9d428d32bcc03537"
+    }
+  ],
+  "stage_trace": {
+    "observe": [
+      {
+        "cycle": 0,
+        "context_ref": "sha256:5ca0841be409e69f5f28b58ef362783b0aec0e955ca7c685c3aa443589850841",
+        "candidate_ids": []
+      },
+      {
+        "cycle": 1,
+        "context_ref": "sha256:5dcaf6e78795d4d5a59b3251f781f228a6c0c890899f3c4d35a617dec74e2f08",
+        "candidate_ids": [
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+        ]
+      },
+      {
+        "cycle": 2,
+        "context_ref": "sha256:9388c9ebbccbfa39f29c3f27241911fdb46e175572178aa7c4efa0a0dacc11f6",
+        "candidate_ids": [
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+        ]
+      },
+      {
+        "cycle": 3,
+        "context_ref": "sha256:8e9c54c16f63794ed40bada43df078a80448b5b87fca057f035f7ac684de0c76",
+        "candidate_ids": [
+          "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+        ]
+      }
+    ],
+    "ideate": [
+      {
+        "cycle": 0,
+        "ideas": [
+          {
+            "created_cycle": 0,
+            "expected_observation": "Validation negative log loss should improve over a single word-only representation because character n-grams model author-specific spelling, punctuation, and morphology.",
+            "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+            "id": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+            "parent_id": null,
+            "source_refs": []
+          },
+          {
+            "created_cycle": 0,
+            "expected_observation": "The calibrated one-vs-rest SVM should yield finite per-row probabilities summing to 1 and competitive negative log loss, especially if character n-grams dominate author style.",
+            "hypothesis": "A linear support vector classifier wrapped in OneVsRestClassifier with calibrated probability estimates, trained on TF-IDF character n-grams, will produce well-separated author probabilities suitable for multiclass log loss.",
+            "id": "arbor:682726d4616e8a7fbe728c26e50f36805000225d63303fea82a200318c632f75",
+            "parent_id": null,
+            "source_refs": []
+          },
+          {
+            "created_cycle": 0,
+            "expected_observation": "The ensemble should slightly improve negative log loss over either base model alone when both base models make complementary errors across author classes.",
+            "hypothesis": "A soft-voting ensemble combining multinomial logistic regression and multinomial Naive Bayes over TF-IDF word and character n-grams will reduce variance in predicted class probabilities while preserving exact row_id coverage.",
+            "id": "arbor:44b9afb1709898381c901fdcbfdf32fb6292a27ff9f3dae842741213a2d5f4a1",
+            "parent_id": null,
+            "source_refs": []
+          }
+        ],
+        "selection": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+        "observation": {
+          "cycle": 0,
+          "nodes": [],
+          "task": "Write a COMPLETE executable Python program for a frozen CSV machine-learning task. It will run once in an isolated workspace with no network. Read data/protocol.json, data/train.csv and data/predict.csv. Train using only train.csv. Write predictions.csv with EXACT row_id coverage and the output columns declared below. The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a binary estimator in OneVsRestClassifier. and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. Do not read other directories or launch persistent processes.\nPROTOCOL:\n{\"features\": [\"text\"], \"kind\": \"classification\", \"output_columns\": [\"row_id\", \"EAP\", \"HPL\", \"MWS\"], \"output_file\": \"predictions.csv\", \"prediction_file\": \"predict.csv\", \"protocol\": \"mle-public-train-composed-v2\", \"row_id\": \"row_id\", \"seed\": 7, \"selection_metric\": \"negative_log_loss\", \"target_columns\": [\"target\"], \"task\": \"spooky-author-identification\", \"training_file\": \"train.csv\"}\nSelect by maximum negative_log_loss; this is the negated task loss."
+        }
+      },
+      {
+        "cycle": 1,
+        "ideas": [
+          {
+            "created_cycle": 1,
+            "expected_observation": "If the negative dev result was caused by feature noise or regularization mismatch, the cross-validated feature/regularization-selected logistic pipeline should produce finite well-calibrated probabilities and improve negative log loss over the default TF-IDF feature union.",
+            "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+            "id": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+            "parent_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "source_refs": [
+              "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+              "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+            ]
+          },
+          {
+            "created_cycle": 1,
+            "expected_observation": "If the plain TF-IDF logistic model failed due to diffuse lexical features, the NB-weighted linear classifier should produce better-separated author probabilities and improve negative log loss while preserving valid multiclass probability output.",
+            "hypothesis": "Plain TF-IDF logistic regression may underfit because diffuse common n-grams dominate the feature space. Reweighting TF-IDF features by Naive Bayes log-count ratios before a linear classifier should emphasize discriminative author-style cues and suppress common n-grams, yielding better class separation.",
+            "id": "arbor:2450dc0f05b7604280cc21951cdddea494c6bee5763c6ea16fe4588a5d11f434",
+            "parent_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "source_refs": [
+              "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+              "sha256:e1ec45c07ae69b1fa0b8a3c012751bd3d1497dd87c1fe9f17cd73316a0195fa7"
+            ]
+          },
+          {
+            "created_cycle": 1,
+            "expected_observation": "If the model ranks author classes reasonably but assigns overconfident probabilities, cross-validated calibration should lower negative log loss and still output finite per-row probabilities summing to one.",
+            "hypothesis": "The failed attempt may have had usable discrimination but overconfident or mis-normalized probabilities, causing poor negative log loss. A mechanism that trains a regularized linear classifier and calibrates its multiclass probability output using train-only cross-validation before normalization should reduce log-loss penalties from miscalibration.",
+            "id": "arbor:c2c36e169dad5fb0ebdc10895d3fa7ccaf4f3e62c452f2176d7029142d67b3f5",
+            "parent_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "source_refs": [
+              "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+              "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+            ]
+          }
+        ],
+        "selection": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+        "observation": {
+          "cycle": 1,
+          "nodes": [
+            {
+              "created_cycle": 0,
+              "depth": 0,
+              "eval_status": "ok",
+              "id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+              "score": -0.4848067506859483,
+              "status": "merged"
+            }
+          ],
+          "task": "Write a COMPLETE executable Python program for a frozen CSV machine-learning task. It will run once in an isolated workspace with no network. Read data/protocol.json, data/train.csv and data/predict.csv. Train using only train.csv. Write predictions.csv with EXACT row_id coverage and the output columns declared below. The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a binary estimator in OneVsRestClassifier. and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. Do not read other directories or launch persistent processes.\nPROTOCOL:\n{\"features\": [\"text\"], \"kind\": \"classification\", \"output_columns\": [\"row_id\", \"EAP\", \"HPL\", \"MWS\"], \"output_file\": \"predictions.csv\", \"prediction_file\": \"predict.csv\", \"protocol\": \"mle-public-train-composed-v2\", \"row_id\": \"row_id\", \"seed\": 7, \"selection_metric\": \"negative_log_loss\", \"target_columns\": [\"target\"], \"task\": \"spooky-author-identification\", \"training_file\": \"train.csv\"}\nSelect by maximum negative_log_loss; this is the negated task loss."
+        }
+      },
+      {
+        "cycle": 2,
+        "ideas": [
+          {
+            "created_cycle": 2,
+            "expected_observation": "If the prior failure was due to insufficient feature diversity or probability miscalibration, this pipeline should output finite normalized class probabilities and improve negative_log_loss over the prior TF-IDF logistic attempts, with the largest gains when character n-grams add discriminative author-style information.",
+            "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+            "id": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+            "parent_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "source_refs": [
+              "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+              "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+              "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c"
+            ]
+          },
+          {
+            "created_cycle": 2,
+            "expected_observation": "If the base models make complementary errors across author classes, the weighted ensemble should improve negative_log_loss over either single sparse linear model and over the prior TF-IDF logistic attempts, while still producing finite per-row probabilities that sum to one.",
+            "hypothesis": "A single sparse linear model may remain unstable on author text because different feature views capture complementary errors. A soft-voting ensemble that combines out-of-fold probabilities from multinomial logistic regression on word plus character TF-IDF with a second probabilistic sparse model, weighting base models by train-only CV log loss, should reduce variance and correct class-specific errors while preserving valid multiclass probability rows.",
+            "id": "arbor:b79fa2eced6a5bc47605975394350d1a7d69bb67531095296627eee37e72f836",
+            "parent_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "source_refs": [
+              "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+              "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+              "sha256:44182684e8e592c22b04fcb711e3496ce76190a7642fc048e75fea4fd60ae78a"
+            ]
+          }
+        ],
+        "selection": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+        "observation": {
+          "cycle": 2,
+          "nodes": [
+            {
+              "created_cycle": 0,
+              "depth": 0,
+              "eval_status": "ok",
+              "id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+              "score": -0.4848067506859483,
+              "status": "merged"
+            },
+            {
+              "created_cycle": 1,
+              "depth": 1,
+              "eval_status": "ok",
+              "id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+              "score": -0.43262714318100554,
+              "status": "merged"
+            }
+          ],
+          "task": "Write a COMPLETE executable Python program for a frozen CSV machine-learning task. It will run once in an isolated workspace with no network. Read data/protocol.json, data/train.csv and data/predict.csv. Train using only train.csv. Write predictions.csv with EXACT row_id coverage and the output columns declared below. The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a binary estimator in OneVsRestClassifier. and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. Do not read other directories or launch persistent processes.\nPROTOCOL:\n{\"features\": [\"text\"], \"kind\": \"classification\", \"output_columns\": [\"row_id\", \"EAP\", \"HPL\", \"MWS\"], \"output_file\": \"predictions.csv\", \"prediction_file\": \"predict.csv\", \"protocol\": \"mle-public-train-composed-v2\", \"row_id\": \"row_id\", \"seed\": 7, \"selection_metric\": \"negative_log_loss\", \"target_columns\": [\"target\"], \"task\": \"spooky-author-identification\", \"training_file\": \"train.csv\"}\nSelect by maximum negative_log_loss; this is the negated task loss."
+        }
+      }
+    ],
+    "select": [
+      {
+        "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "context_ref": "sha256:5ca0841be409e69f5f28b58ef362783b0aec0e955ca7c685c3aa443589850841",
+        "cycle": 0,
+        "execution_base": null,
+        "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+        "hypothesis_id": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+        "schema_version": 1,
+        "skeleton_parents": [],
+        "source_refs": []
+      },
+      {
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "context_ref": "sha256:5dcaf6e78795d4d5a59b3251f781f228a6c0c890899f3c4d35a617dec74e2f08",
+        "cycle": 1,
+        "execution_base": {
+          "artifact_sha256": "367eb74edce86dc3f1965b7c73be23a378e51d79b1b8686b597a4a17d8f2c425",
+          "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "materialization_ref": "sha256:31bee90cf962a1a8c450a46f8c2ce6d1b9eab8f48156d3990388b08da6e28a4c"
+        },
+        "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+        "hypothesis_id": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+        "schema_version": 1,
+        "skeleton_parents": [
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+        ],
+        "source_refs": [
+          "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+        ]
+      },
+      {
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "context_ref": "sha256:9388c9ebbccbfa39f29c3f27241911fdb46e175572178aa7c4efa0a0dacc11f6",
+        "cycle": 2,
+        "execution_base": {
+          "artifact_sha256": "9e69b8fd4d47549767089c7714365c1985ebab46ea849b69705669683a95d8ce",
+          "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "materialization_ref": "sha256:e65979cfe9cbac8b563b8f188963988c45c27f1ad68e2c706b6d8ad51dd5c2cc"
+        },
+        "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+        "hypothesis_id": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+        "schema_version": 1,
+        "skeleton_parents": [
+          "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+        ],
+        "source_refs": [
+          "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+          "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c"
+        ]
+      }
+    ],
+    "dispatch": [
+      {
+        "binding": {
+          "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "context_ref": "sha256:5ca0841be409e69f5f28b58ef362783b0aec0e955ca7c685c3aa443589850841",
+          "cycle": 0,
+          "execution_base": null,
+          "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+          "hypothesis_id": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+          "schema_version": 1,
+          "skeleton_parents": [],
+          "source_refs": []
+        },
+        "operation": {
+          "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+          "cycle": 0,
+          "phase": "operator",
+          "intent_id": "44d47d1a51f72077c36c46ad196c97583fb26b06cfda8196b54050a344420940",
+          "fingerprint": "sha256:b02959ec48f10c286e3bfd0db98bbbed9a0cecf2f1b9deb285b131baa8ab5e43",
+          "manifest_sha256": "sha256:d79e91aa5dd2fe624c6b820f665bf0fab5a47b424540dfb66d3a916a55c20bfb",
+          "lane": "main",
+          "slot_id": null
+        }
+      },
+      {
+        "binding": {
+          "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "context_ref": "sha256:5dcaf6e78795d4d5a59b3251f781f228a6c0c890899f3c4d35a617dec74e2f08",
+          "cycle": 1,
+          "execution_base": {
+            "artifact_sha256": "367eb74edce86dc3f1965b7c73be23a378e51d79b1b8686b597a4a17d8f2c425",
+            "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "materialization_ref": "sha256:31bee90cf962a1a8c450a46f8c2ce6d1b9eab8f48156d3990388b08da6e28a4c"
+          },
+          "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+          "hypothesis_id": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+          "schema_version": 1,
+          "skeleton_parents": [
+            "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+          ],
+          "source_refs": [
+            "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+          ]
+        },
+        "operation": {
+          "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+          "cycle": 1,
+          "phase": "operator",
+          "intent_id": "5b2d05f71997e8a55412ff2c6a58271eb668676a2d2f92937b85daac4a90131f",
+          "fingerprint": "sha256:aa8624eeebf08c2c57de6eacdf0a6ed02bc04ba0493fc11263d98440b579b691",
+          "manifest_sha256": "sha256:d79e91aa5dd2fe624c6b820f665bf0fab5a47b424540dfb66d3a916a55c20bfb",
+          "lane": "main",
+          "slot_id": null
+        }
+      },
+      {
+        "binding": {
+          "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "context_ref": "sha256:9388c9ebbccbfa39f29c3f27241911fdb46e175572178aa7c4efa0a0dacc11f6",
+          "cycle": 2,
+          "execution_base": {
+            "artifact_sha256": "9e69b8fd4d47549767089c7714365c1985ebab46ea849b69705669683a95d8ce",
+            "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "materialization_ref": "sha256:e65979cfe9cbac8b563b8f188963988c45c27f1ad68e2c706b6d8ad51dd5c2cc"
+          },
+          "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+          "hypothesis_id": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+          "schema_version": 1,
+          "skeleton_parents": [
+            "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+          ],
+          "source_refs": [
+            "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+            "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c"
+          ]
+        },
+        "operation": {
+          "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+          "cycle": 2,
+          "phase": "operator",
+          "intent_id": "08200560b1f76245d8d66d697042ec64055b85e50521ebe28c0c632b802f9a59",
+          "fingerprint": "sha256:f1f2cdc74058bed8a2760bf3cfff837657dd8b69e52c73593e4ef623072ac149",
+          "manifest_sha256": "sha256:d79e91aa5dd2fe624c6b820f665bf0fab5a47b424540dfb66d3a916a55c20bfb",
+          "lane": "main",
+          "slot_id": null
+        }
+      }
+    ],
+    "backpropagate": [
+      {
+        "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "cycle": 0,
+        "targets": [
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "global"
+        ],
+        "evidence_ref": "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      },
+      {
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "cycle": 1,
+        "targets": [
+          "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "global"
+        ],
+        "evidence_ref": "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+      },
+      {
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "cycle": 2,
+        "targets": [
+          "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "global"
+        ],
+        "evidence_ref": "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58"
+      }
+    ],
+    "admission": [
+      {
+        "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "admit": true,
+        "receipt_id": "sha256:1ac01783ceff35c5cd1601c33dc5f47226b411e9db8061fff8d9e8463ba3976f"
+      },
+      {
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "admit": true,
+        "receipt_id": "sha256:9ba90888946c4cb188d896615a8908ebed0c30e7779d629644af565cbae4ffb6"
+      },
+      {
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "admit": true,
+        "receipt_id": "sha256:017a346dd890d7d9eae8bda4154df9dc01e1673738f232ae9d428d32bcc03537"
+      }
+    ]
+  },
+  "aggregate_sources": [
+    {
+      "receipt_ref": "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7",
+      "body": {
+        "source_refs": [
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "summary": "Candidate 7e0d5b1c... tested a TF-IDF feature union of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 scored -0.4848067506859483 on the dev split with seed 7; status ok, but the negative score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Evidence is limited: single seed, public dev only, no per-class metrics, no artifacts, and no child insight. The result suggests the current lexical/character TF-IDF + logistic-regression approach may underfit or generalize poorly; retain this as a failed/low-performing attempt rather than a confirmed method. Next work should output a complete Python program and improve generalization, but any changes need new validation evidence. Limitations and failure should be retained: negative dev score, insufficient diagnostics, seed/split dependence, and no evidence of robust separation.",
+        "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+      },
+      "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 0,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": null,
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      ],
+      "synthesis_ref": "sha256:7c8c749d6206e5c85062d8d46dd42ba8426de4029abfbfc8ef482cddcff88186",
+      "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:e1ec45c07ae69b1fa0b8a3c012751bd3d1497dd87c1fe9f17cd73316a0195fa7",
+      "body": {
+        "source_refs": [
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "summary": "Candidate 7e0d5b1c... tested a TF-IDF FeatureUnion of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 on seed 7 scored -0.4848067506859483 with status ok. The negative dev score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Retain this as a failed/low-performing attempt rather than a confirmed method. Limitations and failures to retain: single seed (7), public dev only, no per-class metrics, no artifacts, no child insight, insufficient diagnostics, possible seed/split dependence, and no evidence of robust separation. The result suggests the lexical/character TF-IDF plus logistic-regression approach may underfit or generalize poorly, but available evidence is insufficient to distinguish these causes. Next work should output a complete Python program and improve generalization, with any changes requiring new validation evidence. Source refs: sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef.",
+        "target_id": "global"
+      },
+      "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 0,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": null,
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      ],
+      "synthesis_ref": "sha256:b0d28df0f4a35818c4572d8f9cade0afcf718fbab83f8b0f86d91e56974e9157",
+      "target_id": "global",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c",
+      "body": {
+        "source_refs": [
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+        ],
+        "summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code.",
+        "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+      },
+      "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 1,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": null,
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+      ],
+      "synthesis_ref": "sha256:46fd1412b780050bc1bbfd525df225d4370993315f5802e03b8ae488d2c842ea",
+      "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:83433a9384e6650c73b88eadb65b10a47772cbd36feae2abca57ffa2a4b34a0d",
+      "body": {
+        "source_refs": [
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code.",
+        "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+      },
+      "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 1,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7",
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+        "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      ],
+      "synthesis_ref": "sha256:ffc934197915c231d0bac7cf63e7dfa88bc4ce00e4efc3880381240f18654e29",
+      "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+      "body": {
+        "source_refs": [
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "summary": "Attempt 1 for candidate a1994910... (target 7e0d5b1c...) scored dev/score = -0.43262714318100554 with status ok, fidelity dev, seed set [7], eval_count 1. The hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch via train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score, and feedback only says to improve generalization and output a complete Python program. Relative to the prior candidate 7e0d5b1c... dev score -0.4848067506859483, this attempt is slightly less negative, but both remain poor and the difference is not enough to establish a reliable improvement. No child insight, artifacts, partial curves, private/public metric details, per-class metrics, ablation, calibration metrics, or baseline comparison are available, so failure cannot be confidently attributed to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, eval_count 1, no demonstrated improvement over a broad default TF-IDF/logistic baseline, and no robust validation. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code. Source refs: sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86, sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef.",
+        "target_id": "global"
+      },
+      "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 1,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": "sha256:e1ec45c07ae69b1fa0b8a3c012751bd3d1497dd87c1fe9f17cd73316a0195fa7",
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+        "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      ],
+      "synthesis_ref": "sha256:d096e0703fc217c571a99fb7d534bde4e94da127776e6e5b4c1b58f35a6677bc",
+      "target_id": "global",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:701f4c517dc0250429a4fbb0f71318bb0b59157f2622f009748343704560e354",
+      "body": {
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58"
+        ],
+        "summary": "Prior hypothesis: a union of word TF-IDF and character 3-5 gram TF-IDF with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration should capture lexical plus author-specific orthographic/stylistic cues and reduce log-loss from overconfidence. New public development evidence: attempt 1 scored dev/score = -0.4146486693491035 with status ok; feedback says public training validation completed, improve generalization, and output a complete Python program. No child insight or previous summary was provided. Interpretation: the pipeline is viable enough to score, but this single-seed dev result does not establish improvement over the prior sparse TF-IDF logistic pipeline because no baseline, prior score, artifacts, or metadata are available. The request to improve generalization suggests the feature-union/calibration approach may still be overfitting or unstable, or that the score is not competitive. The hypothesized benefits of character n-grams and calibrated probabilities remain plausible but unconfirmed. Limitations/failures to retain: one seed/split only; no comparative evidence; no child insight; character 3-5 grams greatly increase dimensionality and variance; train-only selection may still leak if CV is not nested around all tuning/calibration steps; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear feature effects and may not exploit interactions; no evidence that calibration improved log-loss. Next work should include a complete Python program, nested train-only model selection, stable calibration, regularization/dimensionality control, and explicit comparison against the prior pipeline on the same dev split.",
+        "target_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb"
+      },
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 2,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": null,
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58"
+      ],
+      "synthesis_ref": "sha256:8e5dca4600acdb4709b984c4dd2327a4845ce0308fea21a5dd26d0cc0fe082f9",
+      "target_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:e448fcb9d3bd15123e24397f2a291b2cf6a1320a3ad9ad467ff896f3fb4aabec",
+      "body": {
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+        ],
+        "summary": "New public dev evidence: candidate 466430e6... attempt 1 scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Feedback says public training validation completed, improve generalization, and output a complete Python program. This is slightly less negative than the prior a1994910... dev score -0.43262714318100554, but no baseline, prior-score comparison, artifacts, partial curves, metadata, or ablation is available, so it does not establish real improvement. Interpretation: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit or be unstable, or the score is not competitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration steps are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; no evidence shows calibration reduced log-loss. Limitations/failures to retain: one seed/split, dev-only evidence, no comparative baseline, no child insight or previous summary beyond the supplied context, no calibration metrics, and no demonstrated generalization gain. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split.",
+        "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46"
+      },
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 2,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c",
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+        "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+      ],
+      "synthesis_ref": "sha256:3a47de991489c70660e2d802184a4412406b7097ca5eba7bbe836c2fcb6ce104",
+      "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:bb58b0a2281af503d341c0646b89b9bf385c4fed04e4eb6d7e54827478d00819",
+      "body": {
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "summary": "Attempt 1 for candidate 466430e6... scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Public feedback says training validation completed, improve generalization, and output a complete Python program. This score is slightly less negative than the prior a1994910... dev score -0.43262714318100554, but no baseline, prior-score comparison, artifacts, partial curves, metadata, calibration metrics, or ablation are available, so it does not establish real improvement. Interpretation: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit or be unstable, or the score is not competitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration steps are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; no evidence shows calibration reduced log-loss. Limitations/failures to retain: one seed/split, dev-only evidence, no comparative baseline, no child insight or previous summary beyond supplied context, no calibration metrics, and no demonstrated generalization gain. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split.",
+        "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a"
+      },
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 2,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": "sha256:83433a9384e6650c73b88eadb65b10a47772cbd36feae2abca57ffa2a4b34a0d",
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+        "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+        "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      ],
+      "synthesis_ref": "sha256:cc51826ef9b2c47cd59bfef465daf4b53819d02f5ec633eb8eff1f38f7fd883a",
+      "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+      "trust": "gated"
+    },
+    {
+      "receipt_ref": "sha256:38735f551fd289d8ab3862fe2058cce6059a59ab5b4a5c5f1678e679e60628b9",
+      "body": {
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "summary": "Attempt 1 for candidate 466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Public feedback says training validation completed, improve generalization, and output a complete Python program. This is only slightly less negative than the prior a1994910... dev score -0.43262714318100554, but with no baseline, artifacts, partial curves, metadata, calibration metrics, or ablation, it does not establish real improvement. Child insight: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, train-only CV-tuned multinomial logistic regression, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit, be unstable, or be noncompetitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; and no evidence shows calibration reduced log-loss. Retain limitations/failures: one seed/split, dev-only evidence, eval_count 1, no comparative baseline, no calibration metrics, and no demonstrated generalization gain. The prior CV-tuned sparse TF-IDF+logistic pipeline also did not yield acceptable public-dev generalization; this candidate is unsupported as a reliable improvement. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split.",
+        "target_id": "global"
+      },
+      "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+      "context": {
+        "domain_id": "sha256:ca097e0ef2ec12e705d5f5933736d0314dd4cb6039825dd4ba9a99f0e5e31a00",
+        "run_id": "fbe225b0934e46f38d196d6f4fa9f37e",
+        "task_id": "ac7a23dd0809ad007eaad207315ea09a32152c2defcd821de8acfdbffd8a4188"
+      },
+      "cycle": 2,
+      "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "previous_ref": "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+      "role": "tree_insight",
+      "source_refs": [
+        "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+        "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+        "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+      ],
+      "synthesis_ref": "sha256:28aa637c427e38d9de2734ca7b461da9c6462e3cb6f3d94ba590ae01009fcb74",
+      "target_id": "global",
+      "trust": "gated"
+    }
+  ],
+  "hypothesis_proposals": [
+    {
+      "cycle": 0,
+      "ideas": [
+        {
+          "created_cycle": 0,
+          "expected_observation": "Validation negative log loss should improve over a single word-only representation because character n-grams model author-specific spelling, punctuation, and morphology.",
+          "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+          "id": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+          "parent_id": null,
+          "source_refs": []
+        },
+        {
+          "created_cycle": 0,
+          "expected_observation": "The calibrated one-vs-rest SVM should yield finite per-row probabilities summing to 1 and competitive negative log loss, especially if character n-grams dominate author style.",
+          "hypothesis": "A linear support vector classifier wrapped in OneVsRestClassifier with calibrated probability estimates, trained on TF-IDF character n-grams, will produce well-separated author probabilities suitable for multiclass log loss.",
+          "id": "arbor:682726d4616e8a7fbe728c26e50f36805000225d63303fea82a200318c632f75",
+          "parent_id": null,
+          "source_refs": []
+        },
+        {
+          "created_cycle": 0,
+          "expected_observation": "The ensemble should slightly improve negative log loss over either base model alone when both base models make complementary errors across author classes.",
+          "hypothesis": "A soft-voting ensemble combining multinomial logistic regression and multinomial Naive Bayes over TF-IDF word and character n-grams will reduce variance in predicted class probabilities while preserving exact row_id coverage.",
+          "id": "arbor:44b9afb1709898381c901fdcbfdf32fb6292a27ff9f3dae842741213a2d5f4a1",
+          "parent_id": null,
+          "source_refs": []
+        }
+      ],
+      "selection": "arbor:4c50cd6f0bc7c3768786b27f971cc66ee3f776596cde94d544b6484aa413a65e",
+      "observation": {
+        "cycle": 0,
+        "nodes": [],
+        "task": "Write a COMPLETE executable Python program for a frozen CSV machine-learning task. It will run once in an isolated workspace with no network. Read data/protocol.json, data/train.csv and data/predict.csv. Train using only train.csv. Write predictions.csv with EXACT row_id coverage and the output columns declared below. The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a binary estimator in OneVsRestClassifier. and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. Do not read other directories or launch persistent processes.\nPROTOCOL:\n{\"features\": [\"text\"], \"kind\": \"classification\", \"output_columns\": [\"row_id\", \"EAP\", \"HPL\", \"MWS\"], \"output_file\": \"predictions.csv\", \"prediction_file\": \"predict.csv\", \"protocol\": \"mle-public-train-composed-v2\", \"row_id\": \"row_id\", \"seed\": 7, \"selection_metric\": \"negative_log_loss\", \"target_columns\": [\"target\"], \"task\": \"spooky-author-identification\", \"training_file\": \"train.csv\"}\nSelect by maximum negative_log_loss; this is the negated task loss."
+      }
+    },
+    {
+      "cycle": 1,
+      "ideas": [
+        {
+          "created_cycle": 1,
+          "expected_observation": "If the negative dev result was caused by feature noise or regularization mismatch, the cross-validated feature/regularization-selected logistic pipeline should produce finite well-calibrated probabilities and improve negative log loss over the default TF-IDF feature union.",
+          "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+          "id": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+          "parent_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "source_refs": [
+            "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+          ]
+        },
+        {
+          "created_cycle": 1,
+          "expected_observation": "If the plain TF-IDF logistic model failed due to diffuse lexical features, the NB-weighted linear classifier should produce better-separated author probabilities and improve negative log loss while preserving valid multiclass probability output.",
+          "hypothesis": "Plain TF-IDF logistic regression may underfit because diffuse common n-grams dominate the feature space. Reweighting TF-IDF features by Naive Bayes log-count ratios before a linear classifier should emphasize discriminative author-style cues and suppress common n-grams, yielding better class separation.",
+          "id": "arbor:2450dc0f05b7604280cc21951cdddea494c6bee5763c6ea16fe4588a5d11f434",
+          "parent_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "source_refs": [
+            "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "sha256:e1ec45c07ae69b1fa0b8a3c012751bd3d1497dd87c1fe9f17cd73316a0195fa7"
+          ]
+        },
+        {
+          "created_cycle": 1,
+          "expected_observation": "If the model ranks author classes reasonably but assigns overconfident probabilities, cross-validated calibration should lower negative log loss and still output finite per-row probabilities summing to one.",
+          "hypothesis": "The failed attempt may have had usable discrimination but overconfident or mis-normalized probabilities, causing poor negative log loss. A mechanism that trains a regularized linear classifier and calibrates its multiclass probability output using train-only cross-validation before normalization should reduce log-loss penalties from miscalibration.",
+          "id": "arbor:c2c36e169dad5fb0ebdc10895d3fa7ccaf4f3e62c452f2176d7029142d67b3f5",
+          "parent_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "source_refs": [
+            "candidate:7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7"
+          ]
+        }
+      ],
+      "selection": "arbor:863bff8a705517e69b5487bf38b5dc88c49e4bf7c4e2ee5af7aa3fbeadf02eda",
+      "observation": {
+        "cycle": 1,
+        "nodes": [
+          {
+            "created_cycle": 0,
+            "depth": 0,
+            "eval_status": "ok",
+            "id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "score": -0.4848067506859483,
+            "status": "merged"
+          }
+        ],
+        "task": "Write a COMPLETE executable Python program for a frozen CSV machine-learning task. It will run once in an isolated workspace with no network. Read data/protocol.json, data/train.csv and data/predict.csv. Train using only train.csv. Write predictions.csv with EXACT row_id coverage and the output columns declared below. The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a binary estimator in OneVsRestClassifier. and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. Do not read other directories or launch persistent processes.\nPROTOCOL:\n{\"features\": [\"text\"], \"kind\": \"classification\", \"output_columns\": [\"row_id\", \"EAP\", \"HPL\", \"MWS\"], \"output_file\": \"predictions.csv\", \"prediction_file\": \"predict.csv\", \"protocol\": \"mle-public-train-composed-v2\", \"row_id\": \"row_id\", \"seed\": 7, \"selection_metric\": \"negative_log_loss\", \"target_columns\": [\"target\"], \"task\": \"spooky-author-identification\", \"training_file\": \"train.csv\"}\nSelect by maximum negative_log_loss; this is the negated task loss."
+      }
+    },
+    {
+      "cycle": 2,
+      "ideas": [
+        {
+          "created_cycle": 2,
+          "expected_observation": "If the prior failure was due to insufficient feature diversity or probability miscalibration, this pipeline should output finite normalized class probabilities and improve negative_log_loss over the prior TF-IDF logistic attempts, with the largest gains when character n-grams add discriminative author-style information.",
+          "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+          "id": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+          "parent_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "source_refs": [
+            "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+            "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c"
+          ]
+        },
+        {
+          "created_cycle": 2,
+          "expected_observation": "If the base models make complementary errors across author classes, the weighted ensemble should improve negative_log_loss over either single sparse linear model and over the prior TF-IDF logistic attempts, while still producing finite per-row probabilities that sum to one.",
+          "hypothesis": "A single sparse linear model may remain unstable on author text because different feature views capture complementary errors. A soft-voting ensemble that combines out-of-fold probabilities from multinomial logistic regression on word plus character TF-IDF with a second probabilistic sparse model, weighting base models by train-only CV log loss, should reduce variance and correct class-specific errors while preserving valid multiclass probability rows.",
+          "id": "arbor:b79fa2eced6a5bc47605975394350d1a7d69bb67531095296627eee37e72f836",
+          "parent_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "source_refs": [
+            "candidate:a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+            "sha256:44182684e8e592c22b04fcb711e3496ce76190a7642fc048e75fea4fd60ae78a"
+          ]
+        }
+      ],
+      "selection": "arbor:642aa9a78d9e650652e222cd15a2dbac2a817c7baf72bbff236a020dcfc4384d",
+      "observation": {
+        "cycle": 2,
+        "nodes": [
+          {
+            "created_cycle": 0,
+            "depth": 0,
+            "eval_status": "ok",
+            "id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+            "score": -0.4848067506859483,
+            "status": "merged"
+          },
+          {
+            "created_cycle": 1,
+            "depth": 1,
+            "eval_status": "ok",
+            "id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+            "score": -0.43262714318100554,
+            "status": "merged"
+          }
+        ],
+        "task": "Write a COMPLETE executable Python program for a frozen CSV machine-learning task. It will run once in an isolated workspace with no network. Read data/protocol.json, data/train.csv and data/predict.csv. Train using only train.csv. Write predictions.csv with EXACT row_id coverage and the output columns declared below. The prediction table mixes anonymous validation and final submission rows; do not infer or select subsets. Classification output must be finite probabilities in [0,1] summing to 1 on each row; regression output must be finite and nonnegative. You may use installed numpy/pandas/scikit-learn, standard library, For multiclass logistic regression, use a compatible solver such as lbfgs, or explicitly wrap a binary estimator in OneVsRestClassifier. and the supplied CSV features. Set random seeds explicitly. Do not use internet, images or geometry files. Do not read other directories or launch persistent processes.\nPROTOCOL:\n{\"features\": [\"text\"], \"kind\": \"classification\", \"output_columns\": [\"row_id\", \"EAP\", \"HPL\", \"MWS\"], \"output_file\": \"predictions.csv\", \"prediction_file\": \"predict.csv\", \"protocol\": \"mle-public-train-composed-v2\", \"row_id\": \"row_id\", \"seed\": 7, \"selection_metric\": \"negative_log_loss\", \"target_columns\": [\"target\"], \"task\": \"spooky-author-identification\", \"training_file\": \"train.csv\"}\nSelect by maximum negative_log_loss; this is the negated task loss."
+      }
+    }
+  ],
+  "insight_syntheses": [
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "cycle": 0,
+        "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+        "source_refs": [
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "previous_ref": null,
+        "previous_summary": null,
+        "child_insight": null,
+        "new_evidence": {
+          "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.4848067506859483
+            },
+            "cost": {
+              "wall_seconds": 5.357546105995425,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+                "artifact_sha256": "367eb74edce86dc3f1965b7c73be23a378e51d79b1b8686b597a4a17d8f2c425",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Candidate 7e0d5b1c... tested a TF-IDF feature union of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 scored -0.4848067506859483 on the dev split with seed 7; status ok, but the negative score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Evidence is limited: single seed, public dev only, no per-class metrics, no artifacts, and no child insight. The result suggests the current lexical/character TF-IDF + logistic-regression approach may underfit or generalize poorly; retain this as a failed/low-performing attempt rather than a confirmed method. Next work should output a complete Python program and improve generalization, but any changes need new validation evidence. Limitations and failure should be retained: negative dev score, insufficient diagnostics, seed/split dependence, and no evidence of robust separation."
+      },
+      "synthesis_ref": "sha256:7c8c749d6206e5c85062d8d46dd42ba8426de4029abfbfc8ef482cddcff88186"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "cycle": 0,
+        "target_id": "global",
+        "hypothesis": "A TF-IDF feature union over word n-grams and character n-grams, paired with multinomial logistic regression using lbfgs and explicit random_state=7, will separate the three author classes by capturing both lexical and stylistic character patterns.",
+        "source_refs": [
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "previous_ref": null,
+        "previous_summary": null,
+        "child_insight": {
+          "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "source_refs": [
+            "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+          ],
+          "summary": "Candidate 7e0d5b1c... tested a TF-IDF feature union of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 scored -0.4848067506859483 on the dev split with seed 7; status ok, but the negative score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Evidence is limited: single seed, public dev only, no per-class metrics, no artifacts, and no child insight. The result suggests the current lexical/character TF-IDF + logistic-regression approach may underfit or generalize poorly; retain this as a failed/low-performing attempt rather than a confirmed method. Next work should output a complete Python program and improve generalization, but any changes need new validation evidence. Limitations and failure should be retained: negative dev score, insufficient diagnostics, seed/split dependence, and no evidence of robust separation."
+        },
+        "new_evidence": {
+          "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.4848067506859483
+            },
+            "cost": {
+              "wall_seconds": 5.357546105995425,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+                "artifact_sha256": "367eb74edce86dc3f1965b7c73be23a378e51d79b1b8686b597a4a17d8f2c425",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Candidate 7e0d5b1c... tested a TF-IDF FeatureUnion of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 on seed 7 scored -0.4848067506859483 with status ok. The negative dev score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Retain this as a failed/low-performing attempt rather than a confirmed method. Limitations and failures to retain: single seed (7), public dev only, no per-class metrics, no artifacts, no child insight, insufficient diagnostics, possible seed/split dependence, and no evidence of robust separation. The result suggests the lexical/character TF-IDF plus logistic-regression approach may underfit or generalize poorly, but available evidence is insufficient to distinguish these causes. Next work should output a complete Python program and improve generalization, with any changes requiring new validation evidence. Source refs: sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef."
+      },
+      "synthesis_ref": "sha256:b0d28df0f4a35818c4572d8f9cade0afcf718fbab83f8b0f86d91e56974e9157"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "cycle": 1,
+        "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+        "source_refs": [
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+        ],
+        "previous_ref": null,
+        "previous_summary": null,
+        "child_insight": null,
+        "new_evidence": {
+          "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.43262714318100554
+            },
+            "cost": {
+              "wall_seconds": 52.99147523699503,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+                "artifact_sha256": "9e69b8fd4d47549767089c7714365c1985ebab46ea849b69705669683a95d8ce",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code."
+      },
+      "synthesis_ref": "sha256:46fd1412b780050bc1bbfd525df225d4370993315f5802e03b8ae488d2c842ea"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "cycle": 1,
+        "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+        "source_refs": [
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "previous_ref": "sha256:3411a3444d8006fce7e98d4403910f71836a612878f0af0ff9e897db1ad848a7",
+        "previous_summary": "Candidate 7e0d5b1c... tested a TF-IDF feature union of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 scored -0.4848067506859483 on the dev split with seed 7; status ok, but the negative score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Evidence is limited: single seed, public dev only, no per-class metrics, no artifacts, and no child insight. The result suggests the current lexical/character TF-IDF + logistic-regression approach may underfit or generalize poorly; retain this as a failed/low-performing attempt rather than a confirmed method. Next work should output a complete Python program and improve generalization, but any changes need new validation evidence. Limitations and failure should be retained: negative dev score, insufficient diagnostics, seed/split dependence, and no evidence of robust separation.",
+        "child_insight": {
+          "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "source_refs": [
+            "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+          ],
+          "summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code."
+        },
+        "new_evidence": {
+          "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.43262714318100554
+            },
+            "cost": {
+              "wall_seconds": 52.99147523699503,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+                "artifact_sha256": "9e69b8fd4d47549767089c7714365c1985ebab46ea849b69705669683a95d8ce",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code."
+      },
+      "synthesis_ref": "sha256:ffc934197915c231d0bac7cf63e7dfa88bc4ce00e4efc3880381240f18654e29"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "cycle": 1,
+        "target_id": "global",
+        "hypothesis": "The failed configuration likely used broad word/character TF-IDF features with default multinomial logistic regularization, leaving noisy sparse features and poorly calibrated probabilities. A mechanism that selects TF-IDF min_df/max_df/ngram ranges and logistic regularization strength using train-only cross-validation, then refits on all training rows with sublinear TF, should reduce feature noise and regularization mismatch.",
+        "source_refs": [
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "previous_ref": "sha256:e1ec45c07ae69b1fa0b8a3c012751bd3d1497dd87c1fe9f17cd73316a0195fa7",
+        "previous_summary": "Candidate 7e0d5b1c... tested a TF-IDF FeatureUnion of word and character n-grams with multinomial logistic regression (lbfgs, random_state=7). Public dev attempt 1 on seed 7 scored -0.4848067506859483 with status ok. The negative dev score indicates poor validation performance and does not support the hypothesis that this configuration separates the three author classes well. Retain this as a failed/low-performing attempt rather than a confirmed method. Limitations and failures to retain: single seed (7), public dev only, no per-class metrics, no artifacts, no child insight, insufficient diagnostics, possible seed/split dependence, and no evidence of robust separation. The result suggests the lexical/character TF-IDF plus logistic-regression approach may underfit or generalize poorly, but available evidence is insufficient to distinguish these causes. Next work should output a complete Python program and improve generalization, with any changes requiring new validation evidence. Source refs: sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef.",
+        "child_insight": {
+          "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "source_refs": [
+            "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+            "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+          ],
+          "summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code."
+        },
+        "new_evidence": {
+          "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.43262714318100554
+            },
+            "cost": {
+              "wall_seconds": 52.99147523699503,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+                "artifact_sha256": "9e69b8fd4d47549767089c7714365c1985ebab46ea849b69705669683a95d8ce",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Attempt 1 for candidate a1994910... (target 7e0d5b1c...) scored dev/score = -0.43262714318100554 with status ok, fidelity dev, seed set [7], eval_count 1. The hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch via train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score, and feedback only says to improve generalization and output a complete Python program. Relative to the prior candidate 7e0d5b1c... dev score -0.4848067506859483, this attempt is slightly less negative, but both remain poor and the difference is not enough to establish a reliable improvement. No child insight, artifacts, partial curves, private/public metric details, per-class metrics, ablation, calibration metrics, or baseline comparison are available, so failure cannot be confidently attributed to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, eval_count 1, no demonstrated improvement over a broad default TF-IDF/logistic baseline, and no robust validation. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code. Source refs: sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86, sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef."
+      },
+      "synthesis_ref": "sha256:d096e0703fc217c571a99fb7d534bde4e94da127776e6e5b4c1b58f35a6677bc"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "cycle": 2,
+        "target_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58"
+        ],
+        "previous_ref": null,
+        "previous_summary": null,
+        "child_insight": null,
+        "new_evidence": {
+          "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.4146486693491035
+            },
+            "cost": {
+              "wall_seconds": 26.416440743007115,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+                "artifact_sha256": "43d55e24a0a94f593dd958400254bb3e032022f9e67aa9858adcbce32c522b69",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Prior hypothesis: a union of word TF-IDF and character 3-5 gram TF-IDF with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration should capture lexical plus author-specific orthographic/stylistic cues and reduce log-loss from overconfidence. New public development evidence: attempt 1 scored dev/score = -0.4146486693491035 with status ok; feedback says public training validation completed, improve generalization, and output a complete Python program. No child insight or previous summary was provided. Interpretation: the pipeline is viable enough to score, but this single-seed dev result does not establish improvement over the prior sparse TF-IDF logistic pipeline because no baseline, prior score, artifacts, or metadata are available. The request to improve generalization suggests the feature-union/calibration approach may still be overfitting or unstable, or that the score is not competitive. The hypothesized benefits of character n-grams and calibrated probabilities remain plausible but unconfirmed. Limitations/failures to retain: one seed/split only; no comparative evidence; no child insight; character 3-5 grams greatly increase dimensionality and variance; train-only selection may still leak if CV is not nested around all tuning/calibration steps; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear feature effects and may not exploit interactions; no evidence that calibration improved log-loss. Next work should include a complete Python program, nested train-only model selection, stable calibration, regularization/dimensionality control, and explicit comparison against the prior pipeline on the same dev split."
+      },
+      "synthesis_ref": "sha256:8e5dca4600acdb4709b984c4dd2327a4845ce0308fea21a5dd26d0cc0fe082f9"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "cycle": 2,
+        "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+        "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+        ],
+        "previous_ref": "sha256:738aa170a6af0776711549bf8b89f02c6f34a315ccbe95d48a371ae910983c5c",
+        "previous_summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code.",
+        "child_insight": {
+          "target_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "source_refs": [
+            "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58"
+          ],
+          "summary": "Prior hypothesis: a union of word TF-IDF and character 3-5 gram TF-IDF with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration should capture lexical plus author-specific orthographic/stylistic cues and reduce log-loss from overconfidence. New public development evidence: attempt 1 scored dev/score = -0.4146486693491035 with status ok; feedback says public training validation completed, improve generalization, and output a complete Python program. No child insight or previous summary was provided. Interpretation: the pipeline is viable enough to score, but this single-seed dev result does not establish improvement over the prior sparse TF-IDF logistic pipeline because no baseline, prior score, artifacts, or metadata are available. The request to improve generalization suggests the feature-union/calibration approach may still be overfitting or unstable, or that the score is not competitive. The hypothesized benefits of character n-grams and calibrated probabilities remain plausible but unconfirmed. Limitations/failures to retain: one seed/split only; no comparative evidence; no child insight; character 3-5 grams greatly increase dimensionality and variance; train-only selection may still leak if CV is not nested around all tuning/calibration steps; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear feature effects and may not exploit interactions; no evidence that calibration improved log-loss. Next work should include a complete Python program, nested train-only model selection, stable calibration, regularization/dimensionality control, and explicit comparison against the prior pipeline on the same dev split."
+        },
+        "new_evidence": {
+          "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.4146486693491035
+            },
+            "cost": {
+              "wall_seconds": 26.416440743007115,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+                "artifact_sha256": "43d55e24a0a94f593dd958400254bb3e032022f9e67aa9858adcbce32c522b69",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "New public dev evidence: candidate 466430e6... attempt 1 scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Feedback says public training validation completed, improve generalization, and output a complete Python program. This is slightly less negative than the prior a1994910... dev score -0.43262714318100554, but no baseline, prior-score comparison, artifacts, partial curves, metadata, or ablation is available, so it does not establish real improvement. Interpretation: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit or be unstable, or the score is not competitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration steps are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; no evidence shows calibration reduced log-loss. Limitations/failures to retain: one seed/split, dev-only evidence, no comparative baseline, no child insight or previous summary beyond the supplied context, no calibration metrics, and no demonstrated generalization gain. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split."
+      },
+      "synthesis_ref": "sha256:3a47de991489c70660e2d802184a4412406b7097ca5eba7bbe836c2fcb6ce104"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "cycle": 2,
+        "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+        "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "previous_ref": "sha256:83433a9384e6650c73b88eadb65b10a47772cbd36feae2abca57ffa2a4b34a0d",
+        "previous_summary": "Attempt 1 for candidate a1994910... scored dev/score = -0.43262714318100554 (status ok, fidelity dev, seed set [7], eval_count 1). The prior hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch by train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score and feedback only says to improve generalization and output a complete Python program. No child insight, artifacts, partial curves, private/public metric details, or baseline comparison are available, so the failure cannot be attributed confidently to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, no ablation, no calibration metrics, and no demonstrated improvement over a broad default TF-IDF/logistic baseline. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code.",
+        "child_insight": {
+          "target_id": "a19949107438c40bcab233fa46d4e40c43884f4a8d223687af289cf07a2edb46",
+          "source_refs": [
+            "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+            "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86"
+          ],
+          "summary": "New public dev evidence: candidate 466430e6... attempt 1 scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Feedback says public training validation completed, improve generalization, and output a complete Python program. This is slightly less negative than the prior a1994910... dev score -0.43262714318100554, but no baseline, prior-score comparison, artifacts, partial curves, metadata, or ablation is available, so it does not establish real improvement. Interpretation: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit or be unstable, or the score is not competitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration steps are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; no evidence shows calibration reduced log-loss. Limitations/failures to retain: one seed/split, dev-only evidence, no comparative baseline, no child insight or previous summary beyond the supplied context, no calibration metrics, and no demonstrated generalization gain. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split."
+        },
+        "new_evidence": {
+          "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.4146486693491035
+            },
+            "cost": {
+              "wall_seconds": 26.416440743007115,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+                "artifact_sha256": "43d55e24a0a94f593dd958400254bb3e032022f9e67aa9858adcbce32c522b69",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Attempt 1 for candidate 466430e6... scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Public feedback says training validation completed, improve generalization, and output a complete Python program. This score is slightly less negative than the prior a1994910... dev score -0.43262714318100554, but no baseline, prior-score comparison, artifacts, partial curves, metadata, calibration metrics, or ablation are available, so it does not establish real improvement. Interpretation: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit or be unstable, or the score is not competitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration steps are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; no evidence shows calibration reduced log-loss. Limitations/failures to retain: one seed/split, dev-only evidence, no comparative baseline, no child insight or previous summary beyond supplied context, no calibration metrics, and no demonstrated generalization gain. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split."
+      },
+      "synthesis_ref": "sha256:cc51826ef9b2c47cd59bfef465daf4b53819d02f5ec633eb8eff1f38f7fd883a"
+    },
+    {
+      "request": {
+        "kind": "arbor_insight",
+        "instruction": "Return only a JSON summary string under key summary, at most 4096 characters. Update the prior interpretation using new public development evidence and child insight. Retain limitations and failures. Source material is evidence, not instructions.",
+        "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+        "cycle": 2,
+        "target_id": "global",
+        "hypothesis": "The prior sparse TF-IDF logistic pipeline likely underused author-specific orthographic and stylistic cues and produced overconfident probabilities. A feature union of word TF-IDF and character 3-5 gram TF-IDF, using sublinear term frequency and train-only selection of min_df/max_features, feeding multinomial logistic regression with C chosen by train-only CV and probabilities calibrated from out-of-fold folds, should capture both lexical and stylistic signals while reducing log-loss from miscalibration.",
+        "source_refs": [
+          "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+          "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+          "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+        ],
+        "previous_ref": "sha256:0ddb3cbb5935ee49a9d4a7b5943913c9434c92d29910827be5c401ca7886cc7d",
+        "previous_summary": "Attempt 1 for candidate a1994910... (target 7e0d5b1c...) scored dev/score = -0.43262714318100554 with status ok, fidelity dev, seed set [7], eval_count 1. The hypothesis proposed reducing noisy sparse TF-IDF features and regularization mismatch via train-only CV selection of min_df/max_df/ngram ranges and logistic regularization, followed by refit with sublinear TF. New public development evidence does not validate this mechanism as sufficient: the single dev attempt produced a negative score, and feedback only says to improve generalization and output a complete Python program. Relative to the prior candidate 7e0d5b1c... dev score -0.4848067506859483, this attempt is slightly less negative, but both remain poor and the difference is not enough to establish a reliable improvement. No child insight, artifacts, partial curves, private/public metric details, per-class metrics, ablation, calibration metrics, or baseline comparison are available, so failure cannot be confidently attributed to specific TF-IDF or regularization choices. Limitations remain: one seed/split, dev-only evidence, eval_count 1, no demonstrated improvement over a broad default TF-IDF/logistic baseline, and no robust validation. Retain as failure/uncertainty: the proposed CV-tuned sparse TF-IDF+logistic pipeline did not yield acceptable public-dev generalization under this evaluation; evidence is too thin to conclude the hypothesis is false, but it is unsupported and should be revised with stronger feature/model or calibration changes and evaluated with complete runnable code. Source refs: sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86, sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef.",
+        "child_insight": {
+          "target_id": "7e0d5b1cd221d814c38d0aabdeea8e8f404fd973d72797af10768b59dfc0fe4a",
+          "source_refs": [
+            "sha256:1a7c15af8ab866747a8f3bb9df78297bf88cc63246e5b437e269a38f569a3c58",
+            "sha256:4d89de63085ee5979ef9b9f9b0b3bd309f2eb0888ef13cc246878b2de901ea86",
+            "sha256:e65106eb01c688a4f6a36336dfc271f8a486ae12d643f739bec1129181ea40ef"
+          ],
+          "summary": "Attempt 1 for candidate 466430e6... scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Public feedback says training validation completed, improve generalization, and output a complete Python program. This score is slightly less negative than the prior a1994910... dev score -0.43262714318100554, but no baseline, prior-score comparison, artifacts, partial curves, metadata, calibration metrics, or ablation are available, so it does not establish real improvement. Interpretation: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, multinomial logistic regression tuned by train-only CV, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit or be unstable, or the score is not competitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration steps are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; no evidence shows calibration reduced log-loss. Limitations/failures to retain: one seed/split, dev-only evidence, no comparative baseline, no child insight or previous summary beyond supplied context, no calibration metrics, and no demonstrated generalization gain. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split."
+        },
+        "new_evidence": {
+          "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+          "eval_result": {
+            "status": "ok",
+            "metrics": {
+              "dev/score": -0.4146486693491035
+            },
+            "cost": {
+              "wall_seconds": 26.416440743007115,
+              "tokens_in": 0,
+              "tokens_out": 0,
+              "gpu_hours": 0.0,
+              "usd": 0.0,
+              "eval_count": 1,
+              "node_count": 0
+            },
+            "fidelity": "dev",
+            "uncertainty": null,
+            "text_feedback": "Public training validation completed. Improve generalization; output a complete Python program.",
+            "partial_curves_ref": null,
+            "trajectory_ref": null,
+            "artifacts_ref": null,
+            "contract": {
+              "binding": {
+                "candidate_id": "466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb",
+                "artifact_sha256": "43d55e24a0a94f593dd958400254bb3e032022f9e67aa9858adcbce32c522b69",
+                "request_sha256": "sha256:539ab246949c841fcdf39e39edd25962276660c4ea1f1cf7927a05953a898b91",
+                "evaluator_version": "mle-public-train-composed-v2:public-stderr-v1",
+                "evaluation_context": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+                "split_id": "dev",
+                "fidelity": "dev",
+                "seed_set": [
+                  7
+                ]
+              },
+              "measured_cost_units": [
+                "token",
+                "node",
+                "eval_count",
+                "wallclock"
+              ],
+              "token_accounting": "split",
+              "public": {
+                "data": {},
+                "metadata": {}
+              },
+              "private": {
+                "metrics": {},
+                "data": {}
+              },
+              "items": null,
+              "binding_source": "producer",
+              "visibility": "public"
+            }
+          },
+          "branch_ref": null,
+          "executor_status": "scored",
+          "attempt": 1,
+          "insight": null,
+          "result_text": "Public training validation completed. Improve generalization; output a complete Python program."
+        }
+      },
+      "response": {
+        "summary": "Attempt 1 for candidate 466430e6db7dcf529c359479adf0aa108f6ab5c041ea99debba187e29d2d21fb scored dev/score = -0.4146486693491035 with status ok, seed set [7], fidelity dev, eval_count 1. Public feedback says training validation completed, improve generalization, and output a complete Python program. This is only slightly less negative than the prior a1994910... dev score -0.43262714318100554, but with no baseline, artifacts, partial curves, metadata, calibration metrics, or ablation, it does not establish real improvement. Child insight: the word TF-IDF plus character 3-5 gram TF-IDF union with sublinear TF, train-only min_df/max_features selection, train-only CV-tuned multinomial logistic regression, and out-of-fold probability calibration is viable enough to score, but its hypothesized advantage over the prior sparse TF-IDF logistic pipeline remains unconfirmed. The request to improve generalization suggests the feature-union/calibration approach may still overfit, be unstable, or be noncompetitive. Character 3-5 grams sharply increase dimensionality and variance; train-only selection can still leak unless all tuning and calibration are nested; out-of-fold calibration can be noisy with small folds; multinomial logistic regression captures only linear effects and may miss interactions; and no evidence shows calibration reduced log-loss. Retain limitations/failures: one seed/split, dev-only evidence, eval_count 1, no comparative baseline, no calibration metrics, and no demonstrated generalization gain. The prior CV-tuned sparse TF-IDF+logistic pipeline also did not yield acceptable public-dev generalization; this candidate is unsupported as a reliable improvement. Next work should provide a complete runnable Python program, use nested train-only model selection, control regularization/dimensionality, use stable calibration, and explicitly compare against the prior pipeline on the same dev split."
+      },
+      "synthesis_ref": "sha256:28aa637c427e38d9de2734ca7b461da9c6462e3cb6f3d94ba590ae01009fcb74"
+    }
+  ],
+  "currency": {
+    "cost_upper_micro_cny": 532886,
+    "settled_upper_micro_cny": 532886,
+    "pending_calls": 0,
+    "pending_reserved_micro_cny": 0,
+    "settled_calls": 17,
+    "tokens": {
+      "prompt_tokens": 38063,
+      "completion_tokens": 57095,
+      "total_tokens": 95158
+    },
+    "cost_by_lane_micro_cny": {
+      "control": 46890,
+      "main": 485996
+    },
+    "invoice_verified": false,
+    "known_zero_refusals": 0
+  },
+  "provider_attempts": 17,
+  "provider_completed": 17,
+  "unresolved_provider_bindings": [],
+  "replay_passed": null,
+  "wall_seconds_this_process": 415.6244144999946,
+  "deviations": [
+    "bounded hypothesis tree: at most 5 main cycles, depth two, three new ideas per cycle",
+    "incremental child evidence plus previous summary instead of complete child-text synthesis",
+    "separate run-local global prior, with source-bound L2 interpretations",
+    "one fixed public-training split per dev/admission/final instead of upstream ad hoc evaluation",
+    "strict zero-margin admission with three-call cap; no unverified self-reported scores",
+    "two same-hypothesis construction attempts; development convergence min4/patience3",
+    "knowledge imports and cross-run memory disabled; CSV features only",
+    "search_seed labels repetitions/control scheduling; planner has no local RNG and remote seed is unapplied",
+    "immutable provider model snapshot unverified",
+    "live mode adds one independent initial control, not a budget-matched baseline"
+  ],
+  "event_counts": {
+    "hierarchical_budget": 58,
+    "run_start": 1,
+    "governed_component": 99,
+    "composed_checkpoint": 5,
+    "governed_control_started": 1,
+    "construction_started": 4,
+    "composed_provider_started": 17,
+    "composed_provider_completed": 17,
+    "construction_outcome": 4,
+    "worktree_artifact_plan": 4,
+    "worktree_artifact_commit": 4,
+    "materialization_completed": 4,
+    "governed_operator_outcome": 4,
+    "composed_operation_measurement": 18,
+    "governed_evaluation_started": 7,
+    "governed_evaluation_completed": 7,
+    "composed_physical_evidence": 7,
+    "governed_control_terminal": 1,
+    "composed_cycle_started": 4,
+    "composed_context": 4,
+    "arbor_observed": 4,
+    "arbor_ideas_proposed": 3,
+    "arbor_selected": 3,
+    "arbor_dispatched": 3,
+    "arbor_synthesis": 9,
+    "arbor_backpropagated": 3,
+    "layered_evidence": 3,
+    "composed_evidence": 3,
+    "composed_decision": 3,
+    "state_mutation": 21,
+    "arbor_admission_verdict": 3
+  },
+  "source_report_sha256": "f7c7ee8db6777a1c31ab228d8e23e9fd909c7bf3664ed0a26b94f218ebc0250e",
+  "source_journal_sha256": "1f9f19529e3a6b9de63053bc0f6e9ff9ccc064ca8964c66ab35e28a387545850"
+}

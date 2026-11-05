@@ -1,5 +1,6 @@
 """AIDE CSV search through the public Framework; offline fixture by default."""
 from core.composition.defaults import composed_profile
+from zoo.mle_bench_lite.recipe_support import FIXTURE_PROGRAM, fixture_data, source_identity
 
 RECIPE = 'aide-mle-v1'
 REFERENCE_REVISION = 'ad73d227af481bea3de06f884f41b2993dd6453a'
@@ -33,26 +34,6 @@ def build_profile(*, split_seed=7, search_seed=0, call_token_bound, max_nodes=10
             'operator': {'token': call_token_bound, 'node': 1, 'eval_count': 0}},
         'fidelity_rungs': [{'fidelity': 'dev', 'split_id': 'dev', 'seed_set': [split_seed]}]}}
     return p
-
-
-# This constant program learns priors from the visible training table only.
-# It is a plumbing fixture, not an AIDE result or a competitive baseline.
-FIXTURE_PROGRAM = '''import csv, json
-from collections import Counter
-with open('data/protocol.json') as f: protocol = json.load(f)
-with open('data/train.csv') as f: train = list(csv.DictReader(f))
-with open('data/predict.csv') as f: predict = list(csv.DictReader(f))
-columns = protocol['output_columns']
-if protocol['kind'] == 'classification':
-    counts = Counter(row['target'] for row in train)
-    values = [counts[name] / len(train) for name in columns[1:]]
-else:
-    values = [sum(float(row[name]) for row in train) / len(train) for name in columns[1:]]
-with open('predictions.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(columns)
-    writer.writerows([row['row_id'], *values] for row in predict)
-'''
 
 
 class FixtureProvider:
@@ -102,19 +83,6 @@ def governed_setup(bundle, output, *, ledger, api_key, split_seed, search_seed,
         'operator': {'name': 'draft'}, 'request': {
             'fidelity': 'dev', 'split_id': 'dev', 'seed_set': [split_seed]}, 'reservations': reservations}}
     return p, registry, provider
-
-
-def source_identity():
-    import subprocess
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[3]
-    try:
-        return {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root,
-                    text=True, stderr=subprocess.DEVNULL).strip(),
-                'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=root,
-                    text=True, stderr=subprocess.DEVNULL))}
-    except (OSError, subprocess.CalledProcessError):
-        return {'commit': None, 'dirty': None}
 
 
 def run(*, output, public_root, task_id, split_seed=7, search_seed=0, max_nodes=10,
@@ -284,29 +252,6 @@ def run(*, output, public_root, task_id, split_seed=7, search_seed=0, max_nodes=
         json.dump(report, stream, indent=2, allow_nan=False)
     _atomic_json(output / 'method-report.json', report)
     return report
-
-
-def fixture_data(root, task_id):
-    """Small synthetic CSVs; no Kaggle access and no hidden labels in programs."""
-    from zoo.mle_bench_lite.public_train import TASK_SPECS, write_csv
-    if root.exists():
-        return root
-    root.mkdir(parents=True)
-    spec = TASK_SPECS[task_id]
-    if spec['kind'] == 'classification':
-        classes = ['A', 'B', 'C']
-        targets = [spec['target']]
-        train = [{'id': str(i), 'x': i, targets[0]: classes[i % 3]} for i in range(60)]
-        sample = [{'id': str(i), **{name: 1 / 3 for name in classes}} for i in range(4)]
-        outputs = classes
-    else:
-        targets = outputs = spec['targets']
-        train = [{'id': str(i), 'x': i, **{name: i / 10 + 1 for name in targets}} for i in range(60)]
-        sample = [{'id': str(i), **{name: 0 for name in outputs}} for i in range(4)]
-    write_csv(root / 'train.csv', ['id', 'x', *targets], train)
-    write_csv(root / 'test.csv', ['id', 'x'], [{'id': str(i), 'x': i + 1000} for i in range(4)])
-    write_csv(root / 'sample_submission.csv', ['id', *outputs], sample)
-    return root
 
 
 def main(argv=None):

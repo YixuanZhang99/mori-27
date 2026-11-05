@@ -1,0 +1,9 @@
+{
+  "original_source": "64cecb67ab2784b495ac58314397a3b15d4c2b4b",
+  "original_error": "construction transcript does not cover currency calls",
+  "corrected_auditor_file": "m0/zoo/mle_bench_lite/m7_pilot_audit.py",
+  "corrected_auditor_sha256": "67d2f44af74249a5054dc56c2a5efc1bec86c3dd478d50185c521769f8bbe1a7",
+  "original_outcome_retained": true,
+  "provider_calls_during_reaudit": 0,
+  "campaign_unchanged_during_reaudit": true
+}

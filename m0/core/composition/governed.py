@@ -139,7 +139,7 @@ class GovernedInvocation:
                 current = provider.__dict__.get("current_external_context")
                 if current is None:
                     raise UsageError("external invocation has no trusted call context")
-                if current.phase != "planning":
+                if current.phase != "planning" or "planning" in binding["phase_call_limits"]:
                     try:
                         validate_external_ordinal(binding, current.phase, current.ordinal)
                     except ValueError:

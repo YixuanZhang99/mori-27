@@ -1,6 +1,6 @@
 # C04 — Arbor 假设驱动研究
 
-状态：规格草案；继承 [COMMON](COMMON.md)。依据：REPLICATION §3、统一抽象 M1/M5/M7/M9、CODE-BORROWING 的 Arbor 文件清单。
+状态：规格冻结、机制接通、九组真实小规模实测与官方评分完成（2026-11-05）；38/44 主候选有效，九份提交均有效。完整性能区间复现未完成。细化设计见 [实施设计](../../superpowers/specs/2026-11-05-arbor-design.md)，任务见 [实施计划](../../superpowers/plans/2026-11-05-arbor-delivery.md)，[真实结果及全部失败](../../../research/experiments/2026-11-05-arbor-mle/README.md)已归档。当前待最终证据提交的 CI 与 PR #8 合入。继承 [COMMON](COMMON.md)。依据：REPLICATION §3、统一抽象 M1/M5/M7/M9、CODE-BORROWING 的 Arbor 文件清单。
 源码核对对象：[RUC-NLPIR/Arbor / a633f56f](https://github.com/RUC-NLPIR/Arbor/tree/a633f56f2601387402194481e846e3375e822afa)；本轮锁定身份，执行前核对六步语义和 insight 写读路径。
 
 | 模块 | 本方法要求 |
@@ -15,10 +15,31 @@
 | evaluation | dev/admission/final 各自身份；同一固定 artifact 跨 split 评分 |
 | admission | dev trigger→held-out 严格 margin 改进→merge，失败保留旧 trunk |
 
-复用 `LLMCyclesPolicy`、`ContextMemory`、M7 configured construction、`LayeredAdmissionController`；目前这些只是组件，不是完整 Arbor 轨迹。
+复用 `ContextMemory`、M7 configured construction、`LayeredAdmissionController`；`ArborPolicy` 与 driver coordinator 已连接六步轨迹、待选假设、主干构造和源绑定经验回传。真实 v4 矩阵包含六阶段各 44 次、125 次来源绑定经验汇总、21 次实际准入评估及 2 次拒绝；之前三批失败均保留。
 新增 `m0/config/profiles/arbor_mle.json`、`m0/tests/test_arbor_recipe.py`；按需新增 `m0/core/composition/arbor_policy.py`，只补六步规划和 insight 消费，记忆写入沿用串行 mutation。
 首个任务复用 spooky；pilot 5 cycles、tree depth 2、margin 0、gate 上限 3；完整默认配置保留 REPLICATION 的 20/2，并分开标注。
 
 验收 R1：六步事件有候选/假设身份；R2：冻结假设在修复中不可被替换；R3：提供高 dev 低 admission 候选，拒绝 merge、原 trunk 不变；R4：叶负面 insight 上溯且下一次 ideation 输入实际包含来源；R5：禁用 insight 的 fixture 会改变输入，不能只比存储是否存在；R6：final 不进入 policy/memory。
 真实报告展示至少一次完整 gate 决策，若自然 run 未出现拒绝，保留实际情况并另附机制反例，不伪造实测轨迹。性能采用 MLE 三任务诊断口径，不声称论文奖牌复现。
-当前没有完整 `arbor_mle` 入口；实现完成时将可复制命令和三元组报告补到此页。
+运行入口已实现（需要 Linux 的 bubblewrap/seccomp 沙箱；默认仅用合成 CSV，不调用外部模型）：
+
+```bash
+PYTHONPATH=m0 uv run --project m0 python -m zoo.mle_bench_lite.arbor_runner --output work/arbor-fixture --max-cycles 3
+PYTHONPATH=m0 uv run --project m0 python -m zoo.mle_bench_lite.arbor_runner --output work/arbor-fixture --max-cycles 3 --resume
+```
+
+恢复要求源码、数据、配置和原匿名化 key 保持不变。入口默认 pilot 5 cycles；`build_profile` 与打包 profile 的完整默认值为 20 cycles。`search_seed` 标记重复运行和独立 control 调度；规划器没有本地随机选亲器，也不声称供应商应用了远端 seed。
+
+本地验证已包含：实际 Linux 沙箱训练与跨 split 冻结预测、开发集赢家被准入集拒绝、经验消融、篡改恢复拒绝，以及本机 HTTP 下 planning/constructor/synthesis 的真实费用结算和零调用回放。独立 `arbor_grading` 入口只接受原始冻结 trunk 及原始预测重建的提交，评分单次执行并与搜索隔离。
+
+独立 [导出与重算工具](../../../research/experiments/2026-11-05-arbor-mle/README.md) 已实现，分别核对开发集最优、准入 trunk、最终冻结评估、费用和经验来源；未完成尝试与未运行 cell 保留在分母中。v1/v2/v3 失败矩阵与 v4 九组结果均已独立重算；v4 官方提交全部有效。
+
+**交付边界：** 完整分支审查及修复、本地检查、干净 CLI/resume、九组真实矩阵及官方评分已完成；当前待最终证据提交 CI 与合入。nomad 达到历史银牌阈值，leaf 表现低于历史中位数；没有等预算对照或完整论文复现结论。
+
+以下保留运行协议修正历史；当前 recipe 为 `arbor-mle-v4`，并非尚待启动的旧矩阵。
+
+v2 规划输入显式列出 `eligible_parent_ids`，来源是同一严格父节点校验；所有新假设的 parent_id 只能引用该集合或为 null。待选 hypothesis ID 仅用于 selection.pending_id，不允许成为未执行的父节点。任一新假设无效时仍拒绝整批，不丢弃失败项、不自动重试。
+
+v2 完成五轮但因独立审计错误停止交付；v3 修复按阶段的原始调用覆盖核对。构造器仅在本 profile 中设置 `explicit_json_output=true`，明确 artifact/hypothesis JSON 外层格式，主搜索及独立控制均适用；规划与共享 task 不接收这条构造格式指令。旧方法默认请求保持不变，解析器仍严格、两次构造尝试上限不变。v1/v2 的失败矩阵和费用分别保留，v3 当时另行预声明，其失败也已归档。
+
+规划父身份协议 v4：`parent_id` 可为裸候选 ID，或同一 ID 的单层 `candidate:<ID>` 引用；解码后统一为裸 ID 再做资格、预算投影及深度校验，假设身份和谱系记录采用规范形式，原模型回执保留。不能把 pending ID、未知引用或多层前缀映射为合法父代，也不丢弃批次中的非法选项。此规则解决 v3 真实运行的命名空间歧义；失败仍归档，不改写原运行。

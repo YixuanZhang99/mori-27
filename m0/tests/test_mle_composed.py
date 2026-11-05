@@ -377,3 +377,18 @@ def test_task_instructions_address_multiclass_solver_compatibility():
     assert 'multiclass' in task.lower()
     assert 'lbfgs' in task.lower()
     assert 'OneVsRestClassifier' in task
+
+
+def test_task_metric_domain_declares_and_scores_isolated_admission(tmp_path):
+    bundle = PublicTrainBundle(fixture_public(tmp_path / 'public'), tmp_path / 'inputs', TASK, 7,
+                              anonymization_key=TEST_ANONYMIZATION_KEY, dev_scoring='task_metric')
+    domain = PublicTrainDomain(bundle, tmp_path / 'candidates', runner=TrustedFixtureRunner())
+    assert domain.evaluation_contexts == {split: bundle.contexts[split]
+                                         for split in ('dev', 'admission', 'final_audit')}
+    proposal = Proposal(Candidate('arbor-artifact'), program(bundle))
+    results = [asyncio.run(domain.evaluate(proposal, EvalRequest(split, split_id=split)))
+               for split in ('dev', 'admission', 'final_audit')]
+    assert all(result.status is EvalStatus.OK for result in results)
+    assert domain.training_invocations == 1
+    assert len({result.contract.private.data['prediction_sha256'] for result in results}) == 1
+    assert len({result.contract.binding.evaluation_context for result in results}) == 3

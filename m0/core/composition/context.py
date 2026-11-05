@@ -153,6 +153,7 @@ class ContextMemory(ScopedMemory):
             raise ValueError("evaluation context must be a fingerprint or the explicit opaque empty string")
         self.evaluation_context = evaluation_context
         self.bindings = {}
+        self._research_events = None
         self.imports = {}
         self._imported_ids = set()
 
@@ -284,6 +285,14 @@ class ContextMemory(ScopedMemory):
                     {"target_level": "L2", "delta": {"utility": {"harmful_count": 1}}},
                     "retain a run-scoped negative lesson supported by two actual calibration pairs")]
 
+    def prepare_admission_verdict(self, verdict, *, cycle):
+        from core.composition.tree_insight import prepare_verdict
+        return prepare_verdict(self, verdict, cycle=cycle)
+
+    def prepare_tree_insight(self, **kwargs):
+        from core.composition.tree_insight import prepare
+        return prepare(self, **kwargs)
+
     def verify_proxy_feedback(self, controller):
         for binding in self.bindings.values():
             if binding.get("role") == "proxy_feedback":
@@ -317,6 +326,14 @@ class ContextMemory(ScopedMemory):
             raise ValueError("foreign memory requires explicit import authorization")
         for ref in refs:
             binding = self.bindings[ref]
+            if binding.get('role') == 'admission_verdict':
+                from core.composition.tree_insight import validate_verdict_entry
+                validate_verdict_entry(self, entry, ref, binding, imported=imported)
+                continue
+            if binding.get('role') == 'tree_insight':
+                from core.composition.tree_insight import validate_entry
+                validate_entry(self, entry, ref, binding, imported=imported)
+                continue
             if binding.get("role") == "proxy_feedback":
                 if imported or entry.scope != "run" or entry.context != self.context \
                         or set(binding) != {"role", "candidate_id", "context", "evaluation_context", "status", "cycle", "feedback"} \
@@ -343,7 +360,15 @@ class ContextMemory(ScopedMemory):
     def write(self, entry, at):
         self._validate_entry(entry)
         written = super().write(copy.deepcopy(entry), at)
-        if written.level == "L1":
+        tree = self.bindings[written.provenance.evidence_refs[0]].get('role') == 'tree_insight'
+        if tree:
+            binding = self.bindings[written.provenance.evidence_refs[0]]
+            previous = binding['previous_ref']
+            if previous is not None:
+                old = self.entries['arbor-insight:' + previous[7:]]
+                old.time.superseded_by = written.id
+                self._log('memory_superseded', old, successor=written.id)
+        if written.level == "L1" or tree:
             self.transition(written.id, "active", "observed_dev_evidence",
                             written.provenance.evidence_refs[0])
         return written
@@ -365,6 +390,7 @@ class ContextMemory(ScopedMemory):
             raise ValueError("memory restore requires a fresh component")
         temporary = ContextMemory(self.store, self.context, self.evaluation_context, self.utility_weight)
         ScopedMemory.restore_state(temporary, {"seq": state["seq"], "entries": state["entries"]})
+        temporary._research_events = self._research_events
         temporary.bindings, temporary.imports = state["bindings"], state["imports"]
         for digest, identifiers in temporary.imports.items():
             if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest) or type(identifiers) is not list \

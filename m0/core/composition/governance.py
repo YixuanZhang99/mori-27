@@ -184,10 +184,10 @@ def validate_factory_governance(kind: str, declaration: Any, *, reservation=None
                     type(authority["bridge"]) is not str or authority["bridge"] not in external_bridges:
                 raise ValueError("external provider requires an explicitly installed versioned bridge capability")
             caps = value["phase_call_limits"]
-            if type(caps) is not dict or set(caps) != {"operator", "evaluation"} or any(
+            if type(caps) is not dict or set(caps) not in ({"operator", "evaluation"}, {"planning", "operator", "evaluation"}) or any(
                     type(caps[phase]) is not int or caps[phase] < (1 if phase == "operator" else 0)
-                    for phase in ("operator", "evaluation")):
-                raise ValueError("external provider requires finite operator/evaluation ordinal limits")
+                    for phase in caps):
+                raise ValueError("external provider requires finite provider phase ordinal limits")
             if phase_reservations is not None:
                 for phase, cap in caps.items():
                     basket = phase_reservations.get(phase)
