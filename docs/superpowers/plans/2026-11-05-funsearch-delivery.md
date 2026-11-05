@@ -57,5 +57,5 @@
 - [x] 独立初始 control 复用M7构造/OR3 dev domain，只有operator需要provider调用，evaluation计0模型token。调用预留取provider声明。主候选池不得混入control。
 - [x] 基准 best-fit 使用同一 frozen template/可信 scorer/沙箱，独立报告dev和held_out逐实例bin数，不作为模型发现。主程序先冻结再评held_out；基准结果不反馈生成器。
 - [x] loopback验证费用、控制隔离、失败报告、恢复不重复调用；随后离线端到端命令完成并记录replay。完成一次全分支审查和必要修复。
-- [ ] 提交干净source后，固定16384输出上限、timeout30秒/partition、官方OR3切分，按0/1/2各最多10提案真实运行；原累计campaign。保留全部生成/评分/终评失败，不为挑成功重跑。
+- [x] 提交干净source后，固定16384输出上限、timeout30秒/partition、官方OR3切分，按0/1/2各最多10提案真实运行；原累计campaign。保留全部生成/评分/终评失败，不为挑成功重跑。
 - [ ] 导出原始证据、源/配置/数据hash、程序和逐case bin数、控制状态、费用、失败率、所有差异；脚本从冻结记录重算，不需要密钥。执行macOS portable/Linux完整CI并合入main，才推进AIDE。

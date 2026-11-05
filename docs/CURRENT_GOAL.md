@@ -19,4 +19,6 @@
 
 v2 已修正格式，但真实seed0的10次改进均在high推理下达到16384输出上限；初始程序dev213.9/held-out210.1箱，与best-fit持平。此批费用上界¥1.373084全部结算，原campaign累计¥20.069044。其余v2 seed在调用前停止，[完整记录](../research/experiments/2026-11-05-funsearch-or3/high-effort-v2/README.md)保留。
 
-v3增加可冻结的推理强度参数，C02选low，其他调用者默认仍high；不改变模型、数据、节点/输出上限或原账本。接下来独立完成seeds0/1/2及最终CI，不混合版本统计。当前尚不宣称优化收益。PR检查与结果核对后合入，随后按已预读的AIDE规格推进；Goal保持active。GEPA合并后Mac故障注入修复已由PR#6的fd02b5c两组Mac检查通过验证。
+v3 的三个 seed 已全部完成：有效候选 10/11、11/11、10/11；三组冻结 held-out 都为 210.1 箱，与 best-fit 持平。Seed 0 的 dev 改善至 213.8 箱，但没有体现留出收益。三组回放与独立重算通过，真实轨迹包含非最优父代选亲与弱岛重置。[完整结果及失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档；本批费用上界 ¥1.098926，原 campaign 累计 ¥21.167970，剩余 ¥178.832030，无未决调用或预留。
+
+下一步完成 PR #6 最终候选检查并合入，再从 main 开始 AIDE，依次打通 draft/debug/improve、真实 L1 摘要消费和 MLE 试跑。当前仅发布一个方法分支；AIDE 仍是规格准备，不冒称实现完成。Goal 保持 active。GEPA 合并后 Mac 故障注入修复已由 PR #6 的 fd02b5c、1462fb3 Mac 检查通过验证。

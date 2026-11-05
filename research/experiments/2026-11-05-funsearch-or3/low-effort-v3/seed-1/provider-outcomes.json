@@ -1,0 +1,218 @@
+[
+  {
+    "response_sha256": "394ab8a8a96b374e5786bbe9dd02741e6719e1f4e4f2529a755b14d7776835df",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 3881,
+      "completion_tokens_details": {
+        "reasoning_tokens": 3792
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1073,
+      "prompt_tokens": 1073,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 4954
+    }
+  },
+  {
+    "response_sha256": "41cf123a0f00663b4135e654ffdfd3e01d545399e553721ced7161d2c7d8e93f",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 180,
+      "completion_tokens_details": {
+        "reasoning_tokens": 151
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 375,
+      "prompt_tokens": 375,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 555
+    }
+  },
+  {
+    "response_sha256": "8537235d7dcb0a2b41db95437f47528806a033b2bf7424c5e0e576316b206f21",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 1249,
+      "completion_tokens_details": {
+        "reasoning_tokens": 1172
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1847,
+      "prompt_tokens": 1847,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 3096
+    }
+  },
+  {
+    "response_sha256": "0ea9935f27fb0e81b61457c324b3ba24e53d69b0786a98a52749f933d53cee7b",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 257,
+      "completion_tokens_details": {
+        "reasoning_tokens": 228
+      },
+      "prompt_cache_hit_tokens": 256,
+      "prompt_cache_miss_tokens": 221,
+      "prompt_tokens": 477,
+      "prompt_tokens_details": {
+        "cached_tokens": 256
+      },
+      "total_tokens": 734
+    }
+  },
+  {
+    "response_sha256": "2d84bd82477f3190415f95458c4d605e8c2efbdf033b644d60307d27ca8c6239",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 5532,
+      "completion_tokens_details": {
+        "reasoning_tokens": 5401
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1685,
+      "prompt_tokens": 1685,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 7217
+    }
+  },
+  {
+    "response_sha256": "5dfab5323f629bd38d39524400ffc65fded8fcbc599d6be9f465aa235e51a4d7",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 5077,
+      "completion_tokens_details": {
+        "reasoning_tokens": 4944
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1115,
+      "prompt_tokens": 1115,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 6192
+    }
+  },
+  {
+    "response_sha256": "4ac8693a65aed72507353680559a1745de10de7cb30479c304220fc1fd300331",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 1945,
+      "completion_tokens_details": {
+        "reasoning_tokens": 1825
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1834,
+      "prompt_tokens": 1834,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 3779
+    }
+  },
+  {
+    "response_sha256": "98a9d46e100550781aa9d15ef8ccdaa31943dcf8fe057de925baf94589ebeaf3",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 9101,
+      "completion_tokens_details": {
+        "reasoning_tokens": 8921
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1223,
+      "prompt_tokens": 1223,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 10324
+    }
+  },
+  {
+    "response_sha256": "3ccf4d3e523f3ca4fc0f958ad0513d30890dc168d96fd35e860594860b29e299",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 2660,
+      "completion_tokens_details": {
+        "reasoning_tokens": 2562
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1373,
+      "prompt_tokens": 1373,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 4033
+    }
+  },
+  {
+    "response_sha256": "255a52bad1eb0e27d1ac52a6808163fd1544ffc488e06edf32427a0eea82bcbc",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 1610,
+      "completion_tokens_details": {
+        "reasoning_tokens": 1528
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1406,
+      "prompt_tokens": 1406,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 3016
+    }
+  },
+  {
+    "response_sha256": "cae9d9cd12884c38d51ccf8ae8ccb210c2a9077fe6e2c9ea72922b8fcac43e7f",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 4262,
+      "completion_tokens_details": {
+        "reasoning_tokens": 4112
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1131,
+      "prompt_tokens": 1131,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 5393
+    }
+  },
+  {
+    "response_sha256": "b4e8a021bf4f70455918e693a54329eb1533f61f2d9f09f9fba8ce62889055ca",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 1698,
+      "completion_tokens_details": {
+        "reasoning_tokens": 1557
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1610,
+      "prompt_tokens": 1610,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 3308
+    }
+  }
+]

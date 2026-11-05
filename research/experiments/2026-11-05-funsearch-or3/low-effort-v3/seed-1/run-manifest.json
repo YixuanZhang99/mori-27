@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "mode": "live",
+  "source_commit": "1462fb373b4630504c82c9d5f1fcf9b2c9fb7078",
+  "source_dirty": false,
+  "dataset_identity": "sha256:7afeaaa1b9caba379761a6b73a7e6454069dc45b819742897de4069db823637f",
+  "split_hashes": {
+    "dev": "sha256:a99be58e4e5cf25986edcffd55f03928f47e82f2db00397eab72b9c1d73c19c3",
+    "held_out": "sha256:4c18523528ff1c9c5bf235f105478a731c312a92d2924c27c2253ac729918045"
+  },
+  "profile": {
+    "schema_version": 2,
+    "name": "funsearch-or3-v3",
+    "mode": "benchmark",
+    "provider": {
+      "name": "provided"
+    },
+    "domain": {
+      "name": "funsearch_or3",
+      "options": {
+        "dataset_identity": "sha256:7afeaaa1b9caba379761a6b73a7e6454069dc45b819742897de4069db823637f",
+        "timeout": 30.0
+      }
+    },
+    "policy": {
+      "name": "funsearch",
+      "options": {
+        "case_ids": [
+          "u500_00",
+          "u500_01",
+          "u500_02",
+          "u500_03",
+          "u500_04",
+          "u500_05",
+          "u500_06",
+          "u500_07",
+          "u500_08",
+          "u500_09"
+        ],
+        "islands": 2,
+        "seed": 1,
+        "prompt_size": 2,
+        "temperature": 1.0,
+        "temperature_period": 10,
+        "metric": "score",
+        "template": "def priority(item, bins):\n    return -(bins - item)\n",
+        "template_ref": "sha256:d4c06d2e4f2807ae3840c5675238cf4008a518f447eddfcb84c556d9c5d31a8f",
+        "function_name": "priority",
+        "reset_interval": 5
+      }
+    },
+    "operators": [
+      {
+        "name": "draft"
+      },
+      {
+        "name": "funsearch"
+      }
+    ],
+    "frontier": {
+      "name": "population",
+      "options": {
+        "capacity": 11
+      }
+    },
+    "memory": {
+      "name": "scoped"
+    },
+    "executor": {
+      "name": "inprocess"
+    },
+    "admission": {
+      "name": "metric_final",
+      "options": {
+        "final_request": {
+          "fidelity": "final_audit",
+          "split_id": "final_audit"
+        }
+      }
+    },
+    "budget": {
+      "name": "hierarchical",
+      "options": {
+        "limits": {
+          "global": {
+            "token": 12779520,
+            "node": 12,
+            "eval_count": 13
+          },
+          "direction": {
+            "token": 11714560,
+            "node": 11,
+            "eval_count": 12
+          },
+          "candidate": {
+            "token": 11714560,
+            "node": 11,
+            "eval_count": 12
+          }
+        },
+        "reservation": {
+          "token": 0,
+          "node": 0,
+          "eval_count": 1
+        },
+        "operation_reservations": {
+          "planning": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 0
+          },
+          "operator": {
+            "token": 1064960,
+            "node": 1,
+            "eval_count": 0
+          }
+        },
+        "fidelity_rungs": [
+          {
+            "fidelity": "dev",
+            "split_id": "dev"
+          }
+        ]
+      }
+    },
+    "skills": [
+      {
+        "name": "instruction",
+        "options": {
+          "text": "Optimize online bin packing. priority(item, bins) returns one finite numeric priority per eligible bin; the largest priority chooses the bin. bins is a NumPy vector of remaining capacities, including empty bins, and np is available. Fewer used bins is better. Change only the target function. No files, network, external data, or random state."
+        }
+      }
+    ],
+    "execution": {
+      "schema_version": 1,
+      "spec": {
+        "role": "coder",
+        "hypothesis_frozen": true,
+        "context_projection": []
+      },
+      "constructor": {
+        "name": "funsearch_prompt",
+        "options": {
+          "template": "def priority(item, bins):\n    return -(bins - item)\n",
+          "function_name": "priority"
+        }
+      }
+    },
+    "governance": {
+      "schema_version": 1,
+      "controls": {
+        "after_main_cycles": [
+          0
+        ],
+        "seed": 1,
+        "provider": {
+          "name": "funsearch-cny-control"
+        },
+        "domain": {
+          "name": "funsearch-dev-control"
+        },
+        "operator": {
+          "name": "draft"
+        },
+        "request": {
+          "fidelity": "dev",
+          "split_id": "dev"
+        },
+        "reservations": {
+          "operator": {
+            "token": 1064960,
+            "node": 1,
+            "eval_count": 0
+          },
+          "evaluation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          }
+        }
+      }
+    }
+  },
+  "baseline_sha256": "87c07fe87ab286933dbeeb5c667765ab79b7727a592176b0d22f8a839e29aa2a",
+  "provider": {
+    "schema_version": 1,
+    "requested_model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "max_completion_tokens": 16384,
+    "timeout": 120.0,
+    "request_format": "deepseek",
+    "retry_policy": "never",
+    "response_model_required": true,
+    "thinking": {
+      "type": "enabled"
+    },
+    "reasoning_effort": "low",
+    "temperature_applied": false,
+    "seed_applied": false,
+    "immutable_snapshot_verified": false,
+    "campaign": {
+      "cache_discount_applied": false,
+      "campaign_id": "18509cd4f3514d51ae79aa3aceaf1779",
+      "concurrency": "one_unresolved_operation",
+      "context_tokens": 1048576,
+      "currency": "CNY",
+      "input_micro_cny_per_token": 2,
+      "invoice_verified": false,
+      "limit_micro_cny": 200000000,
+      "max_output_tokens": 393216,
+      "model": "deepseek-flash",
+      "output_micro_cny_per_token": 8,
+      "policy_sha256": "00ee6005cda46ae0be0270b5daaff5a97821b173ec99aab9d3127f2a37184a18",
+      "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "price_verified_date": "2026-11-04",
+      "provider_base_url": "https://api.deepseek.com",
+      "schema_version": 1,
+      "unit": "micro_cny"
+    },
+    "token_admission": {
+      "mode": "model_capacity_v1",
+      "guarantee": "service_capacity_bound",
+      "input_capacity": 1048576
+    },
+    "phase_call_limits": {
+      "operator": 1,
+      "evaluation": 0
+    }
+  }
+}

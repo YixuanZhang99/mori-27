@@ -103,5 +103,9 @@ callers; effort is included in the manifest, actual wire request, pre-dispatch
 validation and independent currency replay. The original token/currency bounds
 are unchanged. The CLI accepts low/high/max and rejects changing it on resume.
 
-V3 three-seed delivery results remain pending. Fixture and loopback tests do
-not establish benchmark performance or improvement over best-fit.
+V3 seeds 0/1/2 completed with 10/11, 11/11 and 10/11 valid candidates. All three
+frozen held-out results are 210.1 bins, equal to best-fit; seed 0 improved only
+on development (213.8 versus 213.9). All recorded replays and independent result
+recalculations passed. See the [full report](../../../research/experiments/2026-11-05-funsearch-or3/README.md)
+for failures, original records and the total batch upper cost of CNY 1.098926.
+This demonstrates a runnable adapted recipe, not a held-out gain or paper reproduction.

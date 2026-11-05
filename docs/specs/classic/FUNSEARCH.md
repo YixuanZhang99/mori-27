@@ -1,6 +1,6 @@
 # C02 — FunSearch 程序进化
 
-状态：施工规格冻结，2026-11-05；继承 [COMMON](COMMON.md)。目标：现有 OR3 开发集接入真实程序搜索和一次冻结留出评估。
+状态：施工规格冻结、工程与三 seed 小规模实测完成，待最终 CI/合入，2026-11-05；继承 [COMMON](COMMON.md)。目标：现有 OR3 开发集接入真实程序搜索和一次冻结留出评估。
 
 ## 来源与现状
 
@@ -34,7 +34,7 @@
 - F5：报告 seed、搜索预算、baseline/final bin 数、失败率、控制占用和适配差异。OR3 pilot 不声称原论文完整复现。
 
 current：`PYTHONPATH=m0 python research/experiments/2026-11-05-funsearch-population/check_or3_framework.py <dev/data.json>`。
-proposed：`PYTHONPATH=m0 python -m zoo.funsearch_binpacking.runner --mode fixture --output <new-dir>`；live 接受冻结 manifest。
+current：`PYTHONPATH=m0 python -m zoo.funsearch_binpacking.runner --mode fixture --output <new-dir>`；live 接受冻结 manifest。
 针对性复用 `test_funsearch_framework.py`、`test_funsearch_population.py`、`test_funsearch_governed_or3.py`，新增 `test_funsearch_holdout.py` 验证 F3–F5。
 
 ## 进入施工前的最小差距核对（2026-11-05）
@@ -86,3 +86,7 @@ v1 `f151dba` 的 seed 0 完成 11 次搜索，均未通过构造；无有效程�
 v2 seed0 的初始程序与control可评分，但10次mutation均将16384 completion tokens全部用于reasoning后截断；dev213.9/held-out210.1箱与best-fit持平。其余v2 seed未启动，全部记录/费用在[high-effort-v2](../../../research/experiments/2026-11-05-funsearch-or3/high-effort-v2/README.md)。
 
 依据[官方参数说明](https://api-docs.deepseek.com/guides/thinking_mode/)，给既有受治理provider增加显式reasoning_effort（low/high/max），默认high保持原调用者行为；构造、冻结manifest、实际wire、计费桥独立重算均绑定此值。C02 `funsearch-or3-v3` 明确选择low；不改变模型、16384输出上限、10提案、30秒、官方数据或原预算。预声明新批seeds0/1/2，main与control同配置；不混合v1/v2/v3做均值，不把旧失败删除，不声称参数调节证明方法优越。
+
+## v3 交付证据
+
+`1462fb3` 的 seeds 0/1/2 已完整运行：有效候选 10/11、11/11、10/11；三组冻结 held-out 均为 210.1 箱，记录回放和原始证据重算通过。Seed 0 的 dev 改善至 213.8 箱，但未体现留出收益。真实轨迹包含非 incumbent/较差有效父代选亲以及每组两次弱岛重置；F1–F6 对应测试与原始记录见[结果报告](../../../research/experiments/2026-11-05-funsearch-or3/README.md)。本批费用上界 ¥1.098926，原 campaign 累计 ¥21.167970，无未决费用。最终检查与合入仍以 PR #6 为准；不声称论文区间复现。
