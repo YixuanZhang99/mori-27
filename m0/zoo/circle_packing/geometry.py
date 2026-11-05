@@ -60,8 +60,8 @@ def _unique(pairs):
     return result
 
 
-def read_geometry(path):
-    """Open a bounded regular file without following a candidate-created link."""
+def read_geometry_payload(path):
+    """Read and validate geometry once from a bounded no-follow regular file."""
     if not hasattr(os, 'O_NOFOLLOW'):
         raise RuntimeError('safe geometry reading requires no-follow file opens')
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, 'O_NONBLOCK', 0)
@@ -90,4 +90,9 @@ def read_geometry(path):
                              parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite JSON')))
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError('invalid geometry JSON') from error
-    return validate_geometry(payload)
+    validate_geometry(payload)
+    return payload
+
+
+def read_geometry(path):
+    return validate_geometry(read_geometry_payload(path))
