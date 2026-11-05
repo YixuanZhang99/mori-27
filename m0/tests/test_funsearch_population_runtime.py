@@ -1,6 +1,8 @@
 """Valid program retention is independent of global incumbent promotion."""
 from dataclasses import replace
 
+import pytest
+
 from core.executor.evaluation_contract import ItemOutcome
 from test_configured_construction import build
 from test_funsearch_framework import CodeProvider, NumericDomain, TASK, assembly
@@ -56,7 +58,8 @@ def test_population_funsearch_resume_reuses_original_draw_and_members(tmp_path):
     assert first.calls + second.calls == 4
 
 
-def test_restored_rng_requires_full_original_history(tmp_path):
+@pytest.mark.parametrize('fault', ['draw', 'reset'])
+def test_restored_rng_requires_full_original_history(tmp_path, fault):
     import pytest
     from core.funsearch_population import FunSearchPopulation
     fw = build(tmp_path, assembly=assembly(), provider=CodeProvider(),
@@ -65,7 +68,11 @@ def test_restored_rng_requires_full_original_history(tmp_path):
     policy = fw._composed.parts['policy']
     state = policy.checkpoint_state()
     forged = FunSearchPopulation.from_checkpoint(state['population'])
-    forged.sample(0)  # Valid internal snapshot, but no corresponding journal draw.
+    # Valid internal snapshot, but no corresponding original draw or reset.
+    if fault == 'draw':
+        forged.sample(0)
+    else:
+        forged.reset_weaker_half()
     state['population'] = forged.checkpoint_state()
     policy.restore_state(state)
     with pytest.raises(ValueError, match='histor'):

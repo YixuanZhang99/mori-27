@@ -23,6 +23,7 @@ LINUX_MODULES = {
     "test_funsearch_priority_sandbox.py": "real Bubblewrap and x86_64 priority seccomp execution",
     "test_funsearch_or3_domain.py": "domain identity freezes an x86_64 seccomp policy even for validation tests",
     "test_funsearch_holdout.py": "frozen OR3 public runs execute real Bubblewrap priority workers",
+    "test_funsearch_delivery.py": "OR3 CLI and loopback billing use real Linux priority workers",
     "test_funsearch_governed_or3.py": "OR3 priority workers require Bubblewrap and Linux seccomp",
     "test_external_batch_control_recovery.py": "Bubblewrap evaluator and Linux process identity",
     "test_external_batch_partial_start_recovery.py": "Bubblewrap evaluator and Linux process identity",

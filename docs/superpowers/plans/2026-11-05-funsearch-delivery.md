@@ -1,6 +1,6 @@
 # C02 FunSearch Delivery Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 按 C02 交付保留有效岛屿成员的程序搜索、冻结留出评分、三 seed 真实结果及可重算报告。
 **Architecture:** 继续公共 Framework 与 M7/CNY。用 PopulationFrontier 保留有效候选，FunSearchCoordinator 的已有抽样凭证负责岛屿选择；任务文件和双 split 评分位于 zoo，终选复用 metric_final。
@@ -30,22 +30,22 @@
 **Files:** m0/core/composition/population_runtime.py、funsearch_coordinator.py；必要时提取窄历史校验辅助模块；m0/tests/test_funsearch_population_runtime.py。
 **Interfaces:** 复用 FunSearchPolicy.pending_selection()、FunSearchCoordinator 原始 funsearch_selection 事件、core.funsearch_selection.verify_selection；PopulationFrontier 只拥有有效成员/血缘及 promotion 状态，不负责重新抽岛屿。
 
-- [ ] 写 `test_tied_and_worse_valid_programs_remain_eligible_for_island_selection`：公共 Framework 中有效非提升成员应为 done、仍出现在后续 eligible，最终 incumbent 保持 dev 最优；capacity=max(2,max_proposals+1)。当前树分支反例是3个有效候选只有初始 merged，另外2个 pruned。
-- [ ] 写 `test_population_funsearch_resume_and_replay_verify_original_draw`：新 frontier 当前报 selected parents differ from the final sampling receipt；修复后完成、恢复及 replay 不重发 provider。篡改 receipt ancestry/eligible 或没有原始事件时拒绝。
-- [ ] 最小增加 FunSearch 抽样授权与恢复接缝：commit 时核对已审计的 pending receipt 与当前预算允许集合；restore 时从原事件重算 draw 和 genealogy，不采用 checkpoint 的自证哈希。允许类似 GEPA 的专用抽样授权分支，不调用仅接受内置 sampler 凭证的 PopulationFrontier.commit_selection；不得跳过等价的原始抽样校验或伪造 tournament 凭证。
-- [ ] 恢复顺序明确：frontier 校验早于 policy.restore_state，故从冻结配置独立重建 FunSearchPopulation，顺序应用原始 registration/selection/abandonment/reset 并核对全部 before/after；policy restore 后再次比较最终状态，不能读取尚未恢复的 pending_selection 来充当权威。新增 checkpoint RNG/岛屿状态被改但候选证据仍合法、以及自洽重哈希但 eligible 含不可用父代的反例。
-- [ ] 跑上述文件与现有 FunSearch policy/coordinator/framework、population/GEPA 回归；预期全通过；提交。
+- [x] 写 `test_tied_and_worse_valid_programs_remain_eligible_for_island_selection`：公共 Framework 中有效非提升成员应为 done、仍出现在后续 eligible，最终 incumbent 保持 dev 最优；capacity=max(2,max_proposals+1)。当前树分支反例是3个有效候选只有初始 merged，另外2个 pruned。
+- [x] 写 `test_population_funsearch_resume_and_replay_verify_original_draw`：新 frontier 当前报 selected parents differ from the final sampling receipt；修复后完成、恢复及 replay 不重发 provider。篡改 receipt ancestry/eligible 或没有原始事件时拒绝。
+- [x] 最小增加 FunSearch 抽样授权与恢复接缝：commit 时核对已审计的 pending receipt 与当前预算允许集合；restore 时从原事件重算 draw 和 genealogy，不采用 checkpoint 的自证哈希。允许类似 GEPA 的专用抽样授权分支，不调用仅接受内置 sampler 凭证的 PopulationFrontier.commit_selection；不得跳过等价的原始抽样校验或伪造 tournament 凭证。
+- [x] 恢复顺序明确：frontier 校验早于 policy.restore_state，故从冻结配置独立重建 FunSearchPopulation，顺序应用原始 registration/selection/abandonment/reset 并核对全部 before/after；policy restore 后再次比较最终状态，不能读取尚未恢复的 pending_selection 来充当权威。新增 checkpoint RNG/岛屿状态被改但候选证据仍合法、以及自洽重哈希但 eligible 含不可用父代的反例。
+- [x] 跑上述文件与现有 FunSearch policy/coordinator/framework、population/GEPA 回归；预期全通过；提交。
 
 ### Task 2: 冻结双 split 数据与终评
 
 **Files:** 新增 m0/zoo/funsearch_binpacking/data.py；修改 domain.py；新增 runner.py 配置部分、m0/config/profiles/funsearch_or3.json、m0/tests/test_funsearch_holdout.py；修改 tests/conftest.py Linux清单。
 **Interfaces:** `FrozenOR3.from_manifest(path)` 提供 identity、split_hashes、ids(split)、validate() 及只读固定文件；`OR3Domain(data, *, template, timeout)` 提供 dev/final_audit evaluation_contexts；原 OR3DevDomain dev-only 契约保留。`build_profile(data, *, seed, max_proposals, call_token_bound)` 组装已有插件，registry_for(data) 绑定域。
 
-- [ ] 先写反例：两份合法 held-out 内容产生不同 final 分数，但搜索 prompt、dev证据、选亲与最终选择一致；公开 final item IDs 不进入 funsearch_public_candidate。
-- [ ] 测文件/manifest变更、重叠ID、错误hash/count/无效items在付费调用前拒绝；控制读取时再次校验hash，不能校验一份再评分另一份。
-- [ ] 实现双 split adapter，共用可信 scorer + SandboxedPriority；请求严格限制 unseeded dev 或 final_audit，相应 fidelity 一致。final 只经 metric_final 冻结选择后运行；最终失败不伪造完整分数。
-- [ ] 测失败/无效/超时程序无供亲资格，成本eval_count保留；final freeze 后恢复不重复已完成评分，replay 禁止 provider 和沙箱调用。
-- [ ] 运行新增 holdout 与原 OR3 domain/governed tests；实际 Linux执行，全通过；提交。
+- [x] 先写反例：两份合法 held-out 内容产生不同 final 分数，但搜索 prompt、dev证据、选亲与最终选择一致；公开 final item IDs 不进入 funsearch_public_candidate。
+- [x] 测文件/manifest变更、重叠ID、错误hash/count/无效items在付费调用前拒绝；控制读取时再次校验hash，不能校验一份再评分另一份。
+- [x] 实现双 split adapter，共用可信 scorer + SandboxedPriority；请求严格限制 unseeded dev 或 final_audit，相应 fidelity 一致。final 只经 metric_final 冻结选择后运行；最终失败不伪造完整分数。
+- [x] 测失败/无效/超时程序无供亲资格，成本eval_count保留；final freeze 后恢复不重复已完成评分，replay 禁止 provider 和沙箱调用。
+- [x] 运行新增 holdout 与原 OR3 domain/governed tests；实际 Linux执行，全通过；提交。
 
 ### Task 3: 可复制 runner、真实运行与交付
 
