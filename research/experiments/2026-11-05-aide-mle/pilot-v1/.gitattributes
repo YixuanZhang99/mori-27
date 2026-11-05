@@ -1,0 +1,3 @@
+# Frozen submissions and generated programs must keep their evaluated bytes.
+submission.csv -text whitespace=cr-at-eol
+selected-program.py -text
