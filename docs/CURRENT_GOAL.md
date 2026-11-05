@@ -27,6 +27,8 @@ AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，
 
 C04 Arbor 已完成九组真实 MLE 搜索和冻结提交的官方评分：38/44 主候选有效、6 次失败、0 次未完成，九份提交均有效。六阶段各 44 次，125 次来源绑定经验汇总；21 次实际准入中 2 次拒绝。nomad 三组均达到固定评分器历史银牌阈值，leaf 三组均未高于历史中位数；不外推完整 benchmark 奖牌率或论文复现。[完整结果与失败](../research/experiments/2026-11-05-arbor-mle/README.md)已归档，九组回放、物理/费用核验和独立重算通过。
 
-运行源码 `aeeb6fd` 已通过 push/PR 两组 Mac/Linux/MLE 检查；push Linux 首次 900 秒超时，同源码单次重跑通过，失败记录保留。最终证据/文档提交尚需自己的检查及 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入，不把运行版本的成功等同最终候选已过关。v1/v2/v3 三批失败已分别保留，未重跑覆盖。
+运行源码 `aeeb6fd` 已通过 push/PR 两组 Mac/Linux/MLE 检查；push Linux 首次 900 秒超时，同源码单次重跑通过，失败记录保留。最终证据/文档提交随后完成独立检查并通过 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入，详见下方交付记录。v1/v2/v3 三批失败已分别保留，未重跑覆盖。
 
-Arbor v4 本批费用上界 ¥6.317672；含前三批失败的 Arbor 合计 ¥7.720364。原 campaign 累计 ¥38.611570，剩余 ¥161.388430，零未决调用、预留和保护违约。完成最终合入后进入 OpenEvolve；其设计与实施计划已离线准备，尚无 C05 实现或付费调用。Goal 保持 active，后续仍含 OpenEvolve → AIRA → LoongFlow → R&D-Agent。
+Arbor v4 本批费用上界 ¥6.317672；含前三批失败的 Arbor 合计 ¥7.720364。原 campaign 累计 ¥38.611570，剩余 ¥161.388430，零未决调用、预留和保护违约。已进入 OpenEvolve；其设计与实施计划已公开，完整 C05 实现及付费调用尚未完成。Goal 保持 active，后续仍含 OpenEvolve → AIRA → LoongFlow → R&D-Agent。
+
+C04 Arbor 最终候选 `1221810` 的推送和 PR 检查均已通过；PR Linux 首次完整回归在 900 秒超时，同源码重跑通过，失败产物保留。已通过 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入 main `d026357`，合并树一致；最终推送 Linux 产物独立核验 56 项检查及 1,220 个文件。远端方法分支已归档为 `archive/classic-arbor-20261105` 并退役。当前进入 C05 OpenEvolve，设计和实施计划已公开；实现与真实试跑尚未完成。Goal 继续 active。
