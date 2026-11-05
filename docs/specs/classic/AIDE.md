@@ -2,7 +2,7 @@
 
 状态：施工规格冻结，2026-11-05。工作分支已衔接 C02 合入后的实际 main `da4e06c`。继承 [COMMON](COMMON.md)。目标是让公开 Framework 完整执行 draft/debug/improve 和真实 MLE 评估，并保留可核对的失败、费用与树轨迹。
 
-本轮进度：draft/debug/improve、保留代码树、源绑定 L1 Journal、固定切分、冻结提交和独立评分均已实现。完整分支审查的评分权威/并发问题已修复；完整本地检查通过（2359 portable、112 工具测试及示例）。真实三任务 × 三 seed 的九组搜索、记录回放和官方评分全部完成：70/90 主候选有效，20 个失败完整保留，九组提交均有效。独立结果重算及 8 项导出回归通过。[实测结果、配置与费用](../../../research/experiments/2026-11-05-aide-mle/README.md)已归档；最终候选 CI/合入以 [PR #7](https://github.com/YixuanZhang99/mori-27/pull/7) 为准。小规模实测不等于完整 benchmark 或论文区间复现。
+本轮进度：draft/debug/improve、保留代码树、源绑定 L1 Journal、固定切分、冻结提交和独立评分均已实现。完整分支审查的评分权威/并发问题已修复；完整本地检查通过（2359 portable、112 工具测试及示例）。真实三任务 × 三 seed 的九组搜索、记录回放和官方评分全部完成：70/90 主候选有效，20 个失败完整保留，九组提交均有效。独立结果重算及 8 项导出回归通过。[实测结果、配置与费用](../../../research/experiments/2026-11-05-aide-mle/README.md)已归档；最终候选 `bbea24b` 的 push/PR 两组 Mac/Linux/MLE 均通过，已通过 [PR #7](https://github.com/YixuanZhang99/mori-27/pull/7) 合入 main `9d5967d`；合并树相同，方法分支已归档退役。小规模实测不等于完整 benchmark 或论文区间复现。
 
 ## 来源和一致性边界
 

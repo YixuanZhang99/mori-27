@@ -107,7 +107,7 @@ S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最�
 
 新增 [外部费用治理桥接](docs/GOVERNED_CURRENCY.md) 提供独立的 loopback HTTP 示例、双重准入和记录恢复；真实付费三任务试跑已使用该桥接，但尚未完成同搜索治理收益对照。
 
-**当前代码位置：** `main` 已包含历史治理/M7 开发链，以及 GEPA、FunSearch 的适配和真实小规模结果。当前按 spec 在 `codex/classic-aide` 接入 AIDE；其真实 MLE 矩阵尚未完成。最新实现范围、验证证据和缺口见 [框架交付状态](docs/FRAMEWORK_STATUS.md)。
+**当前代码位置：** `main` 已包含历史治理/M7 开发链，以及 GEPA、FunSearch、AIDE 的适配和真实小规模结果；AIDE [PR #7](https://github.com/YixuanZhang99/mori-27/pull/7) 已完成最终检查并合入。当前唯一开发分支 `codex/classic-arbor` 已实现假设循环、经验上溯和准入隔离并通过审查修复及本地检查；真实 MLE 矩阵与最终合入尚待完成。最新证据和缺口见 [框架交付状态](docs/FRAMEWORK_STATUS.md)。
 
 ## 目录
 

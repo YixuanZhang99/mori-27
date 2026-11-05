@@ -21,6 +21,8 @@ v2 已修正格式，但真实seed0的10次改进均在high推理下达到16384�
 
 v3 的三个 seed 已全部完成：有效候选 10/11、11/11、10/11；三组冻结 held-out 都为 210.1 箱，与 best-fit 持平。Seed 0 的 dev 改善至 213.8 箱，但没有体现留出收益。三组回放与独立重算通过，真实轨迹包含非最优父代选亲与弱岛重置。[完整结果及失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档；本批费用上界 ¥1.098926，原 campaign 累计 ¥21.167970，剩余 ¥178.832030，无未决调用或预留。
 
-C03 AIDE 的完整分支审查与修复、本地完整检查、三任务 × 三 seed 真实矩阵、冻结提交的官方评分均已完成。九组提交全部有效，主候选 70/90 有效、20 个失败、0 个未完成。nomad 的三个 seed 达到固定 MLE-Bench 评分器的铜/银/银历史阈值；另两个任务均高于历史中位数但未达奖牌阈值，不外推完整 benchmark 奖牌率。[完整证据和可重算报告](../research/experiments/2026-11-05-aide-mle/README.md)已归档；当前还需最终证据提交的 CI 和 PR #7 合入、归档分支。
+C03 AIDE 的完整分支审查与修复、本地完整检查、三任务 × 三 seed 真实矩阵、冻结提交的官方评分均已完成。九组提交全部有效，主候选 70/90 有效、20 个失败、0 个未完成。nomad 的三个 seed 达到固定 MLE-Bench 评分器的铜/银/银历史阈值；另两个任务均高于历史中位数但未达奖牌阈值，不外推完整 benchmark 奖牌率。[完整证据和可重算报告](../research/experiments/2026-11-05-aide-mle/README.md)已归档；最终 `bbea24b` 的 push/PR 两组 Mac/Linux/MLE 均通过，已通过 [PR #7](https://github.com/YixuanZhang99/mori-27/pull/7) 合入 main `9d5967d`；合并树一致，推送 Linux 产物独立核验 56 项检查、1,206 个源码与验收文件一致。方法分支已归档为 `archive/classic-aide-20261105` 并退役。
 
-AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，剩余 ¥169.108794，无未决调用或保护违约。之后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。保持 main 加一条活跃方法分支；Arbor 离线施工成果须衔接 AIDE 合入后的实际 main 再发布和实测。Goal 保持 active，单项完成不代表八项总目标完成。
+AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，剩余 ¥169.108794，无未决调用或保护违约。之后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。保持 main 加一条活跃方法分支；Arbor 已无冲突衔接实际 main，当前唯一方法分支为 `codex/classic-arbor`。Goal 保持 active，单项完成不代表八项总目标完成。
+
+C04 Arbor 已实现六步假设循环、当前 trunk 构造、来源绑定 insight 上溯/消费、独立准入与冻结终评，以及专用 MLE 入口和导出重算。独立审查的三项重要问题均经 RED→GREEN 修复；完整本地检查 2,408 portable、126 tooling 通过，另有 14 项含 Linux 沙箱的 runner/currency 用例通过。干净默认 CLI、终态 resume 和零调用 replay 通过；接续 AIDE 后 134 项 tooling 全部通过。下一步是预声明九组真实 MLE 矩阵、官方评分、证据归档及最终 CI/合入；合成结果不作为 benchmark 成绩。

@@ -1,6 +1,6 @@
 # C04 — Arbor 假设驱动研究
 
-状态：施工规格冻结（2026-11-05），细化设计见 [实施设计](../../superpowers/specs/2026-11-05-arbor-design.md)，任务见 [实施计划](../../superpowers/plans/2026-11-05-arbor-delivery.md)。AIDE 实测期间仅在独立 detached worktree 开展离线工作，发布与真实运行仍在 AIDE 合入后进行。继承 [COMMON](COMMON.md)。依据：REPLICATION §3、统一抽象 M1/M5/M7/M9、CODE-BORROWING 的 Arbor 文件清单。
+状态：施工规格冻结（2026-11-05），细化设计见 [实施设计](../../superpowers/specs/2026-11-05-arbor-design.md)，任务见 [实施计划](../../superpowers/plans/2026-11-05-arbor-delivery.md)。离线实现已完成独立审查和修复，并从 AIDE 实际合入后的 main `9d5967d` 接续到 `codex/classic-arbor`；真实矩阵尚待运行。继承 [COMMON](COMMON.md)。依据：REPLICATION §3、统一抽象 M1/M5/M7/M9、CODE-BORROWING 的 Arbor 文件清单。
 源码核对对象：[RUC-NLPIR/Arbor / a633f56f](https://github.com/RUC-NLPIR/Arbor/tree/a633f56f2601387402194481e846e3375e822afa)；本轮锁定身份，执行前核对六步语义和 insight 写读路径。
 
 | 模块 | 本方法要求 |
@@ -34,4 +34,4 @@ PYTHONPATH=m0 uv run --project m0 python -m zoo.mle_bench_lite.arbor_runner --ou
 
 独立 [导出与重算工具](../../../research/experiments/2026-11-05-arbor-mle/README.md) 已实现，分别核对开发集最优、准入 trunk、最终冻结评估、费用和经验来源；未完成尝试与未运行 cell 保留在分母中。真实结果尚未生成。
 
-**交付边界：** 当前仍缺真实三任务矩阵、完整分支审查、最终 CI 和合入。fixture 的分数不是 benchmark 表现；性能结论与论文复现均未成立。
+**交付边界：** 完整分支审查及三项重要修复、本地完整检查和干净 CLI/resume 已完成；当前仍缺真实三任务矩阵、最终 CI 和合入。fixture 的分数不是 benchmark 表现；性能结论与论文复现均未成立。
