@@ -1,0 +1,31 @@
+{
+  "binding": {
+    "schema_version": 1,
+    "method_id": "AIDE",
+    "task_id": "leaf-classification",
+    "run_manifest_sha256": "sha256:74f9e0efc68905ca64ff65b50b8767daa541713094872823a7ab984cc88229e3",
+    "selection": {
+      "candidate_id": "fc61186d1e15527e975c5a8381e1feb0628bdd64d58e9872ad14b608227f0b1b",
+      "artifact_sha256": "c849594308d38161191692e6c7f9ce245e47fc98516026fb1d92730da50f8489",
+      "prediction_sha256": "sha256:7a7d3973d49eb8df9b920738f322a706bc6e1d81bfbc48965c9ce96239c73862",
+      "submission_sha256": "sha256:426f13c1dfdb664da40f0b97222b43596297583ef510d3e74dac0e15d336248d"
+    },
+    "final_freeze_sha256": "sha256:dda1f3f6c242ca2e8f0ac4c9cd3d769d26325605be564c8a211daac6dfe046cf",
+    "prepared_identity_sha256": "sha256:3fb200edd3ef3c5483b815d69b5d70a98cd63006b622dae5ae2920385ede0ffc",
+    "fixture": false
+  },
+  "state": "completed",
+  "error_type": null,
+  "official_score": 0.08681,
+  "external_benchmark_score_produced": true,
+  "report": {
+    "competition_id": "leaf-classification",
+    "valid_submission": true,
+    "audit/score": 0.08681,
+    "audit/any_medal": false,
+    "audit/above_median": true,
+    "audit/gold_medal": false,
+    "audit/silver_medal": false,
+    "audit/bronze_medal": false
+  }
+}

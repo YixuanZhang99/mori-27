@@ -1,0 +1,1782 @@
+{
+  "schema_version": 1,
+  "method_id": "AIDE",
+  "recipe_revision": "aide-mle-v1",
+  "reference_revision": "ad73d227af481bea3de06f884f41b2993dd6453a",
+  "declared_at_utc": "2026-11-05T08:43:51.591478+00:00",
+  "source": {
+    "commit": "40b1e88272c401397617b03f88792108e0ae43d4",
+    "dirty": false
+  },
+  "scope": "adapted three-task CSV pilot; not paper/medal reproduction",
+  "cells": [
+    {
+      "task_id": "spooky-author-identification",
+      "search_seed": 0,
+      "split_seed": 7,
+      "output": "spooky-author-identification/seed-0"
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "search_seed": 1,
+      "split_seed": 7,
+      "output": "spooky-author-identification/seed-1"
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "search_seed": 2,
+      "split_seed": 7,
+      "output": "spooky-author-identification/seed-2"
+    },
+    {
+      "task_id": "leaf-classification",
+      "search_seed": 0,
+      "split_seed": 7,
+      "output": "leaf-classification/seed-0"
+    },
+    {
+      "task_id": "leaf-classification",
+      "search_seed": 1,
+      "split_seed": 7,
+      "output": "leaf-classification/seed-1"
+    },
+    {
+      "task_id": "leaf-classification",
+      "search_seed": 2,
+      "split_seed": 7,
+      "output": "leaf-classification/seed-2"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "search_seed": 0,
+      "split_seed": 7,
+      "output": "nomad2018-predict-transparent-conductors/seed-0"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "search_seed": 1,
+      "split_seed": 7,
+      "output": "nomad2018-predict-transparent-conductors/seed-1"
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "search_seed": 2,
+      "split_seed": 7,
+      "output": "nomad2018-predict-transparent-conductors/seed-2"
+    }
+  ],
+  "smoke_cell": "spooky-author-identification/seed-0",
+  "smoke_included_in_matrix": true,
+  "max_main_nodes": 10,
+  "controls_per_run": 1,
+  "solution_timeout": 120,
+  "datasets": {
+    "spooky-author-identification": {
+      "identity": "sha256:b85cb015e584931fabec76765deb2d047a1ec09e4674b3413df3b59e1f08d5b1",
+      "manifest": {
+        "protocol": "mle-public-train-composed-v2",
+        "task_id": "spooky-author-identification",
+        "seed": 7,
+        "features": "CSV only; image/geometry auxiliary files excluded",
+        "source_sha256": {
+          "train.csv": "sha256:87a02befe9c415b976486e4a59b96da0cc907b8645efbb7052256307715ecdbf",
+          "test.csv": "sha256:3f68bfa593154a031ee549899f150ccdf2e7a5ed88083e4d9c3ea2fe2cd3dfd5",
+          "sample_submission.csv": "sha256:5a9d701524a2659476f62e30fa4e61ecfbeb754e0e9c11a8528a7486992ad1f6"
+        },
+        "input_sha256": {
+          "predict.csv": "sha256:bfbee969fd1dfb55ce687e4c80d52e9fd30a058cf7e2d18151ce04955163c5a1",
+          "protocol.json": "sha256:dcc9c7ae59fa22dc8d2841cfe5e971a5de92a6578652713243e284038dbc5b3f",
+          "train.csv": "sha256:7ec8542fbadbc3fe59efac1b13b6c0731cce795bef91054b0b85af587c9ea271"
+        },
+        "split_contexts": {
+          "dev": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+          "calibration": "sha256:d0b31a2b1027a9395882f67f64c0d520fc46fc639859e4a28c99de1d01794d07",
+          "admission": "sha256:7eb1dac1ea4858fdd3bde7e88d45b330d207dfe8de891e4eb113fe347cb11893",
+          "final_audit": "sha256:7a964e1f7ad9162aa8e83a094556dde5b2a4960e12e6b6297520a0bc5f881282"
+        },
+        "split_counts": {
+          "train": 10577,
+          "dev": 1761,
+          "calibration": 1761,
+          "admission": 1761,
+          "final_audit": 1761
+        },
+        "official_test_rows": 1958,
+        "scoring": "negative_log_loss",
+        "dev_scoring": "task_metric"
+      }
+    },
+    "leaf-classification": {
+      "identity": "sha256:cde6f1ee26e4914349cc1f56c49646f6d1b84cf8f0003d14fbd74138a0ff7ab0",
+      "manifest": {
+        "protocol": "mle-public-train-composed-v2",
+        "task_id": "leaf-classification",
+        "seed": 7,
+        "features": "CSV only; image/geometry auxiliary files excluded",
+        "source_sha256": {
+          "train.csv": "sha256:14a1f3f49692d0843d556f802b798b089e0d090752526d8a4b4fc476fa7429c3",
+          "test.csv": "sha256:0b5165de0f0fcae712900e2a4fae491ec8cd1d1a38b691cbaa59ee6d0b030f39",
+          "sample_submission.csv": "sha256:eda4dbc07a075c2bc5441e151e20927a7a06a16bdc03abe0d95a031e4f19079c"
+        },
+        "input_sha256": {
+          "predict.csv": "sha256:3af51349c15ce05d8deb7139da905760ee9306b6eb8882f54d1a51aa2e1fd715",
+          "protocol.json": "sha256:24ac513b09673a31052f860aa529de321647644056de447d96124cad654e1509",
+          "train.csv": "sha256:c7fa375e667062f34f7d0c87906e0b16c9b648f578ebff8a8d49ef06d78bd051"
+        },
+        "split_contexts": {
+          "dev": "sha256:d758ee8f3707f9c0a24e153754c9612efbf225375e1c48e393a8b506d4161e9a",
+          "calibration": "sha256:2582a1a798e0d0af3164ec1fde0f19b3582ec7321890ca89f038abac522307aa",
+          "admission": "sha256:19ea210765315aaccfaa240ad8273104e33945b641d5cfbcb74ee0a8e64e9fb3",
+          "final_audit": "sha256:11b5f289e0ec1196a874d976c72fcdb3c69df9985eec478eaace5572ab219cd9"
+        },
+        "split_counts": {
+          "train": 495,
+          "dev": 99,
+          "calibration": 99,
+          "admission": 99,
+          "final_audit": 99
+        },
+        "official_test_rows": 99,
+        "scoring": "negative_log_loss",
+        "dev_scoring": "task_metric"
+      }
+    },
+    "nomad2018-predict-transparent-conductors": {
+      "identity": "sha256:371d4657e56f8fdbe5a9cf068507f5ec60f58adfc87c9d2df201353f64a86a88",
+      "manifest": {
+        "protocol": "mle-public-train-composed-v2",
+        "task_id": "nomad2018-predict-transparent-conductors",
+        "seed": 7,
+        "features": "CSV only; image/geometry auxiliary files excluded",
+        "source_sha256": {
+          "train.csv": "sha256:6a85d60056f8737c6575c8a7c0575fee6501916cf1dbd6199b0113849352546c",
+          "test.csv": "sha256:806140a0eb1a9a0670bb6111a9476d921cc24ed49d7f9a4652051f973e41e877",
+          "sample_submission.csv": "sha256:ac544665f7e066febfc1f49a4ba10f26d2b25221694c4710c42ac4941ac40acd"
+        },
+        "input_sha256": {
+          "predict.csv": "sha256:381986c8bafeab4b4377b2017794750d8a068796fca42980dd0c56e46b5c2960",
+          "protocol.json": "sha256:4e45ef58f19258abf89cfbfb41c34bb187d85ebdccd73cf50140726800a1886e",
+          "train.csv": "sha256:024f0af751a135944a3b2fc78e4696b6547d2fadc4afaa3af1394f072de96f68"
+        },
+        "split_contexts": {
+          "dev": "sha256:79341db5adda23dc928aa800fcb434f8ea278bfe16a47a8010fbb4a5286f236a",
+          "calibration": "sha256:8303d3f8d4617a5e83cdb5599c46a1558f2221a1b0e1f27b4e159bf350b2bba8",
+          "admission": "sha256:cdc80ae5de30853d4708c07d5ceee6e3b8d21b2c14ca057be8509273c03157f5",
+          "final_audit": "sha256:05bb2dcb35068a2c4c8077aaa1a4ea7c58da5267361a415a38b1815a42c26d0d"
+        },
+        "split_counts": {
+          "train": 1296,
+          "dev": 216,
+          "calibration": 216,
+          "admission": 216,
+          "final_audit": 216
+        },
+        "official_test_rows": 240,
+        "scoring": "negative_mean_target_RMSLE",
+        "dev_scoring": "task_metric"
+      }
+    }
+  },
+  "profiles": {
+    "spooky-author-identification/seed-0": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 0
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 0,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "spooky-author-identification/seed-1": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 1
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 1,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "spooky-author-identification/seed-2": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 2
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 2,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "leaf-classification/seed-0": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 0
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 0,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "leaf-classification/seed-1": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 1
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 1,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "leaf-classification/seed-2": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 2
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 2,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "nomad2018-predict-transparent-conductors/seed-0": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 0
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 0,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "nomad2018-predict-transparent-conductors/seed-1": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 1
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 1,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    },
+    "nomad2018-predict-transparent-conductors/seed-2": {
+      "schema_version": 2,
+      "name": "aide-mle-v1",
+      "mode": "benchmark",
+      "provider": {
+        "name": "provided"
+      },
+      "domain": {
+        "name": "native"
+      },
+      "policy": {
+        "name": "aide",
+        "options": {
+          "num_drafts": 3,
+          "debug_probability": 0.5,
+          "max_debug_depth": 2,
+          "seed": 2
+        }
+      },
+      "operators": [
+        {
+          "name": "draft"
+        },
+        {
+          "name": "debug"
+        },
+        {
+          "name": "improve"
+        }
+      ],
+      "frontier": {
+        "name": "tree",
+        "options": {
+          "retain_rejected": true
+        }
+      },
+      "memory": {
+        "name": "scoped",
+        "options": {
+          "context_scope": "run",
+          "levels": [
+            "L1"
+          ],
+          "trust_floor": "ungated",
+          "include_negative": true,
+          "include_imported": false,
+          "top_k": 10,
+          "max_chars": 160000
+        }
+      },
+      "executor": {
+        "name": "git_artifact"
+      },
+      "admission": {
+        "name": "metric_final",
+        "options": {
+          "final_request": {
+            "fidelity": "final_audit",
+            "split_id": "final_audit",
+            "seed_set": [
+              7
+            ]
+          }
+        }
+      },
+      "budget": {
+        "name": "hierarchical",
+        "options": {
+          "limits": {
+            "global": {
+              "token": 11714560,
+              "node": 11,
+              "eval_count": 12
+            },
+            "direction": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            },
+            "candidate": {
+              "token": 10649600,
+              "node": 10,
+              "eval_count": 11
+            }
+          },
+          "reservation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          },
+          "operation_reservations": {
+            "planning": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 0
+            },
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            }
+          },
+          "fidelity_rungs": [
+            {
+              "fidelity": "dev",
+              "split_id": "dev",
+              "seed_set": [
+                7
+              ]
+            }
+          ]
+        }
+      },
+      "skills": [],
+      "execution": {
+        "schema_version": 1,
+        "spec": {
+          "role": "general",
+          "hypothesis_frozen": false,
+          "context_projection": [
+            "memory"
+          ]
+        },
+        "constructor": {
+          "name": "prompt",
+          "options": {
+            "max_attempts": 1
+          }
+        }
+      },
+      "governance": {
+        "schema_version": 1,
+        "controls": {
+          "after_main_cycles": [
+            0
+          ],
+          "seed": 2,
+          "provider": {
+            "name": "aide-control"
+          },
+          "domain": {
+            "name": "aide-control"
+          },
+          "operator": {
+            "name": "draft"
+          },
+          "request": {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          },
+          "reservations": {
+            "operator": {
+              "token": 1064960,
+              "node": 1,
+              "eval_count": 0
+            },
+            "evaluation": {
+              "token": 0,
+              "node": 0,
+              "eval_count": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "provider": {
+    "schema_version": 1,
+    "requested_model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "max_completion_tokens": 16384,
+    "timeout": 120.0,
+    "request_format": "deepseek",
+    "retry_policy": "never",
+    "response_model_required": true,
+    "thinking": {
+      "type": "enabled"
+    },
+    "reasoning_effort": "low",
+    "temperature_applied": false,
+    "seed_applied": false,
+    "immutable_snapshot_verified": false,
+    "campaign": {
+      "cache_discount_applied": false,
+      "campaign_id": "18509cd4f3514d51ae79aa3aceaf1779",
+      "concurrency": "one_unresolved_operation",
+      "context_tokens": 1048576,
+      "currency": "CNY",
+      "input_micro_cny_per_token": 2,
+      "invoice_verified": false,
+      "limit_micro_cny": 200000000,
+      "max_output_tokens": 393216,
+      "model": "deepseek-flash",
+      "output_micro_cny_per_token": 8,
+      "policy_sha256": "00ee6005cda46ae0be0270b5daaff5a97821b173ec99aab9d3127f2a37184a18",
+      "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "price_verified_date": "2026-11-04",
+      "provider_base_url": "https://api.deepseek.com",
+      "schema_version": 1,
+      "unit": "micro_cny"
+    },
+    "token_admission": {
+      "mode": "model_capacity_v1",
+      "guarantee": "service_capacity_bound",
+      "input_capacity": 1048576
+    },
+    "phase_call_limits": {
+      "operator": 1,
+      "evaluation": 0
+    }
+  },
+  "prepared_identity_sha256": "sha256:3fb200edd3ef3c5483b815d69b5d70a98cd63006b622dae5ae2920385ede0ffc",
+  "runtime_readiness": {
+    "ready": true,
+    "python": "/usr/local/share/mori27-local/pilot/bin/python",
+    "modules": [
+      "numpy",
+      "pandas",
+      "sklearn"
+    ]
+  },
+  "dependencies": {
+    "/usr/local/share/mori27-local/pilot/lib/python3.12/site-packages": "3517b1ba6b4e7cda8285a04eee7c1a10b3ba24328c9cbd779f4458adf2f24a95"
+  },
+  "campaign": {
+    "cache_discount_applied": false,
+    "campaign_id": "18509cd4f3514d51ae79aa3aceaf1779",
+    "concurrency": "one_unresolved_operation",
+    "context_tokens": 1048576,
+    "currency": "CNY",
+    "input_micro_cny_per_token": 2,
+    "invoice_verified": false,
+    "limit_micro_cny": 200000000,
+    "max_output_tokens": 393216,
+    "model": "deepseek-flash",
+    "output_micro_cny_per_token": 8,
+    "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "price_verified_date": "2026-11-04",
+    "provider_base_url": "https://api.deepseek.com",
+    "schema_version": 1,
+    "unit": "micro_cny",
+    "policy_sha256": "00ee6005cda46ae0be0270b5daaff5a97821b173ec99aab9d3127f2a37184a18"
+  },
+  "campaign_before": {
+    "journal_head": {
+      "seq": 1934,
+      "sha256": "d0a188b92f4fda4058f5638b6a3425d74b154347ce739a7989c9a587afb1e7ee"
+    },
+    "settled_upper_bound_micro_cny": 21167970,
+    "limit_micro_cny": 200000000
+  },
+  "stop_rule": "Stop remaining calls on execution/replay/accounting/integrity failure or unresolved cost. Retain all attempts; no automatic rerun or revised protocol within this matrix. A completed all-candidate-failed cell remains a failed result, not a replacement baseline.",
+  "grading_rule": "Freeze all search outcomes before official grading; grade only each selected original submission. No official score or local final score controls candidate selection or matrix cell selection.",
+  "missing_cells": "Report each unexecuted declared cell explicitly; never shrink denominator."
+}

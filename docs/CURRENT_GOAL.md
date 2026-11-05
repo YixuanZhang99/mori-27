@@ -21,6 +21,6 @@ v2 已修正格式，但真实seed0的10次改进均在high推理下达到16384�
 
 v3 的三个 seed 已全部完成：有效候选 10/11、11/11、10/11；三组冻结 held-out 都为 210.1 箱，与 best-fit 持平。Seed 0 的 dev 改善至 213.8 箱，但没有体现留出收益。三组回放与独立重算通过，真实轨迹包含非最优父代选亲与弱岛重置。[完整结果及失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档；本批费用上界 ¥1.098926，原 campaign 累计 ¥21.167970，剩余 ¥178.832030，无未决调用或预留。
 
-当前施工转为 C03 AIDE，工作分支 `codex/classic-aide` 已衔接实际 main。Task 1 的 draft/debug/improve 原子选择、完整代码树、预算过滤和恢复核对已通过完整离线检查。Task 2 已跑通真实 Linux 沙箱报错与源绑定 L1 Journal 消费，相关回归及完整离线检查均已通过。Task 3 已实现专用 MLE 入口、固定数据切分、任务指标择优、冻结提交及独立评分入口；146 项相关回归通过。完整分支审查及修复后的完整本地检查已通过；尚需真实小规模矩阵和最终 CI/合入；不宣称 AIDE 已完成实测交付。
+C03 AIDE 的完整分支审查与修复、本地完整检查、三任务 × 三 seed 真实矩阵、冻结提交的官方评分均已完成。九组提交全部有效，主候选 70/90 有效、20 个失败、0 个未完成。nomad 的三个 seed 达到固定 MLE-Bench 评分器的铜/银/银历史阈值；另两个任务均高于历史中位数但未达奖牌阈值，不外推完整 benchmark 奖牌率。[完整证据和可重算报告](../research/experiments/2026-11-05-aide-mle/README.md)已归档；当前还需最终证据提交的 CI 和 PR #7 合入、归档分支。
 
-之后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。保持 main 加一条活跃方法分支，原累计费用仍为 ¥21.167970，本轮工程开发没有新增付费调用。Goal 保持 active。
+AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，剩余 ¥169.108794，无未决调用或保护违约。之后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。保持 main 加一条活跃方法分支；Arbor 离线施工成果须衔接 AIDE 合入后的实际 main 再发布和实测。Goal 保持 active，单项完成不代表八项总目标完成。
