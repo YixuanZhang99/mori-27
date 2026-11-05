@@ -245,6 +245,27 @@ class HierarchicalRuntime(ProxyRuntime):
         if not self.budget.should_continue(direction):
             return self._halt_physical(cycle, "selected direction cannot continue", started=True)
         evaluation_request = self.budget.allocate(candidate, direction_id=direction, depth=depth)
+        paired = parent_training = None
+        prepare = getattr(operator, 'evaluation_plan', None)
+        if callable(prepare):
+            from core.composition.paired_evaluation import PairedEvaluationPlan
+            if not self.construction_enabled or len(parents) != 1 or self.layered or self.proxy:
+                raise ValueError('paired training requires M7, one parent and a direct development gate')
+            paired = prepare(copy.deepcopy(request))
+            if type(paired) is not PairedEvaluationPlan:
+                raise ValueError('operator must return a PairedEvaluationPlan')
+            self._validate_domain(paired.request)
+            self.store.append('paired_evaluation_plan', {'candidate_id': identifier,
+                'parent_id': parents[0], 'plan': paired.to_dict()})
+            parent = self.proposals[parents[0]]
+            receipt = self._reserve_physical(parent.candidate, 'training', f'parent:{identifier}',
+                                             request=paired.request)
+            if not receipt.granted:
+                return self._halt_physical(cycle, receipt.reason, started=True)
+            parent_training = await self._evaluate_physical(parent, paired.request, receipt)
+            if paired.scores(parent_training) is None:
+                return self._halt_physical(cycle, 'parent training evaluation failed', started=True)
+            request = replace(request, evidence=(public_projection(parent_training),))
         operation = self._reserve_physical(candidate, "operator", cycle)
         if not operation.granted:
             return self._halt_physical(cycle, operation.reason, started=True)
@@ -280,6 +301,22 @@ class HierarchicalRuntime(ProxyRuntime):
                     ("token", "eval_count"), binding_source="invocation")),
                 executor_status="failed_to_run", result_text=str(failure))
         else:
+            if paired is not None:
+                receipt = self._reserve_physical(candidate, 'training', f'child:{identifier}',
+                                                 request=paired.request)
+                if not receipt.granted:
+                    return self._halt_physical(cycle, receipt.reason, started=True)
+                training = await self._evaluate_physical(proposal, paired.request, receipt)
+                accepted = paired.accepts(parent_training, training)
+                self.store.append('paired_evaluation_decision', {'candidate_id': identifier,
+                    'parent_id': parents[0], 'plan': paired.to_dict(), 'accepted': accepted,
+                    'parent_evidence': encode_evidence(parent_training), 'child_evidence': encode_evidence(training)})
+                if not accepted:
+                    evidence_ref = 'sha256:' + payload_digest({'logical_run_id': self._logical_run_id,
+                                                              'evidence': encode_evidence(training)})
+                    return self._commit_cycle(cycle, proposal, training,
+                        Decision(False, 'paired training screen: no strict improvement'), [], context,
+                        evidence_ref, paired.request)
             evaluation = self._reserve_physical(candidate, "dev", cycle, request=evaluation_request)
             if not evaluation.granted:
                 return self._halt_physical(cycle, evaluation.reason, started=True)

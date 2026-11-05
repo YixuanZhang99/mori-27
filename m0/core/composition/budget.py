@@ -23,7 +23,7 @@ from core.executor.types import Candidate, EvalRequest, EvalStatus
 
 from core.composition.budget_contracts import UNITS, COUNTS, _canonical, _hash, _text, _quantity, _basket, _request
 
-OPERATIONS = frozenset({"planning", "operator", "dev", "dev_baseline", "anchor", "admission", "final"})
+OPERATIONS = frozenset({"planning", "operator", "dev", "dev_baseline", "training", "anchor", "admission", "final"})
 JOURNAL_KIND = "hierarchical_budget"
 
 
@@ -262,13 +262,13 @@ class HierarchicalBudget:
         candidate.validate()
         if request is not None and not isinstance(request, EvalRequest):
             raise BudgetError("operation request must be an EvalRequest")
-        if operation in {"dev", "dev_baseline", "anchor", "admission", "final"} and request is None:
+        if operation in {"dev", "dev_baseline", "training", "anchor", "admission", "final"} and request is None:
             raise BudgetError("evaluation operation requires its exact EvalRequest")
         if operation in {"planning", "operator"} and request is not None:
             raise BudgetError("non-evaluation operations cannot carry an EvalRequest")
         if request is not None:
             request.validate()
-            expected_split = {"dev": "dev", "dev_baseline": "dev", "anchor": "calibration",
+            expected_split = {"dev": "dev", "dev_baseline": "dev", "training": "train", "anchor": "calibration",
                               "admission": "admission", "final": "final_audit"}[operation]
             if request.split_id != expected_split:
                 raise BudgetError("request split differs from operation authority")

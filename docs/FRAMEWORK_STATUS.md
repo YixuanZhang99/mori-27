@@ -1,18 +1,14 @@
 # 框架交付范围与后续开发顺序
 
-## 当前规划入口（2026-11-05，Goal 已暂停）
+## 当前执行入口（2026-11-05）
 
-用户要求改为按既有九模块设计、逐个经典工作进行 spec 驱动接入。
-本轮整理的 [接入路线与分支决定](CLASSIC_WORKS_PLAN.md) 包含八项独立规格和扩展目录；它们仍是规划草案，尚未启动实现或真实实验。
-后续建议为 GEPA → FunSearch → AIDE → Arbor → OpenEvolve，再依序接 AIRA、LoongFlow、R&D-Agent。
+用户已批准按 [经典工作接入计划](CLASSIC_WORKS_PLAN.md) 收敛分支，并从 GEPA 起逐项施工；应用 Goal 的限制单独记录于 [CURRENT_GOAL](CURRENT_GOAL.md)。
 
-本轮 fetch 核实：`main=49be71e`，`codex/m7-construction=18400ad`，后者包含前者并领先 108 个提交；四个串联 PR 仍未合入。
-`18400ad` 的 push/PR Linux v75 检查成功；macOS 同候选检查仍缺失。
-建议将 PR #4 收敛为面向 main 的整合 PR，补齐检查后保留历史合并，再一次只保留一条方法开发分支。
-本次没有 merge、改 PR base、关闭 PR 或删除分支；本地 FunSearch WIP 也未整包导入。
-本次规划提交会使上述开发头更新；此处 SHA/数量是规划前核对快照，不自称新提交的 CI 结果。
+整合 [PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 已保留历史合入 `main=9648aa3`。候选 `7ef8d48` 的 push/PR 两轮 Mac、Linux v75、MLE 检查全部通过；main 合并树与候选完全相同。10 个早已包含在旧 main 的历史分支已清理，其余串联 PR/分支等待新 main 检查后关闭。历史回滚 tag 和完整本地 bundle 已保留。未推 FunSearch WIP 不整体导入。唯一新方法分支为从该 main 创建的 `codex/classic-gepa`。
 
-下文的“当前优先级”“下一步”和分支数量均是此前阶段记录；查下一轮施工范围请从新规划入口开始。
+GEPA C01 已冻结规格并实现配对训练反思、完整 validation 的实例赢家保留、冻结后的 test、计量与记录回放；154 项针对性回归通过，独立审查发现的预算早停恢复问题已修复并单测通过，完整 `make check` 通过（2285 portable tests、188 Linux-dependent cases 显式排除；全部示例、架构检查及 106 tooling tests 通过），后补的运行 manifest/数据准备 2 项测试也通过。可运行命令及差异见 [GEPA provenance](../m0/zoo/gepa_gsm8k/PROVENANCE.md)。真实多 seed、等预算对照和论文公开区间复现均未因这些工程测试而完成。
+
+后续顺序为 GEPA → FunSearch → AIDE → Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
 
 ## 最新实证进展（2026-11-05）
 
