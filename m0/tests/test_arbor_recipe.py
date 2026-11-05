@@ -141,6 +141,7 @@ def test_exhausted_parent_budget_is_excluded_before_ideation(tmp_path):
     planning = [json.loads(p) for p in provider.prompts if json.loads(p).get('kind') == 'arbor_ideation']
     assert len(planning) == 2
     assert planning[1]['observation']['nodes'][0]['status'] == 'pruned'
+    assert planning[1]['eligible_parent_ids'] == []
 
 
 class RepairProvider(ArborProvider):
@@ -218,3 +219,54 @@ def test_completed_cycle_resume_retains_unconsumed_hypothesis(tmp_path):
     assert [c['hypothesis'] for c in candidates] == ['baseline hypothesis', 'first child', 'pending sibling']
     assert provider.calls == prior_calls + 5
     assert len([call for call in domain.calls if call['request']['split_id'] == 'dev']) == 3
+
+
+def test_planner_parent_candidates_are_explicit_and_distinct_from_pending_hypotheses(tmp_path):
+    class ExplicitParents(ArborProvider):
+        def __call__(self, prompt):
+            result = super().__call__(prompt)
+            request = json.loads(prompt)
+            if request.get('kind') != 'arbor_ideation':
+                return result
+            nodes = request['observation']['nodes']
+            eligible = [n['id'] for n in nodes if n['status'] in {'done', 'merged'}
+                        and n['eval_status'] == 'ok' and n['score'] is not None
+                        and n['depth'] < request['max_tree_depth']]
+            assert request['eligible_parent_ids'] == eligible
+            assert not set(request['eligible_parent_ids']) & {i['id'] for i in request['pending']}
+            if nodes:
+                # The real response confused these namespaces. Choose a parent from
+                # the explicit executed-candidate list, not an unexecuted pending idea.
+                assert request['pending']
+                value = json.loads(result)
+                for idea in value['new_ideas']:
+                    idea['parent_id'] = request['eligible_parent_ids'][0]
+                return json.dumps(value)
+            return result
+
+    provider = ExplicitParents()
+    fw = build(tmp_path, assembly=assembly(), provider=provider, domain=Domain(), generations=1)
+    fw.evolve(TASK)
+    candidates = records(fw, 'composed_evidence')
+    assert len(candidates) == 2
+    assert candidates[1]['proposal']['candidate']['parents'] == [candidates[0]['proposal']['candidate']['id']]
+    assert fw.replay(TASK)['replay_certificate']['passed']
+
+
+def test_invalid_unselected_idea_parent_is_rejected_atomically(tmp_path):
+    class PendingAsParent(ArborProvider):
+        def __call__(self, prompt):
+            result = super().__call__(prompt)
+            request = json.loads(prompt)
+            if request.get('kind') == 'arbor_ideation' and request['observation']['cycle'] == 1:
+                value = json.loads(result)
+                value['new_ideas'][1]['parent_id'] = request['pending'][0]['id']
+                return json.dumps(value)
+            return result
+
+    fw = build(tmp_path, assembly=assembly(), provider=PendingAsParent(), domain=Domain(), generations=1)
+    with pytest.raises(ValueError, match='hypothesis parent is not eligible'):
+        fw.evolve(TASK)
+    assert len(records(fw, 'composed_evidence')) == 1
+    assert len(records(fw, 'arbor_ideas_proposed')) == 1
+    assert fw._composed.parts['policy'].checkpoint_state()['observation']['cycle'] == 0

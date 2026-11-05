@@ -2,7 +2,7 @@
 from core.composition.defaults import composed_profile
 from zoo.mle_bench_lite.recipe_support import FIXTURE_PROGRAM, fixture_data, source_identity
 
-RECIPE = 'arbor-mle-v1'
+RECIPE = 'arbor-mle-v2'
 REFERENCE_REVISION = 'a633f56f2601387402194481e846e3375e822afa'
 
 

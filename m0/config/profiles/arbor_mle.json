@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "name": "arbor-mle-v1",
+  "name": "arbor-mle-v2",
   "mode": "benchmark",
   "provider": {
     "name": "provided"

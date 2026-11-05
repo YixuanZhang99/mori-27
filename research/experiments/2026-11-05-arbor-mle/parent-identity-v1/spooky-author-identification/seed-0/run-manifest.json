@@ -1,0 +1,371 @@
+{
+  "schema_version": 1,
+  "recipe_revision": "arbor-mle-v1",
+  "mode": "live",
+  "source": {
+    "commit": "3fe91198d94ac9e4fe79aef420a28b4f99832405",
+    "dirty": false
+  },
+  "task_id": "spooky-author-identification",
+  "split_seed": 7,
+  "search_seed": 0,
+  "max_cycles": 5,
+  "solution_timeout": 120,
+  "profile": {
+    "schema_version": 2,
+    "name": "arbor-mle-v1",
+    "mode": "benchmark",
+    "provider": {
+      "name": "provided"
+    },
+    "domain": {
+      "name": "native"
+    },
+    "policy": {
+      "name": "arbor",
+      "options": {
+        "max_cycles": 5,
+        "max_tree_depth": 2,
+        "seed": 0,
+        "max_new_ideas": 3
+      }
+    },
+    "operators": [
+      {
+        "name": "hypothesis_refine"
+      }
+    ],
+    "frontier": {
+      "name": "tree",
+      "options": {
+        "retain_rejected": true
+      }
+    },
+    "memory": {
+      "name": "scoped",
+      "options": {
+        "context_scope": "run",
+        "levels": [
+          "L1",
+          "L2"
+        ],
+        "trust_floor": "ungated",
+        "include_negative": true,
+        "include_imported": false,
+        "top_k": 20,
+        "max_chars": 160000
+      }
+    },
+    "executor": {
+      "name": "git_artifact"
+    },
+    "admission": {
+      "name": "layered",
+      "options": {
+        "metric": "gate/score",
+        "dev_metric": "dev/score",
+        "margin": 0,
+        "call_budget": 3,
+        "admission_seeds": [
+          7
+        ],
+        "final_seeds": [
+          7
+        ]
+      }
+    },
+    "budget": {
+      "name": "hierarchical",
+      "options": {
+        "limits": {
+          "global": {
+            "token": 39403520,
+            "node": 6,
+            "eval_count": 10
+          },
+          "direction": {
+            "token": 37273600,
+            "node": 5,
+            "eval_count": 9
+          },
+          "candidate": {
+            "token": 37273600,
+            "node": 5,
+            "eval_count": 9
+          }
+        },
+        "reservation": {
+          "token": 0,
+          "node": 0,
+          "eval_count": 1
+        },
+        "operation_reservations": {
+          "planning": {
+            "token": 4259840,
+            "node": 0,
+            "eval_count": 0
+          },
+          "operator": {
+            "token": 2129920,
+            "node": 1,
+            "eval_count": 0
+          }
+        },
+        "fidelity_rungs": [
+          {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              7
+            ]
+          }
+        ],
+        "convergence": {
+          "patience": 3,
+          "min_samples": 4,
+          "metric": "dev/score",
+          "direction": "maximize",
+          "min_improvement": 0
+        }
+      }
+    },
+    "skills": [],
+    "execution": {
+      "schema_version": 1,
+      "spec": {
+        "role": "general",
+        "hypothesis_frozen": true,
+        "context_projection": [
+          "memory"
+        ]
+      },
+      "constructor": {
+        "name": "prompt",
+        "options": {
+          "max_attempts": 2
+        }
+      }
+    },
+    "governance": {
+      "schema_version": 1,
+      "controls": {
+        "after_main_cycles": [
+          0
+        ],
+        "seed": 0,
+        "provider": {
+          "name": "arbor-control"
+        },
+        "domain": {
+          "name": "arbor-control"
+        },
+        "operator": {
+          "name": "draft"
+        },
+        "request": {
+          "fidelity": "dev",
+          "split_id": "dev",
+          "seed_set": [
+            7
+          ]
+        },
+        "reservations": {
+          "operator": {
+            "token": 2129920,
+            "node": 1,
+            "eval_count": 0
+          },
+          "evaluation": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 1
+          }
+        }
+      }
+    }
+  },
+  "dataset_identity": "sha256:b85cb015e584931fabec76765deb2d047a1ec09e4674b3413df3b59e1f08d5b1",
+  "dataset_manifest": {
+    "protocol": "mle-public-train-composed-v2",
+    "task_id": "spooky-author-identification",
+    "seed": 7,
+    "features": "CSV only; image/geometry auxiliary files excluded",
+    "source_sha256": {
+      "train.csv": "sha256:87a02befe9c415b976486e4a59b96da0cc907b8645efbb7052256307715ecdbf",
+      "test.csv": "sha256:3f68bfa593154a031ee549899f150ccdf2e7a5ed88083e4d9c3ea2fe2cd3dfd5",
+      "sample_submission.csv": "sha256:5a9d701524a2659476f62e30fa4e61ecfbeb754e0e9c11a8528a7486992ad1f6"
+    },
+    "input_sha256": {
+      "predict.csv": "sha256:bfbee969fd1dfb55ce687e4c80d52e9fd30a058cf7e2d18151ce04955163c5a1",
+      "protocol.json": "sha256:dcc9c7ae59fa22dc8d2841cfe5e971a5de92a6578652713243e284038dbc5b3f",
+      "train.csv": "sha256:7ec8542fbadbc3fe59efac1b13b6c0731cce795bef91054b0b85af587c9ea271"
+    },
+    "split_contexts": {
+      "dev": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+      "calibration": "sha256:d0b31a2b1027a9395882f67f64c0d520fc46fc639859e4a28c99de1d01794d07",
+      "admission": "sha256:7eb1dac1ea4858fdd3bde7e88d45b330d207dfe8de891e4eb113fe347cb11893",
+      "final_audit": "sha256:7a964e1f7ad9162aa8e83a094556dde5b2a4960e12e6b6297520a0bc5f881282"
+    },
+    "split_counts": {
+      "train": 10577,
+      "dev": 1761,
+      "calibration": 1761,
+      "admission": 1761,
+      "final_audit": 1761
+    },
+    "official_test_rows": 1958,
+    "scoring": "negative_log_loss",
+    "dev_scoring": "task_metric"
+  },
+  "domain": {
+    "kind": "mle-public-train-composed-v2",
+    "dataset_identity": "sha256:b85cb015e584931fabec76765deb2d047a1ec09e4674b3413df3b59e1f08d5b1",
+    "dataset_manifest": {
+      "protocol": "mle-public-train-composed-v2",
+      "task_id": "spooky-author-identification",
+      "seed": 7,
+      "features": "CSV only; image/geometry auxiliary files excluded",
+      "source_sha256": {
+        "train.csv": "sha256:87a02befe9c415b976486e4a59b96da0cc907b8645efbb7052256307715ecdbf",
+        "test.csv": "sha256:3f68bfa593154a031ee549899f150ccdf2e7a5ed88083e4d9c3ea2fe2cd3dfd5",
+        "sample_submission.csv": "sha256:5a9d701524a2659476f62e30fa4e61ecfbeb754e0e9c11a8528a7486992ad1f6"
+      },
+      "input_sha256": {
+        "predict.csv": "sha256:bfbee969fd1dfb55ce687e4c80d52e9fd30a058cf7e2d18151ce04955163c5a1",
+        "protocol.json": "sha256:dcc9c7ae59fa22dc8d2841cfe5e971a5de92a6578652713243e284038dbc5b3f",
+        "train.csv": "sha256:7ec8542fbadbc3fe59efac1b13b6c0731cce795bef91054b0b85af587c9ea271"
+      },
+      "split_contexts": {
+        "dev": "sha256:dc0eb02fd82314a3f1021e1a32cfe78d7760b4c5eef3a7677fca9c587aa2b9b5",
+        "calibration": "sha256:d0b31a2b1027a9395882f67f64c0d520fc46fc639859e4a28c99de1d01794d07",
+        "admission": "sha256:7eb1dac1ea4858fdd3bde7e88d45b330d207dfe8de891e4eb113fe347cb11893",
+        "final_audit": "sha256:7a964e1f7ad9162aa8e83a094556dde5b2a4960e12e6b6297520a0bc5f881282"
+      },
+      "split_counts": {
+        "train": 10577,
+        "dev": 1761,
+        "calibration": 1761,
+        "admission": 1761,
+        "final_audit": 1761
+      },
+      "official_test_rows": 1958,
+      "scoring": "negative_log_loss",
+      "dev_scoring": "task_metric"
+    },
+    "runner": {
+      "kind": "bubblewrap-seccomp-csv-v1",
+      "python": "/usr/local/share/mori27-local/pilot/bin/python",
+      "python_sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+      "threads": {
+        "OMP_NUM_THREADS": 2,
+        "OPENBLAS_NUM_THREADS": 2,
+        "MKL_NUM_THREADS": 2
+      },
+      "seccomp": {
+        "schema_version": 1,
+        "policy": "dangerous-syscall-denylist",
+        "policy_version": 2,
+        "architecture": "x86_64",
+        "action": "errno:EPERM",
+        "denied_syscall_bits": 1073741824,
+        "denied_syscall_ranges": [
+          [
+            512,
+            547
+          ]
+        ],
+        "denied_syscalls": [
+          "add_key",
+          "bpf",
+          "delete_module",
+          "finit_module",
+          "fsconfig",
+          "fsmount",
+          "fsopen",
+          "fspick",
+          "init_module",
+          "kexec_file_load",
+          "kexec_load",
+          "keyctl",
+          "mount",
+          "mount_setattr",
+          "move_mount",
+          "name_to_handle_at",
+          "open_by_handle_at",
+          "open_tree",
+          "perf_event_open",
+          "pivot_root",
+          "ptrace",
+          "reboot",
+          "request_key",
+          "setns",
+          "swapoff",
+          "swapon",
+          "umount2",
+          "unshare",
+          "userfaultfd"
+        ],
+        "filter_sha256": "1684831d295f154d29f8a57a61488baf0d73f80896e76fc31f1cc249a3d87bd7",
+        "filter_base64": "IAAAAAQAAAAVAAEAPgAAwAYAAAAAAACAIAAAAAAAAABFAAABAAAAQAYAAAABAAUANQAAAgACAAA1AAEAJAIAAAYAAAABAAUAFQAAAfgAAAAGAAAAAQAFABUAAAFBAQAABgAAAAEABQAVAAABsAAAAAYAAAABAAUAFQAAATkBAAAGAAAAAQAFABUAAAGvAQAABgAAAAEABQAVAAABsAEAAAYAAAABAAUAFQAAAa4BAAAGAAAAAQAFABUAAAGxAQAABgAAAAEABQAVAAABrwAAAAYAAAABAAUAFQAAAUABAAAGAAAAAQAFABUAAAH2AAAABgAAAAEABQAVAAAB+gAAAAYAAAABAAUAFQAAAaUAAAAGAAAAAQAFABUAAAG6AQAABgAAAAEABQAVAAABrQEAAAYAAAABAAUAFQAAAS8BAAAGAAAAAQAFABUAAAEwAQAABgAAAAEABQAVAAABrAEAAAYAAAABAAUAFQAAASoBAAAGAAAAAQAFABUAAAGbAAAABgAAAAEABQAVAAABZQAAAAYAAAABAAUAFQAAAakAAAAGAAAAAQAFABUAAAH5AAAABgAAAAEABQAVAAABNAEAAAYAAAABAAUAFQAAAagAAAAGAAAAAQAFABUAAAGnAAAABgAAAAEABQAVAAABpgAAAAYAAAABAAUAFQAAARABAAAGAAAAAQAFABUAAAFDAQAABgAAAAEABQAGAAAAAAD/fw=="
+      }
+    },
+    "implementation_sha256": {
+      "/home/neekyoung12/.codex/worktrees/resident-governance/mori-27/m0/zoo/mle_bench_lite/composed_domain.py": "sha256:aef3d78d812a092a79f32d869063cdb613f675e43e8d8e7543c28a107159fb0f",
+      "/home/neekyoung12/.codex/worktrees/resident-governance/mori-27/m0/zoo/mle_bench_lite/public_train.py": "sha256:1ff42f907c6cdf8f7bcb1a6019e2cd746f88d479833a1e3abcf56e418374c227",
+      "/home/neekyoung12/.codex/worktrees/resident-governance/mori-27/m0/zoo/mle_bench_lite/agent_common.py": "sha256:2c06df450f8170aaebfcf5ad21c98b3573bf7a85f5ccbf7b7e0e7fe1a5c2fdb7"
+    },
+    "solution_timeout": 120,
+    "public_dev_feedback": {
+      "schema_version": 1,
+      "stderr_tail_bytes": 4096
+    },
+    "prediction_reuse": "one frozen candidate training run across all local splits"
+  },
+  "task_description_sha256": "sha256:122f283849f627842d27afc8c46accff14e55a7f31c536f7f7a44dee748e589f",
+  "provider": {
+    "schema_version": 1,
+    "requested_model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "max_completion_tokens": 16384,
+    "timeout": 120.0,
+    "request_format": "deepseek",
+    "retry_policy": "never",
+    "response_model_required": true,
+    "thinking": {
+      "type": "enabled"
+    },
+    "reasoning_effort": "low",
+    "temperature_applied": false,
+    "seed_applied": false,
+    "immutable_snapshot_verified": false,
+    "campaign": {
+      "cache_discount_applied": false,
+      "campaign_id": "18509cd4f3514d51ae79aa3aceaf1779",
+      "concurrency": "one_unresolved_operation",
+      "context_tokens": 1048576,
+      "currency": "CNY",
+      "input_micro_cny_per_token": 2,
+      "invoice_verified": false,
+      "limit_micro_cny": 200000000,
+      "max_output_tokens": 393216,
+      "model": "deepseek-flash",
+      "output_micro_cny_per_token": 8,
+      "policy_sha256": "00ee6005cda46ae0be0270b5daaff5a97821b173ec99aab9d3127f2a37184a18",
+      "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "price_verified_date": "2026-11-04",
+      "provider_base_url": "https://api.deepseek.com",
+      "schema_version": 1,
+      "unit": "micro_cny"
+    },
+    "token_admission": {
+      "mode": "model_capacity_v1",
+      "guarantee": "service_capacity_bound",
+      "input_capacity": 1048576
+    },
+    "phase_call_limits": {
+      "planning": 4,
+      "operator": 2,
+      "evaluation": 0
+    }
+  }
+}

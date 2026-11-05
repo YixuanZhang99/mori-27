@@ -1,6 +1,8 @@
 # Arbor MLE evidence tools
 
-No real Arbor results have been published here yet. These tools export a declared
+The first real pilot stopped in planning after one completed candidate; its original
+[nine-cell failed packet](parent-identity-v1/README.md) and costs are retained.
+There is no successful real matrix or official Arbor score yet. These tools export a declared
 matrix and independently recalculate its selection, coverage and currency from
 original records. They do not call a model, retrain programs, read credential
 contents, or recompute hidden-label losses.
