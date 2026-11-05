@@ -5,6 +5,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -83,9 +84,18 @@ def owner_main(run_dir, crash_point):
     mutation_target = None
     mutation_count = 0
     gate_seen = False
+    evaluation_start_lock = threading.Lock()
 
     def append_with_crash(self, kind, payload):
         nonlocal batch_outcomes, mutation_target, mutation_count, gate_seen
+        if crash_point == "active" and kind == "m0_batch_evaluation_started":
+            # The store releases its append lock before this wrapper regains
+            # control. Hold a fixture barrier through SIGKILL so no second
+            # worker can return from its start marker and call the evaluator.
+            with evaluation_start_lock:
+                original_append(self, kind, payload)
+                os.kill(os.getpid(), signal.SIGKILL)
+            return
         original_append(self, kind, payload)
         data = payload if isinstance(payload, dict) else {}
         crash = False
