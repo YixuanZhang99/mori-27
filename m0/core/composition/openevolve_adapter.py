@@ -4,9 +4,12 @@ from __future__ import annotations
 import copy
 import json
 import random
+import threading
 
 from core.composition.contracts import json_copy
 from core.openevolve_interop import DatabaseConfig, ProgramDatabase
+
+_HOST_LOCK = threading.RLock()
 
 
 class OpenEvolveAdapter:
@@ -30,16 +33,13 @@ class OpenEvolveAdapter:
                       'embedding_model', 'embedding_api_base', 'artifacts_base_path'}
         if prohibited & self.config.keys():
             raise ValueError('OpenEvolve host side effects are not configurable')
-        host_config = DatabaseConfig(**self.config, random_seed=seed, db_path=None,
+        host_config = DatabaseConfig(**self.config, random_seed=None, db_path=None,
                                      in_memory=True, novelty_llm=None,
                                      embedding_model=None, embedding_api_base=None,
                                      artifacts_base_path=None)
-        unrelated_rng = random.getstate()
-        try:
-            self.database = ProgramDatabase(host_config)
-            self._host_rng = random.getstate()
-        finally:
-            random.setstate(unrelated_rng)
+        self.database = ProgramDatabase(host_config)
+        host_config.random_seed = seed
+        self._host_rng = random.Random(seed).getstate()
         self._events = []
 
     @property
@@ -68,7 +68,8 @@ class OpenEvolveAdapter:
                 'events_ref': payload_digest(self._events)}
 
     def checkpoint_state(self):
-        return self._state()
+        with _HOST_LOCK:
+            return self._state()
 
     def _apply_unchecked(self, kind, args, replay_tape=None):
         import contextlib
@@ -100,16 +101,16 @@ class OpenEvolveAdapter:
         time_proxy = types.SimpleNamespace(time=lambda: take('time', time.time))
         uuid_proxy = types.SimpleNamespace(uuid4=lambda: take('uuid', lambda: str(uuid.uuid4())))
         before = payload_digest(self._state())
-        saved_rng = random.getstate()
-        random.setstate(self._host_rng)
-        try:
-            with patch.object(host, 'time', time_proxy), patch.object(host, 'uuid', uuid_proxy), patch.object(host, 'Program', RecordedProgram):
-                result = self._perform(kind, args, RecordedProgram)
-                if replay_tape is not None and index != len(replay_tape):
-                    raise ValueError('unused host nondeterminism journal')
-                self._host_rng = random.getstate()
-        finally:
-            random.setstate(saved_rng)
+        host_rng = random.Random()
+        host_rng.setstate(self._host_rng)
+        with _HOST_LOCK, patch.object(host, 'random', host_rng), patch.object(host, 'time', time_proxy), patch.object(host, 'uuid', uuid_proxy), patch.object(host, 'Program', RecordedProgram):
+            result = self._perform(kind, args, RecordedProgram)
+            if replay_tape is not None and index != len(replay_tape):
+                raise ValueError('unused host nondeterminism journal')
+            self._host_rng = host_rng.getstate()
+        if kind == 'select':
+            result = {**result, 'before_ref': 'sha256:' + before,
+                      'after_ref': 'sha256:' + payload_digest(self._state())}
         event = {'kind': kind, 'candidate_id': args['candidate_id'], 'args': json_copy(args),
                  'tape': tape, 'before_ref': before, 'result': json_copy(result)}
         self._events.append(event)
@@ -117,6 +118,10 @@ class OpenEvolveAdapter:
         return copy.deepcopy(result)
 
     def _apply(self, kind, args, replay_tape=None):
+        with _HOST_LOCK:
+            return self._apply_serial(kind, args, replay_tape)
+
+    def _apply_serial(self, kind, args, replay_tape=None):
         # Reject non-JSON arguments before the host can mutate state.
         args = json_copy(args)
         prior = self.events
@@ -158,7 +163,7 @@ class OpenEvolveAdapter:
             if candidate in self._sources:
                 raise ValueError('candidate already registered')
             selection = args['selection']
-            if self._sources and (self._pending is None or self._pending != selection or self._pending['candidate_id'] != candidate):
+            if self._sources and (self._pending is None or self._events[-1]['kind'] != 'select' or self._events[-1]['result'] != selection or self._pending['candidate_id'] != candidate):
                 raise ValueError('registration requires its pending selection')
             if not self._sources and (selection is not None or args['iteration'] != 0):
                 raise ValueError('initial program requires zero iteration and no selection')
@@ -216,7 +221,9 @@ class OpenEvolveAdapter:
             self._pending = {'candidate_id': candidate, 'host_parent_id': parent.id,
                              'source_candidate_id': self._sources[parent.id]['candidate_id'],
                              'evidence_ref': self._sources[parent.id]['evidence_ref'],
-                             'island': island, 'inspiration_host_ids': [p.id for p in inspirations]}
+                             'island': island, 'inspiration_host_ids': [p.id for p in inspirations],
+                             'inspirations': [{'host_id': p.id, 'source_candidate_id': self._sources[p.id]['candidate_id'],
+                                               'evidence_ref': self._sources[p.id]['evidence_ref']} for p in inspirations]}
             return self._pending
         if kind == 'abandon':
             if self._pending is None or self._pending['candidate_id'] != candidate:
@@ -226,6 +233,10 @@ class OpenEvolveAdapter:
         raise ValueError('unknown host event')
 
     def restore_state(self, state, original_events):
+        with _HOST_LOCK:
+            return self._restore_serial(state, original_events)
+
+    def _restore_serial(self, state, original_events):
         if state.get('hash_fingerprint') != hash('mori-openevolve-host-v1'):
             raise ValueError('OpenEvolve process hash fingerprint differs')
         other = type(self)(self.config, seed=self._seed, source_binding=self.source_binding)

@@ -220,3 +220,60 @@ def test_restore_rejects_forged_original_event_without_changing_existing_host():
     with pytest.raises(ValueError, match='event replay differs'):
         restored.restore_state(state, events)
     assert restored.checkpoint_state() == before
+
+
+def test_adapter_never_reseeds_or_replaces_process_global_rng(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError('adapter touched the process global RNG')
+    monkeypatch.setattr(random, 'seed', forbidden)
+    monkeypatch.setattr(random, 'setstate', forbidden)
+    adapter = new_adapter()
+    measured(adapter, 'root', .4, iteration=0)
+    adapter.select('child', {'root'})
+
+
+def test_selection_records_source_bound_inspirations_and_transition_refs():
+    adapter = new_adapter(num_islands=1, feature_dimensions=['novelty'],
+                          exploitation_ratio=1., exploration_ratio=0., migration_interval=50)
+    measured(adapter, 'root', .4, iteration=0, novelty=.1)
+    measured(adapter, 'child', .8, iteration=1, eligible={'root'}, novelty=.9)
+    selected = adapter.select('next', {'root', 'child'})
+    assert selected['before_ref'].startswith('sha256:')
+    assert selected['after_ref'].startswith('sha256:')
+    assert selected['inspiration_host_ids']
+    assert [row['host_id'] for row in selected['inspirations']] == selected['inspiration_host_ids']
+    assert all(row['source_candidate_id'] in {'root', 'child'} and row['evidence_ref'].startswith('sha256:')
+               for row in selected['inspirations'])
+    forged = copy.deepcopy(selected)
+    forged['inspirations'][0]['evidence_ref'] = 'sha256:' + '0' * 64
+    with pytest.raises(ValueError):
+        adapter.register('next', 'next', {'combined_score': .9}, 'sha256:' + '1' * 64,
+                         iteration=2, selection=forged)
+
+
+def test_checkpoint_does_not_expose_a_partially_committed_host_operation(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+    from threading import Event
+    adapter = new_adapter()
+    entered, release = Event(), Event()
+    perform = adapter._perform
+    def delayed(*args):
+        result = perform(*args)
+        entered.set()
+        if not release.wait(5):
+            raise RuntimeError('test synchronization timed out')
+        return result
+    monkeypatch.setattr(adapter, '_perform', delayed)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        writer = executor.submit(measured, adapter, 'root', .4, iteration=0)
+        assert entered.wait(5)
+        reader = executor.submit(adapter.checkpoint_state)
+        try:
+            with pytest.raises(TimeoutError):
+                reader.result(timeout=.1)
+        finally:
+            release.set()
+        writer.result(timeout=5)
+        state = reader.result(timeout=5)
+    assert state['program_order'] == ['root']
+    assert len(adapter.events) == 1
