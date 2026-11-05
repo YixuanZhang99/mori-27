@@ -8,7 +8,7 @@
 
 GEPA C01 已冻结规格并实现配对训练反思、完整 validation 的实例赢家保留、冻结后的 test、计量与记录回放；154 项针对性回归通过，独立审查发现的预算早停恢复问题已修复并单测通过，完整 `make check` 通过（2285 portable tests、188 Linux-dependent cases 显式排除；全部示例、架构检查及 106 tooling tests 通过），后补的运行 manifest/数据准备 2 项测试也通过。可运行命令及差异见 [GEPA provenance](../m0/zoo/gepa_gsm8k/PROVENANCE.md)。工程测试不能代替真实成绩；本轮实测见下段，等预算对照和论文公开区间复现仍未完成。
 
-当前是 FunSearch 工程候选：有效非最优程序保留供亲，原始事件重建岛屿状态，冻结留出评分和独立终评命令已接通；11-cycle 离线试跑完成两次重置、终评和回放，107 项相关测试通过。独立审查发现的未知用量缺少失败报告问题已复现并修复，三 seed 真实结果和合入仍待完成。后续顺序为 FunSearch → AIDE → Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
+当前 FunSearch 已完成有效非最优供亲保留、原始岛屿历史重建、冻结留出和独立终评入口，以及三 seed 真实 OR3 运行：31/33 候选有效，三组 held-out 均210.1箱，回放与重算通过。Seed 0 的 dev 为213.8箱，未体现留出收益。[结果与全部失败](../research/experiments/2026-11-05-funsearch-or3/README.md)已归档，原 campaign 累计 ¥21.167970，无未决费用。PR #6 待最终候选 CI 和合入；完成后继续 AIDE → Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
 
 真实 GEPA/GSM8K 运行、逐题成绩、费用与失败记录见 [本轮交付报告](../research/experiments/2026-11-05-gepa-gsm8k/README.md)。它是 adapted 小规模运行验证；输出截断、无效构造等失败不删除，不据此宣称方法优化收益或论文成绩复现。
 

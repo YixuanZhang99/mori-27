@@ -16,13 +16,20 @@
 
 全部 18 份提交有效。seed 1 和 seed 2/3 分为两个冻结批次，第二批在看到第一批结果后启动；模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照。这里只覆盖三个任务，不代表完整 MLE-Bench Lite 或统计显著结果。逐 seed 成绩、批次差异、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md)。
 
-经典方法开发进展：GEPA 已通过公共 Framework 接通配对反思、validation 实例赢家、冻结 test、费用计量与记录回放，并在 GSM8K 小子集上进行了真实模型试跑；[运行报告](research/experiments/2026-11-05-gepa-gsm8k/README.md)保留所有预声明 seed 的成功与失败。FunSearch 目前已有离线种群/构造示例与固定 OR3 开发集隔离评分，下一步补真实搜索和冻结留出评估。两者均不宣称完整论文复现，GEPA 小试跑也不构成优化收益证据。
+经典方法开发进展：GEPA 已通过公共 Framework 接通配对反思、validation 实例赢家、冻结 test、费用计量与记录回放，并在 GSM8K 小子集上进行了真实模型试跑；[运行报告](research/experiments/2026-11-05-gepa-gsm8k/README.md)保留所有预声明 seed 的成功与失败。FunSearch 已完成三 seed 真实 OR3 搜索、冻结留出评估和回放，31/33 候选有效；[完整结果](research/experiments/2026-11-05-funsearch-or3/README.md)中三组 held-out 均为 210.1 箱，与 best-fit 持平。两者均不宣称完整论文复现，GEPA 小试跑也不构成优化收益证据。
 
 GEPA 新入口（默认离线、不访问模型）：
 
 ```sh
 uv run --project m0 --locked python -m zoo.gepa_gsm8k.runner \
   --mode fixture --max-proposals 2 --output /tmp/gepa-fixture
+```
+
+FunSearch 新入口（默认离线；需要 Linux x86_64 和 Bubblewrap）：
+
+```sh
+uv run --project m0 --locked python -m zoo.funsearch_binpacking.runner \
+  --mode fixture --max-proposals 2 --output /tmp/funsearch-fixture
 ```
 
 ### 方法和证据范围
@@ -32,7 +39,7 @@ uv run --project m0 --locked python -m zoo.gepa_gsm8k.runner \
 | MLE 搜索（baseline / full） | 三个公开任务；M7 | [真实模型、三个 seed 的官方评分](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md) | 完整 MLE-Bench Lite；两种搜索方法不同，不能隔离治理效果 |
 | 同搜索治理强度对照 | 三个公开任务、单 seed；M7 | [真实模型官方评分和总费用上界](research/experiments/2026-11-05-m7-governance-intensity/README.md) | 更大样本、候选接纳数与单独控制开销；不能直接视为有无治理的因果比较 |
 | GEPA 单组件 prompt 优化 | GSM8K train/validation/test；M7 | [真实试跑、逐题成绩与失败](research/experiments/2026-11-05-gepa-gsm8k/README.md)；[运行命令](m0/zoo/gepa_gsm8k/PROVENANCE.md) | 更充分的多提案搜索、同配置多 seed 等预算对照与公开区间复现 |
-| FunSearch 种群与程序构造 | 合成机制检查；OR3 开发集使用 M7 | [离线机制和固定参考程序的隔离评分](research/experiments/2026-11-05-funsearch-population/README.md) | 真实模型搜索、留出集评分与完整论文复现 |
+| FunSearch 程序进化 | OR3 dev/held-out；M7 隔离执行 | [三 seed 真实搜索、全部失败与留出成绩](research/experiments/2026-11-05-funsearch-or3/README.md)；[运行命令](m0/zoo/funsearch_binpacking/PROVENANCE.md) | 更大规模、等预算对照与论文区间复现；本批无留出收益 |
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
