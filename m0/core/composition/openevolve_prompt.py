@@ -6,8 +6,9 @@ import hashlib
 import math
 from pathlib import Path
 
-from core.composition.evaluation import decode_evidence, encode_evidence
-from core.executor.types import EvalStatus
+from core.composition.contracts import Proposal
+from core.composition.evaluation import binding_for, decode_evidence, encode_evidence
+from core.executor.types import Candidate, EvalRequest, EvalStatus
 from core.x1.checkpoint import payload_digest
 # Initializes the repository-pinned host package path.
 from core.openevolve_interop import ProgramDatabase as _ProgramDatabase  # noqa: F401
@@ -79,10 +80,11 @@ def build_bound_prompt(selection, host_events, evidence_rows, *, logical_run_id,
         result = evidence.eval_result
         binding = result.contract.binding
         artifact = proposal['artifact']
+        expected_binding = binding_for(Proposal(Candidate(**proposal['candidate']), artifact),
+            EvalRequest(fidelity='dev', split_id='dev'), evaluator_version=evaluator_version,
+            evaluation_context=evaluation_context)
         if type(artifact) is not str or not artifact or evidence.candidate_id != candidate \
-                or binding.candidate_id != candidate or binding.artifact_sha256 != hashlib.sha256(artifact.encode('utf-8')).hexdigest() \
-                or binding.evaluator_version != evaluator_version or binding.evaluation_context != evaluation_context \
-                or binding.split_id != 'dev' or binding.fidelity != 'dev' or result.status is not EvalStatus.OK:
+                or binding != expected_binding or result.status is not EvalStatus.OK:
             raise ValueError('selected source is not the bound successful dev evidence')
         score = result.metrics.get('dev/score')
         if type(score) not in (int, float) or not math.isfinite(score):

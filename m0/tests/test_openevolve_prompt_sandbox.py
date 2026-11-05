@@ -23,7 +23,7 @@ def setup_material(tmp_path):
     rows = []
     for i, name in enumerate(('root', 'child')):
         source = GRID + f'\n# {name}\n'
-        proposal = Proposal(Candidate(name, hypothesis='fixed'), source)
+        proposal = Proposal(Candidate(name, parents=[] if i == 0 else ['root'], hypothesis='fixed'), source)
         result = asyncio.run(domain.evaluate(proposal, EvalRequest(fidelity='dev', split_id='dev')))
         private = replace(result.contract.private, data={**result.contract.private.data,
                                                            'sentinel': 'PRIVATE_SENTINEL_81'})
@@ -83,3 +83,23 @@ def test_prompt_refuses_drifted_pinned_configuration(tmp_path, monkeypatch):
         module.build_bound_prompt(selection, adapter.events, rows, logical_run_id='run',
                                   evaluator_version=domain.evaluator_version,
                                   evaluation_context=domain.evaluation_contexts['dev'])
+
+
+def test_prompt_rejects_rehashed_wrong_development_request(tmp_path):
+    from core.composition.openevolve_prompt import build_bound_prompt
+    domain, adapter, rows, selection = setup_material(tmp_path)
+    rows, selection, events = copy.deepcopy(rows), copy.deepcopy(selection), adapter.events
+    source = selection['source_candidate_id']
+    row = next(item for item in rows if item['proposal']['candidate']['id'] == source)
+    row['evidence']['eval_result']['contract']['binding']['request_sha256'] = 'sha256:' + '0' * 64
+    ref = 'sha256:' + payload_digest({'logical_run_id': 'run',
+        'evidence': {'schema_version': 1, 'evidence': row['evidence']}})
+    row['evidence_ref'] = ref
+    selection['evidence_ref'] = ref
+    for item in selection['inspirations']:
+        if item['source_candidate_id'] == source: item['evidence_ref'] = ref
+    events[-1]['result'] = copy.deepcopy(selection)
+    with pytest.raises(ValueError):
+        build_bound_prompt(selection, events, rows, logical_run_id='run',
+                           evaluator_version=domain.evaluator_version,
+                           evaluation_context=domain.evaluation_contexts['dev'])
