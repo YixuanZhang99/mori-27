@@ -2,6 +2,8 @@
 
 状态：施工规格冻结，2026-11-05。本地基于 C02 最终候选 1af2dc0 开始；仅在 C02 合入后衔接实际 main 并发布 AIDE 分支。继承 [COMMON](COMMON.md)。目标是让公开 Framework 完整执行 draft/debug/improve 和真实 MLE 评估，并保留可核对的失败、费用与树轨迹。
 
+本轮进度：Task 1 的原子选择、可修复代码树、配方和恢复核对已实现；22 个公开 Framework 用例覆盖选择、拒绝伪造状态、中断恢复和回放。完整离线检查通过（2331 项 portable 测试、112 项工具测试及示例）。Task 2 的实际报错与 L1 Journal 消费、Task 3 的专用入口和真实 MLE 矩阵尚未交付，不能据此宣称 AIDE 已完整可用。
+
 ## 来源和一致性边界
 
 参考固定为 [WecoAI/aideml@ad73d227af481bea3de06f884f41b2993dd6453a](https://github.com/WecoAI/aideml/tree/ad73d227af481bea3de06f884f41b2993dd6453a)。已核对 `aide/agent.py` 的 search_policy、`aide/journal.py` 的 Node/Journal 和 `aide/utils/config.yaml`。
@@ -35,7 +37,7 @@
 1. `Policy.select` 目前只返回父代列表。AIDE 需要父代与算子的一次明确选择；允许增加一个内部结构化选择结果，同时保留旧列表调用者。不能先在 observe 固定 debug，再在预算过滤后改选父代而仍使用旧算子。Framework 的 evolve/inspect/replay 接口不变。
 2. runtime 只授权 OK/scored 父代，树 admission 会 prune 所有非赢家。需要显式的调试父代能力与 opt-in 保留语义：授权必须同时核对终态、artifact、叶节点、连续 debug 深度和预算；普通方法保持成功父代限制。树恢复必须保留并验证该配置，不引入现有 restore 不支持的隐式子类。
 3. 构造 recipe 目前没有 debug/improve 种类。增加真实语义；debug 不制造 numeric comparison。原始错误通过 M5 的授权上下文传入，不能借 strategy 或 private evaluation metadata 绕过投影。
-4. L1 candidate 状态不会被检索，默认 BestFirst 会把成功记录升到 L2。增加当前证据绑定的 L1 激活路径；AIDE 不继承该 L2 晋升。M5 从 authoritative proposal 和公开 dev evidence 形成摘要。复用 M7 已有 hypothesis_frozen=False：初始 hypothesis 记录规则意图，构造器输出的 effective hypothesis 记录实际生成计划；原始 materialization 同时保留两者。无需从代码 docstring 提取计划，不额外调用模型编造摘要。
+4. 默认 BestFirst 会把成功记录升到 L2；AIDE 不继承该晋升，而需要生成当前证据绑定的 L1 Journal。已核对 ContextMemory.write 会自动激活经过验证的 L1，直接复用该路径，无需新增状态变更操作。M5 从 authoritative proposal 和公开 dev evidence 形成摘要。复用 M7 已有 hypothesis_frozen=False：初始 hypothesis 记录规则意图，构造器输出的 effective hypothesis 记录实际生成计划；原始 materialization 同时保留两者。无需从代码 docstring 提取计划，不额外调用模型编造摘要。
 5. 当前 MLE 入口将一个 seed 同时用于数据与搜索。专用 builder 必须分离 split_seed/search_seed：bundle 和全部 dev/control/final EvalRequest.seed_set 使用固定 split_seed，策略/控制抽样使用 search_seed。
 
 复用现有预算/provider/数据/沙箱/提交/回放路径。新增方法代码集中在 composition 的策略与配方、现有 M5 接缝和 zoo runner。禁止另建优化主循环、supervisor、费用账本或模型评分器。

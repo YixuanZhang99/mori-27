@@ -18,7 +18,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from types import FunctionType
 
-from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorBudgetExhausted, OperatorRequest, Proposal
+from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorBudgetExhausted, OperatorRequest, Proposal, Selection
 from core.composition.context import ContextMemory, ContextPackBuilder
 from core.composition.knowledge import KnowledgePack
 from core.composition.admission import LayeredAdmissionController
@@ -426,6 +426,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
+        self._validate_aide_restore(restored, payload['incumbent'], proposals, evidence_by_id)
         if self.funsearch:
             self.funsearch._audit()
         if self.proxy:
@@ -653,20 +654,36 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         if selection_view is None:
             selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
         unavailable = set()
+        if self.construction_enabled:
+            unavailable.update(identifier for identifier, proposal in self.proposals.items()
+                               if not proposal.artifact.strip())
         if self.hierarchical:
-            unavailable = {identifier for identifier, proposal in self.proposals.items()
-                if not self.budget.should_continue(self._candidate_scope(proposal.candidate)[0])}
+            unavailable.update(identifier for identifier, proposal in self.proposals.items()
+                if not self.budget.should_continue(self._candidate_scope(proposal.candidate)[0]))
             # Keep skeleton ancestry intact while hiding exhausted branches from
             # sampling. The policy may choose another branch or a fresh draft.
-            for identifier in unavailable:
-                selection_view.nodes[identifier].status = "pruned"
+        for identifier in unavailable:
+            selection_view.nodes[identifier].status = "pruned"
         selection_budget = self.budget.main_account_summary() if self.governed else self.budget.account_summary()
         parents = await self.funsearch.select(candidate_id, selection_view, selection_budget) if self.funsearch \
             else await self._policy("select", selection_view, selection_budget)
+        if isinstance(parents, Selection):
+            strategy = {**strategy, 'operator': parents.operator}
+            parents = parents.parents
+        names = [spec.name for spec in self.assembly.operators]
+        selected = strategy.get('operator', names[min(1 if parents else 0, len(names)-1)])
+        if selected not in names:
+            raise ValueError('policy selected an unregistered operator')
+        operator = self.parts['operators'][names.index(selected)]
         eligible_parents = {node.id for node in self.frontier.nodes.values()
                             if node.status in {"done", "merged"}
                             and node.eval_status == EvalStatus.OK.value
                             and node.score is not None and node.id not in unavailable}
+        from core.composition.construction_recipes import RecipeOperator
+        if self.construction_enabled and type(operator) is RecipeOperator and operator.kind == 'debug':
+            from core.composition.aide_policy import repairable
+            eligible_parents = {node.id for node in self.frontier.nodes.values()
+                if node.id not in unavailable and repairable(node, self.frontier.nodes, operator.max_debug_depth)}
         if not isinstance(parents, list) or len(parents) > 2 \
                 or any(type(parent) is not str for parent in parents) \
                 or len(set(parents)) != len(parents) \
@@ -674,6 +691,11 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                        for parent in parents):
             raise ValueError("policy selected invalid parents")
         self._commit_population_selection(selection_view, parents, eligible_parents)
+        from core.composition.aide_policy import AIDEPolicy
+        if type(self.parts['policy']) is AIDEPolicy:
+            self.store.append('aide_selection', {'candidate_id': candidate_id, 'cycle': cycle,
+                'parents': parents, 'operator': selected,
+                'rng_state': self.parts['policy'].checkpoint_state()['rng_state']})
         context = self._context(task, cycle, parents)
         if self.layered:
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
@@ -725,11 +747,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if request.context.get("retrieval") != producer_context["retrieval"] or \
                     request.context.get("context_pack_ref") != context["context_pack_ref"]:
                 raise ValueError("skill changed authoritative retrieval context")
-        names = [spec.name for spec in self.assembly.operators]
-        selected = strategy.get("operator", names[min(1 if parents else 0, len(names)-1)])
-        if selected not in names:
-            raise ValueError("policy selected an unregistered operator")
-        operator = self.parts["operators"][names.index(selected)]
+        # Keep the operator whose parent capability was already authorized.
+        # A skill can enrich a request, but cannot change this dispatch decision.
         return operator, selected, parents, context, request
 
     def _execution_operation(self, receipt, phase, *, lane="main", slot_id=None, cycle=None):

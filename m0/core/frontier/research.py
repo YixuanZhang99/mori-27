@@ -83,12 +83,16 @@ class ResearchFrontier:
     def __init__(self, metric: str = "dev/score",
                  direction: Literal["maximize", "minimize"] = "maximize",
                  sample_seed: int = 0, store: AppendOnlyStore | None = None,
-                 git_state: dict | None = None, messages: list | None = None):
+                 git_state: dict | None = None, messages: list | None = None,
+                 retain_rejected: bool = False):
         if not metric or direction not in {"maximize", "minimize"}:
             raise ValueError("frontier requires a metric and valid direction")
         self.metric = metric
         self.direction = direction
         self.sample_seed = sample_seed
+        if type(retain_rejected) is not bool:
+            raise ValueError('retain_rejected must be boolean')
+        self.retain_rejected = retain_rejected
         self.store = store
         self.git_state = dict(git_state or {})
         self.messages = list(messages or [])
@@ -264,6 +268,8 @@ class ResearchFrontier:
                    "messages": self.messages,
                    "nodes": [asdict(self.nodes[key]) for key in sorted(self.nodes)],
                    "edges": self._edge_payload()}
+        if self.retain_rejected:
+            payload['config']['retain_rejected'] = True
         checkpoint = FrontierCheckpoint(1, payload, _digest(payload))
         self._emit("frontier_checkpoint", {"payload_sha256": checkpoint.payload_sha256,
                                            "nodes": len(self.nodes),
@@ -278,7 +284,8 @@ class ResearchFrontier:
         if config.get("structure") != "tree":
             raise ValueError("checkpoint is not a tree frontier")
         frontier = cls(config["metric"], config["direction"], config["sample_seed"], store,
-                       payload.get("git_state"), payload.get("messages"))
+                       payload.get("git_state"), payload.get("messages"),
+                       retain_rejected=config.get('retain_rejected', False))
         for data in payload["nodes"]:
             node = FrontierNode(**data)
             if node.id in frontier.nodes:

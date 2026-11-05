@@ -144,7 +144,7 @@ class ConstructionPlan:
         base = {"kind", "task_desc", "parent_artifacts", "instructions", "comparison"}
         if type(recipe) is not dict or set(recipe) != base | ({'funsearch_binding'} if recipe.get('kind') == 'funsearch' else set()):
             raise ValueError("construction recipe requires explicit permitted inputs")
-        if recipe["kind"] not in {"draft", "reflective", "crossover", "funsearch"}:
+        if recipe["kind"] not in {"draft", "reflective", "crossover", "funsearch", 'debug', 'improve'}:
             raise ValueError("unsupported construction recipe")
         _text(recipe["task_desc"], "construction task")
         if type(recipe["instructions"]) is not list or any(type(x) is not str or not x.strip()
@@ -155,7 +155,7 @@ class ConstructionPlan:
                 or type(p["artifact"]) is not str for p in parents) \
                 or [p["candidate_id"] for p in parents] != candidate.parents:
             raise ValueError("recipe artifacts must match candidate parent identities in order")
-        expected = {"draft": 0, "reflective": 1, "crossover": 2}.get(recipe["kind"])
+        expected = {"draft": 0, "reflective": 1, "crossover": 2, 'debug': 1, 'improve': 1}.get(recipe["kind"])
         if expected is not None and len(parents) != expected or recipe['kind'] == 'funsearch' and len(parents) not in (1, 2):
             raise ValueError("recipe parent count differs from its construction kind")
         if recipe['kind'] == 'funsearch':
@@ -163,6 +163,8 @@ class ConstructionPlan:
                 raise ValueError('FunSearch construction requires one bound program prompt')
             _funsearch_binding(recipe['funsearch_binding'], recipe['instructions'][0], candidate.parents)
         comparison = recipe["comparison"]
+        if recipe['kind'] == 'debug' and comparison:
+            raise ValueError('debug construction cannot invent a numeric comparison')
         if type(comparison) is not dict or set(comparison) - set(candidate.parents) \
                 or any(type(value) not in (int, float) for value in comparison.values()):
             raise ValueError("comparison may contain only selected parent numeric values")

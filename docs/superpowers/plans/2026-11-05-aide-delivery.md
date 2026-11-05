@@ -10,21 +10,21 @@
 
 Files: new m0/core/composition/aide_policy.py and m0/tests/test_aide_recipe.py; existing contracts.py, runtime.py, population_runtime.py, construction_recipes.py, construction.py, defaults.py and core/frontier/research.py only where the new method requires a shared seam.
 
-- [ ] First write public Framework failures for three independent roots; later valid-best improve; failed leaf debug; depth/nonleaf/exhausted-scope exclusions; empty construction failure remains a root but is not a debug parent. Use deterministic fixture outcomes, debug_probability=1 for the repair fixture and0 for the improve fixture.
-- [ ] Add an internal structured selection of parent IDs and operator alongside the legacy list result. Select after budget filtering, validate the named operator and its parent capability before exposing inputs or dispatching. Default methods keep OK/scored-only parents.
-- [ ] Implement source-matched AIDE policy order and independent RNG. Retain original failed eval_status, no invented score; keep rejected valid/failed tree history with opt-in persisted retention. Do not add an unhandled frontier subclass or overwrite default pruning semantics.
-- [ ] Add debug/improve recipe kinds. Debug takes one failed artifact; Task 2 adds the selected parent's authorized public feedback and enforces its presence. Improve takes one successful artifact and dev score. Draft stays parentless. ConstructionPlan validates parent count and no fabricated debug comparison.
-- [ ] Validate resumed history and RNG against original run events; reject configuration/parent/RNG tampering before another provider call. Use existing recorded replay, not a second optimizer or verifier stack. Test default GEPA/FunSearch/greedy behavior and ordinary failed-parent refusal.
-- [ ] Run focused AIDE selection/recovery plus shared construction/frontier regressions and architecture axioms; commit the coherent task.
+- [x] First write public Framework failures for three independent roots; later valid-best improve; failed leaf debug; depth/nonleaf/exhausted-scope exclusions; empty construction failure remains a root but is not a debug parent. Use deterministic fixture outcomes, debug_probability=1 for the repair fixture and0 for the improve fixture.
+- [x] Add an internal structured selection of parent IDs and operator alongside the legacy list result. Select after budget filtering, validate the named operator and its parent capability before exposing inputs or dispatching. Default methods keep OK/scored-only parents.
+- [x] Implement source-matched AIDE policy order and independent RNG. Retain original failed eval_status, no invented score; keep rejected valid/failed tree history with opt-in persisted retention. Do not add an unhandled frontier subclass or overwrite default pruning semantics.
+- [x] Add debug/improve recipe kinds. Debug takes one failed artifact; Task 2 adds the selected parent's authorized public feedback and enforces its presence. Improve takes one successful artifact and dev score. Draft stays parentless. ConstructionPlan validates parent count and no fabricated debug comparison.
+- [x] Validate resumed history and RNG against original run events; reject configuration/parent/RNG tampering before another provider call. Use existing recorded replay, not a second optimizer or verifier stack. Test default GEPA/FunSearch/greedy behavior and ordinary failed-parent refusal.
+- [x] Run focused AIDE selection/recovery plus shared construction/frontier regressions and architecture axioms; commit the coherent task.
 
 ### Task 2: Source-bound L1 journal and actual public debugging feedback
 
-Files: m0/core/composition/context.py, runtime.py, defaults.py; core/policy/types.py, core/state.py for an explicit L1 activation operation if needed; zoo/mle_bench_lite/composed_domain.py; new m0/tests/test_aide_delivery.py (Linux inventory) and related memory regression tests.
+Files: m0/core/composition/context.py, runtime.py, defaults.py; zoo/mle_bench_lite/composed_domain.py; new m0/tests/test_aide_delivery.py (Linux inventory) and related memory regression tests.
 
 - [ ] Write a real sandbox/public CSV fixture with a recognizable syntax error. Assert the subsequent debug request includes its original artifact and public traceback, then produces valid predictions.
 - [ ] Add bounded actual stderr to dev-only failure feedback, frozen in domain identity. Keep raw logs in original candidate artifacts; exclude private labels, prediction metadata and final scores from feedback.
 - [ ] M5 builds one bounded run-scoped journal entry from the authoritative proposal plus public dev evidence and original receipt. Reuse M7 hypothesis_frozen=False so the original materialization retains initial rule intent and effective generated plan; bind the scored proposal's effective hypothesis to the journal. No new docstring parser or extra model call.
-- [ ] Activate a newly written source-bound L1 entry without L2 promotion. Keep mutations through StateApplier; reject activation of unrelated entries or forged provenance. AIDE absorb must avoid BestFirst's automatic L2 behavior.
+- [ ] Reuse ContextMemory.write, which already activates newly written validated L1 entries without L2 promotion. Keep writes through StateApplier; reject forged source bindings and journal payloads on restore. Do not add a new activation operation. AIDE absorb must avoid BestFirst's automatic L2 behavior.
 - [ ] Configure run scope, L1 only, no imports/knowledge, top_k covering the bounded node count and sufficient rendered context capacity. Test an older failed parent after multiple newer entries; missing selected-parent feedback must not silently become generic improve.
 - [ ] Assert actual later constructor consumption of plan marker, correct dev metric and failed traceback, plus absence of private/final/L2 material. Run memory/context/default-method regressions and actual sandbox fixture; commit.
 

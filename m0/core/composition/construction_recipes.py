@@ -19,18 +19,20 @@ def constructor_options(options):
 class RecipeOperator:
     measured_cost_units = ("token", "node", "eval_count")
 
-    def __init__(self, kind, *, prompt_version="1", metric="dev/score"):
+    def __init__(self, kind, *, prompt_version="1", metric="dev/score", max_debug_depth=2):
         self.kind, self.prompt_version, self.metric = kind, prompt_version, metric
+        self.max_debug_depth = max_debug_depth
 
     def recipe(self, request):
-        if len(request.parents) != {"draft": 0, "reflective": 1, "crossover": 2}[self.kind] \
+        if len(request.parents) != {"draft": 0, "reflective": 1, "crossover": 2, 'debug': 1, 'improve': 1}[self.kind] \
                 or len(request.evidence) != len(request.parents):
             raise ValueError("construction recipe has invalid selected parent inputs")
         comparisons = {}
         for parent, evidence in zip(request.parents, request.evidence):
             if evidence.candidate_id != parent.candidate.id:
                 raise ValueError("recipe parent differs from its comparison evidence")
-            comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+            if self.kind != 'debug':
+                comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
         instruction = request.context.get("instruction", "")
         if type(instruction) is not str:
             raise ValueError("recipe instruction must be configured text")
