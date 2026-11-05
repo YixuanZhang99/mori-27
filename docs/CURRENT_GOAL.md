@@ -13,4 +13,4 @@
 
 应用 Goal 控件：本轮开始时仍为 paused，现有工具只提供查询、创建和有限状态更新，不能编辑未完成目标正文或将 paused 恢复为 active；旧目标尚未完成，不能为更换目标而假报 complete。本页不代表控件已更新，实际执行以最新用户批准为准。
 
-执行进度：PR #4 已合入 main `9648aa3`，两轮候选 Mac/Linux/MLE 检查通过；10 个已合入旧 main 的历史分支已清理。GEPA 已从新 main 单独开工，公共入口、完整本地检查与独立审查修复完成，真实小试跑待执行。应用 Goal 查询仍返回 paused，仓库记录不冒充控件已恢复。
+执行进度：PR #4 已合入 main `9648aa3`，候选与合并后 Mac/Linux/MLE 检查通过；旧串联 PR 已处理，远端已收敛至 main 加一条 GEPA 方法分支。GEPA 公共入口、配对反思、冻结 test 与记录回放已接通，真实试跑及失败见 [GSM8K 交付记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)。本轮交付 PR #5 合入后，下一项是 C02 FunSearch 的冻结留出评估和真实程序搜索，不再扩建外围 supervisor。应用 Goal 查询仍为 paused，仓库记录不冒充控件已恢复。

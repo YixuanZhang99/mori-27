@@ -1,0 +1,110 @@
+{
+  "seed": 2,
+  "source_commit": "d950a4f76d5316a26e4619100ee59bd879266af5",
+  "dataset_identity": "sha256:366456d33df19a0b9c7b3b19a066c3fdb7a5ae9a69eaa50c8399ed05529c8c4f",
+  "max_proposals": 1,
+  "model_alias": "deepseek-flash",
+  "immutable_snapshot_verified": false,
+  "max_completion_tokens": 16384,
+  "final_audit_state": "evaluation_failed",
+  "cycles": 2,
+  "validation_accuracy": 0.953125,
+  "final_test": {
+    "state": "failed_to_run",
+    "accuracy": null,
+    "scored_item_count": 119,
+    "failure": "solver failed: RuntimeError"
+  },
+  "initial_iid_rs_validation": {
+    "correct": 61,
+    "count": 64,
+    "accuracy": 0.953125
+  },
+  "paired_decisions": [
+    {
+      "candidate_id": "1e21a4ab4919efe7aa43a5de1f7dfdd1cec7b7378245285f8d40918bb6e65e91",
+      "parent_id": "722488aa5e384ee31010b0f0b357c10123360e17416c94148739170ae5a2c6d1",
+      "accepted": false,
+      "item_ids": [
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000003",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000021",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000039",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000049",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000015",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000055",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000009",
+        "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000018"
+      ],
+      "parent_metrics": {
+        "train/score": 1.0
+      },
+      "child_metrics": {
+        "train/score": 1.0
+      }
+    }
+  ],
+  "provider_calls": 267,
+  "tokens": {
+    "prompt_tokens": 81407,
+    "completion_tokens": 93282,
+    "total_tokens": 174689
+  },
+  "cost_upper_micro_cny": 909070,
+  "cost_by_lane_micro_cny": {
+    "control": 157298,
+    "main": 751772
+  },
+  "invoice_verified": false,
+  "replay_passed": true,
+  "source_journal_sha256": "31c256b80b755ee386905dadea5d37bbc3d2782ad811ca4785a8463ea0b302f5",
+  "event_counts": {
+    "hierarchical_budget": 34,
+    "run_start": 1,
+    "governed_component": 19,
+    "composed_checkpoint": 5,
+    "governed_control_started": 1,
+    "construction_started": 3,
+    "composed_provider_started": 267,
+    "composed_provider_completed": 267,
+    "construction_outcome": 3,
+    "materialization_completed": 3,
+    "governed_operator_outcome": 3,
+    "composed_operation_measurement": 11,
+    "governed_evaluation_started": 5,
+    "governed_evaluation_completed": 5,
+    "composed_physical_evidence": 5,
+    "governed_control_terminal": 1,
+    "composed_cycle_started": 2,
+    "gepa_parent_selection": 2,
+    "composed_context": 2,
+    "composed_evidence": 2,
+    "composed_decision": 2,
+    "state_mutation": 9,
+    "gepa_public_verdicts": 1,
+    "paired_evaluation_plan": 1,
+    "paired_evaluation_decision": 1,
+    "metric_final_frozen": 1,
+    "metric_final_completed": 1,
+    "replay_certificate": 1
+  },
+  "provider_failures": [
+    {
+      "integrity_reason": "incomplete_output",
+      "finish_reason": "length",
+      "usage": {
+        "completion_tokens": 16384,
+        "completion_tokens_details": {
+          "reasoning_tokens": 16384
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 324,
+        "prompt_tokens": 324,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "total_tokens": 16708
+      },
+      "response_sha256": "07105a620c73bc9f20291a83ff1439a03a1624e369e9b9c67065802ff3d558db"
+    }
+  ]
+}

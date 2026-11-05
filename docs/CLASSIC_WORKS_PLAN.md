@@ -1,7 +1,7 @@
 # 经典工作接入：当前路线与文档导航
 
 日期：2026-11-05。状态：**用户已批准执行，逐项验收；不是全部实现完成声明**。
-代码核对基线：`18400ad5e6b671beb82b19763c5b4ea52793519e`。
+规划时源码核对基线：`18400ad5e6b671beb82b19763c5b4ea52793519e`；已执行的分支收敛见第 6 节。
 用户已批准分支收敛及从 GEPA 起逐项施工；当前执行目标及应用 Goal 控件限制见 [CURRENT_GOAL](CURRENT_GOAL.md)。
 
 ## 1. 本轮结论
@@ -58,7 +58,7 @@
 
 | 顺序 | 工作 spec | 当前确认证据 | 必须补的闭环 |
 | --- | --- | --- | --- |
-| 1 | [GEPA](specs/classic/GEPA.md) | 实例级选择、合成公开入口示例；旧 reflective profile 是子集 | 同批父子比较、反思轨迹、独立 validation 表、真实 prompt 任务 |
+| 1 | [GEPA](specs/classic/GEPA.md) | 同批父子反思、validation 实例赢家、冻结 test、计量回放已接通；[真实 GSM8K 记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)单列成功与失败 | 更充分的多提案搜索、等预算对照与公开区间复现 |
 | 2 | [FunSearch](specs/classic/FUNSEARCH.md) | signature/island、构造、OR3 开发集固定程序评分 | 最小真实搜索、冻结优胜程序、独立留出评分；不整包导入临时 supervisor |
 | 3 | [AIDE](specs/classic/AIDE.md) | 通用树/算子/MLE 任务组件；未找到完整命名 recipe 的验收包 | draft 扇出、buggy debug 路由、best-first、validation best |
 | 4 | [Arbor](specs/classic/ARBOR.md) | llm_cycles、假设/上下文、记忆、layered gate 组件 | 六步循环、insight 上溯与实际消费、gate 接纳/拒绝轨迹 |
@@ -79,35 +79,20 @@
 3. **小规模实测**：真实模型 + 固定数据，报告所有预先声明 seed，包括失败，保存逐项成绩和实际成本。>=3 seeds 才报告均值与标准差；单 seed 只叫 smoke。
 4. **公开区间复现**：匹配参考任务/模型/预算或解释偏差，独立达到公开区间；不能由第 3 步自动升级。
 
-首批验收目标是 GEPA/FunSearch 达到 2、3，其他按序闭环；完整 v1.0 仍须原 RUBRIC。真实预算继续沿用用户授权的累计 ¥200，共享账本不重置。本轮不消费模型预算。
+首批验收目标是 GEPA/FunSearch 达到 2、3，其他按序闭环；完整 v1.0 仍须原 RUBRIC。真实预算继续沿用用户授权的累计 ¥200，共享账本不重置。真实调用继续记入同一原始账本；不另开预算。
 对照必须与方法共用相同总资源口径，报告治理占用，不能给主方法和 control 各算一份“同预算”。
 
-## 6. 分支决定
+## 6. 分支决定与已执行结果
 
-2026-11-05 fetch 后：默认分支是 **main**，不是 master。
+稳定入口统一为 **main**。2026-11-05，[PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 已用 merge commit `9648aa3` 整合既有开发链，保留原提交历史；候选两轮检查及 [合并后 main 检查](https://github.com/YixuanZhang99/mori-27/actions/runs/41964500311) 的 macOS、Linux v75、MLE jobs 全部通过。
 
-| 引用 | 核实状态 | 处理决定 |
-| --- | --- | --- |
-| `main` / `49be71e` | 现开发分支祖先，落后 108 commits | 后续唯一稳定入口，需推进 |
-| `codex/m7-construction` / `18400ad` | 相对 main：305 files，51087 additions，346 deletions；已有 push/PR Linux v75 success | 当前唯一整合分支，本轮文档写在这里 |
-| PR #1 → #2 → #3 → #4 | 四层串联；#4 仍 Draft，base 是 invocation-lifecycle | 收敛为 #4 → main 的一份整合 PR，不继续叠分支 |
-| abstraction-stage-1…8 / safety / evaluation-context | 内容已在 main | 集成成功后可清理名字；先保留回滚 tag/bundle |
-| mle-composed / resident / currency / invocation | 全部内容已在 m7-construction | 合入后关闭 #1–#3 为 superseded，再清理祖先分支 |
-| `origin/pr-4-merge` / `8220bb1` | 有 1 个非祖先 merge commit；树与其第二父 `457987e` 相同，无额外文件改动 | 历史 PR 合并检查引用，备份后可清理；不能当祖先提交盲删 |
-| 本机 `/tmp/mori27-classic-integrate` / `4df353f` | 未推的 FunSearch 试验历史 | 保留 bundle；只按 FunSearch spec 选取必要改动，不整包合入 |
+- PR #1 随完整提交链进入 main 后被 GitHub 标为 merged；被取代的 PR #2、#3 已关闭。
+- 15 条已被 main 包含的历史开发分支已按精确 SHA 核对后清理；历史 `pr-4-merge` 引用也不再出现在远端。
+- 远端收敛核对时仅剩 `main` 与 `codex/classic-gepa`。本轮方法交付见 [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5)，其合入后结束该分支；后续从更新后的 main 开 `codex/classic-funsearch`。
+- 回滚标签 `archive/pre-classic-main-20261105`、`archive/pre-classic-development-20261105` 与已验证本地 bundle 保留。保留有未提交文件的本地工作区，不用远端分支清理覆盖用户文件。
+- 未推的 `/tmp/mori27-classic-integrate@4df353f` FunSearch WIP 保留备份。已核对其额外 supervisor、价格门禁等不属 C02 最小缺口，不能整包导入。
 
-**要合并，但本次规划不直接执行 merge、retarget、close 或 delete。**
-已核实 [18400ad push CI](https://github.com/YixuanZhang99/mori-27/actions/runs/41943396585) 和 [PR CI](https://github.com/YixuanZhang99/mori-27/actions/runs/41943406704) 成功；这还不是改 base 后的 main 合并验收。
-
-下一轮先完成一次整合：
-
-1. 冻结整合候选与 main 回滚点；修正 PR #4 的 base/title/body，描述实际已交付范围。
-2. 对最终候选跑现有 Linux 验收，补 `.github/workflows/ci.yml` 的 macOS `make check`（不运行 Linux 专属测试），满足 [原合入门槛](ABSTRACTION_ALIGNMENT.md)。macOS 结果目前缺失，不能拿 Linux 绿灯代替。
-3. 审查 main 到候选的完整差异和新合并检查。使用 merge commit 保留既有 SHA 与证据关系，不 squash、不 force push。
-4. 合并成功且主线检查通过，再关闭被取代的 PR、备份后清理已被 main 包含的历史分支；不删除孤立工作。
-5. 从新 main 开 `codex/classic-gepa`；以后每个方法一条短期分支、一个 PR，合入即结束。最多 main + 一条活跃方法分支。
-
-若 macOS runner 暂不可用，可继续在现整合分支完成首个方法规格/离线工作，但 main 合并保持待检查，不偷偷降低门槛。
+以后固定为：一个方法 spec → 一个短期分支/PR → 公共入口与真实结果 → 检查通过合入 → 下一项。最多 main 加一条活跃方法分支，不再叠串联 PR。
 
 ## 7. 执行节奏
 

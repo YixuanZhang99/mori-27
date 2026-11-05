@@ -42,7 +42,7 @@ item ID 固定为 `gsm8k:<dataset_revision>:<original_split>:<zero-padded origin
 - G5：反思 prompt 实际包含本批 rollout 来源；空反思不能作为完成；记录回放不调用模型。
 
 current：`PYTHONPATH=m0 python m0/examples/gepa_instance_offline.py`，只验证选择机制。
-current（工作区实现，尚待合入验收）：`PYTHONPATH=m0 python -m zoo.gepa_gsm8k.runner --mode fixture --output <new-dir>`；真实运行显式 `--mode live --manifest <frozen-json>`，相同命令契约由 COMMON 继承。
+current（配对反思入口）：`PYTHONPATH=m0 python -m zoo.gepa_gsm8k.runner --mode fixture --output <new-dir>`；真实运行显式 `--mode live --manifest <frozen-json>`，相同命令契约由 COMMON 继承。
 报告：accuracy、逐题结果、evaluation 次数、生成/评估 tokens、各 seed 搜索与 IID-RS 结果；不强行要求提高准确率，不把小子集结果关闭 B4。
 
 ## 冻结的数据流与最小接缝
@@ -66,3 +66,8 @@ current（工作区实现，尚待合入验收）：`PYTHONPATH=m0 python -m zoo
 施工核对补充：PopulationFrontier 的既有抽样票据只适用于它自己的 sampler；GEPA 接线另记由 InstanceFrontier 可重算的供亲票据，恢复时核对实际成员/预算资格。Domain 的 `evaluation_contexts` 声明 train/dev/final 的独立固定身份，整份数据身份另外进入 profile。`metric_final` 准入插件只按 dev 选 incumbent，复用既有 final 预算操作在搜索冻结后做一次最终评分，不添加 admission split，也不把 final 分数反馈给搜索。它不宣称已实现原三层治理门槛。
 
 首版 live 有一个初始独立 IID-RS control（仅 validation），暂不宣称等预算 IID-RS 对照或论文分数复现。完整多 seed 等预算对照仍是 C01 实测交付的剩余项，不因 fixture 通过而关闭。所有具体差异见 `m0/zoo/gepa_gsm8k/PROVENANCE.md`。
+
+
+## 本轮真实交付边界
+
+[2026-11-05 GSM8K 报告](../../../research/experiments/2026-11-05-gepa-gsm8k/README.md)记录 seeds 0/1/2 的全部尝试，每个 seed 只做一次反思提案，属于完整训练/validation/冻结 test 路径的小规模运行验证。首个 smoke 的输出上限为 4096，观察到截断失败后后两次明确改为 16384；不同配置不合并均值。失败对照、未完成终评及所有已结算费用均保留，不复跑挑最好成绩。本轮不关闭更充分搜索、同预算对照或原论文公开区间条款。

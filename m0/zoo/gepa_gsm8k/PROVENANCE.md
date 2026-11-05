@@ -42,7 +42,7 @@ uv run --project m0 --locked python -m zoo.gepa_gsm8k.runner \
 uv run --project m0 --locked python -m zoo.gepa_gsm8k.runner \
   --mode live --manifest /path/to/pilot/manifest.json \
   --spending-ledger /path/to/existing-campaign.db \
-  --seed 0 --max-proposals 10 --output /path/to/new-gepa-run
+  --seed 0 --max-proposals 10 --max-completion-tokens 16384 --output /path/to/new-gepa-run
 ```
 
 `method-report.json`, `profile.json`, the existing execution journal and its
@@ -52,3 +52,7 @@ by the existing provider audit. Every solver, reflection and control request
 uses the same cumulative CNY authority. Replay consumes recorded outcomes.
 `--resume` restores the same run; extending a search after final selection is
 frozen is rejected.
+
+Observed live runs and failures are preserved in the [GSM8K report](../../../research/experiments/2026-11-05-gepa-gsm8k/README.md). A 4,096-token allowance produced a reasoning-only truncated response in the first smoke; subsequent attempts used an explicitly frozen 16,384-token allowance. A failed response stops that evaluation and does not receive a full-set accuracy. A single-attempt M7 constructor can also reject malformed model output; failed controls remain visible. Increasing the allowance is not a guarantee of completion.
+
+Fixture mode can run from an installed package or an isolated source copy without Git, recording null source fields. Live mode continues to require a clean Git checkout before any provider dispatch.

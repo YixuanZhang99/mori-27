@@ -36,8 +36,8 @@
 - [x] 保存 main/候选回滚引用；核对 `git merge-base --is-ancestor origin/main origin/codex/m7-construction`。
 - [x] 补 macOS `make check` job，保留现 Linux job 与测试；验证 portable 测试明确排除 Linux、无 skip/xfail 偷过。
 - [x] 更新 #4 为唯一面向 main 的整合 PR；正文写真实范围和剩余缺口，移除过期“final acceptance pending”描述。
-- [ ] 最终候选 Mac + Linux 检查通过，并审查 main 到候选完整差异，再保留历史合并；main 检查通过后处理 #1–#3 和祖先分支。
-- [ ] 更新状态页，明确唯一稳定 main 与下一条 `codex/classic-gepa`；提交/推送并保留回滚点。
+- [x] 最终候选 Mac + Linux 检查通过，并审查 main 到候选完整差异，再保留历史合并；main 检查通过后处理 #1–#3 和祖先分支。
+- [x] 更新状态页，明确唯一稳定 main 与下一条 `codex/classic-gepa`；提交/推送并保留回滚点。
 
 ### Task 2：冻结 GEPA 的最小协议差距
 
@@ -65,9 +65,9 @@
 **Files:** C01 runner、`research/experiments/<date>-gepa-gsm8k/`、README 方法矩阵。
 **Interfaces:** 输入为冻结 manifest 和已有凭据位置；输出逐 seed 原始结果、方法身份与可重算 summary，不含密钥。
 
-- [ ] 先验证 fixture/live 模式显式切换和成本预检；确认原累计账本剩余额度，不重置。
-- [ ] 一个 smoke 后按预声明三 seed 执行，包含失败；模型别名与版本未知如实记录。
-- [ ] 冻结候选后一次 test 评分，输出 accuracy/成本/对照/差异，不把新结果拼接到旧 MLE 报告。
+- [x] 先验证 fixture/live 模式显式切换和成本预检；确认原累计账本剩余额度，不重置。
+- [x] 一个 smoke 后按预声明三 seed 执行，包含失败；模型别名与版本未知如实记录。
+- [x] 冻结候选后一次 test 评分，输出 accuracy/成本/对照/差异，不把新结果拼接到旧 MLE 报告。
 - [ ] 在方法结果上审查 C01、一次现有合入检查，通过后合并；若结果不提升仍可交付“无提升”报告，公开区间复现状态保持未通过。
 
 ### Task 5：FunSearch、其余方法顺序推进
