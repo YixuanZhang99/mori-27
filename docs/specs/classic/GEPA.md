@@ -1,6 +1,6 @@
 # C01 — GEPA 反思式 prompt 优化
 
-状态：首项规格草案；继承 [COMMON](COMMON.md)。目标：从完整公共入口跑通单组件 GEPA，第一任务选 GSM8K 小子集；小子集不用于宣称原论文公开区间。
+状态：规格冻结（2026-11-05，C01 单组件 pilot）；继承 [COMMON](COMMON.md)。目标：从完整公共入口跑通单组件 GEPA，第一任务选 GSM8K 小子集；小子集不用于宣称原论文公开区间。
 
 ## 依据、已有与缺口
 
@@ -24,7 +24,7 @@
 
 GSM8K pilot：按 item ID 排序，将官方 train 前 64 题作反思训练、随后 64 题作 validation，官方 test 前 128 题仅终评；实际数据 revision、内容 hash 在运行 manifest 冻结。minibatch=8，search seeds=0/1/2，最多 10 次提案，成本限额可提前停；这些是本仓库小试跑参数，不是论文参数。反思与 solver 可同一服务，所有调用同账本。
 item ID 固定为 `gsm8k:<dataset_revision>:<original_split>:<zero-padded original row index>`，先对完整源 split 编号再切分/抽批，不能用当前 minibatch 下标重编号。当前 `core/tasks/gsm8k.py` 的列表内编号不能直接当此稳定身份；只复用其答案解析和评分规则。每份 manifest 同时绑定行内容 hash，防止同 ID 替换内容。
-配对 acceptance 的 strict/tie 行为须从固定上游源码提取成测试后冻结；不能沿用默认 metric gate 猜测。该项未完成前规格状态不升为“冻结”。
+配对规则固定为 pinned `StrictImprovementAcceptance`：同一批次的子代分数和严格大于父代才接受；相等或更低均拒绝。对应 G2 测试必须覆盖三个分支。
 
 ## 最小施工
 
@@ -42,5 +42,32 @@ item ID 固定为 `gsm8k:<dataset_revision>:<original_split>:<zero-padded origin
 - G5：反思 prompt 实际包含本批 rollout 来源；空反思不能作为完成；记录回放不调用模型。
 
 current：`PYTHONPATH=m0 python m0/examples/gepa_instance_offline.py`，只验证选择机制。
-proposed：`PYTHONPATH=m0 python -m zoo.gepa_gsm8k.runner --mode fixture --output <new-dir>`；真实运行显式 `--mode live --manifest <frozen-json>`，相同命令契约由 COMMON 继承。
+current（配对反思入口）：`PYTHONPATH=m0 python -m zoo.gepa_gsm8k.runner --mode fixture --output <new-dir>`；真实运行显式 `--mode live --manifest <frozen-json>`，相同命令契约由 COMMON 继承。
 报告：accuracy、逐题结果、evaluation 次数、生成/评估 tokens、各 seed 搜索与 IID-RS 结果；不强行要求提高准确率，不把小子集结果关闭 B4。
+
+## 冻结的数据流与最小接缝
+
+参考源码：`strategies/acceptance.py`、`strategies/batch_sampler.py`、`proposer/reflective_mutation/reflective_mutation.py`、`core/engine.py`（以上均为开头固定 revision）。
+本 pilot 为 adapted：单 prompt、merge 关闭、skip_perfect_score 关闭；实例赢家等分去冗余沿用本仓库确定性插入顺序。批次采样使用独立 `Random(seed)` 流；不宣称与上游全局随机流逐位一致。训练集必须整除 minibatch，首版不实现非整除补齐或多提案并行抽批。
+
+数据来源固定为 [openai/grade-school-math@3101c7d](https://github.com/openai/grade-school-math/tree/3101c7d5072418e28b9008a6636bde82a006892c)。源 train/test SHA256 分别为 `17f347dc51477c50d4efb83959dbb7c56297aba886e5544ee2aaed3024813465`、`3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14`。
+
+一轮（例：cycle=1，父代 P，训练 ID 批 B）：
+1. policy 只读 validation 的逐题分数，选 P；GEPA operator 的纯 `evaluation_plan(request)` 返回通用 `PairedEvaluationPlan`，绑定 B 和 `EvalRequest(split_id="train", fidelity=<批次身份>)`。批次按 seed/轮次确定，计划在调用前进入现有日志，恢复验证同一计划。
+2. runtime 为 P/B 预留独立 `training` operation，调用现有 `_evaluate_physical`；public train rollout/错误与来源引用成为反思配方输入，validation 原始错误不进入反思。
+3. M7 生成 C，只计生成成本；runtime 再为 C/B 预留 `training` operation，用完全相同请求评估。
+4. 严格改进才进入原有 `dev` operation（该任务的完整 validation）。拒绝时保留实际 train evidence、成本和明确拒绝决策；不伪造 validation 评估。训练结果只有 `train/score`，不含 frontier 的 `dev/score`，因此不获得供亲资格。
+5. 完整 validation 结果更新 instance frontier；PopulationFrontier 容量设为至少初始候选加最多提案数，避免有效实例赢家因均分未胜出而丢失。incumbent 的全局均分判定与供亲资格独立。
+6. 搜索结束冻结选中 artifact 后才评分 test；test 标签不参与前述任何方法输入，所有 solver/reflection 调用继续同一计量 provider 和累计账本。
+
+通用变更限于：`PairedEvaluationPlan`、`training` 预算操作（明确 train split）、在既有 hierarchical cycle 中插入父代/子代筛选调用。公开 Framework API 不变，不添加第二套主循环。拒绝、错误、预算不足均保留已知费用；不能把未知费用当零。现有 GEPA 公共 verdict 接线仅接纳 dev 证据，恢复时同样排除 train 记录。
+
+
+施工核对补充：PopulationFrontier 的既有抽样票据只适用于它自己的 sampler；GEPA 接线另记由 InstanceFrontier 可重算的供亲票据，恢复时核对实际成员/预算资格。Domain 的 `evaluation_contexts` 声明 train/dev/final 的独立固定身份，整份数据身份另外进入 profile。`metric_final` 准入插件只按 dev 选 incumbent，复用既有 final 预算操作在搜索冻结后做一次最终评分，不添加 admission split，也不把 final 分数反馈给搜索。它不宣称已实现原三层治理门槛。
+
+首版 live 有一个初始独立 IID-RS control（仅 validation），暂不宣称等预算 IID-RS 对照或论文分数复现。完整多 seed 等预算对照仍是 C01 实测交付的剩余项，不因 fixture 通过而关闭。所有具体差异见 `m0/zoo/gepa_gsm8k/PROVENANCE.md`。
+
+
+## 本轮真实交付边界
+
+[2026-11-05 GSM8K 报告](../../../research/experiments/2026-11-05-gepa-gsm8k/README.md)记录 seeds 0/1/2 的全部尝试，每个 seed 只做一次反思提案，属于完整训练/validation/冻结 test 路径的小规模运行验证。首个 smoke 的输出上限为 4096，观察到截断失败后后两次明确改为 16384；不同配置不合并均值。失败对照、未完成终评及所有已结算费用均保留，不复跑挑最好成绩。本轮不关闭更充分搜索、同预算对照或原论文公开区间条款。

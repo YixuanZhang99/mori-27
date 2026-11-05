@@ -1,0 +1,47 @@
+{
+  "source": {
+    "repository": "openai/grade-school-math",
+    "revision": "3101c7d5072418e28b9008a6636bde82a006892c",
+    "files": {
+      "LICENSE": {
+        "sha256": "86bbb73e855821d7c401912fd4bf82e34313e6e3b6fd6f909f2b6cc9e209a53b",
+        "bytes": 1062
+      },
+      "grade_school_math/data/train.jsonl": {
+        "sha256": "17f347dc51477c50d4efb83959dbb7c56297aba886e5544ee2aaed3024813465",
+        "bytes": 4166206
+      },
+      "grade_school_math/data/test.jsonl": {
+        "sha256": "3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14",
+        "bytes": 749738
+      }
+    }
+  },
+  "splits": {
+    "train": {
+      "count": 64,
+      "sha256": "e2464786a4c19d71ccb129395f9594bfa8ef739d575f9081ff7b843d0f6fd407",
+      "first_id": "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000000",
+      "last_id": "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000063"
+    },
+    "validation": {
+      "count": 64,
+      "sha256": "f57d04efa0144991cc106c0ff79a39caf68783764f1227c65a27b20f0d137813",
+      "first_id": "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000064",
+      "last_id": "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000127"
+    },
+    "test": {
+      "count": 128,
+      "sha256": "59595c22b09f3e6db624b8ac036a6ac7c72676290a8eb30ba68f6828c18da886",
+      "first_id": "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:test:000000",
+      "last_id": "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:test:000127"
+    }
+  },
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "minibatch_size": 8,
+  "max_proposals": 10
+}

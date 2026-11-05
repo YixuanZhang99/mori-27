@@ -307,6 +307,20 @@ class MetricAdmission:
                         else "objective does not exceed margin")
 
 
+def _final_metric_options(options):
+    from core.composition.final_evaluation import final_metric_options
+    final_metric_options(options)
+    _objective_options({k: v for k, v in options.items() if k != 'final_request'}, margin=True)
+
+
+class FinalMetricAdmission(MetricAdmission):
+    def __init__(self, *, final_request, **options):
+        from core.executor.types import EvalRequest
+        _final_metric_options(dict(options, final_request=final_request))
+        super().__init__(**options)
+        self.final_request = EvalRequest(**final_request)
+
+
 def _provided(context, options):
     if not callable(context.llm):
         raise ValueError("provided provider must be callable")
@@ -388,6 +402,11 @@ def default_registry():
     registry.register('operator', 'funsearch', lambda ctx, opts: FunSearchRecipeOperator(**opts),
         validate_options=lambda opts: _options(opts, {'metric'}),
         execution={'schema_version': 1, 'contract': 'recipe_v1'})
+    from core.composition.gepa_recipe import GEPAReflectiveRecipe, gepa_recipe_options
+    registry.register('operator', 'gepa_reflective', lambda ctx, opts: GEPAReflectiveRecipe(**opts),
+        validate_options=gepa_recipe_options, execution={'schema_version': 1, 'contract': 'recipe_v1'})
+    registry.register('admission', 'metric_final', lambda ctx, opts: FinalMetricAdmission(**opts),
+                      validate_options=_final_metric_options)
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),
                       validate_options=_skill_options, execution={"schema_version": 1, "contract": "projected_skill_v1"})
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(

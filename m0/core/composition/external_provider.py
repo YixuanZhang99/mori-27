@@ -113,7 +113,7 @@ class GovernedCallContext(_JSONPort):
         if type(value["ordinal"]) is not int or value["ordinal"] < 0:
             raise ValueError("external provider ordinal must be a nonnegative integer")
         operation = value["operation"]
-        if operation not in {"planning", "operator", "dev", "dev_baseline", "anchor", "admission", "final"}:
+        if operation not in {"planning", "operator", "dev", "dev_baseline", "training", "anchor", "admission", "final"}:
             raise ValueError("external call requires a known physical operation")
         phase = operation if operation in {"planning", "operator"} else "evaluation"
         if value["phase"] != phase:
@@ -124,7 +124,7 @@ class GovernedCallContext(_JSONPort):
                 raise ValueError("control call cannot claim a main account or operation")
         elif value["lane"] == "main":
             allowed = {"overhead"} if operation == "planning" else {"reeval"} if operation in {
-                "dev_baseline", "anchor", "admission", "final"} else {"explore", "exploit", "reeval"}
+                "dev_baseline", "training", "anchor", "admission", "final"} else {"explore", "exploit", "reeval"}
             if account not in allowed:
                 raise ValueError("main call account differs from physical operation")
         if value["session_id"] != external_session_id(value["logical_run_id"], value["lane"],

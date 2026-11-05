@@ -90,6 +90,10 @@ class PopulationRuntime:
             physical._data = _empty_state()
         current_cycle, current_attempt, draws, observed, finalized = None, -1, {}, set(), {}
         completed_attempts, aborted_attempts = set(), set()
+        from core.composition.gepa_policy import GEPAInstancePolicy
+        from core.frontier.gepa import InstanceFrontier
+        policy = self.parts['policy']
+        instance_draws = InstanceFrontier(list(policy.items), seed=policy.seed) if type(policy) is GEPAInstancePolicy else None
 
         def direction(identifier, visiting=frozenset()):
             if identifier in visiting or identifier not in proposals:
@@ -108,6 +112,16 @@ class PopulationRuntime:
                 if value['cycle'] != current_cycle:
                     raise ValueError('population cycle abort has no matching active attempt')
                 aborted_attempts.add(current_attempt)
+            elif kind == 'gepa_public_verdicts' and instance_draws is not None:
+                instance_draws.offer(value['candidate_id'], value['verdicts'])
+            elif kind == 'gepa_parent_selection' and instance_draws is not None:
+                allowed = {identifier for identifier in authority.eligible_parent_ids()
+                           if physical is None or physical.should_continue(direction(identifier))}
+                selected = [instance_draws.select(eligible=allowed)] if allowed else []
+                if current_cycle is None or current_attempt in draws or value != {
+                        'eligible': sorted(allowed), 'selected': selected}:
+                    raise ValueError('GEPA population parent draw differs from durable instance evidence')
+                draws[current_attempt] = selected
             elif kind == 'population_sampling_committed':
                 if current_cycle is None or current_attempt in draws \
                         or current_attempt in completed_attempts | aborted_attempts or type(value) is not dict \
@@ -171,7 +185,24 @@ class PopulationRuntime:
         allowed = set(eligible_parents).intersection(self.frontier.eligible_parent_ids())
         if any(identifier not in allowed for identifier in parents):
             raise ValueError('policy selected a candidate outside the retained population')
-        self.frontier.commit_selection(parents, view.sampling_receipts, allowed_ids=allowed)
+        from core.composition.gepa_policy import GEPAInstancePolicy
+        if type(self.parts['policy']) is GEPAInstancePolicy:
+            from core.frontier.gepa import InstanceFrontier
+            policy = self.parts['policy']
+            authority = InstanceFrontier(list(policy.items), seed=policy.seed)
+            for row in self.store.read():
+                value = row['payload']
+                if row['kind'] == 'gepa_public_verdicts':
+                    authority.offer(value['candidate_id'], value['verdicts'])
+                elif row['kind'] == 'gepa_parent_selection' and value['eligible']:
+                    if [authority.select(eligible=set(value['eligible']))] != value['selected']:
+                        raise ValueError('GEPA parent selection history differs')
+            selected = [authority.select(eligible=allowed)] if allowed else []
+            if selected != parents or authority.checkpoint_state() != policy.instance_frontier.checkpoint_state():
+                raise ValueError('GEPA parent draw differs from authoritative instance evidence')
+            self.store.append('gepa_parent_selection', {'eligible': sorted(allowed), 'selected': selected})
+        else:
+            self.frontier.commit_selection(parents, view.sampling_receipts, allowed_ids=allowed)
 
     def _finalize_frontier_admission(self, candidate_id, decision, decision_ref):
         if isinstance(self.frontier, PopulationFrontier):

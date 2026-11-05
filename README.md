@@ -16,7 +16,14 @@
 
 全部 18 份提交有效。seed 1 和 seed 2/3 分为两个冻结批次，第二批在看到第一批结果后启动；模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照。这里只覆盖三个任务，不代表完整 MLE-Bench Lite 或统计显著结果。逐 seed 成绩、批次差异、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md)。
 
-经典方法开发进展：GEPA 实例级选择和 FunSearch 种群机制已有可运行的离线示例；FunSearch 还可对固定 OR3 开发集执行隔离评分。它们目前均属于**机制与开发集验证**，并非完整论文复现或真实模型 benchmark 成绩。执行命令、参考版本及未完成范围分别见 [GEPA 实验记录](research/experiments/2026-11-05-gepa-frontier/README.md)和 [FunSearch 实验记录](research/experiments/2026-11-05-funsearch-population/README.md)。
+经典方法开发进展：GEPA 已通过公共 Framework 接通配对反思、validation 实例赢家、冻结 test、费用计量与记录回放，并在 GSM8K 小子集上进行了真实模型试跑；[运行报告](research/experiments/2026-11-05-gepa-gsm8k/README.md)保留所有预声明 seed 的成功与失败。FunSearch 目前已有离线种群/构造示例与固定 OR3 开发集隔离评分，下一步补真实搜索和冻结留出评估。两者均不宣称完整论文复现，GEPA 小试跑也不构成优化收益证据。
+
+GEPA 新入口（默认离线、不访问模型）：
+
+```sh
+uv run --project m0 --locked python -m zoo.gepa_gsm8k.runner \
+  --mode fixture --max-proposals 2 --output /tmp/gepa-fixture
+```
 
 ### 方法和证据范围
 
@@ -24,14 +31,14 @@
 | --- | --- | --- | --- |
 | MLE 搜索（baseline / full） | 三个公开任务；M7 | [真实模型、三个 seed 的官方评分](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md) | 完整 MLE-Bench Lite；两种搜索方法不同，不能隔离治理效果 |
 | 同搜索治理强度对照 | 三个公开任务、单 seed；M7 | [真实模型官方评分和总费用上界](research/experiments/2026-11-05-m7-governance-intensity/README.md) | 更大样本、候选接纳数与单独控制开销；不能直接视为有无治理的因果比较 |
-| GEPA 实例级候选选择 | 合成案例；现有 composed 与 M7 规划会话 | [离线组件和公开入口示例](research/experiments/2026-11-05-gepa-frontier/README.md) | 反思、独立验证集与真实任务 benchmark；完整论文复现 |
+| GEPA 单组件 prompt 优化 | GSM8K train/validation/test；M7 | [真实试跑、逐题成绩与失败](research/experiments/2026-11-05-gepa-gsm8k/README.md)；[运行命令](m0/zoo/gepa_gsm8k/PROVENANCE.md) | 更充分的多提案搜索、同配置多 seed 等预算对照与公开区间复现 |
 | FunSearch 种群与程序构造 | 合成机制检查；OR3 开发集使用 M7 | [离线机制和固定参考程序的隔离评分](research/experiments/2026-11-05-funsearch-population/README.md) | 真实模型搜索、留出集评分与完整论文复现 |
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
 ## 先读这里
 
-- **[经典工作接入路线与分支决定](docs/CLASSIC_WORKS_PLAN.md)**：2026-11-05 本轮规划入口，包含文档优先级、九模块职责、八项工作规格、扩展目录和 main 整合顺序。规格草案不等于已实现；旧 Goal 保持暂停。
+- **[经典工作接入路线与分支决定](docs/CLASSIC_WORKS_PLAN.md)**：2026-11-05 本轮规划入口，包含文档优先级、九模块职责、八项工作规格、扩展目录和 main 整合顺序。已获准按路线施工；各方法状态单列，当前进度与 Goal 状态见[当前执行目标](docs/CURRENT_GOAL.md)。
 - [持续开发接续记录](docs/CONTINUATION_2026-11-04.md)：当前分支、已验证基线、真实试跑前置条件、提交与复审节奏。
 - [四个 RSI 项目源码比较](research/2026-11-04-rsi-comparison.md)：固定 SHA 的机制证据与可验证差异化实验。
 

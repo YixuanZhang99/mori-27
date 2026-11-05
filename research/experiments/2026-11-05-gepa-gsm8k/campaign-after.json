@@ -1,0 +1,14 @@
+{
+  "limit_micro_cny": 200000000,
+  "invoice_verified": false,
+  "settled_upper_bound_micro_cny": 17724090,
+  "reserved_micro_cny": 0,
+  "remaining_micro_cny": 182275910,
+  "protected_micro_cny": 0,
+  "pending_calls": [],
+  "protection_breaches": [],
+  "journal_head": {
+    "seq": 1809,
+    "sha256": "cda053c866ef15945f972dee9bfddf0a1ab77b617775e725bf7d2f5233410dd1"
+  }
+}

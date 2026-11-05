@@ -205,6 +205,15 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.manifest["command_domain"] = self.parts["domain"].manifest_binding
             self.manifest["executor"] = self.parts["executor"].manifest_binding
         self.manifest["evaluation_contexts"] = {"dev": self.manifest["evaluation_context"]}
+        declared_contexts = getattr(self.parts["domain"], "evaluation_contexts", None)
+        if declared_contexts is not None:
+            if type(declared_contexts) is not dict or "dev" not in declared_contexts:
+                raise ValueError("domain split contexts require an explicit dev identity")
+            self.manifest["evaluation_contexts"] = copy.deepcopy(declared_contexts)
+            for split, identity in declared_contexts.items():
+                binding_for(Proposal(Candidate("preflight"), ""), EvalRequest("dev", split_id=split),
+                    evaluator_version=self.manifest["domain_version"], evaluation_context=identity)
+
         self.funsearch = None
         if self.assembly.policy.name == 'funsearch':
             from core.composition.funsearch_coordinator import FunSearchCoordinator
@@ -306,7 +315,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         if (getattr(domain, "evaluator_version", None) != self.manifest["domain_version"]
                 or getattr(domain, "evaluation_context", "") != self.manifest["evaluation_context"]):
             raise ValueError("domain identity changed during configured execution")
-        if (self.layered or self.proxy) and domain.evaluation_context_for(request) != self.manifest["evaluation_contexts"].get(request.split_id):
+        if (self.layered or self.proxy or getattr(domain, "evaluation_contexts", None) is not None) and domain.evaluation_context_for(request) != self.manifest["evaluation_contexts"].get(request.split_id):
             raise ValueError("domain split context changed during configured execution")
         self._binding(Proposal(Candidate("preflight"), ""), request)
 
@@ -439,7 +448,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                                     for row in self.store.read('composed_evidence')}
                 expected = {}
                 for candidate_id, evidence in evidence_by_id.items():
-                    if evidence.eval_result.status is not EvalStatus.OK:
+                    if evidence.eval_result.status is not EvalStatus.OK or evidence.eval_result.contract.binding.split_id != "dev":
                         continue
                     public_items = public_projection(evidence).eval_result.contract.items or ()
                     verdicts = {item.item_id: item.verdict for item in public_items
@@ -602,6 +611,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
 
     async def _finish_layered(self):
         if self.layered is None:
+            from core.composition.final_evaluation import finish
+            await finish(self)
             return
         plan = self.layered.freeze(self.proposals[self.incumbent] if self.incumbent else None,
                                    self.parts["domain"])
@@ -882,7 +893,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             # never receives raw feedback, private items, or evaluator state.
             from core.composition.gepa_policy import GEPAInstancePolicy
             policy = self.parts['policy']
-            if type(policy) is GEPAInstancePolicy and evidence.eval_result.status is EvalStatus.OK:
+            if type(policy) is GEPAInstancePolicy and evidence.eval_result.status is EvalStatus.OK \
+                    and evidence.eval_result.contract.binding.split_id == "dev":
                 public_items = public.eval_result.contract.items or ()
                 verdicts = {item.item_id: item.verdict for item in public_items
                             if item.seed is None and item.visibility == 'public'}
@@ -951,6 +963,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self._save()
         if self.governed:
             asyncio.run(self.governed.due(self.next_cycle))
+        if any(self.store.read('metric_final_frozen')) and self._halted_reason is None \
+                and self.next_cycle <= self.cfg.max_generations:
+            raise ValueError('search cannot continue after final selection was frozen; start a new run')
         continued = True
         for cycle in range(self.next_cycle, self.cfg.max_generations + 1):
             if self._halted_reason is not None:
@@ -983,13 +998,14 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self._active_cycle = self.next_cycle
             asyncio.run(self._finish_layered())
             self._finish_context()
+        from core.composition.final_evaluation import final_report
         self.result = {"runtime": self.runtime_identity, "profile": self.assembly.name,
                        "best_candidate_id": self.incumbent,
                        "best_prompt": self.proposals[self.incumbent].artifact if self.incumbent else None,
                        "best_score": self.frontier.nodes[self.incumbent].score if self.incumbent else None,
                        "cycles": self.next_cycle, "ledger": self.budget.account_summary(),
                        "memory_export": self._context_export,
-                       "reporting": self.layered.report() if self.layered else None,
+                       "reporting": self.layered.report() if self.layered else final_report(self),
                        "stop_reason": self._halted_reason,
                        "proxy_validity": self.proxy.state() if self.proxy else None,
                        "accepted_candidate_ids": [row["payload"]["candidate_id"] for row in

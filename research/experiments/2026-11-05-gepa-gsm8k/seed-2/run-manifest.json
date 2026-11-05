@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "mode": "live",
+  "source_commit": "d950a4f76d5316a26e4619100ee59bd879266af5",
+  "source_dirty": false,
+  "dataset_identity": "sha256:366456d33df19a0b9c7b3b19a066c3fdb7a5ae9a69eaa50c8399ed05529c8c4f",
+  "split_hashes": {
+    "train": "sha256:048f6a4d16926237a3cb255432ee4f8015cc93c24e918600c690c34b3cefe422",
+    "validation": "sha256:42994e0bbc951b038785d93a8cf18b0fb1a0d9835aa0f42f341459bc4e54977b",
+    "test": "sha256:e668e70d3edbb0028e52237a9853af86cc6e6d7f710e0f22b594085395847fdb"
+  },
+  "profile": {
+    "schema_version": 2,
+    "name": "gepa-gsm8k-v1",
+    "mode": "benchmark",
+    "provider": {
+      "name": "provided"
+    },
+    "domain": {
+      "name": "gepa_gsm8k",
+      "options": {
+        "seed": 2,
+        "minibatch_size": 8,
+        "max_proposals": 1,
+        "dataset_identity": "sha256:366456d33df19a0b9c7b3b19a066c3fdb7a5ae9a69eaa50c8399ed05529c8c4f"
+      }
+    },
+    "policy": {
+      "name": "gepa_instance",
+      "options": {
+        "items": [
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000064",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000065",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000066",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000067",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000068",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000069",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000070",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000071",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000072",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000073",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000074",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000075",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000076",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000077",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000078",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000079",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000080",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000081",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000082",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000083",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000084",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000085",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000086",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000087",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000088",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000089",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000090",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000091",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000092",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000093",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000094",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000095",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000096",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000097",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000098",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000099",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000100",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000101",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000102",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000103",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000104",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000105",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000106",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000107",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000108",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000109",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000110",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000111",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000112",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000113",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000114",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000115",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000116",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000117",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000118",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000119",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000120",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000121",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000122",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000123",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000124",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000125",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000126",
+          "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000127"
+        ],
+        "seed": 2
+      }
+    },
+    "operators": [
+      {
+        "name": "draft"
+      },
+      {
+        "name": "gepa_reflective",
+        "options": {
+          "train_ids": [
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000000",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000001",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000002",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000003",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000004",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000005",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000006",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000007",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000008",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000009",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000010",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000011",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000012",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000013",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000014",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000015",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000016",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000017",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000018",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000019",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000020",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000021",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000022",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000023",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000024",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000025",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000026",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000027",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000028",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000029",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000030",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000031",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000032",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000033",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000034",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000035",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000036",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000037",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000038",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000039",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000040",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000041",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000042",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000043",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000044",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000045",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000046",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000047",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000048",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000049",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000050",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000051",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000052",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000053",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000054",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000055",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000056",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000057",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000058",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000059",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000060",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000061",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000062",
+            "gsm8k:3101c7d5072418e28b9008a6636bde82a006892c:train:000063"
+          ],
+          "seed": 2,
+          "minibatch_size": 8
+        }
+      }
+    ],
+    "frontier": {
+      "name": "population",
+      "options": {
+        "capacity": 2
+      }
+    },
+    "memory": {
+      "name": "scoped"
+    },
+    "executor": {
+      "name": "inprocess"
+    },
+    "admission": {
+      "name": "metric_final",
+      "options": {
+        "final_request": {
+          "fidelity": "final_audit",
+          "split_id": "final_audit",
+          "seed_set": [
+            2
+          ]
+        }
+      }
+    },
+    "budget": {
+      "name": "hierarchical",
+      "options": {
+        "limits": {
+          "global": {
+            "token": 916222400,
+            "node": 3,
+            "eval_count": 9
+          },
+          "direction": {
+            "token": 847000000,
+            "node": 2,
+            "eval_count": 8
+          },
+          "candidate": {
+            "token": 847000000,
+            "node": 2,
+            "eval_count": 8
+          }
+        },
+        "reservation": {
+          "token": 140800000,
+          "node": 0,
+          "eval_count": 1
+        },
+        "operation_reservations": {
+          "planning": {
+            "token": 0,
+            "node": 0,
+            "eval_count": 0
+          },
+          "operator": {
+            "token": 1100000,
+            "node": 1,
+            "eval_count": 0
+          }
+        },
+        "fidelity_rungs": [
+          {
+            "fidelity": "dev",
+            "split_id": "dev",
+            "seed_set": [
+              2
+            ]
+          }
+        ]
+      }
+    },
+    "skills": [
+      {
+        "name": "instruction",
+        "options": {
+          "text": "Produce reusable instructions for solving mathematical word problems. Return a prompt, not executable code."
+        }
+      }
+    ],
+    "execution": {
+      "schema_version": 1,
+      "spec": {
+        "role": "general",
+        "hypothesis_frozen": true,
+        "context_projection": []
+      },
+      "constructor": {
+        "name": "prompt"
+      }
+    },
+    "governance": {
+      "schema_version": 1,
+      "controls": {
+        "after_main_cycles": [
+          0
+        ],
+        "seed": 2,
+        "provider": {
+          "name": "gepa-cny-control"
+        },
+        "domain": {
+          "name": "gepa-validation-control"
+        },
+        "operator": {
+          "name": "draft"
+        },
+        "request": {
+          "fidelity": "dev",
+          "split_id": "dev",
+          "seed_set": [
+            2
+          ]
+        },
+        "reservations": {
+          "operator": {
+            "token": 1064960,
+            "node": 1,
+            "eval_count": 0
+          },
+          "evaluation": {
+            "token": 68157440,
+            "node": 0,
+            "eval_count": 1
+          }
+        }
+      }
+    }
+  },
+  "provider": {
+    "schema_version": 1,
+    "requested_model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "max_completion_tokens": 16384,
+    "timeout": 120.0,
+    "request_format": "deepseek",
+    "retry_policy": "never",
+    "response_model_required": true,
+    "thinking": {
+      "type": "enabled"
+    },
+    "reasoning_effort": "high",
+    "temperature_applied": false,
+    "seed_applied": false,
+    "immutable_snapshot_verified": false,
+    "campaign": {
+      "cache_discount_applied": false,
+      "campaign_id": "18509cd4f3514d51ae79aa3aceaf1779",
+      "concurrency": "one_unresolved_operation",
+      "context_tokens": 1048576,
+      "currency": "CNY",
+      "input_micro_cny_per_token": 2,
+      "invoice_verified": false,
+      "limit_micro_cny": 200000000,
+      "max_output_tokens": 393216,
+      "model": "deepseek-flash",
+      "output_micro_cny_per_token": 8,
+      "policy_sha256": "00ee6005cda46ae0be0270b5daaff5a97821b173ec99aab9d3127f2a37184a18",
+      "price_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "price_verified_date": "2026-11-04",
+      "provider_base_url": "https://api.deepseek.com",
+      "schema_version": 1,
+      "unit": "micro_cny"
+    },
+    "token_admission": {
+      "mode": "model_capacity_v1",
+      "guarantee": "service_capacity_bound",
+      "input_capacity": 1048576
+    },
+    "phase_call_limits": {
+      "operator": 1,
+      "evaluation": 128
+    }
+  }
+}
