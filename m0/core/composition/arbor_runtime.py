@@ -13,6 +13,8 @@ from core.composition.contracts import json_copy
 class ArborCoordinator:
     def __init__(self, owner):
         self.owner = owner
+        # Driver-only original-event reader; scoped memory keeps its own write lane.
+        owner.memory._research_events = self._original_events
         self.current = None
         cfg = owner.assembly
         if (not owner.construction_enabled or not owner.hierarchical or not owner.layered
@@ -21,6 +23,13 @@ class ArborCoordinator:
                 or [spec.name for spec in cfg.operators] != ['hypothesis_refine']
                 or not cfg.frontier.options.get('retain_rejected')):
             raise ValueError('Arbor requires frozen M7, hierarchical budget, retained tree and isolated layered admission')
+
+    def _original_events(self, kind):
+        if kind == 'arbor_synthesis':
+            return self.owner.store.read(kind)
+        if kind == 'layered_admission_receipt':
+            return self.owner.layered.store.read(kind)
+        raise ValueError('Arbor memory requested an unauthorized original event kind')
 
     def prepare_observation(self, state, context):
         state = json_copy(state)
@@ -182,7 +191,11 @@ class ArborCoordinator:
                 from core.composition.tree_insight import verdict_binding
                 verdict_binding(owner.memory, value)
                 verdicts.append(value)
-            elif kind in {'memory_receipt_binding', 'memory_tree_receipt_binding', 'memory_admission_receipt_binding'}:
+        memory_events = [row for kind in ('memory_receipt_binding', 'memory_tree_receipt_binding',
+                         'memory_admission_receipt_binding', 'memory_hit') for row in owner.memory.store.read(kind)]
+        for row in memory_events:
+            value = row['payload']
+            if row['kind'] != 'memory_hit':
                 bindings[value['receipt_ref']] = {k: v for k, v in value.items() if k != 'receipt_ref'}
         policy = owner.parts['policy']
         expected = ArborPolicy(owner.memory.context, None, **policy.config).checkpoint_state()
@@ -210,7 +223,7 @@ class ArborCoordinator:
             owner.memory._validate_entry(entry)
             from core.memory.types import TimeMeta, UtilitySignals
             binding = bindings[entry.provenance.evidence_refs[0]]
-            hits = [row['payload'] for row in original_events
+            hits = [row['payload'] for row in memory_events
                     if row['kind'] == 'memory_hit' and row['payload']['entry_id'] == key]
             cycle = (binding['cycle'] if binding['role'] == 'tree_insight' else
                      proposals[binding['verdict']['candidate_id']]['cycle'])

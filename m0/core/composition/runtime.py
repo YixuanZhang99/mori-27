@@ -623,6 +623,11 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             from core.composition.final_evaluation import finish
             await finish(self)
             return
+        if self.layered.frozen and self.layered.checkpoint_state()['final']['status'] not in {'ready', 'pending'}:
+            # A terminal resume must not append an extra checkpoint that a
+            # single recorded execution cannot consume.
+            self.layered.final_report()
+            return
         plan = self.layered.freeze(self.proposals[self.incumbent] if self.incumbent else None,
                                    self.parts["domain"])
         if not await self._execute_layered_calls(plan.calls):

@@ -58,9 +58,9 @@ class GovernedCNYProvider:
         if token_admission != 'model_capacity_v1':
             raise ValueError('governed provider requires hard service capacity admission')
         limits = {'operator': 1, 'evaluation': 0} if phase_call_limits is None else copy.deepcopy(phase_call_limits)
-        if type(limits) is not dict or set(limits) != {'operator', 'evaluation'} or \
+        if type(limits) is not dict or set(limits) not in ({'operator', 'evaluation'}, {'planning', 'operator', 'evaluation'}) or \
                 any(type(value) is not int for value in limits.values()) or \
-                limits['operator'] < 1 or limits['evaluation'] < 0:
+                limits['operator'] < 1 or limits['evaluation'] < 0 or limits.get('planning', 0) < 0:
             raise ValueError('provider requires finite phase call limits')
         if api_key is not None and (type(api_key) is not str or not api_key.strip()):
             raise ValueError('provider key must be nonempty text when supplied')

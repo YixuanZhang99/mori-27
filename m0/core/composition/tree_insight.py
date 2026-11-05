@@ -10,6 +10,11 @@ from core.policy.types import MutationOp, StateMutation
 def _hash(value):
     return 'sha256:' + payload_digest(json_copy(value))
 
+def _events(memory, kind):
+    if memory._research_events is None:
+        raise ValueError('Arbor memory requires driver-bound original events')
+    return memory._research_events(kind)
+
 def validate(memory, ref, binding):
     fields = {'role', 'context', 'evaluation_context', 'candidate_id', 'cycle',
               'target_id', 'source_refs', 'previous_ref', 'body', 'synthesis_ref', 'trust'}
@@ -45,7 +50,7 @@ def validate(memory, ref, binding):
             or type(body['summary']) is not str or not body['summary'].strip()
             or len(body['summary']) > 4096):
         raise ValueError('Arbor insight summary has invalid identity or size')
-    originals = [row['payload'] for row in memory.store.read('arbor_synthesis')
+    originals = [row['payload'] for row in _events(memory, 'arbor_synthesis')
                  if row['payload']['synthesis_ref'] == binding['synthesis_ref']]
     if len(originals) != 1:
         raise ValueError('Arbor insight lacks its original synthesis')
@@ -102,7 +107,7 @@ def verdict_binding(memory, verdict):
     if (type(verdict) is not dict or set(verdict) != {'candidate_id', 'admit', 'receipt_id'}
             or type(verdict['admit']) is not bool):
         raise ValueError('Arbor admission exports only candidate, verdict and receipt')
-    records = [row['payload'] for row in memory.store.read('layered_admission_receipt')
+    records = [row['payload'] for row in _events(memory, 'layered_admission_receipt')
                if row['payload']['receipt_id'] == verdict['receipt_id']]
     if (len(records) != 1 or records[0]['admit'] != verdict['admit']
             or records[0]['decision_context']['candidate_id'] != verdict['candidate_id']):

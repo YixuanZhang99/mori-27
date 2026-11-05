@@ -153,6 +153,7 @@ class ContextMemory(ScopedMemory):
             raise ValueError("evaluation context must be a fingerprint or the explicit opaque empty string")
         self.evaluation_context = evaluation_context
         self.bindings = {}
+        self._research_events = None
         self.imports = {}
         self._imported_ids = set()
 
@@ -389,6 +390,7 @@ class ContextMemory(ScopedMemory):
             raise ValueError("memory restore requires a fresh component")
         temporary = ContextMemory(self.store, self.context, self.evaluation_context, self.utility_weight)
         ScopedMemory.restore_state(temporary, {"seq": state["seq"], "entries": state["entries"]})
+        temporary._research_events = self._research_events
         temporary.bindings, temporary.imports = state["bindings"], state["imports"]
         for digest, identifiers in temporary.imports.items():
             if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest) or type(identifiers) is not list \

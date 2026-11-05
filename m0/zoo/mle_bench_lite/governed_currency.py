@@ -235,7 +235,7 @@ class CNYInvocationBridge:
             'adapter_binding_sha256': payload_digest(self._bindings.get(key))}
         if any(getattr(context, name) != value for name, value in expected.items()):
             raise ValueError('currency invocation differs from frozen bridge identity')
-        if admission and context.phase != 'planning':
+        if admission and (context.phase != 'planning' or 'planning' in self._bindings[key]['phase_call_limits']):
             validate_external_ordinal(self._bindings[key], context.phase, context.ordinal)
         if physical:
             identity = self._run.physical_identity_lookup(context.intent_id,

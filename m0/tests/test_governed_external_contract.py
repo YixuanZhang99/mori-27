@@ -78,7 +78,9 @@ def test_external_capability_requires_explicit_registered_bridge():
     lambda d: d["phase_call_limits"].update(operator=True),
     lambda d: d["phase_call_limits"].update(operator=0),
     lambda d: d["phase_call_limits"].update(evaluation=-1),
-    lambda d: d["phase_call_limits"].update(planning=1),
+    lambda d: d["phase_call_limits"].update(reflection=1),
+    lambda d: d["phase_call_limits"].update(planning=-1),
+    lambda d: d["phase_call_limits"].update(planning=True),
     lambda d: d["external_currency"].update(schema_version=True),
 ])
 def test_estimate_only_or_ambiguous_external_capabilities_are_rejected(change):
@@ -278,3 +280,19 @@ def test_external_zero_hard_bound_fails_pure_preflight():
     legacy = copy.deepcopy(PROVIDER_BINDING)
     legacy['call_bound']['units']['token'] = 0
     assert validate_factory_governance('provider', legacy)['call_bound']['units']['token'] == 0
+
+
+def test_optional_planning_cap_is_finite_and_cannot_bypass_physical_reservation():
+    from core.composition.external_provider import validate_external_ordinal
+    declared = capability()
+    declared['phase_call_limits']['planning'] = 4
+    assert validate_factory_governance('provider', declared,
+        external_bridges=('cny_invocation_v1',)) == declared
+    for ordinal in range(4):
+        validate_external_ordinal(declared, 'planning', ordinal)
+    with pytest.raises(ValueError, match='ordinal'):
+        validate_external_ordinal(declared, 'planning', 4)
+    with pytest.raises(ValueError, match='reservations'):
+        validate_factory_governance('provider', declared, external_bridges=('cny_invocation_v1',),
+            phase_reservations={'planning': {'token': 3 * 1052672},
+                                'operator': {'token': 2 * 1052672}, 'evaluation': {'token': 0}})
