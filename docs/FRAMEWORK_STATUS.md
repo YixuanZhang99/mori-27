@@ -1,5 +1,19 @@
 # 框架交付范围与后续开发顺序
 
+## 当前规划入口（2026-11-05，Goal 已暂停）
+
+用户要求改为按既有九模块设计、逐个经典工作进行 spec 驱动接入。
+本轮整理的 [接入路线与分支决定](CLASSIC_WORKS_PLAN.md) 包含八项独立规格和扩展目录；它们仍是规划草案，尚未启动实现或真实实验。
+后续建议为 GEPA → FunSearch → AIDE → Arbor → OpenEvolve，再依序接 AIRA、LoongFlow、R&D-Agent。
+
+本轮 fetch 核实：`main=49be71e`，`codex/m7-construction=18400ad`，后者包含前者并领先 108 个提交；四个串联 PR 仍未合入。
+`18400ad` 的 push/PR Linux v75 检查成功；macOS 同候选检查仍缺失。
+建议将 PR #4 收敛为面向 main 的整合 PR，补齐检查后保留历史合并，再一次只保留一条方法开发分支。
+本次没有 merge、改 PR base、关闭 PR 或删除分支；本地 FunSearch WIP 也未整包导入。
+本次规划提交会使上述开发头更新；此处 SHA/数量是规划前核对快照，不自称新提交的 CI 结果。
+
+下文的“当前优先级”“下一步”和分支数量均是此前阶段记录；查下一轮施工范围请从新规划入口开始。
+
 ## 最新实证进展（2026-11-05）
 
 开发提交 `ac59501` 已通过本机完整项目测试（2459 项）及 v75 本机验收；本机验收产物经独立核验，包含 56 项检查并绑定 1177 个源码与验收文件。该提交的 [GitHub 推送验收](https://github.com/YixuanZhang99/mori-27/actions/runs/41936195902)通过；[PR 验收](https://github.com/YixuanZhang99/mori-27/actions/runs/41936208337)也通过，但其运行对象是 GitHub 生成的合并提交。这些工程验收不代表完整 benchmark 或正式发布已完成。
