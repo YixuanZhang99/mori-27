@@ -413,7 +413,7 @@ v64 成功证据已原样归档到 `m0/verifier/v64/LAST_RUN.json` 与 `m0/verif
 | --- | --- | --- | --- | --- |
 | S6 / v65 | M3-06（§4/M3 L164、§6.2 L442–444）；关联 M3-02～04、M5-03、M8-03、M9-04、X1-02 | 周期 anchor；proxy 与 true 的配对证据及秩相关有效性规则；失效时告警/降级和负反馈进入 scoped memory | 配置周期实际触发独立开发 calibration anchor 并经三层预算；请求/数据/seed 身份可核对；样本不足与无效相关明确区分；故意反向 proxy 触发预定动作并改变后续输入；admission/final 不进入搜索反馈；恢复/replay 保留调用、有效性与记忆来源 | 已接通子范围见下方 S6 实现记录；最终 Mac/Linux 按阶段证据核对 |
 | S7 / v66 | M7-01～03（§4/M7）；X1-01～03（§4/X1）；关联 A-02、M2-04、M8-03 | 将现有 worktree/进程执行与身份写入、保护输入、终态证据和中断接管接入同一配置运行时 | 公开 Framework 实际创建隔离工作区并执行候选；真实 Linux 中断后按进程身份接管，不重复付费、不丢失已知结果；保护文件篡改拒绝；完整证据/成本/来源可恢复；Mac 本地检查明确区分需要 Linux 的用例 | S7 已按同 SHA Linux 验收封板；已接通子范围及保留限制见下方 S7 记录 |
-| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | S7 已封板；S8 三文件组和 Mac 检查完成，同 SHA Linux 门槛见下方 S8 记录 |
+| S8 / v67 | M4-01～04（§4/M4）；M1-02（§4/M1）；关联 M2-03、M5-02、X1-02 | 配置种群 frontier 与选择/生存接口，保留骨架与引用边语义、作用域检索及预算/准入边界 | 同一配置入口选择种群并真实改变保留/选择结果；选择不能引用无资格个体；多样性/生存规则可复算；引用边不能偷改骨架信用；checkpoint/resume/replay 保留种群与来源；已有 tree 和全套安全回归继续通过 | S8 已按同 SHA Linux 验收封板；已接通子范围及保留限制见下方 S8 记录 |
 
 S6 当前验收组为 `test_proxy_validity.py`、`test_composed_proxy.py`；v65 保留 v64 的全部命令、超时与真实历史证据。接线阶段 tooling 37 项、历史/source-only 9 项通过，未生成 v65 运行证书；这些不代替 S6 公开入口功能或 Linux 验收。S7/S8 的测试文件名与精确子范围在实现前确定，不提前认证生产环境隔离、分布式并发或真实外部 benchmark。
 
@@ -517,7 +517,100 @@ v67 三文件显式组为 `test_population_frontier.py`、`test_population_compo
 | Mac `make check` | 最终实现通过：1,472 portable、160 Linux deselected（135.73 秒）、11 axioms、4 个离线示例；全量时 42 tooling，新增真实归档保护后 43 tooling 单独复核通过；Linux deselected 不计通过 |
 | 工具与 source 检查 | v67 接线 43 tooling、9 历史/source-only 检查通过；v66 真实成功证据原字节归档并以 SHA-256 保护，不生成 v67 初始证书 |
 | 打包与导入快照 | 最终实现 `make build` 通过；`make verify-import` 校验 1,020 文件通过 |
-| Linux v67 | 本提交完整 CI 必须通过后才推进 main；新证书需包含 S8 组及全部 37 检查，实际 pytest 数以同 SHA artifact 为准 |
-| 提交与 main 更新 | 候选提交→核对同 SHA 新 summary/certificate/journal→非 force 推进 main；最终阶段证据保存在 CI 产物和交付报告，不为补自引用 SHA 重造一个未验收提交 |
+| Linux v67 | [CI 40994318799](https://github.com/YixuanZhang99/mori-27/actions/runs/40994318799) 通过：1,632 pytest、37 检查、868.971 秒；exact SHA、ZIP 摘要及新 summary/certificate/journal 已核实，历史未改动 |
+| 提交与 main 更新 | `49be71ec079f1412a4a8e74086064c4db121c363` 已在同 SHA Linux 验收通过后非 force 推进 main；本地 handoff 和 CI 产物保留独立复核记录 |
 
 S8 接通配置种群、压力抽样和双亲文本交叉的具体闭环；novelty/MAP-Elites、代码签名、通用执行角色、配置并行池、HITL、事件订阅、网络知识和真实外部 campaign 保持明确未完成或后置。原始抽象文档及基线对照不改写为事后“全部完成”。
+
+
+S8 成功证据已原样归档到 `m0/verifier/v67/LAST_RUN.json` 与 `m0/verifier/runs/v67.jsonl`；来源和摘要见 [v68 历史证据说明](../m0/verifier/v68/README.md#archived-v67-evidence-provenance)。这不代替 S9 验收。
+
+### S9 MLE-Bench Lite 配置评估与同预算试跑：实现记录与验收门槛
+
+本阶段将 S6/S8 能力接到真实任务数据协议，新增 `zoo.mle_bench_lite.composed_agent` 与显式子集 `pilot`；旧 `governed_agent` 的 M0 路径保留。机制验收与外部模型试跑分别记录。精确接口、任务输入范围及评分边界见 [S9 指南](MLE_COMPOSED_V68.md)。
+
+| 条款 ID | S9 接入子范围与验收要求 | 剩余范围或明确限制 |
+| --- | --- | --- |
+| A-03、A-04、M8-01～04 | 三个公开 CSV 任务经同一配置 Framework/domain 产生规范 Evidence；训练/dev/calibration/admission/final 的实际内容身份绑定；每候选固定生成程序与预测后再分别评分 | 不是完整 22 题或全部任务模态；leaf 图像和 nomad 几何数据未接入；旧 M0 benchmark 入口不自动升级 |
+| M3-02、M3-03、M3-06 | full 真实启用层级预算、周期 anchor、秩相关；分类 accuracy 对负 log loss、回归绝对对数误差对负 RMSLE；每个附加操作计入该组资源消耗 | 阈值是预设规则，不宣称显著性；无真实价格表时不推导美元成本，未知费用不补零 |
+| M4-01～04、M2-03 | full 的种群抽样与双亲 crossover 进入实际任务候选生成；baseline 使用同一任务实现的 greedy 搜索 | 两组只测整个组合增益，不能直接归因单个模块；elite 不等于 novelty/MAP-Elites |
+| M5-02、M5-03、M9-04 | 独立公开开发 calibration 触发的有来源负反馈可以影响后续候选；admission/final 与外部官方 private 分数不反馈 | 实验内反思不代表跨任务知识迁移；fixture 中的确定性负反馈链路不代表真实模型必然出现同样行为 |
+| M7-01～03、M8-03 | Linux 使用受限执行环境运行生成程序；受信评分器独占验证标签；冻结后的固定预测供各 split 评分 | Mac 可移植检查不认证 Linux 沙箱；不得由任务执行成功推定未知付费调用可安全重试 |
+| X1-01～03、M9-01～03 | pilot 先冻结完整任务/种子/组/预算/model spec，所有组提交冻结后官方评分；独立 token 回执和实际模型复核；失败矩阵保留 | 子集结果明确 `subset_only`，不触发完整 22 题比较/host parity；正式 runner 的完整矩阵要求不放松 |
+
+v68 显式执行 `test_mle_composed.py`、`test_mle_provider.py` 与 `test_mle_pilot.py`，保留全部 v67 命令和超时、完整 pytest、真实 Linux 安全/恢复组与历史证据。新组必须证明原始数据与评估结果确实驱动候选、校准和回流，不能只检查 profile 字段存在。
+
+| 验证项 | 执行状态与阶段门槛 |
+| --- | --- |
+| Mac `make check` | 最终实现通过：1,577 portable、163 Linux deselected（176.69 秒）、11 axioms、4 个离线示例和 52 tooling；Linux deselected 不计通过 |
+| 工具与历史 | 最终 52 tooling 通过；v68 保留全部 v67 命令与超时，v67 原始证据以 SHA-256 保护；不生成 v68 初始证书 |
+| 官方 CPU 环境冒烟 | Mac 独立环境安装同一 hash lock，真实官方三任务 registry/preparer/protected snapshot/grade_csv 合成测试通过；Linux 由独立 `mle-cloud-runtime` CI job 验证，不计真实 benchmark 分数 |
+| 打包与导入快照 | `make build` 通过；`make verify-import` 核对原始导入快照 1,020 文件通过 |
+| Linux v68 | 同一候选提交的全量 CI 必须通过，证书包含 S9 组及全部 38 检查；实际 pytest 数以同 SHA artifact 为准 |
+| 提交与 main 更新 | 候选提交→核对同 SHA 新 summary/certificate/journal→非 force 推进 main；不为补自引用 SHA 制造未验收提交 |
+| 真实外部试跑 | 未执行；数据、规则授权、模型凭据和资源预算须先完整，实际结果与 fixture 验收分开归档 |
+
+S9 接入真实任务协议不改变其余条款边界：通用执行角色、配置并行池、HITL、事件订阅、外部网络知识、更多模态与全量 benchmark 效果仍须独立实现和验收。原始统一抽象和历史阶段证据保持不变。
+
+### S9 运行修复与 v69 验收门槛
+
+接续核验确认 S9 的 `dfe29cb4265fd939a203d587a57b523efbe52c36` 已通过 [v68 CI 41032740938](https://github.com/YixuanZhang99/mori-27/actions/runs/41032740938)：1,740 pytest、38 检查，两个 job 均成功；真实模型试跑未执行。原证书和 journal 已按字节归档，来源及摘要见 [v69 历史证据说明](../m0/verifier/v69/README.md#archived-v68-evidence-provenance)。该结果不认证后续修复。
+
+| 条款 | 本次修复与实际行为 | 尚未关闭的范围 |
+| --- | --- | --- |
+| M8-03、M9-04 | 匿名预测顺序由受信私有 key 决定；同 task/seed 两方案共享 key；公开 seed 无法复算类分组标签排列；恢复缺失/改动 key 拒绝 | 不是任意数据泄漏的通用证明 |
+| M7-01～03 | 模型请求前实际运行候选沙箱的 Python/依赖探针；解释器不可见或缺依赖时零付费请求 | 通用资源配额、所有执行角色仍未接通 |
+| M3-02、M3-06、X1-01～03 | 单次授权账本跨 run/output 保留，HTTP 前原子预留、有效响应后结算保守 CNY 上界；未知用量阻断后续调用；按持久 run 身份双向核对账本与本地回执集合 | 依赖冻结服务定价/容量约定；不是实际供应商账单、恶意拥有者回滚防护或通用并行池 |
+| A-03、A-04、M8-01～04 | 公开 Framework、六子进程 pilot 与独立审计共享模型参数、campaign 身份和数据契约；截断与错误计价模型保留已知用量 | 模型 alias 一致不等于权重 snapshot 固定；无真实成绩前不作效果结论 |
+
+v69 保留全部 v68 命令、超时和历史证据，显式增加隔离/预算集成组，成功证书应包含 39 检查。当前实现与针对性回归已完成，最终全量 Linux 和版本化验收仍需以新运行结果核验；同 SHA 远端 CI 尚未取得，不推进 main。三个真实数据集与本机凭据/运行环境已准备完成，实际付费试跑仍等待软件验收，不以合成评分代替真实结果。
+
+后续验收更新（2026-11-04）：干净提交 `5fa85d3ab7c4f643550ecaa2223a65231d7f7a86` 完整本机 v69 通过，39 检查、874.524 秒；新 summary/certificate/journal 相符，前后 source SHA 和历史证据不变。官方三任务运行环境 smoke 通过。唯一真实 200 元账本和带预算的生产预检已经完成，六次真实试跑已从该提交的只读源码启动并取得首条有效外部用量回执。试跑仍在进行，尚不构成 B1–B5 或全部 C 指标达标；同 SHA 远端 CI 和远端备份仍受写权限限制。详见接续记录和 DeepSeek 实施计划。
+
+
+### 首次真实试跑及 v70 修复候选
+
+六次真实试跑现已结束：两个 spooky 方案冻结有效提交并完成官方评分，leaf/nomad 四次在候选评估前停止；全部六次均曾触发每次固定 12,000-token 预留超额，未完成所有预定迭代。9 次实际请求合计 130,501 token，冻结费率下费用上界 0.927284 元，无未结调用。完整失败矩阵和限制见 [首次试跑报告](../research/experiments/2026-11-04-deepseek-pilot-attempt-1/README.md)。这不是 B1–B5/C3 达标证据，greedy baseline 不是常驻 IID-RS。
+
+v70 修复候选对应 M3-01/02/05 和 X1-01/03 的精确子范围：在现有三层预算内显式按剩余额度预留 operator 物理资源，保留最低准入量、原子预留、实际费用结算和事件前缀重放校验；MLE 两方案采用该策略。完整测试还发现独立进程读取正在写入的 JSONL 尾部，X1 因而增加协作进程文件锁和释放锁后的固定前缀遍历。未知费用、真实超额和持久损坏仍失败关闭；不声明断电原子性、非协作写入保护或事件订阅。
+
+最终本机 Linux 完整流水线通过：1,821 pytest（371.48 秒）、60 tooling、11 静态约束、4 离线示例、sdist/wheel 及 1,020 文件初始快照核验；总计 374.25 秒，运行前后源码指纹相同。独立预算审查发现的浮点向上舍入问题已用三个失败回归修复；单独日志审查无 Critical/Important 问题。三任务官方 CPU 合成评分 smoke 通过，不记为真实 benchmark。v70 保留全部 v69 检查并增加两组，干净提交上的 41 项版本化验收仍待执行；同 SHA 远端 CI 及 main 更新仍未完成。下一次付费尝试必须复用已使用的同一 200 元账本，不能重置或覆盖第一次结果。
+
+后续 v70 验收更新：干净提交 `aedede3c2b78a5c2b57074c70d510af710f5af4e` 的 41 检查与 1,821 pytest 全部通过，901.868 秒；证书/journal/源码来源一致。本机安装与指南执行的补充证据及边界见 [v70 本地报告](../research/experiments/2026-11-04-v70-local-validation/README.md)。同源码第二次真实试跑已通过生产预检并启动，终态待核验；不据此关闭发布总门槛。
+
+### 第二次真实试跑与请求容量修复（v71 候选）
+
+第二轮固定 `aedede3` 的六个运行已全部终止；spooky/full、leaf/baseline、nomad/full 三份提交有效且已官方评分，其余三份实际总 token 超额。独立审计核对每次调用、共享账本、冻结提交及官方报告；累计3.242064元上界，未结调用0。没有完整有效的同任务 baseline/full 对，不能关闭 B1/B2/C3 或宣称跨任务优势。
+
+实现 `c617931` 修复 M3-01/02/05 与 X1-03 的具体子范围：请求前同时考虑输入容量和完整输出额度；显式区分 estimate-only 与 service-capacity；独立账本顺序核对已有用量；普通拒绝先结算已知成本并保留已有候选；持久化且重放已知拒绝；实际超额与未知费用不降级成正常耗尽。完整本地1,836 pytest、60 tooling和其它流水线目标通过；独立审查三个 Important 均先复现再修复。专项 crossover 拒绝、自定义多调用算子停止的额外测试仍待补。
+
+v71 增量接线保留所有 v70 命令和超时，新增一组并明确证书边界；64项工具测试通过，42项干净源码验收待执行。此项不建立常驻 IID-RS 或七账户完整映射；相关[设计](superpowers/specs/2026-11-04-resident-control-design.md)已有，任务级 schema/实现计划与真实治理证据仍需完成。
+
+
+## 2026-11-04 常驻治理实现进展
+
+这一记录补充已有阶段证据，不改写上文的原始基线状态。新实现通过可选 `governance` 配置进入 `composed-v7-governed`；省略该字段仍使用原 composed-v6 路径。最终版本证据仍需绑定本轮干净提交的验收结果。
+
+| 对齐条款 | 新实现与可检查行为 | 尚不能推出的结论 |
+| --- | --- | --- |
+| A-01/A-03 | 同一 Candidate/Proposal/EvidenceRecord 和公开 Framework 接口执行主搜索与固定对照；注册工厂构造独立会话，未知能力前置拒绝 | 任意第三方 Python 插件已经隔离或兼容 |
+| M3-01/M3-02/M3-05、RUBRIC C1 | 同一物理账本内推导七账户；保护每个未来对照阶段；固定主搜索额度；按调用 ordinal 校验总 token 上界，真实超额与失败成本完整保留 | 物理 token 保护自动等于外部人民币保护；尚无模型适配器桥接 |
+| X1-02、RUBRIC C4 | 已记录的 provider/native/worktree 结果可采用；native 声明状态随终态恢复；真实 SIGKILL 边界和零新调用回放有回归；调用回执摘要进入预算结算链 | 未持久化终态的 opaque native 调用可安全重试，或断电 exactly-once |
+| RUBRIC C3 | 开始前冻结固定 draw 计划，主循环内按周期运行；失败仍占样本位置，普通耗尽排空预留对照，主动暂停保留后续槽；对照不进入主搜索 | 本地确定性 fixture 证明服务商随机独立性、算法优越性或真实 benchmark 达标 |
+
+入门命令、模块边界和当前失败关闭范围见 [常驻治理指南](GOVERNED_CONTROLS.md)。本轮参考代码比较见 [开发优先级与来源](../research/2026-11-04-framework-development-priorities.md)。真实模型第三轮试跑按用户本次优先级暂缓，已有失败／成功实验均保留原结论。
+
+
+## 2026-11-04 M7 配置构造进展（v74 候选）
+
+本增量保留原始基线和未完成条款。Tasks 1–5 已在 `ec478994a907faa40b5494870caee09fd2021c8a` 完成本机验证：2,257 Linux tests、76 tooling、11 公理、示例/构建/导入；独立安装环境验证旧 v8 和新 v9 构造费用路径。完整来源见 [Task 5 证据](../research/experiments/2026-11-04-m7-currency-construction-local/summary.json)。这些结果不替代本次 v74 整体验收或 Mac 门槛。
+
+| 原条款 | 已接通的精确子范围 | 仍开放 |
+| --- | --- | --- |
+| M7-01、A-01/A-03 | schema-2 角色、冻结/自由假设和许可上下文实际参与构造；公开 Framework 主线与独立对照共享规范候选/评估契约 | 任意插件兼容性、完整研究配置和全框架交付 |
+| M7-02、M8-01/02 | 原生与 Git 产物不可变发布；dev/admission/final 复用同一原始产物；命令评分沿用原进程接管 | 通用多文件生成、特殊 Git 树、更多模态；原生执行不是安全沙箱 |
+| M3-01/02/05、RUBRIC C1/C4 | 一次生产一个 operator intent；修复连续 ordinal；已知失败收费、未知保留预扣；原物理/CNY 权威保护未来对照；回放不新增模型调用或账本事件 | 真实供应商费用/统计独立性、任意外部副作用 exactly-once、断电恢复 |
+| X1-02/03 | provider 完成、构造终态、Git 发布及材料化的实际 SIGKILL 接续；核对原始 prompt/response/产物费用链 | 通用只读事件订阅、所有故障切点与整机丢写证明 |
+| M7-03、A7、B1–B5 | 保持原未完成状态，不由本表更改 | composed 并行池、全仓深度指标、真实研究/产品证据 |
+
+Task 6 增加 v74 的五组检查和提交/执行源码身份约束；独立整分支审查、干净同 SHA 验收及远端证据仍待本轮实际完成后登记。当前未更新 main，未清理远端分支。后续阶段继续按原文逐项推进，不能把本轮 M7 的完成率解释为整个框架完成率。

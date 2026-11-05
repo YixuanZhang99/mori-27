@@ -1,0 +1,10 @@
+{
+  "reference_commit": "cc53f274237d7ab05c19df939edbc1f9616a7c19",
+  "notebook_sha256": "eec45846a8661722addbb856179327cf2ede0bc502e32be4ad58a6ac54e0aca6",
+  "prompt_ref": "sha256:dc21947f012c217c4f45feb3e65e5c758411a8925d7380b3d55130a6876ee22b",
+  "input_ref": "sha256:2e2a37d9c7225385187a07a58257112e479869022c77320b8d09aedea5e8c144",
+  "duplicate_samples_preserved": true,
+  "executed_candidate": false,
+  "provider_requests": 0,
+  "scope": "prompt fixture only; no task evaluation or benchmark score"
+}

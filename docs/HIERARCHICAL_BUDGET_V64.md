@@ -114,3 +114,11 @@ wallclock 在 producer 明确声明测量时采用其值，否则由 runtime 在
 当前 replay 是独立重执行并要求完整 snapshot/result 精确一致。runtime 实测 wallclock 或非确定性外部结果可能使比较失败，实际费用仍保存在重执行日志中；固定计量离线例子的成功不能外推为任意真实运行都可逐字重现。它也不是恢复未知付费操作的手段。
 
 v64 显式执行 `test_hierarchical_budget.py`、`test_composed_budget.py`，并单独执行 `examples/composed_research_offline.py`。Mac 的 `make examples` 也包含该例子，合计四个离线示例。完整 Linux 验收保留 S1–S4 和全部历史安全回归，不将 fixture 的物理数量当作真实外部 campaign 成绩。当前验收及证据来源见 [v64 verifier 说明](../m0/verifier/v64/README.md)。
+
+## 可变用量 operator 的剩余预留
+
+后续增量允许在 options 中显式配置 `"reservation_modes": {"operator": {"token": "remaining"}}`。仅支持 operator；键必须是已配置的物理单位，模式只能为 `remaining`。未配置的单位与旧 profile 保持固定预留。
+
+被选单位在原子预留时取全局/方向/候选三个适用作用域的最小可用余额，已经使用或仍被预留的量先扣除。原数值预留成为最低准入要求：若余额不足，拒绝操作；若足够，则预留全部可用额度，结算只扣真实用量并释放其余部分。例如预算 60,000、最低预留 12,000，第一次预留 60,000、实际使用 13,394 后，第二次预留 46,606。时间/GPU/USD 等小数单位向不超过真实余额的可表示数值转换，避免向上舍入导致错误拒绝。
+
+这种模式适用于串行、用量变化较大的生成操作，会占住该作用域剩余资源；不要将它当作并行公平调度策略。未知用量仍保留预留并阻断调用，真实用量超过实际预留仍结算并停止。恢复必须从每条事件之前的状态重新算出同一预留量，不能信任重算 hash 后的任意数值。它不提供供应商输入 token 的精确预估，也不替代独立货币控制。

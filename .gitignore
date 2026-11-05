@@ -23,3 +23,6 @@ venv/
 /m0/runs/
 /m0/outputs/
 /m0/artifacts/
+
+# Agent implementation scratch; committed plans live under docs.
+.superpowers/

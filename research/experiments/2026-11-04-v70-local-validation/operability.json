@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "source_commit": "aedede3c2b78a5c2b57074c70d510af710f5af4e",
+  "wheel_sha256": "71a2006a6fa17e1b1cd7e88fe98748f0fb39b0de4e4a35da3a1b99309a1088c6",
+  "evidence_kind": "automated_local_installation_and_documented_tracer",
+  "external_provider_called": false,
+  "full_release_acceptance": false,
+  "human_newcomer_exercise": false,
+  "checks": {
+    "fresh_noneditable_wheel_installation": true,
+    "imports_from_installed_site_packages": true,
+    "four_profiles_evolve_inspect": true,
+    "four_profiles_independent_metered_replay": true,
+    "fresh_source_make_setup": true,
+    "verbatim_documented_composed_tracer": true,
+    "three_official_synthetic_graders_from_frozen_source": true
+  },
+  "profiles": [
+    "composed_prompt",
+    "population_prompt",
+    "gepa_reflective",
+    "funsearch_island"
+  ],
+  "limitations": [
+    "Dependencies came from an existing uv cache; this is not a bare-machine installation rehearsal.",
+    "Offline model fixtures verify behavior, not provider or benchmark quality.",
+    "The first wheel harness incorrectly supplied reflective MockLLM to a FunSearch evolve-block prompt and failed. Corrected only the harness to use existing FunSearchProposer; the wheel and production source stayed unchanged.",
+    "Installed replay is an independently metered deterministic rerun, not free event replay or proof of repeatable external models.",
+    "C1/C3 integrated resident controls, full A6/A7 and B benchmark requirements remain open."
+  ],
+  "evidence_sha256": {
+    "installed-wheel-aedede3.json": "29d572c760ca06a9de5897e3214b274912406bd4ae3cd1d9ef1e2b71b3636c1f",
+    "installed-wheel-aedede3-corrected.json": "4f37b504556a37f726d68fa9ecb501f8223bc9b3eff43c52c5906fb95af7ae8b",
+    "installed-wheel-aedede3-replay.json": "7b40a32cf91f050c6da4af0014b2827e0ebdd04404178f6ef0bef5c8cd7f8425",
+    "developer-cold-start-aedede3.json": "b2c813258606fb185d22cd79a52cacfee79ec2793c77307be797a0646a18f9f7",
+    "mle-runtime-frozen-aedede3.json": "c8cdfc566544655d63f54c64e95349bd43676d02ed04d795d81ed770af590202"
+  }
+}

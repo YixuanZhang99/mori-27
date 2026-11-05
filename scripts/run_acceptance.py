@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run v67 in a disposable copy with fresh evidence and bounded execution.
+"""Run v73 in a disposable copy with fresh evidence and bounded execution.
 
 Cleanup covers the verifier process group. Workers that deliberately create a
 new session are outside that scope; hosted CI's disposable VM is the final
@@ -24,7 +24,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-VERIFIER_VERSION = "v67"
+VERIFIER_VERSION = "v73"
 HISTORY = (f"verifier/{VERIFIER_VERSION}/LAST_RUN.json",
            f"verifier/runs/{VERIFIER_VERSION}.jsonl")
 VERIFIER_COMMAND = f"python3 verifier/{VERIFIER_VERSION}/verify.py"
@@ -114,7 +114,7 @@ def _signal_interrupt(signum: int, _frame) -> None:
     raise InterruptedError(f"Acceptance interrupted by signal {signum}")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, source_snapshot=None, finalize_summary=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/linux-acceptance")
     parser.add_argument("--timeout", type=float, default=1800,
@@ -134,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     copy: Path | None = None
     scratch = None
     process = None
+    execution_before = execution_after = None
     previous_journal: bytes | None = None
     new_journal: bytes | None = None
     returncode = None
@@ -152,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         copy = Path(scratch.name) / "m0"
         shutil.copytree(ROOT / "m0", copy, ignore=shutil.ignore_patterns(
             ".venv", "__pycache__", ".pytest_cache", "*.egg-info", "build", "dist"))
-        # v67 inspects the active repository workflow rather than m0's archived
+        # v73 inspects the active repository workflow rather than m0's archived
         # nested workflow. Keep that source context beside the isolated copy.
         for name in CONTROL_FILES:
             source = ROOT / name
@@ -160,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
                 destination = copy.parent / name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
+        if source_snapshot is not None:
+            execution_before = source_snapshot(copy.parent)
         # Historical success is never an output from this invocation.
         (copy / HISTORY[0]).unlink(missing_ok=True)
         previous_journal = ((copy / HISTORY[1]).read_bytes()
@@ -201,6 +204,14 @@ def main(argv: list[str] | None = None) -> int:
                     (output / "new-runs.jsonl").write_bytes(new_journal)
             except OSError as exc:
                 errors.append(f"Could not read verifier journal: {exc}")
+        if copy is not None and source_snapshot is not None:
+            try:
+                execution_after = source_snapshot(copy.parent)
+                (output / "execution-source-files.json").write_text(json.dumps(execution_before, sort_keys=True, indent=2) + "\n")
+                if execution_before is None or execution_before != execution_after:
+                    errors.append("Executed source changed during acceptance")
+            except Exception as exc:
+                errors.append(f"Could not verify executed source: {exc}")
         if scratch is not None:
             try:
                 scratch.cleanup()
@@ -260,9 +271,19 @@ def main(argv: list[str] | None = None) -> int:
                "elapsed_seconds": round(time.monotonic() - started, 3),
                "cleanup_scope": "verifier process group; independently detached workers require runner isolation",
                "error": errors[0] if errors else None, "errors": errors, "passed": success}
+    if source_snapshot is not None:
+        summary.update(execution_source_unchanged=execution_before is not None and execution_before == execution_after,
+            execution_source_manifest_sha256=hashlib.sha256(json.dumps(execution_before, sort_keys=True,
+                separators=(",", ":")).encode()).hexdigest())
+    if finalize_summary is not None:
+        try:
+            summary = finalize_summary(summary, output)
+        except Exception as exc:
+            errors.append(f"Could not certify source identity: {exc}")
+            summary.update(passed=False, errors=errors, error=errors[0])
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({**summary, "artifacts": str(output)}, indent=2))
-    return 0 if success else 1
+    return 0 if summary["passed"] else 1
 
 
 if __name__ == "__main__":

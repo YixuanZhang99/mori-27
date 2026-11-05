@@ -10,6 +10,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
+import re
 import threading
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -19,59 +21,16 @@ from core.budget.types import AccountingStamp, finite_number
 from core.composition.contracts import json_copy
 from core.executor.types import Candidate, EvalRequest, EvalStatus
 
-UNITS = frozenset({"token", "eval_count", "node", "wallclock", "gpu_hours", "usd"})
-COUNTS = frozenset({"token", "eval_count", "node"})
+from core.composition.budget_contracts import UNITS, COUNTS, _canonical, _hash, _text, _quantity, _basket, _request
+
 OPERATIONS = frozenset({"planning", "operator", "dev", "dev_baseline", "anchor", "admission", "final"})
 JOURNAL_KIND = "hierarchical_budget"
-
-
-def _canonical(value):
-    return json.dumps(json_copy(value), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-
-
-def _hash(value):
-    return "sha256:" + hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
-
-
-def _text(value, label):
-    if type(value) is not str or not value.strip():
-        raise BudgetError(f"{label} must be nonempty text")
-
-
-def _quantity(value, unit, label, *, positive=False):
-    if type(value) not in (int, float) or not finite_number(value) or value < 0 \
-            or positive and value == 0 or unit in COUNTS and type(value) is not int:
-        raise BudgetError(f"{label}.{unit} must be a finite nonnegative physical quantity"
-                          + (" (integer count)" if unit in COUNTS else ""))
-
-
-def _basket(value, label, *, units=None, nonempty=True):
-    if type(value) is not dict or nonempty and not value or set(value) - UNITS \
-            or units is not None and set(value) != set(units):
-        raise BudgetError(f"{label} must explicitly cover its configured physical units")
-    for unit, amount in value.items():
-        _quantity(amount, unit, label)
-    return json_copy(value)
-
-
-def _request(data):
-    if type(data) is not dict or "fidelity" not in data \
-            or set(data) - {"fidelity", "split_id", "seed_set", "time_limit", "budget_token", "resume_from"}:
-        raise BudgetError("fidelity rung contains unsupported request fields")
-    request = EvalRequest(**json_copy(data))
-    try:
-        request.validate()
-    except (TypeError, ValueError) as error:
-        raise BudgetError("invalid fidelity rung") from error
-    if request.split_id != "dev":
-        raise BudgetError("budget fidelity rungs may allocate only dev exploration")
-    return request
 
 
 def hierarchical_options(options):
     """Pure strict preflight suitable for Registry.register(validate_options=...)."""
     allowed = {"limits", "reservation", "operation_reservations", "fidelity_rungs",
-               "rung_by", "rung_every", "convergence", "proxy_validity"}
+               "rung_by", "rung_every", "convergence", "proxy_validity", "reservation_modes"}
     if type(options) is not dict or set(options) - allowed \
             or not {"limits", "reservation", "fidelity_rungs"}.issubset(options):
         raise BudgetError("hierarchical budget requires limits, reservation and fidelity_rungs")
@@ -91,6 +50,13 @@ def hierarchical_options(options):
         raise BudgetError("unknown operation reservation override")
     for operation, amounts in overrides.items():
         _basket(amounts, f"{operation} reservation", units=global_limits)
+    modes = options.get("reservation_modes", {})
+    if type(modes) is not dict or set(modes) - {"operator"}:
+        raise BudgetError("reservation modes support operator physical units only")
+    for units in modes.values():
+        if type(units) is not dict or not units or set(units) - set(global_limits) \
+                or any(mode != "remaining" for mode in units.values()):
+            raise BudgetError("operator reservation modes require configured units and remaining mode")
     rungs = options["fidelity_rungs"]
     if type(rungs) is not list or not rungs:
         raise BudgetError("fidelity_rungs must be a nonempty list")
@@ -146,20 +112,67 @@ def _empty_state():
 
 
 class HierarchicalBudget:
-    def __init__(self, options, stamp: AccountingStamp, store):
+    def __init__(self, options, stamp: AccountingStamp, store, governance=None):
         hierarchical_options(options)
         if not isinstance(stamp, AccountingStamp):
             raise BudgetError("hierarchical budget requires an AccountingStamp")
         self.options, self.stamp, self.store = json_copy(options), stamp, store
         self.units = tuple(sorted(self.options["limits"]["global"]))
-        self._config_ref = _hash(self.options)
+        self._governed = None
+        if governance is not None:
+            from core.composition.budget_governance import ControlProtection
+            self._governed = ControlProtection(self, governance)
+        self._schema_version = 2 if self._governed is not None else 1
+        self._config_ref = _hash(self.options if governance is None else {
+            "options": self.options, "governance": self._governed.config})
         self._data = _empty_state()
         self._seq, self._head = 0, None
         self._lock = threading.RLock()
 
-    def _reservation(self, operation):
-        return json_copy(self.options.get("operation_reservations", {}).get(
+    def _reservation(self, operation, *, state=None, candidate_id=None, direction_id=None):
+        amounts = json_copy(self.options.get("operation_reservations", {}).get(
             operation, self.options["reservation"]))
+        modes = self.options.get("reservation_modes", {}).get(operation, {})
+        if modes:
+            scopes = (("global", {}), ("direction", {"direction_id": direction_id}),
+                      ("candidate", {"candidate_id": candidate_id}))
+            for unit in modes:
+                available = []
+                for level, scope in scopes:
+                    if unit in self.options["limits"][level]:
+                        used, reserved = self._totals(state, **scope)
+                        protected = self._protected(state)[unit] if level == "global" else Decimal(0)
+                        if level == "global" and self._governed is not None:
+                            available.append(self._main_slack(state)[unit])
+                        available.append(self._decimal(self.options["limits"][level][unit])
+                                         - used[unit] - reserved[unit] - protected)
+                # The fixed quote is a minimum, never a way to obtain a zero
+                # allowance after exhaustion. _insufficient rejects it if needed.
+                exact = max(self._decimal(amounts[unit]), min(available))
+                quantity = self._numeric(unit, exact)
+                if unit not in COUNTS and self._decimal(quantity) > exact:
+                    quantity = math.nextafter(quantity, 0.0)
+                amounts[unit] = quantity
+        return amounts
+
+    def _protected(self, state):
+        return (self._governed.protected(state) if self._governed is not None
+                else {unit: Decimal(0) for unit in self.units})
+
+    def _initial_protected(self, state):
+        return {unit: sum((self._decimal(slot["reservations"][phase][unit])
+            for slot in state.get("control_plan", {}).get("slots", [])
+            for phase in ("operator", "evaluation")), Decimal(0)) for unit in self.units}
+
+    def _main_slack(self, state):
+        # Unused control allowance is never returned to main: a successful
+        # quote must not disclose the cost or outcome of a private draw.
+        main = {"operations": {identifier: operation for identifier, operation in state["operations"].items()
+                               if operation["intent"].get("lane", "main") == "main"}}
+        used, reserved = self._totals(main)
+        initial = self._initial_protected(state)
+        return {unit: self._decimal(limit) - initial[unit] - used[unit] - reserved[unit]
+                for unit, limit in self.options["limits"]["global"].items()}
 
     @staticmethod
     def _decimal(value):
@@ -204,9 +217,14 @@ class HierarchicalBudget:
                   ("candidate", {"candidate_id": intent["candidate"]["id"]}))
         for level, scope in scopes:
             used, reserved = self._totals(data, **scope)
+            protected = self._protected(data) if level == "global" else {unit: Decimal(0) for unit in self.units}
             for unit, ceiling in self.options["limits"][level].items():
-                if used[unit] + reserved[unit] + self._decimal(intent["amounts"][unit]) > self._decimal(ceiling):
+                if used[unit] + reserved[unit] + protected[unit] + self._decimal(intent["amounts"][unit]) > self._decimal(ceiling):
                     return f"insufficient {level} {unit} budget"
+        if self._governed is not None and intent["lane"] == "main":
+            slack = self._main_slack(data)
+            if any(self._decimal(amount) > slack[unit] for unit, amount in intent["amounts"].items()):
+                return "insufficient fixed main allocation"
         return None
 
     def _allocation(self, candidate, direction_id, depth, data):
@@ -221,6 +239,7 @@ class HierarchicalBudget:
         else:
             value = sum(operation["intent"]["operation"] == "dev"
                         and operation["intent"]["direction_id"] == direction_id
+                        and operation["intent"].get("lane", "main") == "main"
                         and operation["status"] != "released"
                         for operation in data["operations"].values())
         index = min(value // self.options.get("rung_every", 1), len(self.options["fidelity_rungs"]) - 1)
@@ -235,7 +254,7 @@ class HierarchicalBudget:
         with self._lock:
             return self._allocation(candidate, direction_id or candidate.id, depth, self._data)
 
-    def _intent(self, intent_id, candidate, direction_id, operation, request, depth):
+    def _intent(self, intent_id, candidate, direction_id, operation, request, depth, *, state, lane="main", control_slot=None):
         _text(intent_id, "intent identity")
         _text(direction_id, "direction identity")
         if not isinstance(candidate, Candidate) or type(operation) is not str or operation not in OPERATIONS:
@@ -255,21 +274,93 @@ class HierarchicalBudget:
                 raise BudgetError("request split differs from operation authority")
         if depth is not None and (type(depth) is not int or depth < 0):
             raise BudgetError("operation depth must be a nonnegative integer")
-        return json_copy({"intent_id": intent_id, "candidate": asdict(candidate), "direction_id": direction_id,
+        intent = json_copy({"intent_id": intent_id, "candidate": asdict(candidate), "direction_id": direction_id,
             "operation": operation, "request": asdict(request) if request is not None else None,
-            "depth": depth, "amounts": self._reservation(operation)})
+            "depth": depth, "amounts": self._reservation(operation, state=state,
+                candidate_id=candidate.id, direction_id=direction_id)})
+        if self._governed is not None:
+            return self._governed.bind(state, intent, lane, control_slot)
+        if lane != "main" or control_slot is not None:
+            raise BudgetError("control lanes require governance")
+        return intent
 
-    def reserve_operation(self, intent_id, candidate, direction_id, operation, *, request=None, depth=None):
-        intent = self._intent(intent_id, candidate, direction_id, operation, request, depth)
-        fingerprint = _hash(intent)
+    def protect_controls(self, plan):
         with self._lock:
+            if self._governed is None:
+                raise BudgetError("control protection requires governance")
+            plan = self._governed.validate_plan(plan)
+            if "control_plan" in self._data:
+                if plan != self._data["control_plan"]:
+                    raise BudgetError("control plan differs from durable protection")
+                return
+            if self._seq == 0 and any(self.store.read(JOURNAL_KIND)):
+                raise BudgetError("existing budget journal must be restored before protecting controls")
+            self._commit("protect_controls", {"plan": plan})
+
+    def reserve_control_operation(self, slot_id, phase, candidate, request=None):
+        with self._lock:
+            if self._governed is None or phase not in {"operator", "evaluation"}:
+                raise BudgetError("control reservation requires governance and a known phase")
+            slot, _ = self._governed.slot(self._data, slot_id)
+            if phase == "evaluation" and request is None:
+                request = EvalRequest(**slot["request"])
+            return self.reserve_operation(f"control:{slot_id}:{phase}", candidate,
+                f"control:{slot_id}", "operator" if phase == "operator" else "dev",
+                request=request, lane="control", control_slot=slot_id)
+
+    def cancel_control_slot(self, slot_id, reason):
+        with self._lock:
+            if self._governed is None:
+                raise BudgetError("control cancellation requires governance")
+            _, live = self._governed.slot(self._data, slot_id)
+            if live["reason"] == reason:
+                return
+            self._commit("cancel_control", {"slot_id": slot_id, "reason": reason})
+
+    def audit_governance(self):
+        with self._lock:
+            if self._governed is None:
+                raise BudgetError("governance audit requires governed budget")
+            data, sequence, head = self._rebuild()
+            if self._seq and (sequence != self._seq or head != self._head):
+                raise BudgetError("live governance journal differs from committed budget history")
+            return self._governed.audit(data)
+
+    def reserve_operation(self, intent_id, candidate, direction_id, operation, *, request=None, depth=None,
+                          lane="main", control_slot=None):
+        with self._lock:
+            intent = self._intent(intent_id, candidate, direction_id, operation, request, depth,
+                                  state=self._data, lane=lane, control_slot=control_slot)
+            fingerprint = _hash(intent)
             if intent_id in self._data["operations"]:
                 return ReservationReceipt(intent_id, "rejected_invalid", fingerprint, {}, "intent identity already used")
-            reason = self._insufficient(self._data, intent)
+            admission_state = copy.deepcopy(self._data) if self._governed is not None else self._data
+            if self._governed is not None:
+                self._governed.convert(admission_state, intent)
+            reason = self._insufficient(admission_state, intent)
             if reason:
                 return ReservationReceipt(intent_id, "rejected_budget", fingerprint, {}, reason)
             self._commit("reserve", {"intent": intent, "fingerprint": fingerprint})
             return ReservationReceipt(intent_id, "granted", fingerprint, json_copy(intent["amounts"]))
+
+    def invocation_identity(self, intent_id, *, fingerprint):
+        """Read the started physical authority identity; never accept provider labels."""
+        with self._lock:
+            if self._governed is None:
+                raise BudgetError("external invocation identity requires governed physical authority")
+            state, sequence, head = self._rebuild()
+            if sequence != self._seq or head != self._head:
+                raise BudgetError("live invocation journal differs from committed physical authority")
+            operation = state["operations"].get(intent_id)
+            if operation is None or operation["fingerprint"] != fingerprint or operation["status"] != "started":
+                raise BudgetError("external invocation requires the exact started physical reservation")
+            intent = operation["intent"]
+            phase = intent["operation"] if intent["operation"] in {"operator", "planning"} else "evaluation"
+            return json_copy({"intent_id": intent_id, "physical_fingerprint": fingerprint,
+                "candidate_id": intent["candidate"]["id"], "lane": intent["lane"],
+                "slot_id": intent["control_slot"], "account": intent["account"],
+                "operation": intent["operation"], "phase": phase, "status": "started",
+                "amounts": intent["amounts"]})
 
     def start_operation(self, intent_id, *, fingerprint):
         """Optional durable call-start marker; started calls cannot be released."""
@@ -277,15 +368,35 @@ class HierarchicalBudget:
             self.pre_call_check()
             self._commit("start", {"intent_id": intent_id, "fingerprint": fingerprint})
 
-    def settle_operation(self, intent_id, actual_costs, *, measured_units, fingerprint):
+    def settle_operation(self, intent_id, actual_costs, *, measured_units, fingerprint,
+                         provider_evidence_ref=None):
         costs = _basket(actual_costs, "actual costs", units=self.units)
         if type(measured_units) not in (list, tuple, set, frozenset) \
                 or any(type(unit) is not str or unit not in UNITS for unit in measured_units) \
                 or not set(self.units).issubset(measured_units):
             raise BudgetError("physical usage coverage is missing; reservation remains open")
         with self._lock:
-            self._commit("settle", {"intent_id": intent_id, "fingerprint": fingerprint,
-                                  "actual_costs": costs, "measured_units": sorted(set(measured_units))})
+            data = {"intent_id": intent_id, "fingerprint": fingerprint,
+                    "actual_costs": costs, "measured_units": sorted(set(measured_units))}
+            if self._governed is not None:
+                data["provider_evidence_ref"] = (_hash([]) if provider_evidence_ref is None
+                                                 else provider_evidence_ref)
+            elif provider_evidence_ref is not None:
+                raise BudgetError("provider evidence references require governance")
+            self._commit("settle", data)
+
+    def invalidate_protection(self, intent_id, reason):
+        """Persist a proven guarantee breach after preserving its full known bill."""
+        with self._lock:
+            if self._governed is None:
+                raise BudgetError("protection invalidation requires governance")
+            _text(intent_id, "protection breach intent")
+            _text(reason, "protection breach reason")
+            if reason != reason.strip():
+                raise BudgetError("protection breach reason must be canonical trimmed text")
+            if reason in self._data.get("protection_breaches", {}).get(intent_id, []):
+                return
+            self._commit("invalidate_protection", {"intent_id": intent_id, "reason": reason})
 
     def mark_unresolved(self, intent_id, *, fingerprint, reason):
         _text(reason, "unresolved usage reason")
@@ -304,20 +415,52 @@ class HierarchicalBudget:
 
     def _reduce(self, state, kind, data):
         operations = state["operations"]
+        if self._governed is not None and kind == "invalidate_protection":
+            if set(data) != {"intent_id", "reason"}:
+                raise BudgetError("invalid protection breach event")
+            _text(data["intent_id"], "protection breach intent")
+            _text(data["reason"], "protection breach reason")
+            if data["reason"] != data["reason"].strip():
+                raise BudgetError("protection breach reason must be canonical trimmed text")
+            operation = operations.get(data["intent_id"])
+            if operation is None or operation["status"] != "settled":
+                raise BudgetError("protection invalidation requires a settled operation")
+            reasons = state.setdefault("protection_breaches", {}).setdefault(data["intent_id"], [])
+            if data["reason"] in reasons:
+                raise BudgetError("duplicate durable protection breach")
+            reasons.append(data["reason"])
+            state["halt_reasons"].append(f"protection invalidated for {data['intent_id']}: {data['reason']}")
+            return
+        if self._governed is not None and kind == "protect_controls":
+            if set(data) != {"plan"}:
+                raise BudgetError("invalid control protection event")
+            self._governed.protect(state, data["plan"])
+            return
+        if self._governed is not None and kind == "cancel_control":
+            if set(data) != {"slot_id", "reason"}:
+                raise BudgetError("invalid control cancellation event")
+            self._governed.cancel(state, data["slot_id"], data["reason"])
+            return
         if kind == "reserve":
             if set(data) != {"intent", "fingerprint"}:
                 raise BudgetError("invalid reserve event")
             intent = data["intent"]
-            if type(intent) is not dict or set(intent) != {"intent_id", "candidate", "direction_id", "operation", "request", "depth", "amounts"}:
+            fields = {"intent_id", "candidate", "direction_id", "operation", "request", "depth", "amounts"}
+            if self._governed is not None:
+                fields |= {"lane", "control_slot", "account"}
+            if type(intent) is not dict or set(intent) != fields:
                 raise BudgetError("invalid reservation binding")
             rebuilt = self._intent(intent["intent_id"], Candidate(**intent["candidate"]), intent["direction_id"],
                 intent["operation"], EvalRequest(**intent["request"]) if intent["request"] is not None else None,
-                intent["depth"])
+                intent["depth"], state=state, lane=intent.get("lane", "main"),
+                control_slot=intent.get("control_slot"))
             if rebuilt != intent or _hash(intent) != data["fingerprint"] or intent["intent_id"] in operations:
                 raise BudgetError("reservation fingerprint or identity mismatch")
-            if intent["operation"] == "dev" and intent["request"] != asdict(self._allocation(
+            if intent["operation"] == "dev" and intent.get("lane", "main") == "main" and intent["request"] != asdict(self._allocation(
                     Candidate(**intent["candidate"]), intent["direction_id"], intent["depth"], state)):
                 raise BudgetError("dev request differs from the allocated fidelity rung")
+            if self._governed is not None:
+                self._governed.convert(state, intent)
             reason = self._insufficient(state, intent)
             if reason:
                 raise BudgetError("journal reserve violates limits: " + reason)
@@ -333,6 +476,8 @@ class HierarchicalBudget:
         required = {"start": {"intent_id", "fingerprint"}, "release": {"intent_id", "fingerprint"},
                     "unresolved": {"intent_id", "fingerprint", "reason"},
                     "settle": {"intent_id", "fingerprint", "actual_costs", "measured_units"}}
+        if self._governed is not None:
+            required["settle"].add("provider_evidence_ref")
         if kind not in required or set(data) != required[kind]:
             raise BudgetError("unknown or malformed physical operation event")
         operation = operations.get(data["intent_id"])
@@ -356,6 +501,11 @@ class HierarchicalBudget:
             if type(coverage) is not list or any(type(unit) is not str or unit not in UNITS for unit in coverage) \
                     or coverage != sorted(set(coverage)) or not set(self.units).issubset(coverage):
                 raise BudgetError("settlement omitted physical usage coverage")
+            if self._governed is not None:
+                reference = data["provider_evidence_ref"]
+                if type(reference) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", reference) is None:
+                    raise BudgetError("invalid governed provider evidence reference")
+                operation["provider_evidence_ref"] = reference
             operation["status"], operation["actual_costs"] = "settled", costs
             operation["measured_units"] = coverage
             for unit, cost in costs.items():
@@ -368,7 +518,7 @@ class HierarchicalBudget:
         data = json_copy(data, label="budget event")
         updated = copy.deepcopy(self._data)
         self._reduce(updated, kind, data)
-        event = {"schema_version": 1, "seq": self._seq + 1, "previous": self._head,
+        event = {"schema_version": self._schema_version, "seq": self._seq + 1, "previous": self._head,
                  "config_ref": self._config_ref, "stamp": asdict(self.stamp), "event": kind, "data": data}
         event["event_ref"] = _hash(event)
         self.store.append(JOURNAL_KIND, event)
@@ -401,13 +551,13 @@ class HierarchicalBudget:
                 or len(set(comparison["seed_set"])) != len(comparison["seed_set"])):
             raise BudgetError("invalid convergence context or seeds")
 
-    def _progress(self, direction_id=None):
+    def _progress(self, direction_id=None, *, data=None):
         rule = self.options.get("convergence")
         progress = {"attempts": 0, "samples": 0, "no_improvement": 0, "best": None,
                     "stagnant": False, "comparison_ref": None, "window_resets": 0}
         if rule is None:
             return progress
-        for observation in self._data["observations"].values():
+        for observation in (self._data if data is None else data)["observations"].values():
             if direction_id is not None and observation["direction_id"] != direction_id:
                 continue
             if progress["comparison_ref"] != observation["comparison_ref"]:
@@ -472,8 +622,12 @@ class HierarchicalBudget:
             if self._data["halt_reasons"] or any(operation["status"] == "unresolved"
                     for operation in self._data["operations"].values()) or self._progress(branch)["stagnant"]:
                 return False
+            if self._governed is not None and any(
+                    self._decimal(amount) > self._main_slack(self._data)[unit]
+                    for unit, amount in self._reservation("dev").items()):
+                return False
             globally_used, globally_reserved = self._totals(self._data)
-            if any(globally_used[unit] + globally_reserved[unit] + self._decimal(self._reservation("dev")[unit]) > self._decimal(limit)
+            if any(globally_used[unit] + globally_reserved[unit] + self._protected(self._data)[unit] + self._decimal(self._reservation("dev")[unit]) > self._decimal(limit)
                    for unit, limit in self.options["limits"]["global"].items()):
                 return False
             used, reserved = self._totals(self._data, direction_id=branch)
@@ -487,8 +641,12 @@ class HierarchicalBudget:
                 return ConvergenceSignal("reservation_overrun", "; ".join(self._data["halt_reasons"]))
             if any(operation["status"] == "unresolved" for operation in self._data["operations"].values()):
                 return ConvergenceSignal("unresolved_usage", "physical usage must be reconciled before another call")
+            if self._governed is not None and any(
+                    self._decimal(amount) > self._main_slack(self._data)[unit]
+                    for unit, amount in self._reservation("dev").items()):
+                return ConvergenceSignal("global_budget_exhausted", "no complete dev operation fits the fixed main allocation")
             used, reserved = self._totals(self._data)
-            if any(used[unit] + reserved[unit] + self._decimal(self._reservation("dev")[unit]) > self._decimal(limit)
+            if any(used[unit] + reserved[unit] + self._protected(self._data)[unit] + self._decimal(self._reservation("dev")[unit]) > self._decimal(limit)
                    for unit, limit in self.options["limits"]["global"].items()):
                 return ConvergenceSignal("global_budget_exhausted", "no complete dev operation reservation fits")
             progress = self._progress()
@@ -500,20 +658,59 @@ class HierarchicalBudget:
         with self._lock:
             directions = sorted({operation["intent"]["direction_id"] for operation in self._data["operations"].values()})
             candidates = sorted({operation["intent"]["candidate"]["id"] for operation in self._data["operations"].values()})
-            return {"schema_version": 1, "units": list(self.units), "limits": json_copy(self.options["limits"]),
+            result = {"schema_version": self._schema_version, "units": list(self.units), "limits": json_copy(self.options["limits"]),
                 "global": self._view(self._data, self.options["limits"]["global"]),
                 "directions": {identifier: self._view(self._data, self.options["limits"]["direction"], direction_id=identifier) for identifier in directions},
                 "candidates": {identifier: self._view(self._data, self.options["limits"]["candidate"], candidate_id=identifier) for identifier in candidates},
                 "open_intents": sorted(identifier for identifier, operation in self._data["operations"].items()
                                        if operation["status"] in {"reserved", "started", "unresolved"}),
                 "halt_reasons": list(self._data["halt_reasons"]), "progress": self._progress()}
+            if self._governed is not None:
+                result["governance"] = self._governed.audit(self._data)
+            return result
+
+    def main_state(self):
+        """Policy view with fixed control allowance and no control observations.
+
+        Actual admission remains governed by the complete journal. The policy
+        sees the fixed initial main allowance regardless of control costs or
+        failures, matching the main admission ceiling without exposing draws.
+        """
+        with self._lock:
+            if self._governed is None:
+                return self.state()
+            if "control_plan" not in self._data:
+                raise BudgetError("main view requires the frozen control plan")
+            data = _empty_state()
+            data["operations"] = {identifier: operation for identifier, operation in self._data["operations"].items()
+                                  if operation["intent"]["lane"] == "main"}
+            main_candidates = {operation["intent"]["candidate"]["id"] for operation in data["operations"].values()}
+            data["observations"] = {identifier: observation for identifier, observation in self._data["observations"].items()
+                                    if observation["candidate_id"] in main_candidates}
+            data["halt_reasons"] = [reason for reason in self._data["halt_reasons"]
+                if any(reason.startswith(f"reservation overrun for {identifier}:") for identifier in data["operations"])]
+            limits = json_copy(self.options["limits"])
+            for unit, limit in limits["global"].items():
+                protected = self._initial_protected(self._data)[unit]
+                limits["global"][unit] = self._numeric(unit, self._decimal(limit) - protected)
+            directions = sorted({operation["intent"]["direction_id"] for operation in data["operations"].values()})
+            return {"schema_version": 1, "units": list(self.units), "limits": limits,
+                "global": self._view(data, limits["global"]),
+                "directions": {identifier: self._view(data, limits["direction"], direction_id=identifier) for identifier in directions},
+                "candidates": {identifier: self._view(data, limits["candidate"], candidate_id=identifier) for identifier in sorted(main_candidates)},
+                "open_intents": sorted(identifier for identifier, operation in data["operations"].items()
+                                       if operation["status"] in {"reserved", "started", "unresolved"}),
+                "halt_reasons": data["halt_reasons"], "progress": self._progress(data=data)}
+
+    def main_account_summary(self):
+        return self.main_state()
 
     def account_summary(self):
         return self.state()
 
     def checkpoint_state(self):
         with self._lock:
-            return {"schema_version": 1, "config_ref": self._config_ref, "stamp": asdict(self.stamp),
+            return {"schema_version": self._schema_version, "config_ref": self._config_ref, "stamp": asdict(self.stamp),
                     "seq": self._seq, "head": self._head, "state": self.state()}
 
     def _rebuild(self):
@@ -521,7 +718,7 @@ class HierarchicalBudget:
         for row in self.store.read(JOURNAL_KIND):
             event = json_copy(row["payload"], label="budget journal")
             if type(event) is not dict or set(event) != {"schema_version", "seq", "previous", "config_ref", "stamp", "event", "data", "event_ref"} \
-                    or type(event["schema_version"]) is not int or event["schema_version"] != 1 \
+                    or type(event["schema_version"]) is not int or event["schema_version"] != self._schema_version \
                     or type(event["seq"]) is not int or event["seq"] != sequence + 1 \
                     or event["previous"] != head or event["config_ref"] != self._config_ref \
                     or event["stamp"] != asdict(self.stamp) \

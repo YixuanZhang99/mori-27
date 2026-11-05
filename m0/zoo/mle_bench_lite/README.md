@@ -1,5 +1,25 @@
 # MLE-Bench Lite TaskAdapter
 
+## S9 configured agent and three-task pilot
+
+For the latest anchor, negative-feedback and population implementation, use
+`python -m zoo.mle_bench_lite.pilot` with the shared `composed_agent`
+baseline/full variants. The [S9 guide](../../../docs/MLE_COMPOSED_V68.md)
+documents the CLI, isolated public-training splits, physical budgets, final
+official scoring, and the manual GitHub CPU workflow.
+
+The configured pilot currently supports `spooky-author-identification`,
+`leaf-classification` and `nomad2018-predict-transparent-conductors` using
+their CSV inputs. It freezes all submissions before official grading and
+labels reports as subset pilots. Its local tests and synthetic official-runtime
+smoke are not external model measurements or full MLE-Bench scores.
+
+The original 22-task host/governed campaign below retains its strict complete
+matrix requirements. Its bundled `governed_agent` uses the legacy M0 path;
+that protocol is separate from S9 and is not silently upgraded.
+
+## Original complete-suite adapter
+
 This adapter covers the official 22-task Low/Lite split at the revision in `PROVENANCE.md`.
 
 ```python

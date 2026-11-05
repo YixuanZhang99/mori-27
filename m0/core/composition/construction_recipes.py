@@ -1,0 +1,101 @@
+"""Pure built-in construction recipes and versioned role registration."""
+from dataclasses import asdict
+
+from core.composition.construction import PromptMaterializer, RoleDefinition
+
+
+DEFAULT_ROLES = {name: RoleDefinition(name, "1", text) for name, text in (
+    ("general", "Construct a complete artifact that implements the stated hypothesis."),
+    ("coder", "Construct executable code implementing the hypothesis; preserve the required interfaces."),
+    ("analyst", "Construct an evidence-based analysis implementing the stated hypothesis; distinguish observations from assumptions."))}
+
+
+def constructor_options(options):
+    if type(options) is not dict or set(options) - {"max_attempts"} \
+            or type(options.get("max_attempts", 1)) is not int or options.get("max_attempts", 1) < 1:
+        raise ValueError("prompt constructor requires a positive max_attempts")
+
+
+class RecipeOperator:
+    measured_cost_units = ("token", "node", "eval_count")
+
+    def __init__(self, kind, *, prompt_version="1", metric="dev/score"):
+        self.kind, self.prompt_version, self.metric = kind, prompt_version, metric
+
+    def recipe(self, request):
+        if len(request.parents) != {"draft": 0, "reflective": 1, "crossover": 2}[self.kind] \
+                or len(request.evidence) != len(request.parents):
+            raise ValueError("construction recipe has invalid selected parent inputs")
+        comparisons = {}
+        for parent, evidence in zip(request.parents, request.evidence):
+            if evidence.candidate_id != parent.candidate.id:
+                raise ValueError("recipe parent differs from its comparison evidence")
+            comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+        instruction = request.context.get("instruction", "")
+        if type(instruction) is not str:
+            raise ValueError("recipe instruction must be configured text")
+        return {"kind": self.kind, "task_desc": request.task_desc,
+            "parent_artifacts": [{"candidate_id": p.candidate.id, "artifact": p.artifact} for p in request.parents],
+            "instructions": [instruction] if instruction else [], "comparison": comparisons}
+
+
+class FunSearchRecipeOperator:
+    """Bridge a driver-verified ordered program selection into a construction plan.
+
+    The runtime must obtain this payload from its durable coordinator, not an
+    untrusted policy. ConstructionPlan validates its shape and digests; the
+    invocation audit must independently bind it to original journal events.
+    """
+    measured_cost_units = ("token", "node", "eval_count")
+
+    def __init__(self, *, metric='dev/score'):
+        if type(metric) is not str or not metric:
+            raise ValueError('FunSearch comparison metric is required')
+        self.metric = metric
+
+    def recipe(self, request):
+        try:
+            data = request.strategy['funsearch']
+            if type(data) is not dict or set(data) != {'selection', 'materialization'}:
+                raise ValueError('FunSearch requires driver-bound selection and materialization')
+            selection, materialized = data['selection'], data['materialization']
+            if (type(selection) is not dict or type(materialized) is not dict or
+                    materialized['samples'] != selection['samples'] or
+                    selection['ancestry'] != [parent.candidate.id for parent in request.parents] or
+                    len(request.parents) != len(request.evidence) or not request.parents):
+                raise ValueError('FunSearch selected samples differ from parent inputs')
+            comparisons = {}
+            for parent, evidence in zip(request.parents, request.evidence):
+                if evidence.candidate_id != parent.candidate.id:
+                    raise ValueError('FunSearch parent differs from comparison evidence')
+                comparisons[parent.candidate.id] = evidence.eval_result.metrics[self.metric]
+            binding = {'selection': selection, **{key: materialized[key] for key in
+                ('selection_ref', 'input_ref', 'prompt_ref', 'evidence_refs', 'binding_ref')}}
+            return {'kind': 'funsearch', 'task_desc': request.task_desc,
+                'parent_artifacts': [{'candidate_id': parent.candidate.id, 'artifact': parent.artifact}
+                                     for parent in request.parents],
+                'instructions': [materialized['prompt']], 'comparison': comparisons, 'funsearch_binding': binding}
+        except (KeyError, TypeError) as exc:
+            raise ValueError('invalid FunSearch recipe inputs') from exc
+
+
+def register_construction(registry):
+    registry.register("constructor", "prompt", lambda ctx, opts: PromptMaterializer(DEFAULT_ROLES, **opts),
+        validate_options=constructor_options,
+        execution={"schema_version": 1, "roles": {key: asdict(role) for key, role in DEFAULT_ROLES.items()}})
+
+
+def funsearch_constructor_options(options):
+    if type(options) is not dict or set(options) != {'template', 'function_name'}:
+        raise ValueError('FunSearch constructor requires a frozen template and target')
+    from core.composition.funsearch_validator import program_validator
+    program_validator(options['template'], options['function_name'])
+
+
+def register_funsearch_construction(registry):
+    from core.composition.funsearch_validator import program_validator
+    registry.register('constructor', 'funsearch_prompt', lambda ctx, opts: PromptMaterializer(
+        DEFAULT_ROLES, validator=program_validator(opts['template'], opts['function_name']),
+        validator_version='funsearch-program-v1', validator_deterministic=True),
+        validate_options=funsearch_constructor_options,
+        execution={'schema_version': 1, 'roles': {key: asdict(role) for key, role in DEFAULT_ROLES.items()}})

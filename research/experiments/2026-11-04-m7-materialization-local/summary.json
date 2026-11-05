@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-11-04T12:59:31.662057+00:00",
+  "finished_at": "2026-11-04T13:04:28.375435+00:00",
+  "elapsed_seconds": 296.689,
+  "source_unchanged": true,
+  "passed": true,
+  "scope": "Private durable native materialization only; public Framework, Git, controls and v9 currency integration pending",
+  "base_commit": "a1b7c60dc86413d515b8a6ea408f1630b9e84abc",
+  "linux_tests": 2180,
+  "tooling_tests": 76,
+  "new_materialization_tests": 28,
+  "construction_and_recovery_tests": 78,
+  "external_provider_requests": 0,
+  "public_m7_complete": false,
+  "independent_whole_branch_review": "pending integrated implementation",
+  "log_sha256": "af16d605f15e9673b7a7b26f24ba8d81ed90351a8a9cec235863d1f0027e11a8",
+  "source_manifest_sha256": "da5f3b24c381dbcc7060e25a9bc7a47a4564f1dc2fd10f21bad841519740ebcc"
+}

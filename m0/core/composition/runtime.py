@@ -18,7 +18,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from types import FunctionType
 
-from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorRequest, Proposal
+from core.composition.contracts import AssemblyConfig, BuildContext, Decision, OperatorBudgetExhausted, OperatorRequest, Proposal
 from core.composition.context import ContextMemory, ContextPackBuilder
 from core.composition.knowledge import KnowledgePack
 from core.composition.admission import LayeredAdmissionController
@@ -96,12 +96,31 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.eval_requests = {}
         self._halted_reason = None
         self.proxy = None
+        self.governed = None
+        self._stop_disposition = None
+        self.construction_enabled = self.assembly.execution is not None
+        funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
+            self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
+            self.assembly.executor.options.get('sandbox') == 'bubblewrap')
+        if self.assembly.policy.name == 'funsearch' and (
+                not self.construction_enabled or not funsearch_executor_ok):
+            raise ValueError('FunSearch requires its bounded M7 configuration')
+        self.construction = None
+        self.continuation_enabled = self.construction_enabled or self.assembly.governance is not None or self.assembly.executor.name == "git_worktree"
+        self.runtime_identity = "composed-v7-governed" if self.assembly.governance is not None else "composed-v6"
+        if self.construction_enabled:
+            self.runtime_identity = "composed-v9-m7-governed" if self.assembly.governance is not None else "composed-v9-m7"
+        self.external_bridge_name = registry.external_bridge_name(self.assembly)
+        if self.external_bridge_name is not None:
+            from core.composition.external_provider import EXTERNAL_RUNTIME, CONSTRUCTION_EXTERNAL_RUNTIME
+            self.runtime_identity = CONSTRUCTION_EXTERNAL_RUNTIME if self.construction_enabled else EXTERNAL_RUNTIME
 
     def _build(self, task):
         scope = ScopeContext(self._logical_run_id, _id("task", task),
                              self.assembly.domain.name)
         context = BuildContext(self.llm, self.evaluator, self.store, scope,
-                               self.cfg, str(self.workdir), self.stamp, mode=self.assembly.mode)
+                               self.cfg, str(self.workdir), self.stamp, mode=self.assembly.mode,
+                               governance=self.assembly.governance.to_dict() if self.assembly.governance else None)
         self.parts = self.registry.build(self.assembly, context)
         if self._forbidden_parts is not None:
             live = [item for value in self._forbidden_parts.values()
@@ -121,13 +140,14 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if any(not callable(getattr(self.parts[kind], name, None)) for name in methods):
                 raise ValueError(f"component {kind} does not implement its runtime contract")
         for operator in self.parts["operators"]:
-            if not callable(getattr(operator, "propose", None)):
+            if not callable(getattr(operator, "recipe" if self.construction_enabled else "propose", None)):
                 raise ValueError("operator does not implement propose")
         self.frontier, self.memory = self.parts["frontier"], self.parts["memory"]
         from core.composition.defaults import MetricAdmission, PromptOperator
+        from core.composition.construction_recipes import RecipeOperator
         expected_metric = self.frontier.metric
         if getattr(self.parts["domain"], "metric", expected_metric) != expected_metric or any(
-                isinstance(operator, PromptOperator) and operator.metric != expected_metric
+                isinstance(operator, (PromptOperator, RecipeOperator)) and operator.metric != expected_metric
                 for operator in self.parts["operators"]):
             raise ValueError("configured objective differs across domain/frontier/operators")
         admission = self.parts["admission"]
@@ -146,22 +166,27 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._preflight_population()
         self.durable_executor = bool(getattr(self.parts["executor"], "durable_operation_recovery", False))
         required_executor = getattr(self.parts["domain"], "required_executor", None)
-        if required_executor is not None and required_executor != self.assembly.executor.name:
+        if required_executor is not None and required_executor != self.assembly.executor.name and not (
+                self.construction_enabled and required_executor == "git_worktree" and self.assembly.executor.name == "git_artifact"):
             raise ValueError("domain requires its bound worktree executor")
-        if self.durable_executor:
+        if self.continuation_enabled:
             from core.composition.recovery import ContinuationStore
             from core.composition.strategies import GreedyPolicy, LLMCyclesPolicy
             from core.composition.defaults import PromptOperator, InstructionSkill
             if not self.hierarchical or not self.cfg.checkpoint_enabled:
                 raise ValueError("worktree recovery requires hierarchical budgets and checkpoints")
-            if type(self.parts["policy"]) not in {GreedyPolicy, LLMCyclesPolicy, PopulationPolicy} or any(
+            if self.durable_executor and (type(self.parts["policy"]) not in {GreedyPolicy, LLMCyclesPolicy, PopulationPolicy} or any(
                     type(item) not in {PromptOperator, CrossoverOperator} for item in self.parts["operators"]) or any(
-                    type(item) is not InstructionSkill for item in self.parts["skills"]):
+                    type(item) is not InstructionSkill for item in self.parts["skills"])):
                 raise ValueError("worktree continuation requires supported deterministic local decision components")
             if not isinstance(self.store, ContinuationStore):
                 raise ValueError("worktree recovery requires a continuation journal")
-            self.parts["executor"].validate_domain(self.parts["domain"])
-            self.parts["provider"].durable_store = self.store
+            if self.durable_executor:
+                self.parts["executor"].validate_domain(self.parts["domain"])
+            if self.assembly.governance is None:
+                self.parts["provider"].durable_store = self.store
+            else:
+                self.parts["provider"]._governed_store = self.store
         preflight = getattr(self.parts["domain"], "validate_context", None)
         if callable(preflight):
             preflight()
@@ -170,10 +195,44 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                          "domain_version": getattr(self.parts["domain"], "evaluator_version", None),
                          "evaluation_context": getattr(self.parts["domain"], "evaluation_context", ""),
                          "knowledge": getattr(self.parts.get("knowledge"), "manifest_binding", None)}
+        if self.construction_enabled:
+            from core.composition.configured_execution import ConfiguredExecution
+            self.construction = ConfiguredExecution(self.assembly.execution, self.parts, self.store,
+                getattr(self, "_recorded_artifacts_root", self.workdir))
+            self.parts["construction_execution"] = self.construction
+            self.manifest["construction"] = self.construction.manifest_binding
         if self.durable_executor:
             self.manifest["command_domain"] = self.parts["domain"].manifest_binding
             self.manifest["executor"] = self.parts["executor"].manifest_binding
         self.manifest["evaluation_contexts"] = {"dev": self.manifest["evaluation_context"]}
+        self.funsearch = None
+        if self.assembly.policy.name == 'funsearch':
+            from core.composition.funsearch_coordinator import FunSearchCoordinator
+            from core.composition.command_domain import CommandDomain
+            options = self.assembly.policy.options
+            domain_binding = getattr(self.parts['domain'], 'funsearch_binding', None)
+            if domain_binding is not None and domain_binding != {key: options[key] for key in
+                    ('case_ids', 'metric', 'template_ref')}:
+                raise ValueError('frozen FunSearch task differs from policy configuration')
+            constructor = self.assembly.execution.constructor if self.construction_enabled else None
+            funsearch_executor_ok = (self.assembly.executor.name == 'inprocess' or
+                self.assembly.executor.name == 'git_artifact' and self.assembly.domain.name == 'command' and
+                self.assembly.executor.options.get('sandbox') == 'bubblewrap')
+            if (not self.construction_enabled or not funsearch_executor_ok or self.durable_executor or
+                    self.assembly.executor.name == 'git_artifact' and not isinstance(self.parts['domain'], CommandDomain) or
+                    [spec.name for spec in self.assembly.operators] != ['draft', 'funsearch'] or
+                    constructor.name != 'funsearch_prompt' or constructor.options != {
+                        'template': options['template'], 'function_name': options['function_name']} or
+                    options.get('comparison_metric', 'dev/score') != self.frontier.metric or
+                    self.assembly.operators[1].options.get('metric', 'dev/score') != self.frontier.metric):
+                raise ValueError('FunSearch requires its bounded M7 configuration')
+            self.funsearch = FunSearchCoordinator(self.parts['policy'], self.store,
+                case_ids=options['case_ids'], metric=options['metric'], logical_run_id=self._logical_run_id,
+                evaluator_version=self.manifest['domain_version'], evaluation_context=self.manifest['evaluation_context'],
+                template_ref=options['template_ref'], template=options['template'], function_name=options['function_name'])
+        elif (any(spec.name == 'funsearch' for spec in self.assembly.operators) or
+              self.construction_enabled and self.assembly.execution.constructor.name == 'funsearch_prompt'):
+            raise ValueError('FunSearch components require the FunSearch policy')
         if self.layered:
             contexts = self.layered.validate_domain(self.parts["domain"])
             self.manifest["evaluation_contexts"].update(contexts)
@@ -211,6 +270,20 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         if (self.assembly.memory.options.get("export_on_finish") or self.assembly.knowledge
                 and self.assembly.knowledge.options.get("ingest_on_finish")) and not self.memory.evaluation_context:
             raise ValueError("opaque evaluation context cannot authorize memory export or knowledge ingest")
+
+        if self.assembly.governance is not None:
+            from core.composition.governed import GovernedInvocation
+            self.governed = GovernedInvocation(self)
+            self.manifest["governance"] = self.governed.plan
+            self.manifest["governance_provider"] = self.governed.main_binding
+            if self.governed.external is not None:
+                self.manifest["external_governance"] = self.governed.external_plan.to_dict()
+
+        if self.hierarchical:
+            from core.composition.invocation import InvocationLifecycle
+            from core.composition.hierarchical_runtime import time as physical_clock
+            self.invocations = InvocationLifecycle(self.budget, self.store, self._settle_physical,
+                                                   governance=self.governed, clock=physical_clock.monotonic)
 
     def _validate_domain(self, request):
         validate_request(request)
@@ -257,7 +330,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        return {"runtime": "composed-v6", "manifest": self.manifest, "config": config,
+        return {"runtime": self.runtime_identity, "manifest": self.manifest, "config": config,
                 "logical_run_id": self._logical_run_id,
                 "context_export": self._context_export,
                 "evaluation_requests": {key: asdict(value) for key, value in self.eval_requests.items()},
@@ -271,16 +344,17 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 "memory": self.memory.checkpoint_state(), "module_states": self._module_states(),
                 "proposals": {key: _jsonable(value) for key, value in self.proposals.items()},
                 "evidence": {key: encode_evidence(value)["evidence"] for key, value in self.evidence.items()},
-                "incumbent": self.incumbent, "ledger": self.budget.account_summary()}
+                "incumbent": self.incumbent, "ledger": self.budget.account_summary(),
+                **({"materializations": self.construction.snapshot()} if self.construction_enabled else {})}
 
     def _save(self):
         if self.cfg.checkpoint_enabled:
-            if getattr(self, "durable_executor", False) and self.store.peek() is not None:
+            if self.continuation_enabled and not hasattr(self, "_recorded_rows") and self.store.peek() is not None:
                 raise ValueError("cannot checkpoint before consuming the durable continuation")
             if (self.budget.state()["open_intents"] if self.hierarchical else self.budget.reserves):
                 raise RuntimeError("cycle checkpoint cannot contain unsettled reservations")
             checkpoint = RunCheckpoint.create(self._payload())
-            if getattr(self, "durable_executor", False):
+            if self.continuation_enabled:
                 from core.composition.recovery import save_checkpoint
                 save_checkpoint(checkpoint, self.workdir, self.store)
                 return
@@ -293,7 +367,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         config = asdict(self.cfg)
         config.pop("resume_from_checkpoint")
         config.pop("stop_after_generation")
-        expected = {"runtime": "composed-v6", "manifest": self.manifest,
+        expected = {"runtime": self.runtime_identity, "manifest": self.manifest,
                     "task_desc": self.task, "config": config}
         for field in ("runtime", "manifest", "task_desc", "config"):
             if payload.get(field) != expected[field]:
@@ -314,6 +388,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 raise ValueError("checkpoint candidate key differs from evidence identity")
             self._validate_domain(evaluation_requests[key])
             validate_evidence(evidence, expected_binding=self._binding(proposals[key], evaluation_requests[key]))
+        if self.construction_enabled:
+            self.construction.restore(payload.get("materializations"))
+            for key, proposal in proposals.items():
+                item = self.construction.materializations.get(key)
+                if proposal.artifact and (item is None or item.proposal != proposal):
+                    raise ValueError("checkpoint proposal differs from its materialization")
         self._verify_context_export(payload["context_export"])
         if self.hierarchical:
             self.budget.restore_state(payload["budget_checkpoint"])
@@ -324,7 +404,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             raise ValueError("checkpoint budget differs from durable ledger")
         restored = self._restore_frontier_snapshot(payload["frontier_checkpoint"].encode(),
             incumbent=payload["incumbent"], proposals=proposals, evidence=evidence_by_id)
+        frontier_store = self.frontier.store
         self.frontier.__dict__.update(restored.__dict__)
+        if self.governed:
+            self.frontier.store = frontier_store
         self.memory.restore_state(payload["memory"])
         for key, state in payload["module_states"].items():
             kind, index = key.split(":")
@@ -334,6 +417,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
             restore(state)
+        if self.funsearch:
+            self.funsearch._audit()
         if self.proxy:
             self.proxy.restore_state(payload["proxy_state"])
             self.memory.verify_proxy_feedback(self.proxy)
@@ -341,7 +426,39 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             raise ValueError("checkpoint contains an unconfigured proxy monitor")
         else:
             self.memory.verify_proxy_feedback(None)
-        self.frontier.store = self.store
+        if self.governed is None:
+            self.frontier.store = self.store
+        if self.construction_enabled:
+            from core.composition.gepa_policy import GEPAInstancePolicy
+            policy = self.parts['policy']
+            if type(policy) is GEPAInstancePolicy:
+                saved = {item['id']: item['scores'] for item in
+                         policy.instance_frontier.checkpoint_state()['candidates']}
+                recorded = [row['payload'] for row in self.store.read('gepa_public_verdicts')]
+                journal_evidence = {row['payload']['proposal']['candidate']['id']: row['payload']
+                                    for row in self.store.read('composed_evidence')}
+                expected = {}
+                for candidate_id, evidence in evidence_by_id.items():
+                    if evidence.eval_result.status is not EvalStatus.OK:
+                        continue
+                    public_items = public_projection(evidence).eval_result.contract.items or ()
+                    verdicts = {item.item_id: item.verdict for item in public_items
+                                if item.visibility == 'public' and item.seed is None}
+                    row = journal_evidence.get(candidate_id)
+                    if len(verdicts) != len(public_items) or row is None or \
+                            row['evidence'] != encode_evidence(evidence)['evidence']:
+                        raise ValueError('GEPA public verdict evidence differs from original journal')
+                    expected[candidate_id] = (verdicts, row['evidence_ref'])
+                if len(recorded) != len(expected) or len(saved) != len(expected):
+                    raise ValueError('GEPA public verdict evidence coverage differs')
+                for row in recorded:
+                    candidate_id = row.get('candidate_id')
+                    if set(row) != {'candidate_id', 'verdicts', 'evidence_ref'} or candidate_id not in expected \
+                            or (row['verdicts'], row['evidence_ref']) != expected.pop(candidate_id) \
+                            or saved.get(candidate_id) != row['verdicts']:
+                        raise ValueError('GEPA public verdict evidence differs from checkpoint')
+                if expected:
+                    raise ValueError('GEPA public verdict evidence is missing')
         self.proposals, self.evidence = proposals, evidence_by_id
         self.eval_requests = evaluation_requests
         self._halted_reason = payload["halted_reason"]
@@ -354,7 +471,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         provider = self.parts["provider"]
         before = provider.usage_total
         try:
-            return await getattr(self.parts["policy"], name)(*args)
+            component = self.parts["policy_absorber"] if self.construction_enabled and name == "absorb" \
+                else self.parts["policy"]
+            return await getattr(component, name)(*args)
         finally:
             self._policy_tokens += provider.usage_total - before
 
@@ -510,12 +629,18 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                     raise ValueError("policy execution metadata differs from evidence")
 
     async def _prepare_cycle(self, task, cycle, candidate_id):
-        state = {"task": task, "cycle": cycle, "frontier": json.loads(self.frontier.view("json")),
+        selection_view = None
+        if self.construction_enabled:
+            selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
+            self.construction.selection_view(selection_view)
+        state = {"task": task, "cycle": cycle, "frontier": json.loads(
+                    (selection_view if self.construction_enabled else self.frontier).view("json")),
                  "operators": [spec.name for spec in self.assembly.operators]}
-        strategy = await self._policy("observe", state, self.budget.account_summary())
+        strategy = await self._policy("observe", state, self.budget.main_account_summary() if self.governed else self.budget.account_summary())
         if not isinstance(strategy, dict):
             raise ValueError("policy observe must return a strategy object")
-        selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
+        if selection_view is None:
+            selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
         unavailable = set()
         if self.hierarchical:
             unavailable = {identifier for identifier, proposal in self.proposals.items()
@@ -524,7 +649,9 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             # sampling. The policy may choose another branch or a fresh draft.
             for identifier in unavailable:
                 selection_view.nodes[identifier].status = "pruned"
-        parents = await self._policy("select", selection_view, self.budget.account_summary())
+        selection_budget = self.budget.main_account_summary() if self.governed else self.budget.account_summary()
+        parents = await self.funsearch.select(candidate_id, selection_view, selection_budget) if self.funsearch \
+            else await self._policy("select", selection_view, selection_budget)
         eligible_parents = {node.id for node in self.frontier.nodes.values()
                             if node.status in {"done", "merged"}
                             and node.eval_status == EvalStatus.OK.value
@@ -540,12 +667,42 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         if self.layered:
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
                                          self._source_refs(context))
-        hypotheses = await self._policy("ideate", {**copy.deepcopy(strategy), "context": copy.deepcopy(context)},
-                                        copy.deepcopy(self.proposals[parents[0]]) if parents else None, 1)
+        producer_context = self.construction.project(context) if self.construction_enabled else context
+        if self.funsearch and not parents:
+            producer_context['instruction'] = ('Return exactly one Python function with the target name and '
+                'signature in this frozen template. Do not include other top-level statements.\n' +
+                self.assembly.policy.options['template'])
+        parent_inputs = tuple(self.construction.parent_view(self.proposals[p]) if self.construction_enabled
+                              else copy.deepcopy(self.proposals[p]) for p in parents)
+        ideation = {**copy.deepcopy(strategy), "context": copy.deepcopy(producer_context)}
+        if self.construction_enabled:
+            ideation["execution"] = self.assembly.execution.to_dict()["spec"]
+        hypotheses = await self._policy("ideate", ideation,
+                                        parent_inputs[0] if parents else None, 1)
+        if self.construction_enabled:
+            if type(hypotheses) is list and len(hypotheses) == 1 and type(hypotheses[0]) is str:
+                hypotheses = [{"hypothesis": hypotheses[0]}]
+            if type(hypotheses) is not list or len(hypotheses) != 1 or type(hypotheses[0]) is not dict \
+                    or type(hypotheses[0].get("hypothesis")) is not str or not hypotheses[0]["hypothesis"].strip():
+                raise ValueError("configured construction requires one explicit hypothesis")
+            fixed = self.assembly.execution.spec.hypothesis
+            if fixed is not None and hypotheses[0]["hypothesis"] != fixed:
+                raise ValueError("policy hypothesis conflicts with the frozen execution configuration")
         strategy = {**strategy, "hypotheses": hypotheses}
-        request = OperatorRequest(task, candidate_id, cycle,
-                                  tuple(copy.deepcopy(self.proposals[p]) for p in parents),
-                                  tuple(public_projection(self.evidence[p]) for p in parents), copy.deepcopy(context), strategy)
+        if self.funsearch and parents:
+            options = self.assembly.policy.options
+            materialized = self.funsearch.materialize(candidate_id, options['template'], options['function_name'])
+            strategy['funsearch'] = {'selection': self.parts['policy'].pending_selection()['receipt'],
+                                     'materialization': materialized}
+        producer_task = task
+        if self.funsearch:
+            producer_task += ('\nReturn one complete unversioned function named ' +
+                self.assembly.policy.options['function_name'] + ' with the frozen signature; '
+                'do not return versioned examples or other top-level statements.')
+        request = OperatorRequest(producer_task, candidate_id, cycle,
+                                  parent_inputs,
+                                  tuple((comparison_projection if self.construction_enabled else public_projection)(
+                                      self.evidence[p]) for p in parents), copy.deepcopy(producer_context), strategy)
         for skill in self.parts["skills"]:
             before = self.parts["provider"].usage_total
             try:
@@ -554,7 +711,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 self._policy_tokens += self.parts["provider"].usage_total - before
             if not isinstance(request, OperatorRequest) or request.candidate_id != candidate_id:
                 raise ValueError("skill changed candidate identity")
-            if request.context.get("retrieval") != context["retrieval"] or \
+            if request.context.get("retrieval") != producer_context["retrieval"] or \
                     request.context.get("context_pack_ref") != context["context_pack_ref"]:
                 raise ValueError("skill changed authoritative retrieval context")
         names = [spec.name for spec in self.assembly.operators]
@@ -563,6 +720,19 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             raise ValueError("policy selected an unregistered operator")
         operator = self.parts["operators"][names.index(selected)]
         return operator, selected, parents, context, request
+
+    def _execution_operation(self, receipt, phase, *, lane="main", slot_id=None, cycle=None):
+        return {"run_id": self._logical_run_id, "cycle": getattr(self, "_active_cycle", 0) if cycle is None else cycle,
+            "phase": phase, "intent_id": receipt.intent_id, "fingerprint": receipt.fingerprint,
+            "manifest_sha256": "sha256:" + payload_digest(self.manifest), "lane": lane, "slot_id": slot_id}
+
+    def _production_operator(self, operator, selected, context, receipt, *, parts=None,
+                             lane="main", slot_id=None, cycle=None):
+        if not self.construction_enabled:
+            return operator
+        parts = self.parts if parts is None else parts
+        operation = self._execution_operation(receipt, "operator", lane=lane, slot_id=slot_id, cycle=cycle)
+        return parts["construction_execution"].operator(operator, selected, context, operation)
 
     async def _cycle(self, task, cycle):
         self._active_cycle = cycle
@@ -594,6 +764,13 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self._check_provider_floor(intent, provider_before, failure.cost)
             self._known_cost += _tokens(failure.cost)
             self._call_cost_known = True
+            if isinstance(failure, OperatorBudgetExhausted):
+                if request.context.get("retrieval") != context["retrieval"] or \
+                        request.context.get("context_pack_ref") != context["context_pack_ref"]:
+                    raise ValueError("operator changed authoritative retrieval context")
+                self.budget.settle(intent, self._known_cost + self._policy_tokens)
+                self._current_intent = None
+                return self._halt_physical(cycle, str(failure), started=True)
             proposal = Proposal(Candidate(candidate_id, parents, operator=selected, created_cycle=cycle,
                                           context_pack_ref=context["context_pack_ref"]),
                                 "", failure.cost, failure.measured_cost_units)
@@ -691,6 +868,29 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._finalize_frontier_admission(candidate_id, decision,
             decision.receipt_id if self.layered else event_id)
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
+        if self.funsearch:
+            if evidence.eval_result.status is EvalStatus.OK:
+                self.funsearch.record_evaluated(candidate_id)
+                count = len(list(self.store.read('funsearch_public_candidate')))
+                if count > 1 and count % self.assembly.policy.options['reset_interval'] == 0:
+                    self.funsearch.reset_weaker_half()
+            elif self.parts['policy'].pending_selection() is not None:
+                self.funsearch.abandon(candidate_id, 'evaluation_failed')
+        if self.construction_enabled:
+            # An explicitly configured GEPA selection policy receives only
+            # public binary instance verdicts. Its separate planning session
+            # never receives raw feedback, private items, or evaluator state.
+            from core.composition.gepa_policy import GEPAInstancePolicy
+            policy = self.parts['policy']
+            if type(policy) is GEPAInstancePolicy and evidence.eval_result.status is EvalStatus.OK:
+                public_items = public.eval_result.contract.items or ()
+                verdicts = {item.item_id: item.verdict for item in public_items
+                            if item.seed is None and item.visibility == 'public'}
+                if len(verdicts) != len(public_items):
+                    raise ValueError('GEPA selection requires unique unseeded public instance verdicts')
+                policy.observe_public_verdicts(candidate_id, verdicts)
+                self.store.append('gepa_public_verdicts', {'candidate_id': candidate_id, 'verdicts': verdicts,
+                    'evidence_ref': evidence_ref})
         if decision.admit:
             self.incumbent = candidate_id
         self.eval_requests[candidate_id] = evaluation_request
@@ -700,11 +900,15 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
 
     def run(self, task):
         from core.composition.recovery import ContinuationStore, coordinator_lock, recover_checkpoint
-        if self.assembly.executor.name != "git_worktree":
+        if not self.continuation_enabled:
             return self._run(task)
         with coordinator_lock(self.workdir):
             checkpoint = recover_checkpoint(self.workdir) if self.cfg.resume_from_checkpoint else None
-            self.store = ContinuationStore(self.workdir / "x1.jsonl", checkpoint)
+            if hasattr(self, "_recorded_rows"):
+                from core.composition.recovery import RecordedOutcomeStore
+                self.store = RecordedOutcomeStore(self.workdir / "x1.jsonl", self._recorded_rows)
+            else:
+                self.store = ContinuationStore(self.workdir / "x1.jsonl", checkpoint)
             return self._run(task)
 
     def _run(self, task):
@@ -719,7 +923,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self.task = task
         if self.cfg.resume_from_checkpoint:
             saved = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
-            if saved.get("runtime") != "composed-v6" or not isinstance(saved.get("logical_run_id"), str) \
+            if saved.get("runtime") != self.runtime_identity or not isinstance(saved.get("logical_run_id"), str) \
                     or not saved["logical_run_id"]:
                 raise ValueError("composed checkpoint runtime has no scoped run identity")
             self._logical_run_id = saved["logical_run_id"]
@@ -732,10 +936,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._build(task)
         if self.cfg.resume_from_checkpoint:
             self._restore()
-            if self.durable_executor:
+            if self.governed:
+                self.budget.protect_controls(self.governed.plan)
+            if self.continuation_enabled:
                 self.store.resume()
         else:
-            self.store.append("run_start", {"runtime": "composed-v6", "task_desc": task,
+            self.store.append("run_start", {"runtime": self.runtime_identity, "task_desc": task,
                                            "manifest": self.manifest, "accounting_stamp": asdict(self.stamp)})
             for spec in self.assembly.memory.options.get("imports", []):
                 self.memory.import_snapshot(spec["path"], expected_sha256=spec["sha256"])
@@ -743,6 +949,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 for spec in self.assembly.knowledge.options.get("memory_imports", []):
                     self.parts["knowledge"].ingest_memory_export(spec["path"], expected_sha256=spec["sha256"])
             self._save()
+        if self.governed:
+            asyncio.run(self.governed.due(self.next_cycle))
         continued = True
         for cycle in range(self.next_cycle, self.cfg.max_generations + 1):
             if self._halted_reason is not None:
@@ -761,15 +969,21 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                         "cycle": cycle, "error_type": type(error).__name__,
                         "known_tokens": self._known_cost + self._policy_tokens})
                 raise
+            if self.governed and continued:
+                asyncio.run(self.governed.due(self.next_cycle))
             if not continued:
                 break
             if self.cfg.stop_after_generation == cycle:
                 break
         if self.next_cycle > self.cfg.max_generations or not continued:
+            if self.governed:
+                from core.composition.governed import StopDisposition
+                if self._stop_disposition is not StopDisposition.INTEGRITY:
+                    asyncio.run(self.governed.due(self.next_cycle, drain=True))
             self._active_cycle = self.next_cycle
             asyncio.run(self._finish_layered())
             self._finish_context()
-        self.result = {"runtime": "composed-v6", "profile": self.assembly.name,
+        self.result = {"runtime": self.runtime_identity, "profile": self.assembly.name,
                        "best_candidate_id": self.incumbent,
                        "best_prompt": self.proposals[self.incumbent].artifact if self.incumbent else None,
                        "best_score": self.frontier.nodes[self.incumbent].score if self.incumbent else None,
@@ -783,15 +997,29 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                        "checkpoint_ref": payload_digest(self._payload())}
         if self._population_state() is not None:
             self.result["population"] = self._population_state()
-        if self.durable_executor:
+        if self.construction_enabled:
+            self.result["execution"] = self._construction_report()
+        elif self.durable_executor:
             self.result["execution"] = self.manifest["executor"]
+        if self.governed:
+            self.result["governance"] = self.governed.audit()
         return self.result
+
+    def _construction_report(self):
+        return {"kind": "configured_construction_v1", "main": self.construction.report(),
+                "controls": {key: session["construction_execution"].report()
+                             for key, session in self.governed.sessions.items()} if self.governed else {}}
 
     def inspect(self):
         if self.result is None:
+            if self.governed is not None:
+                return {"runtime": self.runtime_identity, "status": "interrupted",
+                    "governance": self.governed.audit(), "assembly": self.assembly.to_dict(),
+                    "ledger": self.budget.account_summary(), "cycles": self.next_cycle}
             raise RuntimeError("evolve() must run before inspect()")
         certificates = list(self.store.read("replay_certificate"))
-        return {**self.result, "assembly": self.assembly.to_dict(),
+        return {**self.result, **({"governance": self.governed.audit()} if self.governed else {}), "assembly": self.assembly.to_dict(),
+                **({"execution": self._construction_report()} if self.construction_enabled else {}),
                 "memory_entries": len(self.memory.entries),
                 "replay_certificate": certificates[-1]["payload"] if certificates else None}
 
@@ -805,8 +1033,15 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         root.mkdir(exist_ok=True)
         path = Path(tempfile.mkdtemp(prefix="replay-", dir=root))
         store = AppendOnlyStore(path / "x1.jsonl")
-        certificate = {"passed": False, "runtime": "composed-v6", "mode": "independent_rerun",
+        certificate = {"passed": False, "runtime": self.runtime_identity, "mode": "independent_rerun",
                        "replay_workdir": str(path.resolve()), "replay_id": path.name}
+        recorded = self.governed is not None or self.construction_enabled
+        if recorded:
+            if self.governed:
+                self.governed.audit()
+            if task is not None and task != self.task:
+                raise ValueError("recorded outcome replay requires the frozen original task")
+            certificate.update(mode="recorded_outcomes", external_calls=0)
         try:
             if adapter_factory:
                 llm, evaluator = adapter_factory(str(path), store)
@@ -817,17 +1052,28 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 sources = _copy_sources(self._seed)
                 llm, evaluator = sources["llm"], sources["evaluator"]
             clone = type(self)(self.assembly, self.registry, llm, evaluator,
-                              replace(self.cfg, resume_from_checkpoint=False, stop_after_generation=None),
+                              replace(self.cfg, resume_from_checkpoint=False, stop_after_generation=self.cfg.stop_after_generation if recorded else None),
                               path, self.stamp)
             clone._forbidden_parts = self.parts
             clone._logical_run_id = self._logical_run_id
+            if recorded:
+                clone._recorded_rows = list(AppendOnlyStore(self.store.path).read())
+                if self.construction_enabled:
+                    clone._recorded_artifacts_root = getattr(self, "_recorded_artifacts_root", self.workdir)
+                if self.governed and self.governed.external is not None:
+                    clone._recorded_external_bundle = self.governed.external.replay_bundle()
             result = clone.run(task or self.task)
             original = RunCheckpoint.load(self.workdir / "checkpoint.json").payload
             copied = RunCheckpoint.load(path / "checkpoint.json").payload
             certificate["snapshot_match"] = original == copied
             certificate["result_match"] = all(result[key] == self.result[key]
                                                for key in self.result if key != "replay_certificate")
+            if recorded:
+                certificate["receipt_chain_match"] = clone.budget.checkpoint_state() == self.budget.checkpoint_state()
+                certificate["transcript_consumed"] = clone.store.peek() is None
             certificate["passed"] = certificate["snapshot_match"] and certificate["result_match"]
+            if recorded:
+                certificate["passed"] = certificate["passed"] and certificate["receipt_chain_match"] and certificate["transcript_consumed"]
         except Exception as error:
             certificate["error_type"] = type(error).__name__
             store.append("replay_certificate", certificate)

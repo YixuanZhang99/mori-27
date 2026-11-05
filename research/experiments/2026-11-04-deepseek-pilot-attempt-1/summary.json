@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "benchmark": "mle_bench_lite",
+  "scope": "task_subset_pilot",
+  "subset_only": true,
+  "formal_benchmark_complete": false,
+  "evidence_kind": "official_task_subset",
+  "pilot_complete": false,
+  "expected_runs": 6,
+  "failure_count": 4,
+  "statistical_significance_claimed": false,
+  "host_parity_claimed": false,
+  "spec_sha256": "sha256:b72d9078d3c399f9b3f63eda15c788c9c8f45db947db41313441d8eaaa79dd97",
+  "requested_model": "deepseek-flash",
+  "actual_models": [
+    "deepseek-flash"
+  ],
+  "observed_response_models": [
+    "deepseek-flash"
+  ],
+  "response_identifier_evidence_complete": false,
+  "immutable_snapshot_verified": false,
+  "currency_campaign": {
+    "limit_micro_cny": 200000000,
+    "settled_upper_bound_micro_cny": 927284,
+    "reserved_micro_cny": 0,
+    "remaining_micro_cny": 199072716,
+    "invoice_verified": false,
+    "complete": true
+  },
+  "source_commit": "5fa85d3ab7c4f643550ecaa2223a65231d7f7a86",
+  "plan": {
+    "model": "deepseek-flash",
+    "task_ids": [
+      "spooky-author-identification",
+      "leaf-classification",
+      "nomad2018-predict-transparent-conductors"
+    ],
+    "seeds": [
+      1
+    ],
+    "arms": [
+      "baseline",
+      "full"
+    ],
+    "budget": {
+      "token": 60000,
+      "wallclock": 600.0
+    },
+    "iterations": 4,
+    "solution_timeout": 120.0,
+    "provider_sampling": {
+      "temperature": 0.0,
+      "max_completion_tokens": 16384,
+      "seed_sent_to_provider": false,
+      "request_format": "deepseek",
+      "thinking": {
+        "type": "enabled"
+      },
+      "reasoning_effort": "high",
+      "wire_output_field": "max_tokens",
+      "temperature_applied": false
+    },
+    "official_model_mapping": {
+      "api_id": "deepseek-flash",
+      "display_name": "DeepSeek-V4.1-Flash-1017",
+      "verified_date": "2026-11-04",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "immutable_snapshot_verified": false
+    },
+    "official_revision": "507f92e1138bb6e40dac5c6ee7a6758e6424bf97",
+    "execution_host": {
+      "system": "Linux",
+      "machine": "x86_64",
+      "cpu_count": 32,
+      "python": "3.12.3"
+    }
+  },
+  "runs": [
+    {
+      "task_id": "spooky-author-identification",
+      "seed": 1,
+      "arm": "baseline",
+      "status": "graded",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 180.31408223099788,
+        "token": 40105
+      },
+      "actual_model": "deepseek-flash",
+      "submission_sha256": "sha256:1792c6b78741678dc2d348356aae1629a2572a3914501c7186a17586501f2916",
+      "metric_direction": "minimize",
+      "dataset_identity": "sha256:fa7e4bda889783a3872ce51eb76559898f1e23467a0f56485ddfecae6b590451",
+      "profile_sha256": "sha256:a17bafd16438b90e0835b84989c4f04a5f29a2ef7c7a0ecb4a354d918ea97d15",
+      "official_report_sha256": "sha256:baab1a2f72c0b95590303104fff662452a2b0725c0c286dc881805197559ee0c",
+      "agent_summary_sha256": "sha256:5a507773bf971b8a03462a7b3f53c8a5cdd8ab7cf989a6d5f862e1b3171400c0",
+      "provider_usage": {
+        "known_tokens": 40105,
+        "receipt_count": 3,
+        "started_calls": 3,
+        "completed_calls": 3,
+        "costs_complete": true,
+        "complete": true,
+        "actual_models": [
+          "deepseek-flash"
+        ]
+      },
+      "unresolved_provider_calls": 0,
+      "currency_usage": {
+        "limit_micro_cny": null,
+        "settled_upper_bound_micro_cny": 281048,
+        "reserved_micro_cny": 0,
+        "remaining_micro_cny": null,
+        "invoice_verified": false,
+        "complete": true
+      },
+      "failure_type": null,
+      "official_result": {
+        "score": 0.42599,
+        "valid_submission": true,
+        "above_median": false,
+        "any_medal": false
+      }
+    },
+    {
+      "task_id": "spooky-author-identification",
+      "seed": 1,
+      "arm": "full",
+      "status": "graded",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 127.8493656110004,
+        "token": 27698
+      },
+      "actual_model": "deepseek-flash",
+      "submission_sha256": "sha256:8f8c7d1a342d7ad54345887a571fd28f87412722829bfd0921884e4eac771450",
+      "metric_direction": "minimize",
+      "dataset_identity": "sha256:fa7e4bda889783a3872ce51eb76559898f1e23467a0f56485ddfecae6b590451",
+      "profile_sha256": "sha256:72db3a955d94ddffdeebc25be3fff1d93cecf32ccc8f000167fc8ac16c649b9a",
+      "official_report_sha256": "sha256:569ca5d11f3382e150be45defa39d26b71179384d1c9f8515761ffcc439e4386",
+      "agent_summary_sha256": "sha256:d3eee2ce8dde48228f649a0e21b28561d5fd4719868d4ea25939ac11b3b89b26",
+      "provider_usage": {
+        "known_tokens": 27698,
+        "receipt_count": 2,
+        "started_calls": 2,
+        "completed_calls": 2,
+        "costs_complete": true,
+        "complete": true,
+        "actual_models": [
+          "deepseek-flash"
+        ]
+      },
+      "unresolved_provider_calls": 0,
+      "currency_usage": {
+        "limit_micro_cny": null,
+        "settled_upper_bound_micro_cny": 201802,
+        "reserved_micro_cny": 0,
+        "remaining_micro_cny": null,
+        "invoice_verified": false,
+        "complete": true
+      },
+      "failure_type": null,
+      "official_result": {
+        "score": 0.42352,
+        "valid_submission": true,
+        "above_median": false,
+        "any_medal": false
+      }
+    },
+    {
+      "task_id": "leaf-classification",
+      "seed": 1,
+      "arm": "full",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 53.28235287800271,
+        "token": 13394
+      },
+      "actual_model": null,
+      "submission_sha256": null,
+      "metric_direction": null,
+      "dataset_identity": null,
+      "profile_sha256": null,
+      "official_report_sha256": null,
+      "agent_summary_sha256": null,
+      "provider_usage": {
+        "known_tokens": 13394,
+        "receipt_count": 1,
+        "started_calls": 1,
+        "completed_calls": 1,
+        "costs_complete": true,
+        "complete": true,
+        "actual_models": [
+          "deepseek-flash"
+        ]
+      },
+      "unresolved_provider_calls": 0,
+      "currency_usage": {
+        "limit_micro_cny": null,
+        "settled_upper_bound_micro_cny": 88012,
+        "reserved_micro_cny": 0,
+        "remaining_micro_cny": null,
+        "invoice_verified": false,
+        "complete": true
+      },
+      "failure_type": "ValueError",
+      "official_result": {
+        "score": null,
+        "valid_submission": null,
+        "above_median": null,
+        "any_medal": null
+      }
+    },
+    {
+      "task_id": "leaf-classification",
+      "seed": 1,
+      "arm": "baseline",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 58.39226005999808,
+        "token": 13313
+      },
+      "actual_model": null,
+      "submission_sha256": null,
+      "metric_direction": null,
+      "dataset_identity": null,
+      "profile_sha256": null,
+      "official_report_sha256": null,
+      "agent_summary_sha256": null,
+      "provider_usage": {
+        "known_tokens": 13313,
+        "receipt_count": 1,
+        "started_calls": 1,
+        "completed_calls": 1,
+        "costs_complete": true,
+        "complete": true,
+        "actual_models": [
+          "deepseek-flash"
+        ]
+      },
+      "unresolved_provider_calls": 0,
+      "currency_usage": {
+        "limit_micro_cny": null,
+        "settled_upper_bound_micro_cny": 87832,
+        "reserved_micro_cny": 0,
+        "remaining_micro_cny": null,
+        "invoice_verified": false,
+        "complete": true
+      },
+      "failure_type": "ValueError",
+      "official_result": {
+        "score": null,
+        "valid_submission": null,
+        "above_median": null,
+        "any_medal": null
+      }
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "baseline",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 83.67418654399808,
+        "token": 17974
+      },
+      "actual_model": null,
+      "submission_sha256": null,
+      "metric_direction": null,
+      "dataset_identity": null,
+      "profile_sha256": null,
+      "official_report_sha256": null,
+      "agent_summary_sha256": null,
+      "provider_usage": {
+        "known_tokens": 17974,
+        "receipt_count": 1,
+        "started_calls": 1,
+        "completed_calls": 1,
+        "costs_complete": true,
+        "complete": true,
+        "actual_models": [
+          "deepseek-flash"
+        ]
+      },
+      "unresolved_provider_calls": 0,
+      "currency_usage": {
+        "limit_micro_cny": null,
+        "settled_upper_bound_micro_cny": 134252,
+        "reserved_micro_cny": 0,
+        "remaining_micro_cny": null,
+        "invoice_verified": false,
+        "complete": true
+      },
+      "failure_type": "ValueError",
+      "official_result": {
+        "score": null,
+        "valid_submission": null,
+        "above_median": null,
+        "any_medal": null
+      }
+    },
+    {
+      "task_id": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "full",
+      "status": "failed",
+      "budget": {
+        "token": 60000,
+        "wallclock": 600.0
+      },
+      "actual_costs": {
+        "wallclock": 76.63600220200169,
+        "token": 18017
+      },
+      "actual_model": null,
+      "submission_sha256": null,
+      "metric_direction": null,
+      "dataset_identity": null,
+      "profile_sha256": null,
+      "official_report_sha256": null,
+      "agent_summary_sha256": null,
+      "provider_usage": {
+        "known_tokens": 18017,
+        "receipt_count": 1,
+        "started_calls": 1,
+        "completed_calls": 1,
+        "costs_complete": true,
+        "complete": true,
+        "actual_models": [
+          "deepseek-flash"
+        ]
+      },
+      "unresolved_provider_calls": 0,
+      "currency_usage": {
+        "limit_micro_cny": null,
+        "settled_upper_bound_micro_cny": 134338,
+        "reserved_micro_cny": 0,
+        "remaining_micro_cny": null,
+        "invoice_verified": false,
+        "complete": true
+      },
+      "failure_type": "ValueError",
+      "official_result": {
+        "score": null,
+        "valid_submission": null,
+        "above_median": null,
+        "any_medal": null
+      }
+    }
+  ]
+}

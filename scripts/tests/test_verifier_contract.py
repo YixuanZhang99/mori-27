@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import contextlib
+import importlib.util
+import io
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +30,238 @@ def command_groups(tree: ast.Module) -> dict[str, ast.Call]:
 
 
 class VerifierTransitionTests(unittest.TestCase):
+    def setUp(self):
+        # This historical certificate-scope unit test intentionally runs v71 in
+        # its frozen control context. Current v72 wiring is tested separately.
+        # No old assertion or command group is rewritten to accept new wiring.
+        if self._testMethodName == "test_v71_scope_requires_group_and_whole_run_success":
+            original_read = Path.read_text
+            frozen = ROOT / "m0/verifier/v72/v71-control-context"
+            controls = {ROOT / name: frozen / name for name in
+                        ("scripts/run_acceptance.py", "Makefile", ".github/workflows/ci.yml")}
+            def historical_read(path, *args, **kwargs):
+                if path in controls:
+                    return original_read(controls[path], *args, **kwargs)
+                return original_read(path, *args, **kwargs)
+            historical_context = patch.object(Path, "read_text", historical_read)
+            historical_context.start()
+            self.addCleanup(historical_context.stop)
+
+    def test_v71_scope_requires_group_and_whole_run_success(self):
+        path = ROOT / 'm0/verifier/v71/verify.py'
+        self.assertTrue(path.is_file())
+        for failed_group in (None, 'provider_input_admission_refusal_and_durable_replay', 'static_axioms'):
+            with self.subTest(failed=failed_group):
+                spec = importlib.util.spec_from_file_location('v71_fixture', path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                captured = {}
+                def command(name, _args, timeout=300):
+                    module.check(name, name != failed_group, 'controlled command result')
+                def write(path, data, *args, **kwargs):
+                    captured[str(path)] = data
+                    return len(data)
+                original_open = Path.open
+                def open_file(path, mode='r', *args, **kwargs):
+                    if mode == 'a' and path == module.ROOT / 'verifier/runs/v71.jsonl':
+                        return io.StringIO()
+                    return original_open(path, mode, *args, **kwargs)
+                with patch.object(module, 'run_command', command), \
+                     patch.object(Path, 'write_text', write), patch.object(Path, 'open', open_file), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    result = module.main()
+                report = json.loads(captured[str(module.ROOT / 'verifier/v71/LAST_RUN.json')])
+                self.assertEqual(result, 0 if failed_group is None else 1)
+                scope = report['provider_admission_evidence']
+                self.assertEqual(scope['certified'], failed_group is None)
+                self.assertFalse(scope['estimated_input_is_hard_bound'])
+                self.assertFalse(scope['external_provider_api_executed'])
+                self.assertFalse(scope['supplier_invoice_verified'])
+                self.assertFalse(scope['arbitrary_native_crash_recovery_certified'])
+
+    def test_v71_preserves_every_v70_command_and_timeout(self):
+        self.assertTrue((ROOT / 'm0/verifier/v71/verify.py').is_file())
+        previous, current = command_groups(verifier_tree('v70')), command_groups(verifier_tree('v71'))
+        self.assertEqual(len(previous), 32)
+        self.assertEqual(len(current), 33)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v71_executes_provider_admission_and_stop_boundaries_unfiltered(self):
+        self.assertTrue((ROOT / 'm0/verifier/v71/verify.py').is_file())
+        group = command_groups(verifier_tree('v71'))['provider_input_admission_refusal_and_durable_replay']
+        arguments = [node.value for node in group.args[1].elts if isinstance(node, ast.Constant)]
+        for name in ('tests/test_mle_provider.py', 'tests/test_mle_currency_integration.py',
+                     'tests/test_composed_budget.py', 'tests/test_composed_recovery.py'):
+            self.assertIn(name, arguments)
+        self.assertNotIn('-k', arguments)
+        self.assertNotIn('-m', arguments[1:])
+        self.assertEqual(next(k.value.value for k in group.keywords if k.arg == 'timeout'), 480)
+
+    def test_archived_v70_is_exact_verified_local_linux_evidence(self):
+        expected = {
+            'm0/verifier/v70/LAST_RUN.json': '750a0ab259f0ba3648fe67a17b87d8e0ca4231c6cad80498445b95ae24d8a2d4',
+            'm0/verifier/runs/v70.jsonl': 'fd411c00b85d866bc9e3254cd564f8ddd7275736676c36364b49820edaf9737a',
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file())
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / 'm0/verifier/v70/LAST_RUN.json').read_text())
+        entries = [json.loads(line) for line in (ROOT / 'm0/verifier/runs/v70.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['command'], 'python3 verifier/v70/verify.py')
+        self.assertEqual(entries[0]['exit_code'], 0)
+        self.assertEqual(entries[0]['checks'], certificate['checks'])
+        self.assertTrue(certificate['passed'])
+        self.assertEqual(len(certificate['checks']), 41)
+        self.assertTrue(all(row['passed'] for row in certificate['checks']))
+        provenance = json.loads((ROOT / 'm0/verifier/v71/v70-provenance.json').read_text())
+        self.assertEqual(provenance['source_commit'], 'aedede3c2b78a5c2b57074c70d510af710f5af4e')
+        self.assertEqual(provenance['origin'], 'local_linux_acceptance')
+        self.assertFalse(provenance['same_sha_remote_ci'])
+
+    def test_v70_executes_cooperating_process_journal_snapshot_boundaries(self):
+        self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 journal group is missing')
+        group = command_groups(verifier_tree('v70'))['cooperating_process_journal_snapshot_consistency']
+        arguments = [node.value for node in group.args[1].elts if isinstance(node, ast.Constant)]
+        self.assertIn('tests/test_x1_store_concurrency.py', arguments)
+        self.assertIn('tests/test_external_batch_partial_start_recovery.py', arguments)
+        self.assertNotIn('-k', arguments)
+        self.assertNotIn('-m', arguments[1:])
+        self.assertEqual(next(k.value.value for k in group.keywords if k.arg == 'timeout'), 120)
+
+    def test_archived_v69_is_exact_verified_local_linux_evidence(self):
+        expected = {
+            "m0/verifier/v69/LAST_RUN.json": "1b4ab41c4cdb631bb85b3884d7b99bea4f7085ae9a3a3048239f9665dc7d0e1e",
+            "m0/verifier/runs/v69.jsonl": "19f70b2b97fe3e83ac9798aeef636ca97d82eb4edf8fb989a7a140e0dcfc10d6",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file(), "authentic v69 evidence must be archived")
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / 'm0/verifier/v69/LAST_RUN.json').read_text())
+        entries = [json.loads(line) for line in (ROOT / 'm0/verifier/runs/v69.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['checks'], certificate['checks'])
+        self.assertEqual(entries[0]['command'], 'python3 verifier/v69/verify.py')
+        self.assertEqual(entries[0]['exit_code'], 0)
+        self.assertTrue(certificate['passed'])
+        self.assertEqual(len(certificate['checks']), 39)
+        self.assertTrue(all(item['passed'] for item in certificate['checks']))
+        provenance = json.loads((ROOT / 'm0/verifier/v70/v69-provenance.json').read_text())
+        self.assertEqual(provenance['source_commit'], '5fa85d3ab7c4f643550ecaa2223a65231d7f7a86')
+        self.assertEqual(provenance['origin'], 'local_linux_acceptance')
+        self.assertFalse(provenance['same_sha_remote_ci'])
+
+    def test_v70_keeps_every_v69_command_group_and_timeout(self):
+        self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 must preserve prior coverage')
+        previous, current = command_groups(verifier_tree('v69')), command_groups(verifier_tree('v70'))
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v70_executes_remaining_reservation_and_recovery_without_filters(self):
+        self.assertTrue((ROOT / 'm0/verifier/v70/verify.py').is_file(), 'v70 remaining-reservation group is missing')
+        group = command_groups(verifier_tree('v70'))['remaining_physical_reservation_and_mle_usage_end_to_end']
+        arguments = [node.value for node in group.args[1].elts if isinstance(node, ast.Constant)]
+        for name in ('tests/test_hierarchical_budget.py', 'tests/test_composed_budget.py',
+                     'tests/test_composed_recovery.py', 'tests/test_mle_currency_integration.py'):
+            self.assertIn(name, arguments)
+        self.assertNotIn('-k', arguments)
+        self.assertNotIn('-m', arguments[1:])
+        self.assertEqual(next(k.value.value for k in group.keywords if k.arg == 'timeout'), 480)
+
+    def test_archived_v68_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v68/LAST_RUN.json":
+                "33f864e1c7e36ad7b19ffa461004176b32d9bbe210f90af5aaec4ce52cec457b",
+            "m0/verifier/runs/v68.jsonl":
+                "f603892915439fc04873a517fce67a7ca1ec92a5bd5932c8e7a3aeb8e8edeea7",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file(), 'verified v68 evidence must be archived')
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / 'm0/verifier/v68/LAST_RUN.json').read_text())
+        entries = [json.loads(line) for line in (ROOT / 'm0/verifier/runs/v68.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['command'], 'python3 verifier/v68/verify.py')
+        self.assertEqual(entries[0]['exit_code'], 0)
+        self.assertEqual(entries[0]['checks'], certificate['checks'])
+        self.assertTrue(certificate['passed'])
+        self.assertEqual(len(certificate['checks']), 38)
+        self.assertTrue(all(item['passed'] for item in certificate['checks']))
+        self.assertFalse(certificate['mle_composed_stage_evidence']['external_provider_api_executed'])
+
+    def test_v69_keeps_every_v68_command_group_and_timeout(self):
+        self.assertTrue((ROOT / 'm0/verifier/v69/verify.py').is_file(), 'v69 verifier must preserve prior coverage')
+        previous, current = command_groups(verifier_tree('v68')), command_groups(verifier_tree('v69'))
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v69_executes_isolation_and_currency_boundaries_without_filters(self):
+        self.assertTrue((ROOT / 'm0/verifier/v69/verify.py').is_file(), 'v69 budget/isolation group is missing')
+        groups = command_groups(verifier_tree('v69'))
+        command = groups['mle_private_order_and_shared_currency_campaign_end_to_end'].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments[:2], ['-m', 'pytest'])
+        self.assertTrue({'tests/test_mle_isolation.py', 'tests/test_mle_cny_budget.py',
+                         'tests/test_mle_currency_integration.py', 'tests/test_mle_provider.py'} <= set(arguments))
+        self.assertNotIn('-m', arguments[2:])
+        self.assertNotIn('--markexpr', arguments)
+
+    def test_archived_v67_is_exact_verified_linux_evidence(self):
+        expected = {
+            "m0/verifier/v67/LAST_RUN.json":
+                "7c3586bca97082fce0ca25f027a5f26b7cd8f4977c3f4bcbd972a4ef0165c37f",
+            "m0/verifier/runs/v67.jsonl":
+                "f4d8a6d1de90b84c40d57399e5c6597bdb5f927385c5609980ae55562ee79da4",
+        }
+        for filename, digest in expected.items():
+            with self.subTest(file=filename):
+                self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), digest)
+        certificate = json.loads((ROOT / "m0/verifier/v67/LAST_RUN.json").read_text())
+        entries = [json.loads(line) for line in
+                   (ROOT / "m0/verifier/runs/v67.jsonl").read_text().splitlines()]
+        self.assertIs(certificate["passed"], True)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["command"], "python3 verifier/v67/verify.py")
+        self.assertEqual(entries[0]["exit_code"], 0)
+        self.assertEqual(entries[0]["checks"], certificate["checks"])
+        self.assertEqual(len(certificate["checks"]), 37)
+        self.assertTrue(all(item["passed"] is True for item in certificate["checks"]))
+        population = certificate["population_stage_evidence"]
+        self.assertEqual(population["stage"], "S8")
+        self.assertIs(population["certified"], True)
+        self.assertIs(population["external_benchmark_campaign_executed"], False)
+
+    def test_v68_keeps_every_v67_command_group_and_timeout(self):
+        previous = command_groups(verifier_tree("v67"))
+        current = command_groups(verifier_tree("v68"))
+        self.assertTrue(previous)
+        self.assertTrue(previous.keys() <= current.keys())
+        for name, command in previous.items():
+            with self.subTest(group=name):
+                self.assertEqual(ast.dump(command), ast.dump(current[name]))
+
+    def test_v68_explicitly_executes_mle_composition_and_pilot_without_filters(self):
+        groups = command_groups(verifier_tree("v68"))
+        command = groups["configured_mle_anchor_feedback_population_and_pilot_end_to_end"].args[1]
+        self.assertIsInstance(command, ast.List)
+        arguments = [node.value for node in command.elts if isinstance(node, ast.Constant)]
+        self.assertEqual(arguments[:2], ["-m", "pytest"])
+        self.assertTrue({"tests/test_mle_composed.py", "tests/test_mle_provider.py",
+                         "tests/test_mle_pilot.py"} <= set(arguments))
+        self.assertNotIn("-m", arguments[2:])
+        self.assertNotIn("--markexpr", arguments)
+
     def test_archived_v66_is_exact_verified_linux_evidence(self):
         expected = {
             "m0/verifier/v66/LAST_RUN.json":

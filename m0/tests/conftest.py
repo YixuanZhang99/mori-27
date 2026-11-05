@@ -19,6 +19,10 @@ TEST_ROOT = Path(__file__).resolve().parent
 
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {
+    "test_composed_worktree_durable_flush.py": "fault injection reads Linux /proc descriptor paths",
+    "test_funsearch_priority_sandbox.py": "real Bubblewrap and x86_64 priority seccomp execution",
+    "test_funsearch_or3_domain.py": "domain identity freezes an x86_64 seccomp policy even for validation tests",
+    "test_funsearch_governed_or3.py": "OR3 priority workers require Bubblewrap and Linux seccomp",
     "test_external_batch_control_recovery.py": "Bubblewrap evaluator and Linux process identity",
     "test_external_batch_partial_start_recovery.py": "Bubblewrap evaluator and Linux process identity",
     "test_external_batch_post_settlement_recovery.py": "Bubblewrap evaluator and Linux process identity",
@@ -42,6 +46,16 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_funsearch_sandbox_framework.py": {
+        "test_funsearch_uses_sandboxed_worktree_and_replays_without_workers",
+    },
+    "test_mle_m7_pilot.py": {
+        "test_comparison_public_entry_runs_isolated_agent_and_loopback",
+    },
+    "test_mle_pilot.py": {
+        "test_official_preflight_freezes_hashes_without_exposing_private_answers",
+        "test_private_drift_blocks_further_calls_and_all_final_scoring",
+    },
     "test_batch_execution_recovery.py": {
         "test_real_batch_owner_crash_recovers_settles_and_admits_exactly_once",
     },

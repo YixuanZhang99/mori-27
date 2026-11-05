@@ -13,7 +13,7 @@ from dataclasses import asdict, replace
 
 from core.budget.ledger import BudgetLedger
 from core.budget.types import AccountingStamp
-from core.composition.contracts import Decision, OperatorFailure, OperatorRequest, Proposal
+from core.composition.contracts import Decision, OperatorBudgetExhausted, OperatorFailure, OperatorRequest, Proposal
 from core.composition.admission import LayeredAdmissionController, layered_options
 from core.composition.budget import HierarchicalBudget, hierarchical_options
 from core.composition.evaluation import (EvaluationContract, ItemOutcome, PrivateEvaluationData,
@@ -153,7 +153,9 @@ class PromptOperator:
             raise
         except Exception as error:
             used = take_usage(self.llm)
-            raise OperatorFailure(CostVec(tokens_in=used, node_count=1),
+            from core.llm import ProviderBudgetExhausted
+            failure = OperatorBudgetExhausted if isinstance(error, ProviderBudgetExhausted) else OperatorFailure
+            raise failure(CostVec(tokens_in=used, node_count=1),
                                   f"{type(error).__name__}: {error}",
                                   measured_cost_units=("token", "node", "eval_count")) from error
         used = take_usage(self.llm)
@@ -342,17 +344,33 @@ def _hierarchical(context, options):
     stamp = context.accounting_stamp or AccountingStamp(
         getattr(context.llm, "supplier", "unavailable"),
         getattr(context.llm, "model", "unavailable"), "unavailable", "unavailable", "unavailable")
-    return HierarchicalBudget(options, stamp, context.store)
+    return HierarchicalBudget(options, stamp, context.store,
+        **({"governance": context.governance.to_dict() if hasattr(context.governance, "to_dict")
+            else context.governance} if context.governance is not None else {}))
 
 
 def default_registry():
     registry = Registry()
+    from core.composition.construction_recipes import (RecipeOperator, FunSearchRecipeOperator,
+        register_construction, register_funsearch_construction)
+    register_construction(registry)
+    register_funsearch_construction(registry)
+    from core.composition.construction_workspace import register_git_construction
+    register_git_construction(registry)
     from core.composition.recovery import register_worktree
     register_worktree(registry)
     registry.register("provider", "provided", _provided)
     registry.register("domain", "legacy_prompt", lambda ctx, opts: LegacyPromptDomain(
         ctx.evaluator, ctx.llm, **opts), validate_options=_domain_options)
     registry.register("domain", "native", _native)
+    from core.composition.gepa_policy import GEPAInstancePolicy, gepa_policy_options
+    registry.register("policy", "gepa_instance", lambda ctx, opts: GEPAInstancePolicy(ctx.scope_context, **opts),
+                      validate_options=gepa_policy_options)
+    from core.composition.funsearch_policy import FunSearchPolicy, funsearch_policy_options
+    registry.register('policy', 'funsearch', lambda ctx, opts: FunSearchPolicy(ctx.scope_context,
+        **{key: opts[key] for key in ('case_ids', 'islands', 'seed', 'prompt_size',
+                                     'temperature', 'temperature_period', 'context_window') if key in opts}),
+        validate_options=funsearch_policy_options)
     registry.register("policy", "greedy", lambda ctx, opts: GreedyPolicy(ctx.scope_context, **opts),
                       validate_options=policy_options)
     registry.register("policy", "llm_cycles", lambda ctx, opts: LLMCyclesPolicy(
@@ -361,11 +379,17 @@ def default_registry():
         ctx.scope_context, **opts), validate_options=population_policy_options)
     for name in ("draft", "reflective"):
         registry.register("operator", name, lambda ctx, opts, kind=name:
-                          PromptOperator(ctx.llm, kind, **opts), validate_options=_operator_options)
-    registry.register("operator", "crossover", lambda ctx, opts: CrossoverOperator(ctx.llm, **opts),
-                      validate_options=crossover_options)
+                          RecipeOperator(kind, **opts) if ctx.execution else PromptOperator(ctx.llm, kind, **opts),
+                          validate_options=_operator_options, execution={"schema_version": 1, "contract": "recipe_v1"},
+                          governance={"schema_version": 1, "parentless": True} if name == "draft" else None)
+    registry.register("operator", "crossover", lambda ctx, opts:
+                      RecipeOperator("crossover", **opts) if ctx.execution else CrossoverOperator(ctx.llm, **opts),
+                      validate_options=crossover_options, execution={"schema_version": 1, "contract": "recipe_v1"})
+    registry.register('operator', 'funsearch', lambda ctx, opts: FunSearchRecipeOperator(**opts),
+        validate_options=lambda opts: _options(opts, {'metric'}),
+        execution={'schema_version': 1, 'contract': 'recipe_v1'})
     registry.register("skill", "instruction", lambda ctx, opts: InstructionSkill(opts["text"]),
-                      validate_options=_skill_options)
+                      validate_options=_skill_options, execution={"schema_version": 1, "contract": "projected_skill_v1"})
     registry.register("frontier", "tree", lambda ctx, opts: ResearchFrontier(
         store=ctx.store, **opts), validate_options=_objective_options)
     registry.register("frontier", "population", lambda ctx, opts: PopulationFrontier(
@@ -408,3 +432,26 @@ def population_profile(name="composed-population", mode="benchmark", *, capacity
                    operators=[{"name": "draft"}, {"name": "crossover"}],
                    frontier={"name": "population", "options": frontier_options})
     return profile
+
+
+def execution_profile(name="configured-execution", mode="benchmark"):
+    """Explicit M7 assembly with managed Git artifacts and three-layer evaluation.
+
+    Budget values are initial configuration, not provider hard per-call bounds.
+    Legacy profiles remain available with their original execution semantics.
+    """
+    value = composed_profile(name, mode)
+    value.update(schema_version=2, domain={"name": "native"},
+        executor={"name": "git_artifact"}, admission={"name": "layered"},
+        execution={"schema_version": 1, "spec": {"role": "general", "hypothesis_frozen": True,
+            "context_projection": ["memory", "grounding"]},
+            "constructor": {"name": "prompt", "options": {"max_attempts": 2}}},
+        budget={"name": "hierarchical", "options": {
+            "limits": {level: {"token": 1_000_000, "node": 100, "eval_count": 1000}
+                       for level in ("global", "direction", "candidate")},
+            "reservation": {"token": 20_000, "node": 0, "eval_count": 1},
+            "operation_reservations": {
+                "planning": {"token": 4_000, "node": 0, "eval_count": 0},
+                "operator": {"token": 16_000, "node": 1, "eval_count": 0}},
+            "fidelity_rungs": [{"fidelity": "dev", "split_id": "dev"}]}})
+    return value

@@ -1,0 +1,20 @@
+{
+  "source_commit": "bedc5b31fe737dfd207fa8466f68fecb58c5c294",
+  "source_clean_before": true,
+  "source_clean_after": true,
+  "version": "v71",
+  "passed": true,
+  "checks": 42,
+  "origin": "local_linux_acceptance",
+  "elapsed_seconds": 717.642,
+  "run_id": "20261104T103055.784639Z-w5eq6lop",
+  "external_provider_requests_during_acceptance": 0,
+  "same_sha_remote_ci": false,
+  "files": {
+    "LAST_RUN.json": "e5e048ddc5420f9fbb38f29f057e39635c8f69c840f8f93d847eff8959bf5453",
+    "new-runs.jsonl": "af21f0c091d78008b41a1eec5d78eaacde7611b2a15b28f12826e550d0f40276",
+    "console.log": "d74bff90352bda3c20acb7e9cfbbd6febf35048f1e49a1cd01708746bb097461",
+    "summary.json": "4334e7e52a4d58a70aa3ef9dba5c92d611f4eb05dd12422868cafbbe837d4b79",
+    "v71.jsonl": "af21f0c091d78008b41a1eec5d78eaacde7611b2a15b28f12826e550d0f40276"
+  }
+}

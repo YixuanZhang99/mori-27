@@ -34,6 +34,130 @@ def budget(tmp_path, config=None):
                               STAMP, AppendOnlyStore(tmp_path / "budget.jsonl"))
 
 
+def remaining_options():
+    config = options({'token': 12000, 'node': 1})
+    config['limits'] = {level: {'token': 60000, 'node': 20}
+                        for level in ('global', 'direction', 'candidate')}
+    config['reservation_modes'] = {'operator': {'token': 'remaining'}}
+    return config
+
+
+def test_remaining_quote_settles_actual_usage_and_restores_the_next_prefix_quote(tmp_path):
+    controller = budget(tmp_path, remaining_options())
+    first = reserve(controller, operation='operator')
+    assert first.amounts == {'token': 60000, 'node': 1}
+    assert not reserve(controller, 'competing', candidate='other', direction='other', operation='operator').granted
+    settle(controller, first, {'token': 13394, 'node': 1})
+    second = reserve(controller, 'second', candidate='second', operation='operator')
+    assert second.amounts == {'token': 46606, 'node': 1}
+    checkpoint = controller.checkpoint_state()
+    restored = HierarchicalBudget(controller.options, STAMP, controller.store)
+    restored.restore_state(checkpoint)
+    assert restored.checkpoint_state() == checkpoint
+    settle(restored, second, {'token': 120, 'node': 1})
+    assert restored.state()['global']['used'] == {'token': 13514, 'node': 2}
+    assert restored.state()['global']['reserved'] == {'token': 0, 'node': 0}
+
+
+@pytest.mark.parametrize('level,limit', [('global', 50000), ('direction', 33000), ('candidate', 25000)])
+def test_remaining_quote_respects_the_smallest_applicable_scope(tmp_path, level, limit):
+    config = remaining_options()
+    config['limits'][level]['token'] = limit
+    controller = budget(tmp_path, config)
+    receipt = reserve(controller, operation='operator')
+    assert receipt.amounts == {'token': limit, 'node': 1}
+
+
+def test_remaining_quote_subtracts_other_open_operations(tmp_path):
+    config = remaining_options()
+    config['operation_reservations'] = {'planning': {'token': 5000, 'node': 0}}
+    controller = budget(tmp_path, config)
+    reserve(controller, 'open', candidate='planner', direction='coordination', operation='planning')
+    receipt = reserve(controller, operation='operator')
+    assert receipt.amounts == {'token': 55000, 'node': 1}
+    assert controller.state()['global']['reserved']['token'] == 60000
+
+
+@pytest.mark.parametrize('unit', ['wallclock', 'gpu_hours', 'usd'])
+def test_fractional_remaining_quote_does_not_round_above_available_budget(tmp_path, unit):
+    config = options({unit: 0.01})
+    config['limits'] = {level: {unit: 1.0} for level in ('global', 'direction', 'candidate')}
+    config['reservation_modes'] = {'operator': {unit: 'remaining'}}
+    controller = budget(tmp_path, config)
+    first = reserve(controller, operation='operator')
+    settle(controller, first, {unit: 0.25891675029296335})
+    second = reserve(controller, 'second', operation='operator')
+    assert second.granted, 'a rounded-up quote must not reject affordable remaining work'
+    assert second.amounts[unit] == 0.7410832497070365
+    restored = HierarchicalBudget(controller.options, STAMP, controller.store)
+    restored.restore_state(controller.checkpoint_state())
+    settle(restored, second)
+    assert restored.state()['global']['used'][unit] <= 1.0
+    assert restored.state()['halt_reasons'] == []
+
+
+def test_remaining_quote_keeps_the_numeric_minimum_admission_floor(tmp_path):
+    controller = budget(tmp_path, remaining_options())
+    first = reserve(controller, operation='operator')
+    settle(controller, first, {'token': 50000, 'node': 1})
+    before = controller.store.path.read_bytes()
+    denied = reserve(controller, 'too-small', candidate='other', operation='operator')
+    assert not denied.granted
+    assert controller.store.path.read_bytes() == before
+    assert controller.state()['global']['remaining']['token'] == 10000
+
+
+def test_remaining_quote_is_computed_inside_atomic_reservation(tmp_path):
+    controller = budget(tmp_path, remaining_options())
+    barrier = threading.Barrier(2)
+    def attempt(identifier):
+        barrier.wait()
+        return reserve(controller, identifier, candidate=identifier, operation='operator')
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        attempts = list(pool.map(attempt, ['one', 'two']))
+    assert sum(item.granted for item in attempts) == 1
+    assert controller.state()['global']['reserved'] == {'token': 60000, 'node': 1}
+
+
+def test_rehashed_remaining_quote_cannot_change_the_replayed_allocation(tmp_path):
+    from core.composition.budget import _hash
+    controller = budget(tmp_path, remaining_options())
+    reserve(controller, operation='operator')
+    rows = list(controller.store.read())
+    event = rows[0]['payload']
+    event['data']['intent']['amounts']['token'] = 59999
+    event['data']['fingerprint'] = _hash(event['data']['intent'])
+    event['event_ref'] = _hash({k: v for k, v in event.items() if k != 'event_ref'})
+    controller.store.path.write_text(json.dumps(rows[0]) + '\n')
+    restored = HierarchicalBudget(controller.options, STAMP, controller.store)
+    with pytest.raises(BudgetError, match='fingerprint|identity'):
+        restored.restore_from_journal()
+
+
+@pytest.mark.parametrize('mode', ['unknown', 'overrun'])
+def test_remaining_quote_does_not_bypass_unknown_or_true_overrun_stopping(tmp_path, mode):
+    controller = budget(tmp_path, remaining_options())
+    first = reserve(controller, operation='operator')
+    if mode == 'unknown':
+        controller.mark_unresolved(first.intent_id, fingerprint=first.fingerprint, reason='no usage')
+        assert controller.state()['global']['reserved']['token'] == 60000
+    else:
+        settle(controller, first, {'token': 60001, 'node': 1})
+        assert controller.state()['global']['used']['token'] == 60001
+    assert not reserve(controller, 'later', candidate='other', operation='operator').granted
+
+
+@pytest.mark.parametrize('modes', [None, [], {'dev': {'token': 'remaining'}},
+    {'operator': {}}, {'operator': {'unconfigured': 'remaining'}},
+    {'operator': {'token': 'unlimited'}}, {'operator': ['token']}])
+def test_remaining_quote_rejects_unsupported_policy_before_any_journal_write(tmp_path, modes):
+    config = remaining_options()
+    config['reservation_modes'] = modes
+    with pytest.raises(BudgetError):
+        budget(tmp_path, config)
+    assert not (tmp_path / 'budget.jsonl').exists()
+
+
 def reserve(controller, identifier="one", *, candidate="candidate", direction="branch", operation="dev"):
     node = Candidate(candidate)
     request = controller.allocate(node, direction_id=direction) if operation == "dev" else None

@@ -1,0 +1,114 @@
+# 持续开发接续记录（2026-11-04）
+
+## 目标与事实基线
+
+按现有 VISION、RUBRIC、统一抽象及逐项对照清单推进到可复现使用的发布候选。保留六概念内核、公开 Framework 入口和历史验收证据；真实可用性、架构完整性和外部效果分别验收。
+
+- 原仓库：<https://github.com/YixuanZhang99/mori-27>。
+- main：`49be71ec079f1412a4a8e74086064c4db121c363`，S8/v67。
+- 已有后续分支：`codex/mle-composed-pilot`，`dfe29cb4265fd939a203d587a57b523efbe52c36`，S9/v68。接续工作应检查并保留这项既有成果，避免从 main 重做 S9。
+- [v68 CI 41032740938](https://github.com/YixuanZhang99/mori-27/actions/runs/41032740938) 两个 job 成功。已下载并检查 artifact 中 summary、certificate 与日志：1,740 pytest，38 检查，verifier 退出 0，历史未变，外部模型与 benchmark 未执行。
+- 本地采用 Python 3.12.3、仓库 uv.lock；v67 基线 `make check` 实际通过：1,472 portable、160 Linux deselected、11 axioms、4 离线示例、43 tooling；未把 Linux deselected 计为通过。
+- 当前本机 `.venv` 位于用户目录；`scripts/check_linux.py` 实测沙箱不可访问该解释器，完整 Linux 验收需要 docs/DEVELOPMENT.md 所述系统路径环境或同 SHA CI。不可因此扩大沙箱挂载或关闭隔离。
+
+## 下一阶段顺序
+
+1. **接续并核验 S9**：审查 v67→v68 变更，复现影响真实试跑的具体缺陷；每个修复先有失败回归，再做最小修改。维护 `docs/MLE_COMPOSED_V68.md` 中固定预测、隔离评分、同预算、未知费用和失败矩阵契约。
+2. **冷启动与运行证据**：按文档建立锁定环境，验证公开入口、四个离线示例、构建和导入完整性；本机限制与 CI 证据分开记录。发现的问题回到所属模块修复，不能加一条不经 Framework 的演示路径冒充接通。
+3. **真实小规模试跑**：先落实模型、预算、Kaggle 数据和规则授权，再执行 preflight；通过后才跑三个任务的 baseline/full 配对。结果必须包含所有失败、实际费用、实际模型、数据身份及冻结提交。无这些条件时继续离线开发，不使用 fixture 填真实结果。
+4. **治理与架构缺口**：根据逐项清单关闭 composed 路径常驻 IID-RS、X2 HITL、X1 事件订阅、通用执行角色和并行池等仍开放范围；先用真实使用反馈排序，每项建立独立设计和验收边界，不同时扩展全部模块。
+5. **差异化实验**：参考研究记录中的固定 SHA，优先检验“同预算搜索是否优于 IID-RS”“失败/中断费用能否完整归因”“代理误导是否被阻断且终审不泄漏”。这些是待验证假设，不预先宣称他人无法实现或全面领先。
+
+## 清晰结构与开发纪律
+
+- `m0/core/`：领域无关机制；`m0/core/composition/`：配置组装与执行闭环；`m0/zoo/`：任务、数据与评分适配；禁止 benchmark 特例进入内核。
+- `docs/ABSTRACTION_ALIGNMENT.md`：条款及阶段事实源，保留基线记录并追加阶段证据。
+- `autoresearch-fw/VISION.md`、`RUBRIC.md`：产品方向与完成标准，不为测试通过放宽标准。
+- `research/`：对标证据、固定 commit 和可复现实验；不把 README 声明当作已运行结果。
+- `plans/`：历史计划；新阶段执行说明跟随其设计与验收文档，不用旧计划覆盖新代码事实。
+- 功能改动需要行为回归；跨模块改动必须通过公开 Framework 入口。只进行有需求证据的局部重构，避免目录重排造成无效迁移。
+
+## 提交、同步与回滚
+
+用户已授权定期向原仓库提交，并选择为当前 `NeekYoung12` 账号开通写权限。开通前本地继续工作，不擅自改用 fork。
+
+- 每个独立、可复核的修复或里程碑建立一个本地 commit，说明条款、行为、验证及限制。
+- 每个验证通过的里程碑推送验证分支；若持续阶段超过一个工作日，也在通过当日检查后保存远端检查点。
+- 推送前 fetch 并检查分歧；原仓库 main 仅在同 SHA 全量 CI 通过后 fast-forward。禁止 force push，禁止把另一 SHA 的 CI 当作当前通过。
+- 无写权限时保留本地 commit 和可移交 bundle，明确报告尚未同步；不把本地 commit 描述为远端备份。
+- 回滚以独立 commit 和已有稳定 SHA 为锚点，公共历史采用 revert；不得删除失败记录、覆写旧 verifier 或重造历史证书。
+
+## 持续工作与复审节奏
+
+本聊天已创建 active goal，持续推进上述发布候选目标。每个里程碑完成后回顾条款、结构、失败模式、对标证据和下一个最小交付。
+
+另已建立每周一 09:00（Asia/Shanghai）的开发复审 heartbeat；每月首次复审补研究刷新。复审先检查在途开发和 Git 状态，避免并发写同一工作区；无实质变化时不通知，有重要发现、阶段完成、失败或用户必须处理的事项才通知。
+
+复审固定关注 FlashRSI、RSIHub、penguin-harness、RSI-Anything 的新增提交，记录“可借鉴机制、适用边界、是否推翻现有决策、验证方法”。独特性以实测组合能力与证据质量建立，不使用缺乏支持的排他性宣传。
+
+## 本次验证记录
+
+- v67 `make check` 退出 0；可移植测试用时 433.85 秒。
+- 原始 v68 MLE 目标组本机通过：105 passed、3 deselected，33.02 秒。
+- 已复现并修复匿名标签排序泄漏；初始攻击回归先失败后通过，第一轮相关组 109 passed、3 deselected。随后补充配对密钥和恢复拒绝、沙箱前置检查；最终 `make check` 退出 0：1,587 portable、163 Linux deselected（234.68 秒）、11 axioms、4 离线示例、52 tooling；`make build` 生成 wheel/sdist 成功。Linux 全量仍待运行，deselected 不计通过。
+- `make verify-import` 通过：1,020 个原始负载文件，零错误。
+- 独立修复审查未发现重要缺陷；不能代替全量验收。
+
+## 用户最新运行选择
+
+用户指定 DeepSeek 最新 V4.1-Flash（API ID `deepseek-flash`）和本轮累计 200 元总上限。GitHub Secrets 因协作者权限暂不可配置，改用仓库外本地私有配置文件；只验证该文件存在、非符号链接和权限 0600，不显示或复制内容。此前没有启动任何真实模型调用。
+
+真实试跑还需要 DeepSeek 参数兼容、人民币跨 run 费用预留/结算、可用 Linux 依赖环境和 Kaggle 规则/数据权限。当前 token 上限不能冒充人民币硬上限。
+
+goal 曾由用户在界面暂停；用户后续明确要求继续本轮工作，但工具仍显示 paused。工具不能替用户恢复状态；跨轮自动工作需要用户在 goal 控件点击继续。每周复审须尊重用户暂停，暂停期间仅做用户新授权的操作。
+
+用户随后确认三个 Kaggle 竞赛规则均已接受。离开前一次性配置脚本已提供：导入 legacy Kaggle 凭据，创建系统路径下本任务环境目录，安装 Git LFS；用户完成标记出现后继续依赖安装和数据验证。尚无付费调用。
+
+## 一次性本地配置完成后的状态
+
+2026-11-04 后续核验更新（覆盖上文关于环境不可用和 goal 暂停的旧状态）：
+
+- goal 工具确认 `active`，无需用户再次点击继续。
+- 仓库外两份私有配置均存在、非符号链接、权限 0600；只在本地进程内使用，未显示密钥或提交到 Git。
+- DeepSeek 官方 `/models` 认证成功，返回列表包含 `deepseek-flash`；没有发起付费生成请求。
+- Kaggle 三个竞赛的文件列表均可访问；官方固定 revision 的数据准备命令全部退出 0，未关闭校验或覆盖官方 checksum。
+- 系统路径下分别安装锁定开发环境和 hash-locked CPU pilot 环境；实际 Bubblewrap/seccomp 内的 Python、NumPy、pandas、scikit-learn 导入通过。
+- 官方三个任务的注册、protected snapshot 和合成 CSV 评分 smoke 通过。真实 prepared 数据的完整 pilot 环境预检 `ready=true`，无缺失项；这仍不代表模型实验已运行。
+- 非秘密的本地路径、候选六次运行参数与准备证据保存于聊天工作目录的 `outputs/local-run-settings.json`、`local-model-readiness.json`、`local-kaggle-readiness.json`、`local-mle-runtime.json`、`local-mle-preflight.json`。这些记录不包含密钥。
+- GitHub API 仍报告当前账号 `push=false`、`admin=false`；本地工作继续，尚不能声称远端备份完成。
+
+用户所需的人工配置已完成。下一步是软件工作：按 DeepSeek 研究记录实现 `max_tokens` 请求兼容和跨任务、跨输出目录的累计人民币账本，先验证请求前预留、已知用量结算、未知调用阻断与恢复，再启动已授权的真实试跑。配置文件中明确保留 `paid_generation_enabled=false` 和 `currency_controller_implemented=false`，不能以环境预检通过替代费用控制验收。
+
+## 人民币控制与 v69 接线完成后的状态
+
+2026-11-04 后续更新：DeepSeek 请求兼容、持久 campaign 预留/结算、公开 Framework 与六运行 pilot 传播、双向费用对账和公开报告字段已实现。两次独立审查分别发现并修复首条错误模型被按 Flash 定价、整组本地回执缺失未被独立审计发现的问题；均先复现失败回归，再修复，复核通过。
+
+最终集成检查实际完成：1,794 Linux pytest 无跳过（368.09 秒）、四个离线示例、11 axioms、56 tooling、build 和 1,020 个原始导入文件校验通过。新 v69 保留全部 29 个 v68 命令及超时，另加隔离/费用组；v68 历史证据来自重新下载核验的原始 CI artifact，没有覆写历史源码或补造 v69 证书。
+
+下一步在干净提交上执行完整 v69，核验 39 个预期检查及新证书/日志，随后创建本次授权唯一的真实 200 元账本，重跑带预算配置的真实环境预检，再启动六次试跑。实际调用仍为零；配置中继续禁用付费生成直到软件验收通过。GitHub 写权限最新查询仍为 false，保留本地 commit/bundle，不能宣称远端备份或同 SHA CI 已完成。
+
+## v69 实际验收与真实试跑启动
+
+后续事实更新：`5fa85d3ab7c4f643550ecaa2223a65231d7f7a86` 的完整本机 Linux v69 已通过，39 项检查、874.524 秒；新证书与唯一新增 journal 相符，验收前后同 SHA、工作区干净、历史文件不变。证据保留在聊天工作目录 `outputs/v69-acceptance/20261104T072440.444943Z-8arao2_1/`，摘要及各文件 SHA-256 在 `outputs/v69-verified-evidence.json`。这不等于远端同 SHA CI 已通过。
+
+已创建本次授权唯一的真实累计 200 元账本，最终生产预检 `ready=true`、无缺失项。六次 DeepSeek 真实试跑已经启动，首条外部用量回执已验证并结算费用上界；当前结果未完结。运行源码为上述提交的只读 archive，已核对 1,194 个文件摘要，因此后续工作区文档更新不改变正在执行的代码。三个任务、baseline/full、seed 1、每 run 60,000 token、4 次迭代、600 秒运行限额和 120 秒单次执行限额均已冻结。
+
+接续时先检查原运行句柄及 `outputs/local-pilot-launch-status.json`，不得因观察超时或暂无报告而另起付费试跑。运行结果位于 `work/deepseek-pilot-5fa85d3/`；全部提交冻结后才进行官方隐藏评分。完整账本、原始候选和日志留在本地，公开报告使用 `scripts/run_mle_cloud.py` 的白名单导出。所有失败、未知费用及模型身份限制必须保留。GitHub `push/admin` 仍为 false；Goal 为 active，人工配置已完成。
+
+## 第一次真实试跑的终态与修复
+
+原执行进程已退出 1，六次运行均已结束：spooky 两组官方评分有效，leaf/nomad 四组失败。9 次外部请求、130,501 token，独立回执与账本对账完整；累计费用保守上界 0.927284 元，未结调用为零，付费执行已关闭。结果与解释见 [第一次真实尝试](../research/experiments/2026-11-04-deepseek-pilot-attempt-1/README.md)，不得将六次“已执行”写成六次“成功”。
+
+全部运行均在某次模型调用超过固定 12,000-token operator 预留后停止；两条有效 spooky 提交也受到提前停止影响。正在按 [独立修复计划](superpowers/plans/2026-11-04-mle-reservation.md) 增加原子剩余预留策略。原始只读源码、输出和已有 campaign 账本保持不变，后续尝试必须使用同一累计预算。结构复审见 [组合运行接口审视](ARCHITECTURE_REVIEW_2026-11-04.md)：常驻 IID-RS 与七账户完整映射仍需另行接通。
+
+最终预留/日志/v70 候选完整流水线通过：1,821 pytest、60 tooling、11 axioms、4 示例、打包与导入核验，374.25 秒且源码指纹未变；详细结果保存在本机 `outputs/remaining-x1-v70-validation.json` 和日志。三任务官方合成评分 smoke 通过。当前仍需在干净提交上完成 v70，不将本次流水线或首次失败试跑称为全量 benchmark 成功。
+
+v70 干净提交 `aedede3` 已完成本机 41 项验收（901.868 秒、1,821 pytest），原始证据独立核对通过；[公开摘要](../research/experiments/2026-11-04-v70-local-validation/README.md)包含安装可用性证据和局限。第二轮使用 `work/pilot-source-aedede3` 只读源码、原参数及原累计账本，于 08:39:18 UTC 启动；运行状态以本机 `outputs/local-pilot-attempt-2-launch-status.json` 为准，不重启已启动尝试。当前 `local-run-settings.json` 的旧 source_commit 字段未由早期启动器更新；源身份以第二轮 plan、launch-status 和只读 manifest 为权威，终态后同步修正此元数据。
+
+## 第二轮终态与 v71 接线（后续状态优先）
+
+第二轮 session94752 已终止（exit1），不是挂起进程。六个运行中3个有效评分、3个 token 超额失败；[公开报告](../research/experiments/2026-11-04-deepseek-pilot-attempt-2/README.md)与原始私有回执分别保留。共享账本累计33请求、3.242064元上界、预留0/未结0。`local-run-settings.json` 旧 source_commit 已在终态后修正为 `aedede3`。不要重启第二轮。
+
+`c617931` 请求容量/已知拒绝修复通过1,836完整测试；`bf6719e` 保存实验与治理设计。当前 v71 接线将归档原始 v70证据、保留全部32旧命令组并新增一组，64 tooling检查通过；完整干净提交验收待执行。第三轮必须在该验收之后使用新的只读源码、输出目录和独占启动标记，并核对原账本累计3,242,064微元与33个操作，不得新建或清零预算。模型/竞赛本地配置已齐；远端写权限仍未开放。
+
+完成本轮正式验收后，依据已提交常驻控制设计钉定具体 schema/接口任务计划，继续 C1/C3、真实 B 指标和 A/D 全部发布要求；不要把局部预算修复或3个有效提交当作项目完成。

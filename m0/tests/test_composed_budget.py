@@ -602,3 +602,33 @@ def test_actual_evaluation_invocation_cannot_be_free_and_batch_counts_are_not_cl
     assert state["global"]["used"] == {"token": 12, "node": 1, "eval_count": charged_count}
     assert not state["open_intents"] and not rows(fw, "composed_decision")
     assert fw._composed.layered.gate_calls == 0
+
+
+@pytest.mark.parametrize('hierarchical', [False, True])
+def test_typed_provider_exhaustion_settles_then_stops_with_previous_candidate(tmp_path, hierarchical):
+    from core.llm import ProviderBudgetExhausted
+
+    class ExhaustingProvider(Provider):
+        def __call__(self, prompt):
+            if self.calls:
+                self.calls += 1
+                self.last_usage = {'total_tokens': 0}
+                raise ProviderBudgetExhausted('capacity exhausted in fixture')
+            return super().__call__(prompt)
+
+    provider, domain = ExhaustingProvider(), Domain()
+    if hierarchical:
+        fw = build(tmp_path, llm=provider, domain=domain, generations=4)
+    else:
+        profile = composed_profile()
+        profile['domain'] = {'name': 'native'}
+        fw = Framework.from_profile(profile, provider, domain,
+            LoopConfig(max_generations=4, total_budget=10000, intent_cost=100, reeval_floor=0), str(tmp_path))
+    result = fw.evolve(TASK)
+    assert provider.calls == 2 and len(domain.calls) == 1
+    assert result['best_candidate_id'] is not None
+    assert 'capacity exhausted' in result['stop_reason']
+    assert len(rows(fw, 'composed_evidence')) == 1
+    assert len(rows(fw, 'composed_cycle_aborted')) == 1
+    assert fw.replay()['replay_certificate']['passed']
+    assert provider.calls == 2

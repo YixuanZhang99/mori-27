@@ -387,7 +387,12 @@ class WorktreeCommandExecutor:
                 raise UsageError("target process identity differs from its authorization")
         child = self._children.pop(directory.name, None)
         if child is not None:
-            child.wait(timeout=5)
+            # The result rename becomes visible before the trusted supervisor's
+            # final directory fsync returns. A slow filesystem must not turn
+            # known terminal evidence into an unknown-cost invocation. The
+            # supervisor already enforces the evaluator's execution deadline;
+            # here we only wait for its durable flush and reap the owned child.
+            child.wait()
         self._event_once("worktree_process_completed", directory.name, result)
         return result
 

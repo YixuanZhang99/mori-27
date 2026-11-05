@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "cases_checked": 200,
+  "aggregate_ties_skipped": 0,
+  "reference_commit": "3d34469165f0d604df3b48f1d5c776e9080f3da0",
+  "reference_sha256": "6b9d546d9b8c7e6dd3fb17807f50ba2dcd2108f6232beb456f8951820ba3fa16",
+  "benchmark_result": false,
+  "component_only": true
+}

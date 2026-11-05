@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "scope": "local resident governance implementation; no paid/provider bridge certification",
+  "baseline_commit": "53d2ba14dcc9b1575510a08333bfa08abac5dff7",
+  "validation": {
+    "command": "make axioms test-linux examples tooling build verify-import",
+    "started_at": "2026-11-04T10:21:28.548111+00:00",
+    "finished_at": "2026-11-04T10:26:04.545198+00:00",
+    "elapsed_seconds": 275.973,
+    "passed": true,
+    "source_unchanged": true,
+    "source_file_count": 1069,
+    "source_manifest_sha256": "4a9eb4d982e62b480ce6b2d9cbf1c9f0b1f533a55fe8d54a48417482c90849d9",
+    "linux_tests": 2000,
+    "tooling_tests": 64,
+    "historical_import_payload_files": 1020,
+    "log_sha256": "41abcd0be0ce122a4edea209ab5427fcdce79d5dcf0c5ee14fe89723bfb5defc"
+  },
+  "installed_artifact": {
+    "wheel_sha256": "43eb6577347f8bfa842bf125ca274206d39897fc1c2238ea25e23e8623d99bde",
+    "example_sha256": "dc98fc74255a3f75c70a4a5c4c4cdcc31de2d4b873c2f843a023937fa2f70486",
+    "isolated_python": true,
+    "outside_checkout": true,
+    "pause_completed": 1,
+    "pause_pending": 2,
+    "resumed_completed": 3,
+    "recorded_replay_passed": true,
+    "replay_external_calls": 0
+  },
+  "external_provider_requests": 0,
+  "live_campaign_ledger_migrated": false,
+  "same_sha_hosted_ci": false,
+  "provider_currency_bridge_implemented": false,
+  "iid_sampling_certified": false,
+  "superiority_established": false,
+  "formal_release_certified": false,
+  "preserved_failures": [
+    {
+      "source_commit": "53d2ba14dcc9b1575510a08333bfa08abac5dff7",
+      "v71_acceptance_passed": false,
+      "issues": [
+        "supervisor post-result final-sync wait deadline",
+        "full regression timeout at 600 seconds"
+      ]
+    },
+    {
+      "phase": "first current project validation",
+      "passed": false,
+      "issue": "A5 budget/projection dependency cycle; fixed by shared pure contracts before final validation"
+    }
+  ]
+}

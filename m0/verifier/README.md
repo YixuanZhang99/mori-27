@@ -76,3 +76,19 @@
 - v66 — S7 配置运行时的真实 worktree 命令、进程身份、主循环中断接管与 journal 续接验收；保留全部 v65 命令与真实历史证据。Mac 可信本地模式不代表 Linux 沙箱等价，种群与真实外部 campaign 单独验收。见 [v66](v66/README.md)。
 
 - v67 — S8 有界种群成员、可复算抽样、双亲文本 crossover 与公开 Framework 恢复验收；保留全部 v66 命令、超时及真实历史证据。elite 保留不等于 novelty/MAP-Elites，代码签名证明与真实外部 campaign 不由本阶段认证。见 [v67](v67/README.md)。
+
+- v68 — S9 将 MLE-Bench Lite 的公开训练数据评估、anchor、负反馈与种群搜索接入配置 Framework，并验收同模型同预算的小规模对照试跑协议；保留全部 v67 命令、超时与真实历史。离线 fixture 不代表真实 benchmark 成绩，子集试跑不代表 22 题全量成绩。见 [v68](v68/README.md)。
+
+- v69 — S9 private anonymous prediction order, pre-provider sandbox readiness and durable shared CNY campaign admission; preserves all v68 command groups and verified historical evidence.
+
+- v70 — Atomic remaining physical reservations, fractional quote floors and cooperating-process JSONL snapshots; preserves every v69 command and authentic local v69 evidence.
+
+- v71 (2026-11-04): provider input-capacity admission, measured refusal/overrun distinction and durable known-refusal replay; all v70 command groups/timeouts and authentic history retained.
+
+- v72 (2026-11-04): opt-in resident controls, seven protected physical accounts, isolated sessions, native/worktree recovery and recorded replay, additive protected currency migration and semantic audit; all v71 commands/timeouts and authentic history retained.
+
+- v73 (2026-11-04): external governed CNY bridge with strict invocation identity, hard capacity admission, independent shared-authority audit, process-crash adoption, and native/worktree loopback Framework replay; preserves every v72 command and timeout.
+
+- v74 — Configured M7 construction, immutable Git artifacts, isolated controls, protected external currency, installed examples and actual process-crash recovery; retains all v73 checks.
+
+- v75 — Preserve v74 checks and historical sources; extend the full regression time limit to 900 seconds.

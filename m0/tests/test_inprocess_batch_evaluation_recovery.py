@@ -5,6 +5,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -83,9 +84,18 @@ def owner_main(run_dir, crash_point):
     mutation_target = None
     mutation_count = 0
     gate_seen = False
+    evaluation_start_lock = threading.Lock()
 
     def append_with_crash(self, kind, payload):
         nonlocal batch_outcomes, mutation_target, mutation_count, gate_seen
+        if crash_point == "active" and kind == "m0_batch_evaluation_started":
+            # The store releases its append lock before this wrapper regains
+            # control. Hold a fixture barrier through SIGKILL so no second
+            # worker can return from its start marker and call the evaluator.
+            with evaluation_start_lock:
+                original_append(self, kind, payload)
+                os.kill(os.getpid(), signal.SIGKILL)
+            return
         original_append(self, kind, payload)
         data = payload if isinstance(payload, dict) else {}
         crash = False
@@ -380,9 +390,19 @@ def test_batch_outcome_result_binding_is_refused(tmp_path):
 
 
 def test_batch_outcome_cost_must_match_settlement(tmp_path):
-    run_dir, _store = crashed_run(tmp_path, "cost-fork", "settle")
+    run_dir, store = crashed_run(tmp_path, "cost-fork", "settle")
+    settlements = [row['payload'] for row in store.read('ledger')
+                   if row['payload'].get('entry_kind') == 'settle'
+                   and row['payload'].get('account') == 'exploit']
+    assert len(settlements) == 1
+    cohorts = [row['payload'] for row in store.read('batch_cycle_started')]
+    assert len(cohorts) == 1
+    candidates = [intent['candidate_ref'] for intent in cohorts[0]['intents']
+                  if intent['intent_id'] == settlements[0]['intent_id']]
+    assert len(candidates) == 1
     rewrite_one(run_dir, lambda row: row["kind"] == "m0_evaluation_outcome"
-                and bool(row["payload"].get("execution_ref")),
+                and bool(row["payload"].get("execution_ref"))
+                and row['payload'].get('candidate_id') == candidates[0],
                 lambda row: row["payload"].update(token_usage={"total_tokens": 999}))
     with pytest.raises((RuntimeError, ValueError), match="cost|settlement"):
         recovered_framework(run_dir, forbidden=True).evolve(TASK)

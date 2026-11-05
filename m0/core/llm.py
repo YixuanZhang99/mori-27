@@ -16,6 +16,14 @@ class UsageError(ValueError):
     """A completed operation has no trustworthy token-cost evidence."""
 
 
+class ProviderBudgetExhausted(ValueError):
+    """The current provider call was refused for budget before dispatch.
+
+    This does not erase charges from earlier calls in the same operator. Callers
+    must still consume and settle their complete known invocation costs.
+    """
+
+
 def validate_usage(usage) -> dict[str, int]:
     """Require explicit provider totals; never coerce or estimate missing usage."""
     if not isinstance(usage, dict) or "total_tokens" not in usage:

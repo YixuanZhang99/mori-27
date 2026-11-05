@@ -22,10 +22,14 @@ class PopulationRuntime:
         population = isinstance(self.frontier, PopulationFrontier)
         policy = self.parts['policy']
         if isinstance(policy, PopulationPolicy):
+            from core.composition.construction_recipes import RecipeOperator
+            crossover = self.parts['operators'][1] if len(self.parts['operators']) > 1 else None
+            supported = isinstance(crossover, CrossoverOperator) or (self.construction_enabled and
+                isinstance(crossover, RecipeOperator) and crossover.kind == 'crossover')
             if not population or self.frontier.capacity < 2:
                 raise ValueError('population policy requires a population frontier with capacity >= 2')
             if [spec.name for spec in self.assembly.operators] != ['draft', 'crossover'] \
-                    or not isinstance(self.parts['operators'][1], CrossoverOperator):
+                    or not supported:
                 raise ValueError('population policy requires registered operators ordered as draft, crossover')
         for operator in self.parts['operators']:
             if isinstance(operator, CrossoverOperator) and operator.metric != self.frontier.metric:

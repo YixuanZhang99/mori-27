@@ -63,11 +63,19 @@ def _execute_agent(template: str, workspace: Path, task_id: str, seed: int,
                    arm: str, time_limit: float, run_dir: Path,
                    agent_env: dict[str, str] | None = None) -> dict:
     command = _command(template, workspace, task_id, seed, arm, time_limit)
-    env = os.environ.copy()  # credentials may be inherited, never serialized by this runner
+    fixture_only = bool(agent_env and agent_env.get('MLE_FIXTURE_ENV_ONLY') == '1')
+    comparison_only = bool(agent_env and agent_env.get('MLE_COMPARISON_ENV_ONLY') == '1')
+    if fixture_only:
+        env = {'PATH': os.defpath, 'HOME': str(run_dir), 'OPENAI_API_KEY': 'fixture-only'}
+    elif comparison_only:
+        env = {'PATH': os.defpath, 'HOME': str(run_dir), 'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', '')}
+    else:
+        env = os.environ.copy()  # credentials may be inherited, never serialized by this runner
     env.update({"MLE_TASK_ID": task_id, "MLE_SEED": str(seed), "MLE_ARM": arm,
                 "MLE_WALLCLOCK_BUDGET": str(time_limit)})
     if agent_env:
-        env.update(agent_env)
+        env.update({key: value for key, value in agent_env.items()
+                    if key not in {'MLE_FIXTURE_ENV_ONLY', 'MLE_COMPARISON_ENV_ONLY'}})
     started = time.monotonic()
     with (run_dir / "stdout.log").open("wb") as stdout, \
             (run_dir / "stderr.log").open("wb") as stderr:

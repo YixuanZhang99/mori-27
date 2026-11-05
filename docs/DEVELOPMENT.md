@@ -1,6 +1,6 @@
 # Mac 开发与 Linux 自动验收
 
-本文是当前开发入口。开发以 [统一抽象](AutoResearch模块化统一抽象.md)和 [逐项对照清单](ABSTRACTION_ALIGNMENT.md)为基准，当前 v67 保留 S1–S7 组与完整离线 research 示例，并增加 S8 配置种群和公开 Framework 组合组。[S1 使用与边界指南](COMPOSED_RUNTIME.md)说明 `Framework.from_profile("composed_prompt", ...)` 配置入口；[v67 验收说明](../m0/verifier/v67/README.md)限定本阶段认证范围，是否通过仍以同一提交的新证据为准。
+本文是当前开发入口。开发以 [统一抽象](AutoResearch模块化统一抽象.md)和 [逐项对照清单](ABSTRACTION_ALIGNMENT.md)为基准。当前验收入口为 v74 候选，保留所有历史命令和超时，新增配置构造、不可变产物、费用关联及独立安装验证。定义存在不代表本提交已经取得验收证书。使用方式见 [S1 配置入口](COMPOSED_RUNTIME.md)、[v7 治理指南](GOVERNED_CONTROLS.md)和 [v8 外部费用指南](GOVERNED_CURRENCY.md)；[v74 验收说明](../m0/verifier/v74/README.md)限定认证范围，通过状态以同一提交的实际证据为准。
 
 [S2 指南](EVALUATION_CONTRACT_V61.md)说明 native domain、producer 身份、计量覆盖、公开/私有字段和受限准入视图；[S3 指南](CONTEXT_FEEDBACK_V62.md)说明实际 ContextPack、显式跨 run 回流与 local_files 双车道。[S4 指南](LAYERED_ADMISSION_V63.md)说明 native 三层 opt-in、调用硬顶、实际记录复算与不回流终审。[S5 指南](HIERARCHICAL_BUDGET_V64.md)说明实际物理预算和 fidelity 边界。[S6 指南](PROXY_VALIDITY_V65.md)说明周期校准、代理有效性和负反馈边界。[S7 指南](WORKTREE_RECOVERY_V66.md)说明命令、worktree、进程身份和恢复边界。[S8 指南](POPULATION_RUNTIME_V67.md)说明 population_prompt、elite 成员、抽样回执、双亲文本交叉与 fixed-dev 比较限制。S7/S8 沿用 `composed-v6`，executor/domain manifest 与 frontier checkpoint 配置区分任务；各版 checkpoint 严格按运行时版本和完整 manifest 校验；不要补造旧证据以通过新认证。
 
@@ -19,19 +19,19 @@ make check
 
 `make setup` 执行 `uv sync --project m0 --locked --python 3.12`，在 `m0/.venv` 创建独立环境。`m0/uv.lock` 锁定直接和传递依赖，`--locked` 会在项目元数据与 lock 不一致时失败，避免运行时悄悄改锁。
 
-IDE 解释器选择 `m0/.venv/bin/python`。命令通过 `uv run` 进入环境，不要求手动激活。测试和四个示例使用离线模型或本地协议 fixture，不需要真实模型 API key。
+IDE 解释器选择 `m0/.venv/bin/python`。命令通过 `uv run` 进入环境，不要求手动激活。测试和五个示例使用离线模型或本地协议 fixture，不需要真实模型 API key。
 
 | 命令 | 用途 |
 |---|---|
 | `make setup` | 安装锁定开发环境 |
 | `make test` | 可移植测试，明确排除 `linux` 项；任何 skip/xfail 均失败 |
 | `make axioms` | 11 条静态架构公理 |
-| `make examples` | Toy GEPA、GSM8K-style、FunSearch-shaped 与完整 composed research 四个离线示例 |
+| `make examples` | Toy GEPA、GSM8K-style、FunSearch-shaped、composed research 与驻留对照五个离线示例；驻留对照在临时目录验证 pause/resume/replay 并清理产物 |
 | `make tooling` | 验收包装器的成功、失败及超时回归 |
 | `make check` | 上述 Mac 日常检查组合 |
 | `make build` | 构建 sdist 及 wheel 到 `artifacts/dist/` |
 | `make test-linux` | Linux 前置检查后执行完整测试，拒绝任何 skip |
-| `make accept-linux` | Linux 前置检查后，在副本中执行完整 v67 版本化验收 |
+| `make accept-linux` | Linux 前置检查后，在副本中执行完整 v74 版本化验收，并核对提交及执行源码 |
 | `make verify-import` | 校验不可修改的初始 Git 导入快照 |
 
 单文件或单个测试可直接运行，例如：
@@ -54,6 +54,8 @@ S4/S5/S6 继续分别保留三层准入、分层预算和 proxy 校准的显式�
 
 S8 的 `test_population_frontier.py`、`test_population_components.py`、`test_composed_population.py` 组合组验证 elite 成员保留、四种采样、真实双亲 crossover、M9 分离、作用域经验、预算/校准组合，以及状态恢复和 worktree 接管。种群仍要求可比较的同一 dev 请求，未认证 novelty/MAP-Elites 保留或代码签名证明。
 
+S9 的 `test_mle_composed.py`、`test_mle_provider.py` 与 `test_mle_pilot.py` 验证真实配置入口中的公开训练数据拆分、固定预测上的 proxy/anchor 评分、负反馈和种群，以及同模型同预算的对照编排与先冻结后官方评分。测试使用 fixture，不能据此宣称真实外部 API 或 benchmark 试跑完成。三个任务的输入限制、CLI 和证据边界见 [S9 指南](MLE_COMPOSED_V68.md)。
+
 `m0/tests/conftest.py` 以显式模块/函数清单标记 `linux`，原因是依赖 Bubblewrap、x86_64 seccomp 或 Linux `/proc` 稳定进程身份。混合模块中的纯协议测试仍在 Mac 运行。清单中的文件/函数不存在时，测试收集直接失败。
 
 Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不是 skip，也不证明被排除的测试已通过。Linux 完整验收不使用该选择条件，保留全部测试。`--fail-on-skip` 拒绝运行时跳过、模块收集跳过和 xfail；其行为有 5 个独立子进程回归用例保护。
@@ -64,15 +66,19 @@ Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不�
 
 ## GitHub Actions 实际运行路径
 
-根目录 `.github/workflows/ci.yml` 在 push、pull_request 和手动触发时运行，使用 `ubuntu-24.04` x86_64：
+根目录 `.github/workflows/ci.yml` 在 push、pull_request 和手动触发时运行。新增 `macos-14` / Python 3.12 job 执行锁定安装及 `make check`，上传 portable 日志；其显式排除的 Linux 用例由独立 Linux job 验证。以下是 `ubuntu-24.04` x86_64 job：
 
 1. 安装固定版本 uv、系统 Python 3.12、Bubblewrap 与 AppArmor 工具。
 2. 验证 user namespace 可用；必要时只给一份 root-owned CI 专用 bwrap 加允许 userns 的 AppArmor profile，保留全局限制。
 3. 用 lock 安装环境，检查原始导入快照，构建安装包，运行包装器回归及离线示例。
-4. 对当前解释器执行真实沙箱预检，随后在临时 `m0` 副本里运行 v67；所有内部 pytest 调用都强制 `--fail-on-skip --strict-markers`。
+4. 对当前解释器执行真实沙箱预检，随后在临时 `m0` 副本里运行 v74；所有内部 pytest 调用都强制 `--fail-on-skip --strict-markers`。
 5. 无论成功失败都保存本次结果和构建产物，保留 14 天；检查原仓库的历史 verifier 文件没有变化。
 
 Actions 使用完整 commit SHA 固定版本，权限为 `contents: read`，checkout 不持久化访问令牌。同一 ref 的新运行会取消旧运行。
+
+同一 workflow 的 `mle-cloud-runtime` 独立 job 安装 CPU 试跑的 hash-locked 依赖，checkout 固定的官方 MLE revision 并启用 Git LFS，验证三个任务注册、protected snapshot 和真实官方 CSV grader。评分仅使用临时合成数据，禁止网络调用，不需要模型/Kaggle secrets。其报告单独上传到 `mle-runtime-<SHA>` artifact；它不替代 v74 全量验收，也不代表真实试跑成绩。
+
+真实小规模试跑使用单独的手动 `mle-pilot.yml`，模型与 token 预算必填，默认只做 preflight，输入和公开 artifact 边界见 [S9 指南](MLE_COMPOSED_V68.md#github-云端入口)。普通 push/PR 不触发付费模型实验。
 
 ### Linux 的 Python 安装路径为什么特殊
 
@@ -105,7 +111,7 @@ make accept-linux
 
 ## 证据和历史文件
 
-v67 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance.py` 复制当前 `m0` 后才运行。v1–v66 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v67 的运行结果。新增历史证据必须来自其真实成功的阶段 CI artifact，归档前核对提交、摘要、证书与 journal；不得在新的接线上重新运行旧 verifier 后把结果当成历史。
+v74 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance_v74.py` 通过原包装器复制当前 `m0` 后才运行。它要求所执行的源码与 Git 提交、运行前后文件摘要一致；摘要及精确文件清单随验收证据保存。`make accept-linux-v73` 保留旧入口。v1–v73 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v68 的运行结果。新增历史证据必须来自其真实成功的阶段验收，归档前核对提交、摘要、证书与 journal；本地验收必须明确标记来源，不得称为远端 CI；不得在新的接线上重新运行旧 verifier 后把结果当成历史。
 
 v60 成功证据已原样归档自提交 `06491ce5639dd33f7f89bc8e1288f881b54ecb8c` 的 [S1 CI 40889093796](https://github.com/YixuanZhang99/mori-27/actions/runs/40889093796)：1,131 项 pytest、29 个验收检查通过。其 SHA-256 与 artifact 来源见 [v61 归档说明](../m0/verifier/v61/README.md#archived-v60-evidence-provenance)，工具测试固定保护归档字节。
 
@@ -121,17 +127,25 @@ v65 成功证据已原样归档自提交 `62a73631800bdf17eff0e5342fda0212a5303a
 
 v66 成功证据已原样归档自提交 `fb8a0f7e703c2300b95149536837cd2569e3f1e7` 的 [S7 CI 40992561406](https://github.com/YixuanZhang99/mori-27/actions/runs/40992561406)：1,552 项 pytest、36 个检查通过。其来源和摘要见 [v67 归档说明](../m0/verifier/v67/README.md#archived-v66-evidence-provenance)。
 
-v60 保留 v59 所有命令组并加入 S1 三文件组；v61 加入 S2 两文件组；v62 加入 S3 三文件组；v63 加入 S4 两文件组；v64 加入 S5 两文件组和完整离线 research 示例；v65 加入 S6 两文件组；v66 加入 S7 四文件组；v67 保留全部旧命令与超时并加入 S8 三文件组，历史验证范围扩展至 v66。包装器回归逐版本保护 v58→v59→v60→v61→v62→v63→v64→v65→v66→v67 的旧命令与超时设置，以及已经核实的历史归档字节来源。当前真正触发 Actions 的是仓库根级 workflow，其与 Makefile、包装器的实际调用链也接受检查。
+v67 成功证据已原样归档自提交 `49be71ec079f1412a4a8e74086064c4db121c363` 的 [S8 CI 40994318799](https://github.com/YixuanZhang99/mori-27/actions/runs/40994318799)：1,632 项 pytest、37 个检查通过。其来源和摘要见 [v68 归档说明](../m0/verifier/v68/README.md#archived-v67-evidence-provenance)。
+
+v68 成功证据已原样归档自提交 `dfe29cb4265fd939a203d587a57b523efbe52c36` 的 [S9 CI 41032740938](https://github.com/YixuanZhang99/mori-27/actions/runs/41032740938)：1,740 项 pytest、38 个检查通过。其来源和摘要见 [v69 归档说明](../m0/verifier/v69/README.md#archived-v68-evidence-provenance)。
+
+v60 保留 v59 所有命令组并加入 S1 三文件组；v61 加入 S2 两文件组；v62 加入 S3 三文件组；v63 加入 S4 两文件组；v64 加入 S5 两文件组和完整离线 research 示例；v65 加入 S6 两文件组；v66 加入 S7 四文件组；v67 加入 S8 三文件组；v68 加入 S9 三文件组；v69 保留全部 v68 命令与超时，增加匿名数据隔离和共享人民币预算组，历史验证扩展至 v68；v70 保留全部 v69 命令与超时，增加剩余预留和日志并发组，历史验证扩展至 v69。包装器回归逐版本保护 v58→v59→v60→v61→v62→v63→v64→v65→v66→v67→v68→v69→v70→v71→v72→v73 的旧命令与超时设置，以及已经核实的历史归档字节来源。当前真正触发 Actions 的是仓库根级 workflow，其与 Makefile、包装器的实际调用链也接受检查。
 
 每次新结果写入独立目录 `artifacts/linux-acceptance/<UTC-run-id>/`，包含控制台日志、新证书、journal 和结构化摘要；不会把上一轮成功当成本轮结果。包装器要求本次进程退出成功、有效新证书与本次 journal 检查成立，并确认源历史未被改动。CI 的临时 VM 负责最终清理隔离环境；指定进程崩溃恢复测试仍不等价于机器断电或真实远端服务 exactly-once 保证。
 
 运行目录同样应保留历史。普通 `evolve()` 要求空证据目录；已有运行需使用有效检查点恢复，或选择新目录。缺少 v2 判定上下文的旧回执仍可读取，但新审计不会认证，涉及旧回执的中断恢复也会拒绝；不要补造上下文或删掉原证据重跑。需要新认证时，在新目录重新评估。
 
-`Framework.replay()` 是独立重新执行，会调用模型或外部命令并可能计费，不是离线 journal 播放。每次执行写入 `<原工作目录>/replays/replay-*/`，保留各次成功和失败证据。旧 M0 路径的普通适配器与扩展从运行前副本恢复；不可独立复制的适配器需显式提供 `adapter_factory(workdir, store) -> (llm, evaluator)`，带可变闭包状态的函数也需使用 factory。详细接口及状态隔离限制见 [v59 replay 契约](EVALUATION_FIXES_V59.md#replay-隔离与适配器契约)。
+旧 M0 和未启用 `governance` 的配置路径保留原有 `Framework.replay()` 语义：独立重新执行适配器，会调用模型或外部命令并可能计费。每次执行写入 `<原工作目录>/replays/replay-*/`，保留各次成功和失败证据。旧 M0 路径的普通适配器与扩展从运行前副本恢复；不可独立复制的适配器需显式提供 `adapter_factory(workdir, store) -> (llm, evaluator)`，带可变闭包状态的函数也需使用 factory。详细接口及状态隔离限制见 [v59 replay 契约](EVALUATION_FIXES_V59.md#replay-隔离与适配器契约)。
 
-S1 配置路径同样复制运行前的 provider/evaluator 或使用上述 adapter factory，并要求注册组件的 factory 每次返回新实例。组件内部状态需要 `checkpoint_state()/restore_state()` 才能跨恢复保存。S1 仅支持完整 cycle 边界恢复，未完成的已启动 cycle 会拒绝自动重调；默认 `batch_size=max_inflight=1`，其他值前置拒绝。详见 [S1 恢复与 replay](COMPOSED_RUNTIME.md#恢复与-replay)。
+早期 S1 的未治理配置路径同样复制运行前的 provider/evaluator 或使用上述 adapter factory，并要求注册组件的 factory 每次返回新实例。组件内部状态需要 `checkpoint_state()/restore_state()` 才能跨恢复保存。该早期 S1 恢复契约仅支持完整 cycle 边界，未完成的已启动 cycle 会拒绝自动重调；默认 `batch_size=max_inflight=1`，其他值前置拒绝。详见 [S1 恢复与 replay](COMPOSED_RUNTIME.md#恢复与-replay)。
 
 S3 在此基础上保存独立 logical_run_id 与上下文/知识状态。两个独立新 run 的 checkpoint_ref 可以因作用域身份不同而不同；同一逻辑 run 的恢复/replay 才保持该身份。显式结束导出的文件也要在恢复/replay 核对内容 hash，暂停不导出，完成恢复不重复导出。旧 v1/v2 检查点缺少这些字段时明确拒绝。
+
+显式启用 `governance` 后，`composed-v7-governed` 的 replay 使用已记录的 provider/evaluator outcomes，在独立工作目录复算并核对回执。成功证书声明 `mode="recorded_outcomes"`、`external_calls=0`；缺失或不匹配的证据会拒绝回放，不会退回新的模型或评估命令调用。该模式与上面的旧路径重新执行语义分别保留。运行方法、pause/resume/replay 输出及已支持的 native/worktree 边界见 [常驻对照指南](GOVERNED_CONTROLS.md)。
+
+驻留对照示例和当前治理认证使用离线确定性 fixture。人民币 authority 已有独立的未来额度保护和显式 v2 journal 迁移，但外部 provider/currency bridge 尚未实现；core 预检拒绝外部货币能力。录制重放不证明随机采样 IID、供应商账单一致性、真实付费实验或正式发布。
 
 原 `MANIFEST.json` 是导入快照清单，不会因后续开发而重写：
 
@@ -156,6 +170,29 @@ make check
 make build
 ```
 
-同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与 v67 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成。修复覆盖范围见版本修复说明，统一抽象的未完成项和阶段验收条件见 [对照清单](ABSTRACTION_ALIGNMENT.md)。
+同时提交 pyproject 与 lock；不要手改 lock。完整 Linux CI 通过说明当前定义的测试与相应提交的 v74 验收成立，不证明尚未执行的真实模型/benchmark campaign 已完成。修复覆盖范围见版本修复说明，统一抽象的未完成项和阶段验收条件见 [对照清单](ABSTRACTION_ALIGNMENT.md)。
 
 相关一手文档：[uv 锁定与同步](https://docs.astral.sh/uv/concepts/projects/sync/)、[uv GitHub Actions](https://docs.astral.sh/uv/guides/integration/github/)、[Ubuntu user namespace 限制](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)。
+
+本地 v69 的 39 项检查与 1,794 项测试在干净提交 `5fa85d3ab7c4f643550ecaa2223a65231d7f7a86` 上通过；原始证书和 journal 已归档，哈希与本地来源见 [v70 说明](../m0/verifier/v70/README.md#archived-v69-provenance)。这不替代同一 SHA 的远端 CI。
+
+### v71 请求容量与已知拒绝
+
+v71 保留全部 v70 命令及超时，增加完整 provider/currency-integration/composed-budget/composed-recovery 四文件组。成功时共有42项检查；wrapper 使用新的版本路径并要求新证书和 journal 对应同一次运行。v70 真实本地41项证据来自干净 `aedede3`，原始摘要与来源见 [v71 说明](../m0/verifier/v71/README.md#archived-v70-provenance)。
+
+以下保留 2026-11-04 请求容量修复阶段、首次完整 v71 验收前的记录：当时完整本地回归为1,836 pytest、60 tooling，以及示例、约束、打包和固定导入来源检查；[本地证据](../research/experiments/2026-11-04-token-admission-local-validation/README.md)不等于 v71 或 hosted CI。当时 v71 接线的64项 tooling 检查通过，干净提交上的完整 v71 尚待执行；后续完整运行的结论仅由相应原始证书和 provenance 决定。默认 UTF-8 输入容量是估算，服务容量上限模式单独声明；不把“未观察到超额”称为硬 token 保证。
+
+2026-11-04 第二轮真实试跑记录的终态为3个有效官方评分与3个总 token 超额失败；累计费用上界3.242064元，无未结调用。见[完整矩阵](../research/experiments/2026-11-04-deepseek-pilot-attempt-2/README.md)。下一轮复用原200元账本、原任务/seed/额度和新的只读源码，不能重置费用或覆盖失败证据。
+
+### v72 驻留对照与受保护预算
+
+v72 完整保留 v71 的33个命令组及超时，增加4个命令组；成功时共有46项检查。新增组覆盖配置/七账户/session、native 与真实 worktree 恢复和录制重放、人民币 authority v2 显式迁移与语义审计，以及离线示例的 pause/resume/replay。人民币 journal 扩展不构成外部 provider bridge，也不支持跨两个 authority 的原子承诺。认证仅覆盖已运行的离线确定性 fixture；IID、供应商账单、机器掉电持久性和正式发布均不在范围内。
+
+v71 历史 scope 单元测试使用归档的原始 v71 包装器字节；旧测试方法和 verifier 源码保持不变。v72 的 scope 测试保留该版本归档接线；独立 v73 测试检查当前实际接线。v71 证书和 journal 只允许在其真实完整验收成功后归档，保留原始失败记录及来源，不可由新测试的局部成功生成。
+
+### v73 外部费用桥接
+
+v73 保留全部37个 v72 命令，新增4组，共41个命令组／成功时50项检查。新组执行完整的契约、状态恢复、物理身份、模型协议、货币证据、实际 SIGKILL、已知零费用拒绝和 native/worktree 公共入口文件，并运行无测试模块依赖的离线 CNY 示例。全量 pytest 和全部历史命令的超时不变。历史 v72 scope 使用原始 ff5c441 控制文件；历史源码与方法逐字保护。真实供应商请求、live campaign 迁移、账单、IID、效果优势与完整发布均不由 loopback 验收推出。
+
+
+M7 新构造路径的使用与模块职责见 [CONFIGURED_CONSTRUCTION.md](CONFIGURED_CONSTRUCTION.md)。v74 的五个新增组保留旧命令与超时；历史 wrapper 回归仍覆盖 v73，新的 wrapper 回归验证未提交源码、原目录变化或执行副本变化不能认证成功。历史 v73 输出来自原 push 运行，不能把当前新增测试的通过冒充历史证书。

@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "scope": "offline governed external currency bridge engineering validation before v73 transition",
+  "baseline_commit": "ff5c4417879f29cc39c7c5886a793f500bdbcbad",
+  "validation": {
+    "started_at": "2026-11-04T11:15:06.595477+00:00",
+    "finished_at": "2026-11-04T11:20:03.100695+00:00",
+    "elapsed_seconds": 296.476,
+    "passed": true,
+    "source_unchanged": true,
+    "command": "make axioms test-linux examples tooling build verify-import",
+    "linux_tests": 2116,
+    "tooling_tests_before_transition": 70,
+    "tooling_tests_after_transition": 76,
+    "historical_import_payload_files": 1020,
+    "source_file_count": 1095,
+    "source_manifest_sha256": "901cf5abd1f587c99fcf29e2d9f20463f345237099af98de97d545effab76ecc",
+    "log_sha256": "59221ee00fe397f6daf5b3178be143a6c6ee1f8b7cee5fd5a8a162cbc76affd5"
+  },
+  "installed_artifact": {
+    "passed": true,
+    "wheel_sha256": "774f124c89af31af3997d9ea521e8bbbfe5657bbe9e9be976bfd154940656873",
+    "example_sha256": "f3f7a93e684b7cd17705e5b1ced97706df725a0a72ea2ad32d181336abdd9c28",
+    "isolated_python": true,
+    "outside_checkout": true,
+    "report": {
+      "controls_completed": 2,
+      "external_model_requests": 0,
+      "fixture_settled_micro_cny": 152,
+      "loopback_http_requests": 4,
+      "notice": "Synthetic usage on a new fixture ledger; no real spend or invoice certification.",
+      "recorded_replay_passed": true,
+      "replay_currency_events_changed": false,
+      "replay_new_http_requests": 0,
+      "runtime": "composed-v8-governed-external"
+    }
+  },
+  "external_provider_requests": 0,
+  "live_campaign_ledger_migrated": false,
+  "same_sha_hosted_ci": false,
+  "iid_sampling_certified": false,
+  "superiority_established": false,
+  "formal_release_certified": false
+}

@@ -1,0 +1,227 @@
+"""Checkpointable FunSearch population policy; runtime bridge is not installed.
+
+The driver must journal selection before physical generation, validate public
+projection against original evidence, and bind state to that journal on restore.
+"""
+from __future__ import annotations
+
+import ast
+import copy
+import hashlib
+import re
+from core.composition.strategies import GreedyPolicy, policy_options
+from core.executor.types import EvalStatus
+from core.funsearch_population import FunSearchPopulation
+from core.funsearch_selection import draw_selection, verify_selection
+from core.x1.checkpoint import payload_digest
+
+
+def funsearch_policy_options(options):
+    """Validate the complete, frozen configuration before any provider call."""
+    required = {'case_ids', 'islands', 'seed', 'prompt_size', 'temperature', 'temperature_period',
+                'metric', 'template', 'template_ref', 'function_name', 'reset_interval'}
+    optional = {'context_window', 'comparison_metric'}
+    if type(options) is not dict or not required <= set(options) or set(options) - required - optional:
+        raise ValueError('FunSearch requires explicit frozen policy, task and reset configuration')
+    policy_options({'context_window': options.get('context_window', 8)})
+    FunSearchPopulation(**{key: options[key] for key in
+        ('case_ids', 'islands', 'seed', 'prompt_size', 'temperature', 'temperature_period')})
+    if options['prompt_size'] > 2 or type(options['reset_interval']) is not int or options['reset_interval'] < 1:
+        raise ValueError('invalid FunSearch parent limit or reset interval')
+    if any(type(options.get(key, default)) is not str or not options.get(key, default).strip()
+           for key, default in (('metric', ''), ('comparison_metric', 'dev/score'), ('function_name', ''))):
+        raise ValueError('FunSearch metrics and function identity are required')
+    template, reference = options['template'], options['template_ref']
+    if type(template) is not str or type(reference) is not str:
+        raise ValueError('FunSearch requires a frozen template')
+    try:
+        if 'sha256:' + hashlib.sha256(template.encode('utf-8')).hexdigest() != reference:
+            raise ValueError('FunSearch template reference differs')
+        tree = ast.parse(template)
+        matches = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                   and node.name == options['function_name']]
+        if len(matches) != 1:
+            raise ValueError('FunSearch target must be one top-level function')
+        source = ast.get_source_segment(template, matches[0])
+        from core.funsearch_prompt import build_prompt
+        build_prompt(template, options['function_name'], ['seed'], {'seed': source})
+    except (SyntaxError, UnicodeEncodeError, TypeError) as error:
+        raise ValueError('invalid frozen FunSearch template') from error
+
+
+class FunSearchPolicy(GreedyPolicy):
+    def __init__(self, scope_context, *, case_ids, islands, seed, prompt_size,
+                 temperature, temperature_period, context_window=8):
+        super().__init__(scope_context, context_window=context_window)
+        self.population = FunSearchPopulation(case_ids=case_ids, islands=islands, seed=seed,
+            prompt_size=prompt_size, temperature=temperature, temperature_period=temperature_period)
+        if prompt_size > 2:
+            raise ValueError('current runtime supports at most two distinct parents')
+        self._config = self.population.checkpoint_state()['config']
+        self._evidence_refs = {}
+        self._pending = None
+        self._pending_reset = None
+        self._pending_abandonment = None
+        self._verified = False
+
+    async def select(self, frontier, budget):
+        if self._pending_reset is not None:
+            raise ValueError('pending island reset must be audited first')
+        if self._pending is not None:
+            raise ValueError('pending program selection must be settled first')
+        if self._evidence_refs and not self._verified:
+            raise ValueError('original evidence audit is required before selection')
+        eligible = {node.id for node in frontier.nodes.values() if node.status in {'done', 'merged'}
+                    and node.eval_status == EvalStatus.OK.value and node.score is not None}
+        if not self._evidence_refs:
+            if eligible:
+                raise ValueError('eligible candidates lack public program evidence')
+            return []
+        if not eligible:
+            raise ValueError('no eligible candidate remains in the population')
+        before = self.population.checkpoint_state()
+        receipt = draw_selection(self.population, None, eligible=eligible, max_parents=2)
+        after = self.population.checkpoint_state()
+        self._pending = {'receipt': receipt, 'before': before, 'after': after}
+        self._verified = False
+        return list(receipt['ancestry'])
+
+    def pending_selection(self):
+        return copy.deepcopy(self._pending)
+
+    def record_evaluated(self, projection):
+        if self._pending_reset is not None:
+            raise ValueError('pending island reset must be audited first')
+        if self._pending_abandonment is not None:
+            raise ValueError('pending abandonment must be audited first')
+        if self._pending is not None and not self._verified:
+            raise ValueError('original evidence audit is required before settling selection')
+        if type(projection) is not dict or set(projection) != {
+                'candidate_id', 'scores', 'program_ref', 'program_length', 'evidence_ref'}:
+            raise ValueError('evaluated candidate requires a complete public projection')
+        candidate = projection['candidate_id']
+        if type(candidate) is not str or not candidate or candidate in self._evidence_refs:
+            raise ValueError('candidate already recorded or identity invalid')
+        ref = projection['evidence_ref']
+        if type(ref) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', ref):
+            raise ValueError('canonical original evidence reference required')
+        if self._pending is None:
+            if self._evidence_refs:
+                raise ValueError('evaluated child requires a pending selection')
+            island, epoch = None, None
+        else:
+            island, epoch = self._pending['receipt']['island'], self._pending['receipt']['epoch']
+        self.population.register_projection(candidate, program_ref=projection['program_ref'],
+            program_length=projection['program_length'], scores=projection['scores'], island=island, epoch=epoch)
+        self._evidence_refs[candidate] = ref
+        self._pending = None
+        self._verified = False
+
+    def abandon_selection(self, reason):
+        if self._pending is None or self._pending_abandonment is not None or not self._verified or reason not in {'evaluation_failed', 'stale_epoch'}:
+            raise ValueError('pending selection and explicit failure reason are required')
+        self._pending_abandonment = {'selection_ref': 'sha256:' + payload_digest(self._pending), 'reason': reason}
+        self._verified = False
+        return copy.deepcopy(self._pending_abandonment)
+
+    def reset_weaker_half(self):
+        if self._pending_reset is not None:
+            raise ValueError('pending island reset must be audited first')
+        if self._pending is not None:
+            raise ValueError('pending program selection prevents island reset')
+        if self._evidence_refs and not self._verified:
+            raise ValueError('original evidence audit is required before island reset')
+        before = self.population.checkpoint_state()
+        events = self.population.reset_weaker_half()
+        self._pending_reset = {'before': before, 'after': self.population.checkpoint_state(), 'events': events}
+        self._verified = False
+        return copy.deepcopy(events)
+
+    def pending_reset(self):
+        return copy.deepcopy(self._pending_reset)
+
+    def audit_original_evidence(self, rows, *, metric, logical_run_id, evaluator_version, evaluation_context,
+                                selection_rows=None, reset_rows=None, abandonment_rows=None):
+        """Check every retained candidate against authenticated main-lane rows."""
+        from core.funsearch_public_evidence import verify_selected_projections
+        self._verified = False
+        candidates = self.population.checkpoint_state()['candidates']
+        if candidates:
+            projections = {candidate: {'candidate_id': candidate, **record,
+                           'evidence_ref': self._evidence_refs[candidate]}
+                           for candidate, record in candidates.items()}
+            verify_selected_projections(rows, projections, set(candidates), case_ids=self._config['case_ids'],
+                metric=metric, logical_run_id=logical_run_id, evaluator_version=evaluator_version,
+                evaluation_context=evaluation_context)
+        if self._pending is not None:
+            if type(selection_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending)
+                                                       for row in selection_rows) != 1:
+                raise ValueError('pending selection lacks its original journal record')
+        if self._pending_reset is not None:
+            if type(reset_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending_reset)
+                                                   for row in reset_rows) != 1:
+                raise ValueError('pending reset lacks its original journal record')
+            self._pending_reset = None
+        if self._pending_abandonment is not None:
+            if type(abandonment_rows) is not list or sum(payload_digest(row) == payload_digest(self._pending_abandonment)
+                                                         for row in abandonment_rows) != 1:
+                raise ValueError('pending abandonment lacks its original journal record')
+            self._pending = None
+            self._pending_abandonment = None
+        self._verified = True
+        return True
+
+    def checkpoint_state(self):
+        return {'schema_version': 3, 'base': super().checkpoint_state(),
+                'population': self.population.checkpoint_state(),
+                'evidence_refs': dict(self._evidence_refs), 'pending': self.pending_selection(),
+                'pending_reset': self.pending_reset(), 'pending_abandonment': copy.deepcopy(self._pending_abandonment)}
+
+    def restore_state(self, state):
+        if (type(state) is not dict or set(state) != {'schema_version', 'base', 'population', 'evidence_refs', 'pending', 'pending_reset', 'pending_abandonment'}
+                or type(state['schema_version']) is not int or state['schema_version'] != 3
+                or type(state['evidence_refs']) is not dict):
+            raise ValueError('invalid FunSearch policy checkpoint')
+        population = FunSearchPopulation.from_checkpoint(state['population'])
+        frozen = population.checkpoint_state()
+        if payload_digest(frozen['config']) != payload_digest(self._config):
+            raise ValueError('FunSearch policy configuration differs')
+        refs = state['evidence_refs']
+        if set(refs) != set(frozen['candidates']) or any(type(ref) is not str or
+                not re.fullmatch(r'sha256:[0-9a-f]{64}', ref) for ref in refs.values()):
+            raise ValueError('FunSearch evidence coverage differs')
+        pending = state['pending']
+        reset = state['pending_reset']
+        abandonment = state['pending_abandonment']
+        if pending is not None and reset is not None:
+            raise ValueError('selection and reset cannot both be pending')
+        if abandonment is not None and (pending is None or type(abandonment) is not dict or
+                set(abandonment) != {'selection_ref', 'reason'} or
+                abandonment['reason'] not in {'evaluation_failed', 'stale_epoch'} or
+                abandonment['selection_ref'] != 'sha256:' + payload_digest(pending)):
+            raise ValueError('invalid pending selection abandonment')
+        if pending is not None:
+            if type(pending) is not dict or set(pending) != {'receipt', 'before', 'after'}:
+                raise ValueError('invalid pending FunSearch selection')
+            try:
+                eligible = set(pending['receipt']['eligible'])
+                verify_selection(pending['receipt'], pending['before'], pending['after'],
+                                 eligible=eligible, max_parents=2)
+            except (KeyError, TypeError) as exc:
+                raise ValueError('invalid pending FunSearch selection') from exc
+            if payload_digest(pending['after']) != payload_digest(frozen):
+                raise ValueError('pending selection differs from population state')
+        if reset is not None:
+            if type(reset) is not dict or set(reset) != {'before', 'after', 'events'}:
+                raise ValueError('invalid pending island reset')
+            replayed = FunSearchPopulation.from_checkpoint(reset['before'])
+            events = replayed.reset_weaker_half()
+            if (payload_digest(events) != payload_digest(reset['events']) or
+                    payload_digest(replayed.checkpoint_state()) != payload_digest(reset['after']) or
+                    payload_digest(reset['after']) != payload_digest(frozen)):
+                raise ValueError('pending island reset differs from replay')
+        super().restore_state(state['base'])
+        self.population, self._evidence_refs, self._pending = population, dict(refs), copy.deepcopy(pending)
+        self._pending_reset = copy.deepcopy(reset)
+        self._pending_abandonment = copy.deepcopy(abandonment)
+        self._verified = False
