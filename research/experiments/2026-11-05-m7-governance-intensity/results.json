@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "source_commit": "ac5950147f6565b2f73e2c9357f8911db458ad0d",
+  "evidence_kind": "official_task_subset",
+  "requested_model": "deepseek-flash",
+  "score_assurance": "recorded official report consistency; grader not rerun",
+  "wallclock_assurance": "runner-recorded wall time; no independent timing attestation",
+  "invoice_verified": false,
+  "campaign_settled_upper_micro_cny": 15073680,
+  "pairs": [
+    {
+      "task": "spooky-author-identification",
+      "metric_direction": "minimize",
+      "one_control_score": 0.41633,
+      "two_controls_score": 0.42277,
+      "score_delta_two_minus_one": 0.006440000000000001,
+      "token_delta_two_minus_one": -25613
+    },
+    {
+      "task": "leaf-classification",
+      "metric_direction": "minimize",
+      "one_control_score": 0.5833,
+      "two_controls_score": 1.0495,
+      "score_delta_two_minus_one": 0.46620000000000006,
+      "token_delta_two_minus_one": -10826
+    },
+    {
+      "task": "nomad2018-predict-transparent-conductors",
+      "metric_direction": "minimize",
+      "one_control_score": 0.065,
+      "two_controls_score": 0.06503,
+      "score_delta_two_minus_one": 3.0000000000002247e-05,
+      "token_delta_two_minus_one": -14830
+    }
+  ],
+  "runs": [
+    {
+      "task": "spooky-author-identification",
+      "seed": 1,
+      "arm": "one_control",
+      "status": "graded",
+      "score": 0.41633,
+      "valid": true,
+      "metric_direction": "minimize",
+      "above_median": true,
+      "any_medal": false,
+      "tokens": 62642,
+      "provider_calls": 5,
+      "wallclock_seconds": 278.14057758699346,
+      "currency_upper_micro_cny": 421690,
+      "submission_sha256": "sha256:b7652e0135184e6e9976276c6a239d5da28abb66d8c7fb2671b429a1b3425156",
+      "official_report_sha256": "sha256:329febde3906a289c1763f46eaaedc3f821bc5b8721c21540a9f9499a435ddc6",
+      "control_timing": [
+        {
+          "slot_id": "control-0000",
+          "planned_after_main_cycles": 0,
+          "actual_after_main_cycles": 0,
+          "drained_early": false
+        }
+      ]
+    },
+    {
+      "task": "spooky-author-identification",
+      "seed": 1,
+      "arm": "two_controls",
+      "status": "graded",
+      "score": 0.42277,
+      "valid": true,
+      "metric_direction": "minimize",
+      "above_median": false,
+      "any_medal": false,
+      "tokens": 37029,
+      "provider_calls": 5,
+      "wallclock_seconds": 197.67308407499513,
+      "currency_upper_micro_cny": 278334,
+      "submission_sha256": "sha256:45bb3ac6a43e6bccad237ea03d1b4a2a11ffcd560d3fd080687fdc64df21ce0b",
+      "official_report_sha256": "sha256:c5578d2cbb493aed6382051bda69522912a6c32d63b8d4a0f29cd01faa6ab705",
+      "control_timing": [
+        {
+          "slot_id": "control-0000",
+          "planned_after_main_cycles": 0,
+          "actual_after_main_cycles": 0,
+          "drained_early": false
+        },
+        {
+          "slot_id": "control-0001",
+          "planned_after_main_cycles": 2,
+          "actual_after_main_cycles": 2,
+          "drained_early": false
+        }
+      ]
+    },
+    {
+      "task": "leaf-classification",
+      "seed": 1,
+      "arm": "two_controls",
+      "status": "graded",
+      "score": 1.0495,
+      "valid": true,
+      "metric_direction": "minimize",
+      "above_median": false,
+      "any_medal": false,
+      "tokens": 67071,
+      "provider_calls": 5,
+      "wallclock_seconds": 303.2387943819922,
+      "currency_upper_micro_cny": 446982,
+      "submission_sha256": "sha256:2f81da8909c828fd8da3d7fa9d94cd6b5ee6538bd345a410ffd475883c82f829",
+      "official_report_sha256": "sha256:520bf76a60320565f656e3284c9285455bf6ad786651a54279d62eb8def08ac3",
+      "control_timing": [
+        {
+          "slot_id": "control-0000",
+          "planned_after_main_cycles": 0,
+          "actual_after_main_cycles": 0,
+          "drained_early": false
+        },
+        {
+          "slot_id": "control-0001",
+          "planned_after_main_cycles": 2,
+          "actual_after_main_cycles": 2,
+          "drained_early": false
+        }
+      ]
+    },
+    {
+      "task": "leaf-classification",
+      "seed": 1,
+      "arm": "one_control",
+      "status": "graded",
+      "score": 0.5833,
+      "valid": true,
+      "metric_direction": "minimize",
+      "above_median": false,
+      "any_medal": false,
+      "tokens": 77897,
+      "provider_calls": 5,
+      "wallclock_seconds": 304.13495605500066,
+      "currency_upper_micro_cny": 490942,
+      "submission_sha256": "sha256:6a17f834c5c818cec811df1a66ac31167bdb35071e9bf1b1b976031bfa3a0339",
+      "official_report_sha256": "sha256:16d73988e16c4e59a25cb55456f6a1799fa1eb436233f222c571dba21b81b252",
+      "control_timing": [
+        {
+          "slot_id": "control-0000",
+          "planned_after_main_cycles": 0,
+          "actual_after_main_cycles": 0,
+          "drained_early": false
+        }
+      ]
+    },
+    {
+      "task": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "one_control",
+      "status": "graded",
+      "score": 0.065,
+      "valid": true,
+      "metric_direction": "minimize",
+      "above_median": true,
+      "any_medal": true,
+      "tokens": 58548,
+      "provider_calls": 5,
+      "wallclock_seconds": 249.05490683199605,
+      "currency_upper_micro_cny": 397962,
+      "submission_sha256": "sha256:3af934f2808c9d1ec89cdbd675bef2eff5adb5f244626102118a7e0434ff2d3a",
+      "official_report_sha256": "sha256:fed157286e9e75ec3c8b994ae3454ca4b17cc615b5d4d7ef6ff37736208180fa",
+      "control_timing": [
+        {
+          "slot_id": "control-0000",
+          "planned_after_main_cycles": 0,
+          "actual_after_main_cycles": 0,
+          "drained_early": false
+        }
+      ]
+    },
+    {
+      "task": "nomad2018-predict-transparent-conductors",
+      "seed": 1,
+      "arm": "two_controls",
+      "status": "graded",
+      "score": 0.06503,
+      "valid": true,
+      "metric_direction": "minimize",
+      "above_median": true,
+      "any_medal": true,
+      "tokens": 43718,
+      "provider_calls": 5,
+      "wallclock_seconds": 331.27133787800267,
+      "currency_upper_micro_cny": 328630,
+      "submission_sha256": "sha256:f52491f9cc837afe0c93a73a51eafa4152889ef69b8b96fd1625cd917bde321b",
+      "official_report_sha256": "sha256:9fddf11e303afa926262f779cacd9fd58d97782cdd48772db6516e5a3f328565",
+      "control_timing": [
+        {
+          "slot_id": "control-0000",
+          "planned_after_main_cycles": 0,
+          "actual_after_main_cycles": 0,
+          "drained_early": false
+        },
+        {
+          "slot_id": "control-0001",
+          "planned_after_main_cycles": 2,
+          "actual_after_main_cycles": 2,
+          "drained_early": false
+        }
+      ]
+    }
+  ]
+}

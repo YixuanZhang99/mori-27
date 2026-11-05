@@ -29,7 +29,9 @@
 - A governance comparison must hold the search algorithm, target, model, data and resource limits constant. Existing greedy-versus-population experiments cannot isolate governance effects.
 - Aggregate cost must include proposal, repair, evaluation, calibration and resident controls where incurred; unknown costs and estimate-only token admission must retain their real limitations.
 
-## Current evidence and prerequisite
+## Evidence and prerequisites at plan creation
+
+The bullets below describe the starting point of this plan; later status is recorded under each task and in the execution status section.
 
 - Remote ec47899 contains M7 Tasks 1–5. Local candidate 8b5e018 adds v74 acceptance; 2,257 Linux tests, 84 tooling tests, axioms, examples, build and import checks passed with unchanged source.
 - The first clean v74 run was deliberately stopped when the user paused development. It has no completed certificate. The single whole-branch review was interrupted and is now resumed, not replaced by another review.
@@ -40,8 +42,8 @@
 **Files:** Existing docs/superpowers/plans/2026-11-04-m7-execution.md Task 6; its review ledger; research/experiments/2026-11-04-m7-integrated-acceptance/.
 
 - [x] Finish the same fresh whole-branch review of f7ab273..8b5e018. Reproduce and fix Important/Critical findings; record decisions and deferred minors.
-- [ ] Run required checks on the final source and clean v74 acceptance. Expected: all 55 checks, fresh certificate/journal, exact committed/executed source binding and unchanged historical evidence.
-- [ ] Push the existing branch; independently verify same-SHA hosted artifacts; preserve a rollback bundle. Keep main and full-framework status separate.
+- [x] Run required checks on the final source and clean acceptance. The later v75 acceptance supersedes v74 for this candidate: all 56 local checks passed and the artifact was independently verified against commit `ac59501`, including the committed/executed source binding and historical evidence checks.
+- [ ] Push the existing branch; independently verify same-SHA hosted artifacts; preserve a rollback bundle. The `ac59501` push and PR workflows passed; final artifact verification and rollback evidence must be retained with the release record. Keep main and full-framework status separate.
 
 ### Task 2: Freeze the real MLE experiment protocol and integrate its runtime
 
@@ -58,7 +60,7 @@
 
 - [x] Run the frozen 3-task × 2-arm × 1-seed diagnostic matrix. Preserve all six terminal outcomes, receipts, actual model identity, selected submission hashes and official scores when valid. The completed `a6b5826` subset and both earlier failed attempts are documented under `research/experiments/`.
 - [x] Independently reconcile the run matrix, physical/provider usage and shared CNY authority. All six completed slots and official report hashes were rechecked without external requests; the shared ledger was unchanged. The provider identifier is a mutable alias, not a verified immutable snapshot.
-- [ ] Once diagnosed prerequisites are stable, extend the preregistered protocol to seeds 1, 2 and 3, totaling 18 slots. The 18 slots have now been run and independently audited, but as two separately frozen batches: the seed 2/3 batch was frozen after seed 1 results, and its arm order differs from a single `[1, 2, 3]` matrix. Preserve both batches and do not present them as one pre-result preregistration.
+- [x] Once diagnosed prerequisites are stable, extend the protocol to seeds 1, 2 and 3, totaling 18 slots. The 18 slots have now been run and independently audited, but as two separately frozen batches: the seed 2/3 batch was frozen after seed 1 results, and its arm order differs from a single `[1, 2, 3]` matrix. Preserve both batches and do not present them as one pre-result preregistration.
 - [x] Publish per-task/per-seed scores, paired deltas where valid, failure rate, actual token/wallclock/currency coverage and reproduction command. Three seeds are preliminary evidence, not automatic statistical significance or a 22-task Lite certification. See `research/experiments/2026-11-05-m7-real-mle-three-seeds/` for both batches and their limitations.
 
 ### Task 4: Deliver GEPA and FunSearch reproduction packages
@@ -74,7 +76,7 @@
 
 **Files:** New focused experiment protocol and report derived from the existing accounting/receipt/selection interfaces; add runner support only where the protocol requires it.
 
-- [ ] Freeze a same-search governance comparison independently of the MLE greedy/full comparison. Preserve essential spending limits, isolation and data protection in every arm; vary only the declared research-governance mechanisms.
+- [x] Freeze a same-search governance comparison independently of the MLE greedy/full comparison. Preserve essential spending limits, isolation and data protection in every arm; vary only the declared research-governance mechanisms.
 - [ ] Report final task quality, admitted candidates, actual costs, control/calibration overhead and failure rates at equal declared budgets. Use paired seeds and retain null/negative results.
 - [ ] Separately exercise recovery cuts and receipt reconciliation. Report duplicate calls/charges and recovery behavior as mechanism evidence, not as benchmark score gains.
 - [ ] Calculate RUBRIC B5's admitted_per_usd ratio only when price and admission units are comparable and fully measured; otherwise publish the measured coverage and leave that criterion open.
@@ -89,4 +91,4 @@
 
 ## Execution order and status
 
-Task 1 is active. Tasks 2–3 are the next product-facing deliverable; Task 4 follows, then Task 5. Task 6 is updated alongside each deliverable. No new paid run has been launched under this plan. The user restored the existing Goal to active after approving this direction.
+The three-seed MLE report has been published, with its two separately frozen batches and limitations stated in Task 3. The GEPA and FunSearch work remains limited to offline components and fixtures; Task 4 is open. The same-search governance pilot has six independently audited scores; candidate admissions, isolated control costs and the wider Task 5 remain open. See `research/experiments/2026-11-05-m7-governance-intensity/`. Task 6 is updated alongside each deliverable. The original Goal remains active, and the release candidate is not complete.

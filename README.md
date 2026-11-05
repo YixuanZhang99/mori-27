@@ -2,7 +2,7 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v74 候选**（实际通过状态见[统一进度页](docs/FRAMEWORK_STATUS.md)）。它仍在开发：部分真实任务已有成绩，完整 benchmark 与产品级验收尚未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v75 候选**（实际通过状态见[统一进度页](docs/FRAMEWORK_STATUS.md)）。它仍在开发：部分真实任务已有成绩，完整 benchmark 与产品级验收尚未完成。
 
 ## 真实任务结果：三任务、两个批次、三个 seed
 
@@ -17,6 +17,15 @@
 全部 18 份提交有效。seed 1 和 seed 2/3 分为两个冻结批次，第二批在看到第一批结果后启动；模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照。这里只覆盖三个任务，不代表完整 MLE-Bench Lite 或统计显著结果。逐 seed 成绩、批次差异、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md)。
 
 经典方法开发进展：GEPA 实例级选择和 FunSearch 种群机制已有可运行的离线示例；FunSearch 还可对固定 OR3 开发集执行隔离评分。它们目前均属于**机制与开发集验证**，并非完整论文复现或真实模型 benchmark 成绩。执行命令、参考版本及未完成范围分别见 [GEPA 实验记录](research/experiments/2026-11-05-gepa-frontier/README.md)和 [FunSearch 实验记录](research/experiments/2026-11-05-funsearch-population/README.md)。
+
+### 方法和证据范围
+
+| 工作 | 任务与运行时 | 本仓库证据 | 尚未完成 |
+| --- | --- | --- | --- |
+| MLE 搜索（baseline / full） | 三个公开任务；M7 | [真实模型、三个 seed 的官方评分](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md) | 完整 MLE-Bench Lite；两种搜索方法不同，不能隔离治理效果 |
+| 同搜索治理强度对照 | 三个公开任务、单 seed；M7 | [真实模型官方评分和总费用上界](research/experiments/2026-11-05-m7-governance-intensity/README.md) | 更大样本、候选接纳数与单独控制开销；不能直接视为有无治理的因果比较 |
+| GEPA 实例级候选选择 | 合成案例；现有 composed 与 M7 规划会话 | [离线组件和公开入口示例](research/experiments/2026-11-05-gepa-frontier/README.md) | 反思、独立验证集与真实任务 benchmark；完整论文复现 |
+| FunSearch 种群与程序构造 | 合成机制检查；OR3 开发集使用 M7 | [离线机制和固定参考程序的隔离评分](research/experiments/2026-11-05-funsearch-population/README.md) | 真实模型搜索、留出集评分与完整论文复现 |
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -76,7 +85,7 @@ S5 引入 `composed-v5`，不自动接收旧 v1–v4 检查点。`budget=hierarc
 
 S6 周期 anchor/代理有效性回流已按同 SHA CI 封板。S7 新增 `command` domain 与 `git_worktree` executor 的配置组合，使用 hierarchical 预算和 checkpoint 进行真实命令执行与进程接管；Mac 必须显式选择可信本地 `sandbox="none"`，Linux 默认使用 bubblewrap。S8 新增 `population_prompt`：elite 成员保留、四种可复算父代采样和双亲文本 crossover，详见 [S8 指南](docs/POPULATION_RUNTIME_V67.md)。逐项范围和阶段门槛见 [对照清单](docs/ABSTRACTION_ALIGNMENT.md)，配置和平台限制见 [S7 指南](docs/WORKTREE_RECOVERY_V66.md)。实现与验收范围以阶段记录和同 SHA CI 证据为准。
 
-S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最新 anchor、负反馈与种群接到三个公开 CSV 任务。旧 M0 benchmark 入口保留；新试跑的 baseline/full 使用同一模型、数据和资源上限，所有提交冻结后才调用官方 grader。[三任务单 seed 试跑](research/experiments/2026-11-05-m7-real-mle-completed-seed1/README.md)已完成，完整 Lite 和多 seed 实验仍未完成。具体接口见 [S9 指南](docs/MLE_COMPOSED_V68.md)。
+S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最新 anchor、负反馈与种群接到三个公开 CSV 任务。旧 M0 benchmark 入口保留；新试跑的 baseline/full 使用同一模型、数据和资源上限，每批次所有提交冻结后才调用官方 grader。[三任务三个 seed 的试跑](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md)已完成，分为两个分别冻结的批次；完整 Lite 实验仍未完成。具体接口见 [S9 指南](docs/MLE_COMPOSED_V68.md)。
 
 显式配置 `governance` 可启用 `composed-v7-governed`：主搜索和独立对照共用物理结算权威，七账户是同一实际费用的投影；未来对照额度预先保护，主搜索可见预算固定，避免从对照花费推断结果。调用回执绑定 run、lane、slot、intent、ordinal 和适配器参数，恢复及回放核验原始结果而不重新调用。Native 和真实 worktree 路径均有例子与测试；[使用指南](docs/GOVERNED_CONTROLS.md)说明当前支持范围。该 v7 路径不接收外部货币 provider；后续 v8 桥接已实现，见下一段。两者均不能据此宣称真实付费 IID-RS 已达标。
 
