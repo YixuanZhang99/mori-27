@@ -1,6 +1,6 @@
 # C04 — Arbor 假设驱动研究
 
-状态：规格草案；继承 [COMMON](COMMON.md)。依据：REPLICATION §3、统一抽象 M1/M5/M7/M9、CODE-BORROWING 的 Arbor 文件清单。
+状态：施工规格冻结（2026-11-05），细化设计见 [实施设计](../../superpowers/specs/2026-11-05-arbor-design.md)，任务见 [实施计划](../../superpowers/plans/2026-11-05-arbor-delivery.md)。AIDE 实测期间仅在独立 detached worktree 开展离线工作，发布与真实运行仍在 AIDE 合入后进行。继承 [COMMON](COMMON.md)。依据：REPLICATION §3、统一抽象 M1/M5/M7/M9、CODE-BORROWING 的 Arbor 文件清单。
 源码核对对象：[RUC-NLPIR/Arbor / a633f56f](https://github.com/RUC-NLPIR/Arbor/tree/a633f56f2601387402194481e846e3375e822afa)；本轮锁定身份，执行前核对六步语义和 insight 写读路径。
 
 | 模块 | 本方法要求 |
