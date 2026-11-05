@@ -249,7 +249,15 @@ def run(*, output, public_root, task_id, split_seed=7, search_seed=0, max_nodes=
     provider_started = {r['payload']['binding'] for r in rows if r['kind'] == 'composed_provider_started'}
     provider_completed = {r['payload']['binding'] for r in rows if r['kind'] == 'composed_provider_completed'}
     report = {'method_id': 'AIDE', 'reference_revision': REFERENCE_REVISION, 'recipe_revision': RECIPE,
-        'fidelity': 'adapted', 'mode': manifest['mode'], 'source': source, 'task_id': task_id,
+        'fidelity': 'adapted', 'deviations': [
+            f'three draft roots; at most {max_nodes} main nodes; debug depth two',
+            'one fixed public-training validation split instead of five-fold cross validation',
+            'trusted CSV task loss and sandbox errors instead of model self-reviewed metrics',
+            'M7 generates artifact and plan; isolated run-scoped L1 journal; no cross-run knowledge',
+            'CSV features only; no auxiliary images or geometry files',
+            'independent local Python RNG; remote provider seed and immutable model snapshot unverified',
+            'live mode adds one independent initial control, not a budget-matched baseline'],
+        'mode': manifest['mode'], 'source': source, 'task_id': task_id,
         'split_seed': split_seed, 'search_seed': search_seed, 'max_nodes': max_nodes,
         'dataset_identity': bundle.identity, 'dataset_manifest': bundle.manifest,
         'run_state': state, 'error_type': error_type, 'result': result,

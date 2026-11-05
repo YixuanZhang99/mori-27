@@ -138,7 +138,8 @@ All evaluation requests use split seed 7; search seed affects local policy/contr
 PYTHONPATH=m0:/path/to/pinned-mle-bench /path/to/mle-environment/bin/python \
   -m zoo.mle_bench_lite.aide_grading --output /path/to/completed-run \
   --official-root /path/to/pinned-mle-bench --data-root /path/to/mle-data \
-  --frozen-prepared-identity /path/to/predeclared-official-identity.json
+  --frozen-prepared-identity /path/to/predeclared-official-identity.json \
+  --anonymization-key /path/to/shared-private-anonymization.key
 ```
 
-The identity JSON is the output of the existing `_official_prepared_identity` verifier frozen before search. The grader rechecks official source/prepared checksums, search public CSV hashes, selection and submission; its separate `official/result.json` never changes the winner. Grading failure and interrupted grading are retained without automatic re-execution. These commands deliver protocol plumbing; real AIDE matrix results are pending the branch review and declared live run.
+The identity JSON is the output of the existing `_official_prepared_identity` verifier frozen before search. The grader rechecks official source/prepared checksums, search public CSV hashes, selection and submission; its separate `official/result.json` never changes the winner. Grading failure and interrupted grading are retained without automatic re-execution. These commands deliver protocol plumbing; the whole branch review and its fixes have passed local checks; real AIDE matrix results are pending the declared live run.
