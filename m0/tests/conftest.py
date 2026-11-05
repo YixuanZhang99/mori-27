@@ -19,6 +19,7 @@ TEST_ROOT = Path(__file__).resolve().parent
 
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {
+    "test_openevolve_prompt_sandbox.py": "real sandboxed evidence for OpenEvolve prompt binding",
     "test_circle_packing_sandbox.py": "real Bubblewrap circle evaluator execution",
     "test_composed_worktree_durable_flush.py": "fault injection reads Linux /proc descriptor paths",
     "test_funsearch_priority_sandbox.py": "real Bubblewrap and x86_64 priority seccomp execution",
