@@ -2,7 +2,7 @@
 
 ## 当前执行入口（2026-11-05）
 
-用户已批准按 [经典工作接入计划](CLASSIC_WORKS_PLAN.md) 收敛分支，并从 GEPA 起逐项施工；应用 Goal 的限制单独记录于 [CURRENT_GOAL](CURRENT_GOAL.md)。
+用户已批准按 [经典工作接入计划](CLASSIC_WORKS_PLAN.md) 收敛分支，并从 GEPA 起逐项施工；执行目标与 Goal 状态记录于 [CURRENT_GOAL](CURRENT_GOAL.md)。
 
 整合 [PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 已保留历史合入 `main=9648aa3`。候选 `7ef8d48` 的 push/PR 两轮 Mac、Linux v75、MLE 检查全部通过；main 合并树与候选完全相同。合并后的 main 检查也已通过，15 条历史开发分支已清理，旧串联 PR 已处理，远端核对仅 main 与 GEPA 方法分支。历史回滚 tag 和完整本地 bundle 已保留。未推 FunSearch WIP 不整体导入。唯一新方法分支为从该 main 创建的 `codex/classic-gepa`。
 

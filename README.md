@@ -38,7 +38,7 @@ uv run --project m0 --locked python -m zoo.gepa_gsm8k.runner \
 
 ## 先读这里
 
-- **[经典工作接入路线与分支决定](docs/CLASSIC_WORKS_PLAN.md)**：2026-11-05 本轮规划入口，包含文档优先级、九模块职责、八项工作规格、扩展目录和 main 整合顺序。已获准按路线施工；各方法状态单列，应用 Goal 控件限制见[当前执行目标](docs/CURRENT_GOAL.md)。
+- **[经典工作接入路线与分支决定](docs/CLASSIC_WORKS_PLAN.md)**：2026-11-05 本轮规划入口，包含文档优先级、九模块职责、八项工作规格、扩展目录和 main 整合顺序。已获准按路线施工；各方法状态单列，当前进度与 Goal 状态见[当前执行目标](docs/CURRENT_GOAL.md)。
 - [持续开发接续记录](docs/CONTINUATION_2026-11-04.md)：当前分支、已验证基线、真实试跑前置条件、提交与复审节奏。
 - [四个 RSI 项目源码比较](research/2026-11-04-rsi-comparison.md)：固定 SHA 的机制证据与可验证差异化实验。
 
