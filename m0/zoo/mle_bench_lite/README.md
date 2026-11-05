@@ -18,6 +18,79 @@ The original 22-task host/governed campaign below retains its strict complete
 matrix requirements. Its bundled `governed_agent` uses the legacy M0 path;
 that protocol is separate from S9 and is not silently upgraded.
 
+## C04 Arbor adapted recipe
+
+The public `Framework` entry supports a hypothesis tree, construction from the
+admitted trunk, source-bound insight propagation, separate admission, and frozen
+final evaluation. See the [spec](../../../docs/specs/classic/ARBOR.md),
+[algorithm provenance](PROVENANCE.md#c04-arbor-adapted-recipe), and
+[nine-cell real results](../../../research/experiments/2026-11-05-arbor-mle/README.md).
+The real pilot has 38/44 valid main candidates and nine valid official submissions;
+it is not a full MLE-Bench or paper-budget reproduction.
+
+Run from the repository root with the locked dependencies and Linux x86_64
+Bubblewrap/seccomp prerequisites. The default uses generated synthetic CSVs and
+makes no model calls:
+
+```bash
+PYTHONPATH=m0 uv run --project m0 --locked python -m zoo.mle_bench_lite.arbor_runner \
+  --mode fixture --output /tmp/arbor-fixture --max-cycles 3
+PYTHONPATH=m0 uv run --project m0 --locked python -m zoo.mle_bench_lite.arbor_runner \
+  --mode fixture --output /tmp/arbor-fixture --max-cycles 3 --resume
+```
+
+For an explicitly paid run, use the CPU pilot environment described in the
+[S9 guide](../../../docs/MLE_COMPOSED_V68.md), accepted/prepared competition data,
+the existing spending ledger, and the original private anonymization key.
+`OPENAI_API_KEY` must already be available to the process; do not paste its value
+into commands, reports, or tracked files. This recipe uses `deepseek-flash` with
+low reasoning effort and output limit 16384; it does not verify an immutable
+provider snapshot. The existing cumulative campaign cap applies, including the
+independent initial control; do not create a second campaign for this method.
+
+```bash
+PYTHONPATH=m0 python -m zoo.mle_bench_lite.arbor_runner \
+  --mode live --task spooky-author-identification \
+  --public-root /absolute/path/to/spooky-author-identification/prepared/public \
+  --anonymization-key /absolute/path/to/original-private-key \
+  --spending-ledger /absolute/path/to/existing-campaign.db \
+  --output /absolute/path/to/new-arbor-run \
+  --split-seed 7 --search-seed 0 --max-cycles 5 --solution-timeout 120
+```
+
+The pilot caps search at five cycles, depth two and three admission calls;
+min_samples=4/patience=3 may stop it earlier. The packaged full profile defaults
+to 20 cycles. `search_seed` labels repeats/control scheduling; it is not an
+applied remote sampling seed. Live records include all failed candidates and one
+independent initial control, which is not a budget-matched baseline.
+
+A matrix must declare all tasks/seeds, clean source, dependency/data identities,
+and the existing campaign before its first paid call. The command above is a
+single explicit run, not the complete predeclared nine-cell protocol. Preserve
+source, dependencies, data, options and the private key when using `--resume`;
+never resume or replace an existing experiment merely to improve its score.
+
+Only after **all declared searches have stopped**, grade each frozen valid
+submission with the official snapshot and prepared identity frozen before search:
+
+```bash
+PYTHONPATH=m0 python -m zoo.mle_bench_lite.arbor_grading \
+  --output /absolute/path/to/completed-arbor-run \
+  --official-root /absolute/path/to/pinned-mle-bench \
+  --data-root /absolute/path/to/prepared-data \
+  --frozen-prepared-identity /absolute/path/to/official-prepared-identity.json \
+  --anonymization-key /absolute/path/to/original-private-key
+```
+
+The grader rederives the frozen submission from original predictions and stores
+a once-only claim and terminal report. It does not call a model or feed official
+scores back to search. Published evidence can be recalculated without credentials:
+
+```bash
+python research/experiments/2026-11-05-arbor-mle/recalculate.py \
+  research/experiments/2026-11-05-arbor-mle/pilot-v4
+```
+
 ## Original complete-suite adapter
 
 This adapter covers the official 22-task Low/Lite split at the revision in `PROVENANCE.md`.

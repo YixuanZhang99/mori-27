@@ -61,7 +61,7 @@
 | 1 | [GEPA](specs/classic/GEPA.md) | 同批父子反思、validation 实例赢家、冻结 test、计量回放已接通；[真实 GSM8K 记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)单列成功与失败 | 更充分的多提案搜索、等预算对照与公开区间复现 |
 | 2 | [FunSearch](specs/classic/FUNSEARCH.md) | [三 seed 实测](../research/experiments/2026-11-05-funsearch-or3/README.md)完成，31/33 有效，held-out 均210.1箱；选亲/重置/计量回放接通 | 已通过最终 CI 并合入 main；更大规模与等预算对照尚缺，本批无留出收益 |
 | 3 | [AIDE](specs/classic/AIDE.md) | draft/debug/improve、保留代码树、恢复核对已实现；真实沙箱错误与 L1 Journal 消费的相关测试通过 | 九组真实搜索/官方评分完成、70/90 主候选有效；完整审查及修复已验证；最终证据提交检查/合入已完成 |
-| 4 | [Arbor](specs/classic/ARBOR.md) | 六步循环、trunk 构造、insight 上溯/消费、gate 隔离及专用入口已实现；审查修复和本地检查通过 | 真实九组 MLE 矩阵、官方评分、最终 CI/合入 |
+| 4 | [Arbor](specs/classic/ARBOR.md) | [九组真实结果](../research/experiments/2026-11-05-arbor-mle/README.md)与官方评分完成，38/44 主候选有效；真实准入拒绝、经验上溯、计量回放接通 | 最终证据提交 CI/合入；完整 benchmark、等预算对照和论文区间复现尚缺 |
 | 5 | [OpenEvolve](specs/classic/OPENEVOLVE.md) | vendored 宿主、数据库往返、grid/island/cascade 组件 | 同一运行中的 diff→grid×island→cascade→选择；与宿主对照 |
 | 6 | [AIRA](specs/classic/AIRA.md) | 算子、策略和作用域组件 | 独立终选、可换 operator set/π_op/memory 的受控配置 |
 | 7 | [LoongFlow](specs/classic/LOONGFLOW.md) | 种群、lineage、参考源码材料 | Plan→Execute→Summarize 真正串联，温度供亲；并发单列 |

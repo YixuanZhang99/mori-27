@@ -25,10 +25,8 @@ C03 AIDE 的完整分支审查与修复、本地完整检查、三任务 × 三 
 
 AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，剩余 ¥169.108794，无未决调用或保护违约。之后继续 Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。保持 main 加一条活跃方法分支；Arbor 已无冲突衔接实际 main，当前唯一方法分支为 `codex/classic-arbor`。Goal 保持 active，单项完成不代表八项总目标完成。
 
-C04 Arbor 已实现六步假设循环、当前 trunk 构造、来源绑定 insight 上溯/消费、独立准入与冻结终评，以及专用 MLE 入口和导出重算。独立审查的三项重要问题均经 RED→GREEN 修复；完整本地检查 2,408 portable、126 tooling 通过，另有 14 项含 Linux 沙箱的 runner/currency 用例通过。干净默认 CLI、终态 resume 和零调用 replay 通过；接续 AIDE 后 134 项 tooling 全部通过。下一步是预声明九组真实 MLE 矩阵、官方评分、证据归档及最终 CI/合入；合成结果不作为 benchmark 成绩。
+C04 Arbor 已完成九组真实 MLE 搜索和冻结提交的官方评分：38/44 主候选有效、6 次失败、0 次未完成，九份提交均有效。六阶段各 44 次，125 次来源绑定经验汇总；21 次实际准入中 2 次拒绝。nomad 三组均达到固定评分器历史银牌阈值，leaf 三组均未高于历史中位数；不外推完整 benchmark 奖牌率或论文复现。[完整结果与失败](../research/experiments/2026-11-05-arbor-mle/README.md)已归档，九组回放、物理/费用核验和独立重算通过。
 
-Arbor v1 首组真实 smoke 在第二轮规划停止：1 个主候选完成、1 轮未完成，另外 8 组未运行；模型把待选假设 ID 当作父候选，整批提案被正确拒绝。[失败证据与费用](../research/experiments/2026-11-05-arbor-mle/parent-identity-v1/README.md)已独立重算并保留，未重跑覆盖。v2 明确提供可用父候选 ID，仍严格校验全部提案；修复正在完成验证，随后单独声明新矩阵。v1 费用上界 ¥0.183060，原 campaign 累计 ¥31.074266，剩余 ¥168.925734，零未决调用。
+运行源码 `aeeb6fd` 已通过 push/PR 两组 Mac/Linux/MLE 检查；push Linux 首次 900 秒超时，同源码单次重跑通过，失败记录保留。最终证据/文档提交尚需自己的检查及 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入，不把运行版本的成功等同最终候选已过关。v1/v2/v3 三批失败已分别保留，未重跑覆盖。
 
-Arbor v2 已跑完五轮但交付核验失败：1 个有效候选、4 次构造格式失败，另外 8 组未运行。原始 replay 通过且账本平衡；审计错误是将 operator-only 构造次数与含 planning 的全部调用数比较。v3 已按阶段核对全部原始回执，并仅为 Arbor 构造启用明确 JSON 输出指令；112 项相关回归（含完整 HTTP live 入口/物理核验/终态恢复）通过，完整检查通过：2,414 项 portable、134 项 tooling，架构与离线示例通过。[v2 原始失败及只读诊断](../research/experiments/2026-11-05-arbor-mle/audit-coverage-v2/README.md)保留。v2 费用上界 ¥0.686746，原 campaign 累计 ¥31.761012，剩余 ¥168.238988，零未决调用。下一步单独声明 v3，不重跑覆盖 v1/v2。
-
-Arbor v3 首组在第 4 轮规划停止：3 个有效候选、1 轮未完成、8 组未运行；构造格式已正常，模型把合法父候选写成来源引用形式 `candidate:<ID>`，裸 ID 解析器拒绝。原始响应离线复现，v4 明确等价表示解码后继续严格检查资格/深度；[v3 原始失败档案](../research/experiments/2026-11-05-arbor-mle/parent-reference-v3/README.md)已独立重算。费用上界 ¥0.532886，原 campaign 累计 ¥32.293898，剩余 ¥167.706102，无未决调用。修复通过 46 项相关回归及完整检查（2,422 项 portable、134 项 tooling，含架构与离线示例）；即将从干净发布版本单独声明 v4，尚无完整 Arbor 实测交付。
+Arbor v4 本批费用上界 ¥6.317672；含前三批失败的 Arbor 合计 ¥7.720364。原 campaign 累计 ¥38.611570，剩余 ¥161.388430，零未决调用、预留和保护违约。完成最终合入后进入 OpenEvolve；其设计与实施计划已离线准备，尚无 C05 实现或付费调用。Goal 保持 active，后续仍含 OpenEvolve → AIRA → LoongFlow → R&D-Agent。
