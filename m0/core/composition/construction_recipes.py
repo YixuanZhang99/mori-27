@@ -54,6 +54,27 @@ class RecipeOperator:
             "instructions": [instruction] if instruction else [], "comparison": comparisons}
 
 
+class HypothesisRecipeOperator:
+    """Use a driver-authorized trunk while retaining the hypothesis skeleton."""
+    measured_cost_units = ('token', 'node', 'eval_count')
+
+    def recipe(self, request):
+        from core.composition.construction import validate_hypothesis_binding
+        data = request.strategy['arbor']
+        binding = data['binding']
+        base = binding['execution_base']
+        parents = [] if base is None else [{'candidate_id': base['candidate_id'], 'artifact': data['artifact']}]
+        candidate = {'id': request.candidate_id, 'parents': [p.candidate.id for p in request.parents],
+            'hypothesis': request.strategy['hypotheses'][0]['hypothesis'],
+            'created_cycle': request.cycle, 'context_pack_ref': request.context['context_pack_ref']}
+        validate_hypothesis_binding(binding, parents, candidate)
+        return {'kind': 'hypothesis_refine', 'task_desc': request.task_desc,
+            'parent_artifacts': parents, 'instructions': [
+                'Implement this fixed hypothesis against the supplied current trunk. '
+                'The hypothesis skeleton records research ancestry, not a different executable base.'],
+            'comparison': {}, 'hypothesis_binding': binding}
+
+
 class FunSearchRecipeOperator:
     """Bridge a driver-verified ordered program selection into a construction plan.
 

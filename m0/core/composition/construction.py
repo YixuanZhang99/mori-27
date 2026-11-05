@@ -116,6 +116,36 @@ def project_context(pack, fields, *, expected_ref):
             "content": {key: source[key] for key in fields}}
 
 
+def validate_hypothesis_binding(binding, parents, candidate):
+    """Check an explicit execution base without confusing it with idea ancestry.
+
+    The driver separately binds these values to its original selection and trunk;
+    this pure check keeps the materializer's serialized contract self-consistent.
+    """
+    required = {'schema_version', 'candidate_id', 'cycle', 'hypothesis_id', 'hypothesis',
+                'skeleton_parents', 'source_refs', 'execution_base', 'context_ref'}
+    if type(binding) is not dict or set(binding) != required or type(binding['schema_version']) is not int \
+            or binding['schema_version'] != 1 or binding['candidate_id'] != candidate['id'] \
+            or binding['cycle'] != candidate['created_cycle'] or binding['hypothesis'] != candidate['hypothesis'] \
+            or binding['skeleton_parents'] != candidate['parents'] or binding['context_ref'] != candidate['context_pack_ref']:
+        raise ValueError('hypothesis construction binding differs from selected candidate')
+    _text(binding['hypothesis_id'], 'hypothesis identity')
+    refs = binding['source_refs']
+    if type(refs) is not list or any(type(ref) is not str or not ref for ref in refs) or len(set(refs)) != len(refs):
+        raise ValueError('hypothesis source references are invalid')
+    base = binding['execution_base']
+    if base is None:
+        if parents:
+            raise ValueError('hypothesis with no trunk cannot receive base artifacts')
+    else:
+        if type(base) is not dict or set(base) != {'candidate_id', 'artifact_sha256', 'materialization_ref'} \
+                or len(parents) != 1 or parents[0]['candidate_id'] != base['candidate_id'] \
+                or hashlib.sha256(parents[0]['artifact'].encode()).hexdigest() != base['artifact_sha256'] \
+                or type(base['materialization_ref']) is not str \
+                or not re.fullmatch(r'sha256:[0-9a-f]{64}', base['materialization_ref']):
+            raise ValueError('hypothesis trunk artifact differs from its bound materialization')
+
+
 @dataclass(frozen=True)
 class ConstructionPlan:
     _encoded: str
@@ -142,9 +172,10 @@ class ConstructionPlan:
                                      expected_ref=candidate.context_pack_ref)
         recipe = json_copy(recipe, label="construction recipe")
         base = {"kind", "task_desc", "parent_artifacts", "instructions", "comparison"}
-        if type(recipe) is not dict or set(recipe) != base | ({'funsearch_binding'} if recipe.get('kind') == 'funsearch' else set()):
+        extra = {'funsearch': {'funsearch_binding'}, 'hypothesis_refine': {'hypothesis_binding'}}
+        if type(recipe) is not dict or set(recipe) != base | extra.get(recipe.get('kind'), set()):
             raise ValueError("construction recipe requires explicit permitted inputs")
-        if recipe["kind"] not in {"draft", "reflective", "crossover", "funsearch", 'debug', 'improve'}:
+        if recipe["kind"] not in {"draft", "reflective", "crossover", "funsearch", 'debug', 'improve', 'hypothesis_refine'}:
             raise ValueError("unsupported construction recipe")
         _text(recipe["task_desc"], "construction task")
         if type(recipe["instructions"]) is not list or any(type(x) is not str or not x.strip()
@@ -153,8 +184,12 @@ class ConstructionPlan:
         parents = recipe["parent_artifacts"]
         if type(parents) is not list or any(type(p) is not dict or set(p) != {"candidate_id", "artifact"}
                 or type(p["artifact"]) is not str for p in parents) \
-                or [p["candidate_id"] for p in parents] != candidate.parents:
+                or recipe['kind'] != 'hypothesis_refine' and [p["candidate_id"] for p in parents] != candidate.parents:
             raise ValueError("recipe artifacts must match candidate parent identities in order")
+        if recipe['kind'] == 'hypothesis_refine':
+            validate_hypothesis_binding(recipe['hypothesis_binding'], parents, asdict(candidate))
+            if recipe['comparison']:
+                raise ValueError('hypothesis construction cannot substitute base scores for skeleton scores')
         expected = {"draft": 0, "reflective": 1, "crossover": 2, 'debug': 1, 'improve': 1}.get(recipe["kind"])
         if expected is not None and len(parents) != expected or recipe['kind'] == 'funsearch' and len(parents) not in (1, 2):
             raise ValueError("recipe parent count differs from its construction kind")

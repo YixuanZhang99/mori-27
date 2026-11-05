@@ -242,6 +242,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         elif (any(spec.name == 'funsearch' for spec in self.assembly.operators) or
               self.construction_enabled and self.assembly.execution.constructor.name == 'funsearch_prompt'):
             raise ValueError('FunSearch components require the FunSearch policy')
+        self.arbor = None
+        if self.assembly.policy.name == 'arbor':
+            from core.composition.arbor_runtime import ArborCoordinator
+            self.arbor = ArborCoordinator(self)
+        elif any(spec.name == 'hypothesis_refine' for spec in self.assembly.operators):
+            raise ValueError('hypothesis_refine requires its Arbor driver binding')
         if self.layered:
             contexts = self.layered.validate_domain(self.parts["domain"])
             self.manifest["evaluation_contexts"].update(contexts)
@@ -659,9 +665,15 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         state = {"task": task, "cycle": cycle, "frontier": json.loads(
                     (selection_view if self.construction_enabled else self.frontier).view("json")),
                  "operators": [spec.name for spec in self.assembly.operators]}
+        planning_context = None
+        if self.arbor:
+            planning_context = self._context(task, cycle, [])
+            state = self.arbor.prepare_observation(state, planning_context)
         strategy = await self._policy("observe", state, self.budget.main_account_summary() if self.governed else self.budget.account_summary())
         if not isinstance(strategy, dict):
             raise ValueError("policy observe must return a strategy object")
+        if self.arbor:
+            self.arbor.proposed(cycle)
         if selection_view is None:
             selection_view = self._restore_frontier_snapshot(self.frontier.checkpoint())
         unavailable = set()
@@ -707,7 +719,7 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             self.store.append('aide_selection', {'candidate_id': candidate_id, 'cycle': cycle,
                 'parents': parents, 'operator': selected,
                 'rng_state': self.parts['policy'].checkpoint_state()['rng_state']})
-        context = self._context(task, cycle, parents)
+        context = planning_context if planning_context is not None else self._context(task, cycle, parents)
         if self.layered:
             self.layered.check_integrity(Proposal(Candidate(candidate_id), json.dumps(context, ensure_ascii=False)),
                                          self._source_refs(context))
@@ -733,6 +745,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             if fixed is not None and hypotheses[0]["hypothesis"] != fixed:
                 raise ValueError("policy hypothesis conflicts with the frozen execution configuration")
         strategy = {**strategy, "hypotheses": hypotheses}
+        if self.arbor:
+            strategy['arbor'] = self.arbor.selection(candidate_id, cycle, context)
         if self.funsearch and parents:
             options = self.assembly.policy.options
             materialized = self.funsearch.materialize(candidate_id, options['template'], options['function_name'])
@@ -760,6 +774,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
                 raise ValueError("skill changed authoritative retrieval context")
         # Keep the operator whose parent capability was already authorized.
         # A skill can enrich a request, but cannot change this dispatch decision.
+        if self.arbor:
+            self.arbor.validate_request(request)
         return operator, selected, parents, context, request
 
     def _execution_operation(self, receipt, phase, *, lane="main", slot_id=None, cycle=None):
@@ -773,6 +789,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             return operator
         parts = self.parts if parts is None else parts
         operation = self._execution_operation(receipt, "operator", lane=lane, slot_id=slot_id, cycle=cycle)
+        if self.arbor and lane == 'main':
+            self.arbor.dispatch(operation)
         return parts["construction_execution"].operator(operator, selected, context, operation)
 
     async def _cycle(self, task, cycle):
@@ -895,6 +913,8 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             "receipt_id": decision.receipt_id if self.layered else event_id})
         self.applier.apply(StateMutation(MutationOp.ADD_NODE, candidate_id,
                            {"candidate": proposal.candidate, "evidence": public}, "evaluated candidate"))
+        if self.arbor:
+            self.arbor.references(candidate_id)
         self.applier.apply_all(mutations)
         lessons = [entry for entry in self.memory.entries.values()
                    if entry.provenance.source_candidate_id == candidate_id and entry.level in {"L2", "L3"}

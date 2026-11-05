@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "name": "arbor-mle-v1",
+  "mode": "benchmark",
+  "provider": {
+    "name": "provided"
+  },
+  "domain": {
+    "name": "native"
+  },
+  "policy": {
+    "name": "arbor",
+    "options": {
+      "max_cycles": 20,
+      "max_tree_depth": 2,
+      "seed": 0,
+      "max_new_ideas": 3
+    }
+  },
+  "operators": [
+    {
+      "name": "hypothesis_refine"
+    }
+  ],
+  "frontier": {
+    "name": "tree",
+    "options": {
+      "retain_rejected": true
+    }
+  },
+  "memory": {
+    "name": "scoped",
+    "options": {
+      "context_scope": "run",
+      "levels": [
+        "L1",
+        "L2"
+      ],
+      "trust_floor": "ungated",
+      "include_negative": true,
+      "include_imported": false,
+      "top_k": 20,
+      "max_chars": 160000
+    }
+  },
+  "executor": {
+    "name": "git_artifact"
+  },
+  "admission": {
+    "name": "layered",
+    "options": {
+      "metric": "gate/score",
+      "dev_metric": "dev/score",
+      "margin": 0,
+      "call_budget": 3,
+      "admission_seeds": [
+        7
+      ],
+      "final_seeds": [
+        7
+      ]
+    }
+  },
+  "budget": {
+    "name": "hierarchical",
+    "options": {
+      "limits": {
+        "global": {
+          "token": 149094400,
+          "node": 20,
+          "eval_count": 24
+        },
+        "direction": {
+          "token": 149094400,
+          "node": 20,
+          "eval_count": 24
+        },
+        "candidate": {
+          "token": 149094400,
+          "node": 20,
+          "eval_count": 24
+        }
+      },
+      "reservation": {
+        "token": 0,
+        "node": 0,
+        "eval_count": 1
+      },
+      "operation_reservations": {
+        "planning": {
+          "token": 4259840,
+          "node": 0,
+          "eval_count": 0
+        },
+        "operator": {
+          "token": 2129920,
+          "node": 1,
+          "eval_count": 0
+        }
+      },
+      "fidelity_rungs": [
+        {
+          "fidelity": "dev",
+          "split_id": "dev",
+          "seed_set": [
+            7
+          ]
+        }
+      ],
+      "convergence": {
+        "patience": 3,
+        "min_samples": 4,
+        "metric": "dev/score",
+        "direction": "maximize",
+        "min_improvement": 0
+      }
+    }
+  },
+  "skills": [],
+  "execution": {
+    "schema_version": 1,
+    "spec": {
+      "role": "general",
+      "hypothesis_frozen": true,
+      "context_projection": [
+        "memory"
+      ]
+    },
+    "constructor": {
+      "name": "prompt",
+      "options": {
+        "max_attempts": 2
+      }
+    }
+  }
+}

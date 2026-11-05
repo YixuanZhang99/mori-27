@@ -45,7 +45,7 @@ Memory 内容区分：叶 L1 原始摘要；祖先/全局 L2 洞见（模型解�
 
 必须区分假设 skeleton parent 和实际代码基底：保持上游从派发时当前 trunk 的固定 artifact 构造，不能因为现有 parent_artifacts 接口方便而改成从非 trunk 研究分支继续训练。新 `hypothesis_refine` recipe 使用 driver 绑定的 `hypothesis_binding`，显式记录 hypothesis_id、skeleton parents、trunk candidate/artifact/materialization refs 和 context ref。没有 trunk 时允许空基底。ConstructionPlan 对这个 recipe 校验 parent_artifacts 恰好等于该基底；普通 recipe 仍要求 artifact parents 与 candidate.parents 一致。绑定和原 trunk 决策链由 coordinator 重算，不能接受模型填入代码或 refs。reference edges 只表示想法来源，不改变 skeleton/depth 或代码基底。
 
-生成 wire schema 固定 `new_ideas`（1–3 项或仅选择已有 pending 时为空）和 `selection`。新 idea 包含 `parent_id`（nullable）、`hypothesis`、`expected_observation`、`source_refs`；host 分配稳定 ID，不信任模型生成 ID。selection 指已有 pending ID 或本批下标；没有真实 pending 项不能选择。每个新假设的父节点必须存在、执行成功、有非空 artifact；允许无父代探索。选择时重新核对父资格、depth 和预算。pending 只保存计划，未执行前不能拥有实测 score 或 admission 状态。已选项只能消费一次。
+生成 wire schema 固定 `new_ideas`（1–3 项或仅选择已有 pending 时为空）和 `selection`。新 idea 包含 `parent_id`（nullable）、`hypothesis`、`expected_observation`、`source_refs`；其中 `candidate:<id>` 仅引用真实拓扑节点，其他 refs 必须来自授权 M5 evidence；host 分配稳定 ID，不信任模型生成 ID。selection 指已有 pending ID 或本批下标；没有真实 pending 项不能选择。每个新假设的父节点必须存在、执行成功、有非空 artifact；允许无父代探索。选择时重新核对父资格、depth 和预算。pending 只保存计划，未执行前不能拥有实测 score 或 admission 状态。已选项只能消费一次。
 
 拟使用 interfaces：
 
@@ -65,7 +65,7 @@ Memory 内容区分：叶 L1 原始摘要；祖先/全局 L2 洞见（模型解�
 - 构造固定假设，最多 2 次构造尝试。每次都计费；改变假设的输出拒绝，不能作为第二个研究方向提交。
 - 最多三条新假设/轮，pending 总量上限 3 × max_cycles；达到树深度或预算上限的方向不能派发。
 - 使用现有低样本规则收敛：min_samples=4、patience=3、min_improvement=0；它是显式的 adapted 停止规则，不声称等同上游全部 warn/force/stop 行为。
-- 每轮 planning 预留覆盖一轮 ideation 以及最多 depth+1 次反馈合成；各 provider 调用继续原独立 CNY 预留和结算。无未知费用时才开始下一单元格。
+- 每轮 planning 预留覆盖一轮 ideation 以及最多 depth+2 次反馈合成（叶、祖先及独立全局 prior）；各 provider 调用继续原独立 CNY 预留和结算。无未知费用时才开始下一单元格。
 - 一次独立初始 control，fresh session、无 main memory。单列成本，不冒充未成功 main 候选的替代成绩。
 
 ## 验收和交付
