@@ -57,11 +57,17 @@ class FunSearchCoordinator:
             raise ValueError('candidate journal coverage differs from policy state')
         if by_id:
             verify_selected_projections(self._rows('composed_evidence'), by_id, set(by_id), **self.frozen)
-        return self.policy.audit_original_evidence(self._rows('composed_evidence'),
+        self.policy.audit_original_evidence(self._rows('composed_evidence'),
             metric=self.frozen['metric'], logical_run_id=self.frozen['logical_run_id'],
             evaluator_version=self.frozen['evaluator_version'], evaluation_context=self.frozen['evaluation_context'],
             selection_rows=[row['selection'] for row in self._rows('funsearch_selection')],
             reset_rows=self._rows('funsearch_reset'), abandonment_rows=self._rows('funsearch_abandonment'))
+        from core.composition.funsearch_history import FunSearchHistory
+        history = FunSearchHistory(self.policy._config)
+        for row in self.store.read():
+            history.consume(row['kind'], row['payload'])
+        history.verify_policy(self.policy)
+        return True
 
     def _event(self, candidate_id):
         events = [row for row in self._rows('funsearch_selection') if row.get('candidate_id') == candidate_id]

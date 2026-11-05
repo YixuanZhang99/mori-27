@@ -94,6 +94,9 @@ class PopulationRuntime:
         from core.frontier.gepa import InstanceFrontier
         policy = self.parts['policy']
         instance_draws = InstanceFrontier(list(policy.items), seed=policy.seed) if type(policy) is GEPAInstancePolicy else None
+        from core.composition.funsearch_policy import FunSearchPolicy
+        from core.composition.funsearch_history import FunSearchHistory
+        island_history = FunSearchHistory(policy._config) if type(policy) is FunSearchPolicy else None
 
         def direction(identifier, visiting=frozenset()):
             if identifier in visiting or identifier not in proposals:
@@ -122,6 +125,15 @@ class PopulationRuntime:
                         'eligible': sorted(allowed), 'selected': selected}:
                     raise ValueError('GEPA population parent draw differs from durable instance evidence')
                 draws[current_attempt] = selected
+            elif kind.startswith('funsearch_') and island_history is not None:
+                if kind == 'funsearch_selection':
+                    if current_cycle is None or current_attempt in draws or current_attempt in completed_attempts | aborted_attempts:
+                        raise ValueError('FunSearch population draw has no unique cycle binding')
+                    allowed = {identifier for identifier in authority.eligible_parent_ids()
+                               if physical is None or physical.should_continue(direction(identifier))}
+                    draws[current_attempt] = island_history.consume(kind, value, eligible=allowed)
+                else:
+                    island_history.consume(kind, value)
             elif kind == 'population_sampling_committed':
                 if current_cycle is None or current_attempt in draws \
                         or current_attempt in completed_attempts | aborted_attempts or type(value) is not dict \
@@ -186,6 +198,18 @@ class PopulationRuntime:
         if any(identifier not in allowed for identifier in parents):
             raise ValueError('policy selected a candidate outside the retained population')
         from core.composition.gepa_policy import GEPAInstancePolicy
+        from core.composition.funsearch_policy import FunSearchPolicy
+        if type(self.parts['policy']) is FunSearchPolicy:
+            # The coordinator already durably recorded this island draw. Its
+            # sampler owns the RNG; the frontier owns membership and budgets.
+            self.funsearch._audit()
+            pending = self.parts['policy'].pending_selection()
+            if pending is None:
+                if parents or allowed:
+                    raise ValueError('FunSearch population parents lack an original draw')
+            elif pending['receipt']['eligible'] != sorted(allowed) or pending['receipt']['ancestry'] != parents:
+                raise ValueError('FunSearch population eligible parents differ from the original draw')
+            return
         if type(self.parts['policy']) is GEPAInstancePolicy:
             from core.frontier.gepa import InstanceFrontier
             policy = self.parts['policy']
