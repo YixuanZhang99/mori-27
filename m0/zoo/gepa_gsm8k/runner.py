@@ -130,8 +130,17 @@ def main(argv=None):
         parser.error('output is nonempty; use a new directory or --resume')
     import subprocess
     repository = Path(__file__).resolve().parents[3]
-    source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repository, text=True).strip()
-    source_dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=repository, text=True))
+    try:
+        source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repository,
+            text=True, stderr=subprocess.DEVNULL).strip()
+        source_dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=repository,
+            text=True, stderr=subprocess.DEVNULL))
+    except (OSError, subprocess.CalledProcessError):
+        if args.mode == 'live':
+            parser.error('live evidence requires a Git checkout with a verifiable source commit')
+        # Installed packages and isolated acceptance copies can run synthetic
+        # fixtures without inventing a clean source identity.
+        source_commit, source_dirty = None, None
     if args.mode == 'live' and source_dirty:
         parser.error('live evidence requires committed clean sources')
     if args.mode == 'live':

@@ -41,3 +41,23 @@ def test_cli_freezes_source_and_profile_before_run_and_rejects_changed_resume(tm
     with pytest.raises(ValueError, match='frozen run manifest'):
         main(arguments + ['--resume', '--seed', '1'])
     assert json.loads((output / 'run-manifest.json').read_text()) == frozen
+
+
+def test_fixture_runs_without_git_but_live_requires_a_source_commit(tmp_path, monkeypatch, capsys):
+    from zoo.gepa_gsm8k import runner
+    installed = tmp_path / 'installed' / 'm0' / 'zoo' / 'gepa_gsm8k' / 'runner.py'
+    installed.parent.mkdir(parents=True)
+    monkeypatch.setattr(runner, '__file__', str(installed))
+    monkeypatch.setenv('GIT_CEILING_DIRECTORIES', str(tmp_path))
+    output = tmp_path / 'fixture'
+    args = ['--mode', 'fixture', '--max-proposals', '0', '--output', str(output)]
+    assert runner.main(args) == 0
+    manifest = json.loads((output / 'run-manifest.json').read_text())
+    assert manifest['source_commit'] is None and manifest['source_dirty'] is None
+    assert runner.main(args + ['--resume']) == 0
+    live_output = tmp_path / 'live'
+    with pytest.raises(SystemExit) as error:
+        runner.main(['--mode', 'live', '--output', str(live_output)])
+    assert error.value.code == 2
+    assert 'live evidence requires a Git checkout' in capsys.readouterr().err
+    assert not live_output.exists()
