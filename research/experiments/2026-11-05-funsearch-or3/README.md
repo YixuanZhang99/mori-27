@@ -1,8 +1,8 @@
 # FunSearch OR3 pilot evidence
 
-Status: v1 exposed an output-format conflict in real seed 0; its complete [failure record](format-conflict-v1/README.md) is retained. Corrected v2 three-seed validation is pending. This directory does not claim a benchmark gain.
+Status: v1 exposed an output-format conflict in real seed 0; its complete [failure record](format-conflict-v1/README.md) is retained. V2 fixed the format but its ten mutation attempts all exhausted the high-effort output cap; its [complete record](high-effort-v2/README.md) is also retained. V3 low-effort three-seed validation is pending. This directory does not claim a benchmark gain.
 
-Frozen protocol: [C02 specification](../../../docs/specs/classic/FUNSEARCH.md). Seeds 0/1/2, two islands, initial construction plus at most ten proposals, output cap 16384, 30-second partition timeout, and the original cumulative CNY campaign. The fixed best-fit reference is separate from model search. The initial independent control is a sanity check, not a budget-matched comparator.
+Frozen protocol: [C02 specification](../../../docs/specs/classic/FUNSEARCH.md). Seeds 0/1/2, two islands, initial construction plus at most ten proposals, output cap 16384, explicit low reasoning effort for v3, 30-second partition timeout, and the original cumulative CNY campaign. The fixed best-fit reference is separate from model search. The initial independent control is a sanity check, not a budget-matched comparator.
 
 Once the predeclared attempts finish, export all of them, including failures:
 

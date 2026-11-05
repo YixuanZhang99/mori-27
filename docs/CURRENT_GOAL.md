@@ -17,4 +17,6 @@
 
 当前施工为 C02 FunSearch，唯一方法分支 `codex/classic-funsearch` 已衔接 main 并发布 [PR #6](https://github.com/YixuanZhang99/mori-27/pull/6)。本地完整检查、11-cycle 离线试跑和记录回放通过。真实 v1 seed 0 暴露函数输出要求与 JSON 外层格式的冲突：11次构造均失败（7格式错误、4输出截断），无有效程序或留出成绩；费用上界 ¥0.971870 已全部结算，原 campaign 累计 ¥18.695960。其余两个 v1 seed 在调用前停止，完整记录保留于 [失败档案](../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
 
-v2 已明确外层 JSON 与 artifact 内函数的边界，70项相关回归和架构检查通过；接下来从干净发布源码运行独立的 seeds0/1/2，继续原数据、预算和费用账本，保留所有失败。当前不宣称真实机制验收完成或优化收益。PR 最终候选通过 Mac/Linux/MLE 检查及真实结果核对后合入，随后推进 AIDE；Goal 保持 active。GEPA 合并后 Linux/MLE 复验通过，Mac 发现的故障注入时序问题已在 PR #6 修复，等待最终候选复验。
+v2 已修正格式，但真实seed0的10次改进均在high推理下达到16384输出上限；初始程序dev213.9/held-out210.1箱，与best-fit持平。此批费用上界¥1.373084全部结算，原campaign累计¥20.069044。其余v2 seed在调用前停止，[完整记录](../research/experiments/2026-11-05-funsearch-or3/high-effort-v2/README.md)保留。
+
+v3增加可冻结的推理强度参数，C02选low，其他调用者默认仍high；不改变模型、数据、节点/输出上限或原账本。接下来独立完成seeds0/1/2及最终CI，不混合版本统计。当前尚不宣称优化收益。PR检查与结果核对后合入，随后按已预读的AIDE规格推进；Goal保持active。GEPA合并后Mac故障注入修复已由PR#6的fd02b5c两组Mac检查通过验证。

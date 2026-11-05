@@ -80,3 +80,9 @@ C02 必须使用 capacity=max(2, max_proposals+1) 的 PopulationFrontier 保留�
 v1 `f151dba` 的 seed 0 完成 11 次搜索，均未通过构造；无有效程序或留出分数。其中7次因外层格式错误、4次因供应商输出截断而失败；“只返回函数”的任务指令与 M7 JSON 外层格式冲突是已定位的实现缺陷。后两个 v1 seed 在调用前停止，原始记录与费用保留于 [格式冲突记录](../../../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
 
 `funsearch-or3-v2` 将函数限制明确限定为 JSON `artifact` 的内容，并用 version=2 的 FunSearch 专用角色指令要求 `artifact`/`hypothesis` JSON 外层；主搜索与独立 control 同步修正。不放宽解析器、不从裸代码补造成功、不改变算法/数据/提案数/输出上限/时间限额/原费用账本。新版本独立预声明 seeds 0/1/2，各初始加最多10提案，16384输出、30秒/partition；不得把两版样本混合报均值。
+
+## 有界生成参数修正（v3）
+
+v2 seed0 的初始程序与control可评分，但10次mutation均将16384 completion tokens全部用于reasoning后截断；dev213.9/held-out210.1箱与best-fit持平。其余v2 seed未启动，全部记录/费用在[high-effort-v2](../../../research/experiments/2026-11-05-funsearch-or3/high-effort-v2/README.md)。
+
+依据[官方参数说明](https://api-docs.deepseek.com/guides/thinking_mode/)，给既有受治理provider增加显式reasoning_effort（low/high/max），默认high保持原调用者行为；构造、冻结manifest、实际wire、计费桥独立重算均绑定此值。C02 `funsearch-or3-v3` 明确选择low；不改变模型、16384输出上限、10提案、30秒、官方数据或原预算。预声明新批seeds0/1/2，main与control同配置；不混合v1/v2/v3做均值，不把旧失败删除，不声称参数调节证明方法优越。

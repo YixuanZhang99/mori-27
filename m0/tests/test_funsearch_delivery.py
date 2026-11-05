@@ -173,3 +173,26 @@ def test_replay_failure_preserves_completed_scores_and_nonzero_exit(tmp_path, mo
     assert report['final_audit']['state'] == 'completed'
     assert len(report['completed_evidence']) == 1
     assert report['unresolved_provider_bindings'] == []
+
+
+def test_funsearch_main_and_control_use_the_same_requested_effort(tmp_path, endpoint):
+    from core.loop import Framework, LoopConfig
+    from test_funsearch_holdout import prepared, TASK
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.funsearch_binpacking.data import FrozenOR3
+    from zoo.funsearch_binpacking.runner import governed_setup
+    data = FrozenOR3.from_manifest(prepared(tmp_path / 'data'))
+    ledger = campaign_fixture(tmp_path)
+    profile, registry, llm = governed_setup(data, seed=0, max_proposals=0,
+        ledger=ledger, api_key='fixture-only', base_url=endpoint.url,
+        max_completion_tokens=16384, reasoning_effort='low')
+    fw = Framework.from_profile(profile, llm, data,
+        LoopConfig(max_generations=0, total_budget=profile['budget']['options']['limits']['global']['token'],
+                   reeval_floor=0), str(tmp_path/'run'), component_registry=registry)
+    result = fw.evolve(TASK)
+    assert result['reporting']['final_audit']['state'] == 'completed'
+    assert len(endpoint.requests) == 2
+    assert {r['reasoning_effort'] for r in endpoint.requests} == {'low'}
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 2 * 38
+    assert fw.replay(TASK)['replay_certificate']['passed']
+    assert len(endpoint.requests) == 2

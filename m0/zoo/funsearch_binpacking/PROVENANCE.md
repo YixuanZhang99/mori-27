@@ -47,7 +47,7 @@ key in a command or report. Do not create another budget for this method.
 uv run --project m0 --locked python -m zoo.funsearch_binpacking.runner \
   --mode live --manifest /path/to/new-or3-data/manifest.json \
   --spending-ledger /path/to/existing-campaign.db --seed 0 \
-  --max-proposals 10 --max-completion-tokens 16384 --timeout 30 \
+  --max-proposals 10 --max-completion-tokens 16384 --reasoning-effort low --timeout 30 \
   --output /path/to/new-funsearch-run
 ```
 
@@ -88,12 +88,20 @@ wall-clock schedule; M7 generates the initial program; editing is restricted to
 one function. Cluster sampling uses the final sorted case's score, while global
 selection uses development mean. These objectives are reported separately.
 
-The current recipe is `funsearch-or3-v2`. Version 1 exposed conflicting output
+The current recipe is `funsearch-or3-v3`. Version 1 exposed conflicting output
 instructions in its first real seed: all 11 constructions failed before scoring.
 Its other two planned seeds were not started after diagnosis. The full v1 record
 and cost remain in the experiment archive. Version 2 explicitly requires the M7
 JSON envelope and scopes the one-function restriction to its artifact field.
 The strict parser, data, search budget and scorer are unchanged.
 
-Corrected three-seed delivery results remain pending. Fixture and loopback tests do
+The v2 high-effort attempt produced a valid initial program but all ten mutations
+used the complete 16384 output allowance on reasoning and were truncated. Its
+scores and costs remain archived separately. V3 selects `--reasoning-effort low`
+for both main and control. The governed provider's default remains high for other
+callers; effort is included in the manifest, actual wire request, pre-dispatch
+validation and independent currency replay. The original token/currency bounds
+are unchanged. The CLI accepts low/high/max and rejects changing it on resume.
+
+V3 three-seed delivery results remain pending. Fixture and loopback tests do
 not establish benchmark performance or improvement over best-fit.

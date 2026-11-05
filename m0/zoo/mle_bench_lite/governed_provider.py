@@ -28,7 +28,9 @@ class GovernedCNYProvider:
 
     def __init__(self, model, base_url, *, campaign_binding, max_completion_tokens=4096,
                  timeout=120.0, api_key=None, token_admission='model_capacity_v1',
-                 phase_call_limits=None):
+                 phase_call_limits=None, reasoning_effort='high'):
+        if type(reasoning_effort) is not str or reasoning_effort not in {'low', 'high', 'max'}:
+            raise ValueError('reasoning effort must be low, high or max')
         if type(model) is not str or not model.strip():
             raise ValueError('an explicit model is required')
         if type(base_url) is not str:
@@ -67,7 +69,7 @@ class GovernedCNYProvider:
             'base_url': base_url.rstrip('/'), 'max_completion_tokens': max_completion_tokens,
             'timeout': float(timeout), 'request_format': 'deepseek', 'retry_policy': 'never',
             'response_model_required': True, 'thinking': {'type': 'enabled'},
-            'reasoning_effort': 'high', 'temperature_applied': False, 'seed_applied': False,
+            'reasoning_effort': reasoning_effort, 'temperature_applied': False, 'seed_applied': False,
             'immutable_snapshot_verified': False, 'campaign': campaign,
             'token_admission': admission_policy(token_admission, campaign),
             'phase_call_limits': limits}
@@ -81,6 +83,7 @@ class GovernedCNYProvider:
     def protocol_binding(self):
         return {'requested_model': self._manifest['requested_model'],
             'request_format': 'deepseek', 'base_url': self._manifest['base_url'],
+            'reasoning_effort': self._manifest['reasoning_effort'],
             'max_completion_tokens': self._manifest['max_completion_tokens'],
             'input_capacity': self._manifest['campaign']['context_tokens'],
             'token_admission': copy.deepcopy(self._manifest['token_admission'])}

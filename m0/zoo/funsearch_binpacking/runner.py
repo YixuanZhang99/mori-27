@@ -16,7 +16,7 @@ def build_profile(data, *, seed, max_proposals, call_token_bound, timeout=30):
             type(call_token_bound) is not int or call_token_bound <= 0 or
             type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0):
         raise ValueError('finite timeout and explicit nonnegative proposals/positive token bound required')
-    profile = composed_profile(name='funsearch-or3-v2')
+    profile = composed_profile(name='funsearch-or3-v3')
     profile.update(schema_version=2,
         domain={'name': 'funsearch_or3', 'options': {'dataset_identity': data.identity, 'timeout': float(timeout)}},
         policy={'name': 'funsearch', 'options': {'case_ids': data.ids('dev'), 'islands': 2, 'seed': seed,
@@ -60,7 +60,7 @@ def registry_for(data):
 
 
 def governed_setup(data, *, seed, max_proposals, ledger, api_key,
-                   max_completion_tokens=16384, timeout=30, base_url=None):
+                   max_completion_tokens=16384, timeout=30, base_url=None, reasoning_effort='low'):
     from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
     from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
     snapshot = ledger.snapshot()
@@ -70,7 +70,7 @@ def governed_setup(data, *, seed, max_proposals, ledger, api_key,
     def fresh():
         return GovernedCNYProvider(binding['model'], base_url or binding['provider_base_url'],
             campaign_binding=binding, api_key=api_key, max_completion_tokens=max_completion_tokens,
-            phase_call_limits={'operator': 1, 'evaluation': 0})
+            phase_call_limits={'operator': 1, 'evaluation': 0}, reasoning_effort=reasoning_effort)
     provider = fresh()
     declaration = provider.governance_binding()
     bound = declaration['call_bound']['units']['token']
@@ -146,6 +146,7 @@ def main(argv=None):
     parser.add_argument('--max-proposals', type=int, default=10)
     parser.add_argument('--max-completion-tokens', type=int, default=16384)
     parser.add_argument('--timeout', type=float, default=30)
+    parser.add_argument('--reasoning-effort', choices=('low', 'high', 'max'), default='low')
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--final-only', action='store_true')
     args = parser.parse_args(argv)
@@ -182,7 +183,8 @@ def main(argv=None):
         from zoo.mle_bench_lite.cny_budget import CampaignBudget
         ledger = CampaignBudget(args.spending_ledger)
         profile, registry, provider = governed_setup(data, seed=args.seed, max_proposals=args.max_proposals,
-            ledger=ledger, api_key=secret, max_completion_tokens=args.max_completion_tokens, timeout=args.timeout)
+            ledger=ledger, api_key=secret, max_completion_tokens=args.max_completion_tokens, timeout=args.timeout,
+            reasoning_effort=args.reasoning_effort)
     else:
         if args.resume and not (args.output / 'fixture-data' / 'manifest.json').is_file():
             raise ValueError('resume requires the original frozen fixture data')
@@ -253,7 +255,7 @@ def main(argv=None):
             if run_state == 'completed':
                 run_state, error_type = 'reporting_failed', campaign_snapshot_error
     report = {'method_id': 'FunSearch', 'reference_revision': 'cc53f274237d7ab05c19df939edbc1f9616a7c19',
-        'recipe_revision': 'funsearch-or3-v2', 'fidelity': 'adapted', 'mode': args.mode, 'seed': args.seed,
+        'recipe_revision': 'funsearch-or3-v3', 'fidelity': 'adapted', 'mode': args.mode, 'seed': args.seed,
         'source_commit': source_commit, 'source_dirty': source_dirty, 'dataset_identity': data.identity,
         'split_hashes': data.split_hashes, 'max_proposals': args.max_proposals, 'timeout': args.timeout,
         'deviations': ['two islands; bounded 10-proposal standard pilot; independent Python RNG',
@@ -263,6 +265,7 @@ def main(argv=None):
             'independent initial live control uses dev only; not a budget-matched comparison',
             'fixed best-fit reference evaluated before search; reference scores never enter generation'],
         'run_state': run_state, 'error_type': error_type,
+        'reasoning_effort': manifest['provider'].get('reasoning_effort'),
         'search': {'attempted': attempted, 'successful': len(evaluations) - failed, 'failed': failed,
                    'incomplete': incomplete, 'failure_rate': (failed + incomplete) / attempted if attempted else None},
         'baseline': baseline, 'result': result, 'replay_passed': replay_passed,

@@ -1,0 +1,218 @@
+[
+  {
+    "response_sha256": "0ef31bbf7fc09e577a42afd8b973dba690053b1a8d294f904430e1550be887e1",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1101,
+      "prompt_tokens": 1101,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17485
+    }
+  },
+  {
+    "response_sha256": "275ca2077765a455cbe4fbe8845711be1f3f9b9432151a59d6293381bae86e98",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1103,
+      "prompt_tokens": 1103,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17487
+    }
+  },
+  {
+    "response_sha256": "2e727213ea57a862ce0bee52d4004cf08cac933788ad956fc7eb3f94226ee11d",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1099,
+      "prompt_tokens": 1099,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17483
+    }
+  },
+  {
+    "response_sha256": "3f791a13281bcca3afe40131eaa0079eed18533290dbb04a1f4b156164ad7850",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1095,
+      "prompt_tokens": 1095,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17479
+    }
+  },
+  {
+    "response_sha256": "5cec7a52caec0d793cd9a4c573d3ac9e1d6fc520faa0ae7c810701767bbf4032",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 4384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 4329
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 487,
+      "prompt_tokens": 487,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 4871
+    }
+  },
+  {
+    "response_sha256": "6b5a8f229e6594de28f7616d0ad78befe2559b60980f5edeae63298076cef2b6",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1099,
+      "prompt_tokens": 1099,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17483
+    }
+  },
+  {
+    "response_sha256": "6eb4c4a0c3d6fbd89f7618b70b647a59d5afa83c309654429f04f01fe5b2c96c",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1098,
+      "prompt_tokens": 1098,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17482
+    }
+  },
+  {
+    "response_sha256": "76f53b10385e896bc54e35c8f9d35fc85002a5f8ab30593273d779df370612fe",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1112,
+      "prompt_tokens": 1112,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17496
+    }
+  },
+  {
+    "response_sha256": "9590fb097a8155cca27805634916ef3e0ace40b9bb6a4f878938397bb51ebe28",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1104,
+      "prompt_tokens": 1104,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17488
+    }
+  },
+  {
+    "response_sha256": "aa176814c2e11cc0f8833c3ffd0537dea0b9577a864bc514c1cd1282b9621973",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 442,
+      "completion_tokens_details": {
+        "reasoning_tokens": 413
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 379,
+      "prompt_tokens": 379,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 821
+    }
+  },
+  {
+    "response_sha256": "bab2744d6b96cf2b0a6aa8421b301348c0039e1ca3e6b739ae034fa6ebb6d097",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1095,
+      "prompt_tokens": 1095,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17479
+    }
+  },
+  {
+    "response_sha256": "ec8245d5e76e7a111fa8180fa9a7708c9f680908020fe6789e6bba5d93afe1b4",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1106,
+      "prompt_tokens": 1106,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17490
+    }
+  }
+]

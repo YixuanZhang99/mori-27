@@ -284,7 +284,8 @@ class CNYInvocationBridge:
             args_hash = payload_digest({'args': (prompt,), 'kwargs': {}})
             if args_hash != context.argument_sha256 or body != build_request(prompt, {
                     'requested_model': manifest['requested_model'], 'request_format': 'deepseek',
-                    'max_completion_tokens': manifest['max_completion_tokens']}):
+                    'max_completion_tokens': manifest['max_completion_tokens'],
+                    'reasoning_effort': manifest.get('reasoning_effort', 'high')}):
                 raise ValueError('prepared wire differs from canonical invocation arguments')
         except (KeyError, TypeError, IndexError, UnicodeError) as error:
             raise ValueError('prepared wire request is damaged') from error
@@ -728,7 +729,8 @@ class CNYInvocationBridge:
             if manifest['campaign'] != policy:
                 raise ValueError('recorded provider differs from frozen currency policy')
             wire = json.loads(build_request('binding', {'requested_model': manifest['requested_model'],
-                'request_format': 'deepseek', 'max_completion_tokens': manifest['max_completion_tokens']}))
+                'request_format': 'deepseek', 'max_completion_tokens': manifest['max_completion_tokens'],
+                'reasoning_effort': manifest.get('reasoning_effort', 'high')}))
             wire.pop('messages')
             wire.update(base_url=manifest['base_url'], timeout=manifest['timeout'], policy_sha256=policy['policy_sha256'])
             expected = {'schema_version': 2, 'fresh_session': True, 'state_independent': True,
