@@ -13,6 +13,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  macos-portable:
+    name: macOS / Python 3.12 / portable checks
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.6.8'
+          enable-cache: true
+          cache-dependency-glob: m0/uv.lock
+      - name: Install locked Python environment
+        run: make setup PYTHON=3.12
+      - name: Portable checks with explicit Linux deselection and no skips
+        run: |
+          mkdir -p artifacts/macos
+          set -o pipefail
+          make check 2>&1 | tee artifacts/macos/check.log
+      - name: Confirm historical certificates were not modified
+        if: always()
+        run: git diff --exit-code -- m0/verifier
+      - name: Upload portable check evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-portable-${{ github.sha }}
+          path: artifacts/macos/
+          if-no-files-found: warn
+          retention-days: 14
   linux-acceptance:
     name: Linux x86_64 / Python 3.12 / full v75
     runs-on: ubuntu-24.04

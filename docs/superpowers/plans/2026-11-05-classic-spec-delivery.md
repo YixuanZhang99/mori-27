@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 当前 Goal 保持 paused；本计划尚未执行。不得把计划提交当作恢复 Goal 或付费试跑指令。
+- 用户已于 2026-11-05 批准按本计划执行、整合 main 并逐方法交付；控件限制与当前执行目标见 `docs/CURRENT_GOAL.md`。
 - 不修改原 VISION/RUBRIC 完成阈值；遵守现有 Mac `make check` + 同 SHA Linux 验收的主线门槛。
 - 保留既有公开 `Framework.from_profile/evolve/inspect/replay`；不另造方法主循环。
 - 每个正式试跑使用同一累计 ¥200 账本；密钥不打印、不复制到产物。
