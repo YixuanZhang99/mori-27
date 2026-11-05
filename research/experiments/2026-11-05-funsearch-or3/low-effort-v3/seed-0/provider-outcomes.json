@@ -1,0 +1,218 @@
+[
+  {
+    "response_sha256": "352a11f2aab3399262aae7cfc0c0c21ac9edd08d12b5c76fbd31f703725b462b",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 3000,
+      "completion_tokens_details": {
+        "reasoning_tokens": 2915
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1065,
+      "prompt_tokens": 1065,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 4065
+    }
+  },
+  {
+    "response_sha256": "3c78ec5e9b28db9242a4633ee6fe693f2672994661bab82d3fa5bae753010b64",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 2642,
+      "completion_tokens_details": {
+        "reasoning_tokens": 2508
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1185,
+      "prompt_tokens": 1185,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 3827
+    }
+  },
+  {
+    "response_sha256": "03aec30c5077f386898c88c3aeefdc8281394ffa205af3d0116a65500d666057",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 5594,
+      "completion_tokens_details": {
+        "reasoning_tokens": 5468
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1867,
+      "prompt_tokens": 1867,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 7461
+    }
+  },
+  {
+    "response_sha256": "fad19191f5f285811e2cbc4ab7c446273b163418ea4184c661d3a6fa6d90cdf1",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 245,
+      "completion_tokens_details": {
+        "reasoning_tokens": 215
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 372,
+      "prompt_tokens": 372,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 617
+    }
+  },
+  {
+    "response_sha256": "306d61c51a1b149ad5b78e78f7b87d4833bec883367c55da5a6cfb8c64d01fa3",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 7405,
+      "completion_tokens_details": {
+        "reasoning_tokens": 7270
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1107,
+      "prompt_tokens": 1107,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 8512
+    }
+  },
+  {
+    "response_sha256": "69fd75aefec8accf3bd75ca8eb695ac8be9283533a151eb0c03860ff19f7d6fe",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 4529,
+      "completion_tokens_details": {
+        "reasoning_tokens": 4485
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1219,
+      "prompt_tokens": 1219,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 5748
+    }
+  },
+  {
+    "response_sha256": "12437ff5539f0efc0acb757442513c426ce50a5963134d706c20ba3a04c21b0c",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 489,
+      "completion_tokens_details": {
+        "reasoning_tokens": 460
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 477,
+      "prompt_tokens": 477,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 966
+    }
+  },
+  {
+    "response_sha256": "d19908babda1c2d0da1f26b493afbfb23c2b234b0c2a413d5d6f315d73c169e6",
+    "finish_reason": "length",
+    "integrity_reason": "incomplete_output",
+    "usage": {
+      "completion_tokens": 16384,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16384
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1442,
+      "prompt_tokens": 1442,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 17826
+    }
+  },
+  {
+    "response_sha256": "7435b18da262d402847d2263072ad4c1087b0efde6721da3c11e548696843b01",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 6160,
+      "completion_tokens_details": {
+        "reasoning_tokens": 6022
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1798,
+      "prompt_tokens": 1798,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 7958
+    }
+  },
+  {
+    "response_sha256": "a21541d30a634ddfd25acb9956548d49e8e37f2ec860a1d2780e9a2d078b5eb2",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 3148,
+      "completion_tokens_details": {
+        "reasoning_tokens": 3043
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1139,
+      "prompt_tokens": 1139,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 4287
+    }
+  },
+  {
+    "response_sha256": "d7f5d85b4046d0fb4b43b15194c9e48eb6e4bf7b3514bb10669222a082005ba8",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 2227,
+      "completion_tokens_details": {
+        "reasoning_tokens": 2185
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1298,
+      "prompt_tokens": 1298,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 3525
+    }
+  },
+  {
+    "response_sha256": "fa51e3d58ef7109a162b790b5ee7b5078a3dfd39086ed12ef7d8dfb9969a3b15",
+    "finish_reason": "stop",
+    "integrity_reason": null,
+    "usage": {
+      "completion_tokens": 5336,
+      "completion_tokens_details": {
+        "reasoning_tokens": 5208
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1286,
+      "prompt_tokens": 1286,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 6622
+    }
+  }
+]

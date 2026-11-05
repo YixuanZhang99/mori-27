@@ -94,8 +94,15 @@ def funsearch_constructor_options(options):
 
 def register_funsearch_construction(registry):
     from core.composition.funsearch_validator import program_validator
+    # Function-only restrictions describe the artifact, not the wire response.
+    # Keep the M7 JSON envelope explicit, including for independent controls.
+    output_instruction = (' Return exactly one JSON object with string fields "artifact" and "hypothesis". '
+        'Put the complete Python function in the artifact string, using JSON escaping for newlines. '
+        'Copy the input hypothesis unchanged. Do not return bare code or Markdown fences.')
+    roles = {name: RoleDefinition(name, '2', role.instructions + output_instruction)
+             for name, role in DEFAULT_ROLES.items()}
     registry.register('constructor', 'funsearch_prompt', lambda ctx, opts: PromptMaterializer(
-        DEFAULT_ROLES, validator=program_validator(opts['template'], opts['function_name']),
+        roles, validator=program_validator(opts['template'], opts['function_name']),
         validator_version='funsearch-program-v1', validator_deterministic=True),
         validate_options=funsearch_constructor_options,
-        execution={'schema_version': 1, 'roles': {key: asdict(role) for key, role in DEFAULT_ROLES.items()}})
+        execution={'schema_version': 1, 'roles': {key: asdict(role) for key, role in roles.items()}})

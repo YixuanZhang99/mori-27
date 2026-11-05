@@ -1,4 +1,4 @@
-"""Experimental, data-bound OR3 development domain; no held-out evaluation."""
+"""Trusted OR3 scoring with isolated programs and opt-in frozen held-out data."""
 import asyncio
 import hashlib
 import json
@@ -57,8 +57,15 @@ class OR3DevDomain:
     async def evaluate(self, proposal, request):
         self.validate_request(request)
         data = json.loads(self._read_dataset())
+        return await self._evaluate_partition(proposal, request, data)
+
+    def evaluation_context_for(self, request):
+        self.validate_request(request)
+        return self.evaluation_context
+
+    async def _evaluate_partition(self, proposal, request, data):
         bound = binding_for(proposal, request, evaluator_version=self.evaluator_version,
-                            evaluation_context=self.evaluation_context)
+                            evaluation_context=self.evaluation_context_for(request))
         timeout = min(self.timeout, request.time_limit) if request.time_limit else self.timeout
 
         def run():
@@ -68,11 +75,40 @@ class OR3DevDomain:
         try:
             result = await asyncio.to_thread(run)
         except (ValueError, OSError, TimeoutError) as error:
-            return EvalResult(EvalStatus.FAILED_TO_RUN, cost=CostVec(eval_count=1), fidelity='dev',
+            return EvalResult(EvalStatus.FAILED_TO_RUN, cost=CostVec(eval_count=1), fidelity=request.fidelity,
                 text_feedback='Sandboxed OR3 candidate failed: ' + type(error).__name__,
                 contract=EvaluationContract(bound, self.measured_cost_units))
         self.validate_context()
-        items = tuple(ItemOutcome(key, metrics={'score': score}, visibility='public')
+        is_dev = request.split_id == 'dev'
+        items = tuple(ItemOutcome(key, metrics={'score': score}, visibility='public' if is_dev else 'private')
                       for key, score in result['case_scores'].items())
-        return EvalResult(EvalStatus.OK, {'dev/score': result['mean_score']}, CostVec(eval_count=1),
-            fidelity='dev', contract=EvaluationContract(bound, self.measured_cost_units, items=items))
+        return EvalResult(EvalStatus.OK, {('dev' if is_dev else 'test') + '/score': result['mean_score']}, CostVec(eval_count=1),
+            fidelity=request.fidelity, contract=EvaluationContract(bound, self.measured_cost_units, items=items))
+
+
+class OR3Domain(OR3DevDomain):
+    def __init__(self, data, *, template, timeout):
+        self.data = data
+        data.validate()
+        super().__init__(data.paths['dev'], expected_sha256=data.hashes['dev'], template=template, timeout=timeout)
+        self.evaluator_version = self.evaluator_version.replace('or3-dev-v1:', 'or3-frozen-splits-v1:')
+        self.evaluation_contexts = {'dev': data.split_hashes['dev'], 'final_audit': data.split_hashes['held_out']}
+
+    def validate_context(self):
+        self.data.validate()
+
+    def validate_request(self, request):
+        request.validate()
+        if (request.split_id not in {'dev', 'final_audit'} or request.fidelity != request.split_id or
+                request.seed_set is not None or request.resume_from is not None):
+            raise ValueError('only unseeded dev or frozen final_audit evaluation is supported')
+        self.validate_context()
+
+    def evaluation_context_for(self, request):
+        self.validate_request(request)
+        return self.evaluation_contexts[request.split_id]
+
+    async def evaluate(self, proposal, request):
+        self.validate_request(request)
+        data = self.data.rows('dev' if request.split_id == 'dev' else 'held_out')
+        return await self._evaluate_partition(proposal, request, data)

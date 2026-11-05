@@ -75,6 +75,13 @@ class ForbiddenLLM:
         raise AssertionError("recovery must not propose again")
 
 
+def kill_owner_and_wait():
+    # Dispatch is not a Python no-return operation. Keep the fixture barrier
+    # held even if kill(2) returns before SIGKILL takes effect on another CPU.
+    os.kill(os.getpid(), signal.SIGKILL)
+    threading.Event().wait()
+
+
 def owner_main(run_dir, crash_point):
     first = proposal_id(run_dir / "ids-first", "improve:1:0")
     second = proposal_id(run_dir / "ids-second", "improve:1:1")
@@ -94,7 +101,7 @@ def owner_main(run_dir, crash_point):
             # worker can return from its start marker and call the evaluator.
             with evaluation_start_lock:
                 original_append(self, kind, payload)
-                os.kill(os.getpid(), signal.SIGKILL)
+                kill_owner_and_wait()
             return
         original_append(self, kind, payload)
         data = payload if isinstance(payload, dict) else {}
@@ -162,7 +169,7 @@ def owner_main(run_dir, crash_point):
         elif crash_point == "control_baseline":
             crash = kind == "baseline" and data.get("candidate_id") == control_id
         if crash:
-            os.kill(os.getpid(), signal.SIGKILL)
+            kill_owner_and_wait()
 
     AppendOnlyStore.append = append_with_crash
     fail_id = first if crash_point in FAILURE_POINTS else None
@@ -446,3 +453,20 @@ def test_completed_native_batch_resume_is_noop(tmp_path):
 
 if __name__ == "__main__" and len(sys.argv) == 4 and sys.argv[1] == "--owner":
     owner_main(Path(sys.argv[2]), sys.argv[3])
+
+
+def test_owner_crash_barrier_never_returns_before_signal_delivery(monkeypatch):
+    # Signal dispatch may return before the process is terminated. Simulate
+    # that schedule without killing this test process or allowing evaluation.
+    import test_inprocess_batch_evaluation_recovery as fixture
+    calls = []
+    monkeypatch.setattr(fixture.os, 'kill', lambda pid, sig: calls.append((pid, sig)))
+    class ReachedBarrier(Exception):
+        pass
+    def waiting(_self, timeout=None):
+        assert timeout is None
+        raise ReachedBarrier()
+    monkeypatch.setattr(fixture.threading.Event, 'wait', waiting)
+    with pytest.raises(ReachedBarrier):
+        fixture.kill_owner_and_wait()
+    assert calls == [(os.getpid(), signal.SIGKILL)]

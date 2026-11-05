@@ -20,8 +20,11 @@ def build_request(prompt: str, binding: dict) -> bytes:
     kind = binding.get('request_format', 'openai')
     payload = {'model': model, 'messages': [{'role': 'user', 'content': prompt}]}
     if kind == 'deepseek':
+        effort = binding.get('reasoning_effort', 'high')
+        if type(effort) is not str or effort not in {'low', 'high', 'max'}:
+            raise ValueError('reasoning effort must be low, high or max')
         payload.update(max_tokens=allowance, stream=False,
-                       thinking={'type': 'enabled'}, reasoning_effort='high')
+                       thinking={'type': 'enabled'}, reasoning_effort=effort)
     elif kind == 'openai':
         temperature = binding.get('temperature', 0.0)
         if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 2:

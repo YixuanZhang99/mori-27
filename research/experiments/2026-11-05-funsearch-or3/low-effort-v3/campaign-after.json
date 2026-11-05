@@ -1,0 +1,8 @@
+{
+  "limit_micro_cny": 200000000,
+  "settled_upper_bound_micro_cny": 21167970,
+  "remaining_micro_cny": 178832030,
+  "reserved_micro_cny": 0,
+  "pending_calls": [],
+  "protection_breaches": []
+}
