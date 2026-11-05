@@ -85,7 +85,7 @@ def test_malformed_initial_program_produces_failure_report(tmp_path, monkeypatch
     output = tmp_path / 'run'
     assert runner.main(['--mode', 'fixture', '--max-proposals', '0', '--output', str(output)]) == 0
     report = json.loads((output / 'method-report.json').read_text())
-    assert report['search'] == {'attempted': 1, 'successful': 0, 'failed': 1, 'failure_rate': 1.0}
+    assert report['search'] == {'attempted': 1, 'successful': 0, 'failed': 1, 'incomplete': 0, 'failure_rate': 1.0}
     assert report['result']['reporting']['final_audit']['state'] == 'skipped'
     assert report['result']['best_candidate_id'] is None
     assert report['replay_passed']
@@ -139,3 +139,37 @@ def test_governed_programs_and_control_share_original_cost_authority(tmp_path, e
     assert not snapshot['pending_calls'] and snapshot['reserved_micro_cny'] == 0
     assert fw.replay(TASK)['replay_certificate']['passed']
     assert len(endpoint.requests) == 3 and ledger.snapshot() == snapshot
+
+
+def test_unknown_usage_writes_incomplete_attempt_report_without_replay(tmp_path, monkeypatch):
+    from core.llm import UsageError
+    from zoo.funsearch_binpacking import runner
+    def unknown(_self, _prompt):
+        raise UsageError('injected missing usage')
+    monkeypatch.setattr(runner.FixtureProvider, '__call__', unknown)
+    monkeypatch.setattr(Framework, 'replay', lambda *_args: pytest.fail('unknown usage was replayed'))
+    output = tmp_path / 'run'
+    assert runner.main(['--mode', 'fixture', '--max-proposals', '1', '--output', str(output)]) == 1
+    report = json.loads((output / 'method-report.json').read_text())
+    assert report['run_state'] == 'execution_failed' and report['error_type'] == 'UsageError'
+    assert report['result'] is None and report['replay_passed'] is None
+    assert report['final_audit']['state'] == 'not_frozen'
+    assert report['completed_evidence'] == []
+    assert report['search']['attempted'] == report['search']['incomplete'] == 1
+    assert report['search']['successful'] == report['search']['failed'] == 0
+    assert len(report['unresolved_provider_bindings']) == 1
+
+
+def test_replay_failure_preserves_completed_scores_and_nonzero_exit(tmp_path, monkeypatch):
+    from zoo.funsearch_binpacking import runner
+    def failed_replay(_self, *_args):
+        raise ValueError('injected replay mismatch')
+    monkeypatch.setattr(Framework, 'replay', failed_replay)
+    output = tmp_path / 'run'
+    assert runner.main(['--mode', 'fixture', '--max-proposals', '0', '--output', str(output)]) == 1
+    report = json.loads((output / 'method-report.json').read_text())
+    assert report['run_state'] == 'replay_failed' and report['error_type'] == 'ValueError'
+    assert report['result']['best_score'] == -1 and report['replay_passed'] is None
+    assert report['final_audit']['state'] == 'completed'
+    assert len(report['completed_evidence']) == 1
+    assert report['unresolved_provider_bindings'] == []

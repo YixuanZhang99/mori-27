@@ -70,6 +70,11 @@ report hash before any model request. `method-report.json` includes attempted,
 successful and failed program counts, original result, baseline and replay status.
 `profile.json` and the existing journal preserve method decisions and usage.
 All failures remain visible; failed or partial evaluations have no complete score.
+An execution or replay error writes an incomplete report and exits nonzero.
+It includes the error type, completed evidence, actual final state, unresolved
+provider bindings and the campaign snapshot when available. Unknown usage is
+never retried or reported as free. Search statistics distinguish completed
+failures from incomplete attempts; failure rate counts both as unsuccessful.
 
 Use the same original source commit and exact arguments with `--resume`.
 `--resume --final-only` requires an existing frozen winner record, performs only

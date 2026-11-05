@@ -59,7 +59,7 @@
 | 顺序 | 工作 spec | 当前确认证据 | 必须补的闭环 |
 | --- | --- | --- | --- |
 | 1 | [GEPA](specs/classic/GEPA.md) | 同批父子反思、validation 实例赢家、冻结 test、计量回放已接通；[真实 GSM8K 记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)单列成功与失败 | 更充分的多提案搜索、等预算对照与公开区间复现 |
-| 2 | [FunSearch](specs/classic/FUNSEARCH.md) | signature/island、构造、OR3 开发集固定程序评分 | 最小真实搜索、冻结优胜程序、独立留出评分；不整包导入临时 supervisor |
+| 2 | [FunSearch](specs/classic/FUNSEARCH.md) | 本地工程候选已补有效成员保留、岛屿历史校验、冻结留出入口与受治理 runner | 三 seed 真实试跑、独立结果与合入；不整包导入临时 supervisor |
 | 3 | [AIDE](specs/classic/AIDE.md) | 通用树/算子/MLE 任务组件；未找到完整命名 recipe 的验收包 | draft 扇出、buggy debug 路由、best-first、validation best |
 | 4 | [Arbor](specs/classic/ARBOR.md) | llm_cycles、假设/上下文、记忆、layered gate 组件 | 六步循环、insight 上溯与实际消费、gate 接纳/拒绝轨迹 |
 | 5 | [OpenEvolve](specs/classic/OPENEVOLVE.md) | vendored 宿主、数据库往返、grid/island/cascade 组件 | 同一运行中的 diff→grid×island→cascade→选择；与宿主对照 |
@@ -88,7 +88,7 @@
 
 - PR #1 随完整提交链进入 main 后被 GitHub 标为 merged；被取代的 PR #2、#3 已关闭。
 - 15 条已被 main 包含的历史开发分支已按精确 SHA 核对后清理；历史 `pr-4-merge` 引用也不再出现在远端。
-- 远端收敛核对时仅剩 `main` 与 `codex/classic-gepa`。本轮方法交付见 [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5)，其合入后结束该分支；后续从更新后的 main 开 `codex/classic-funsearch`。
+- GEPA [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 已在两组最终候选检查通过后合入 `main=b16b4c6`，合并树与 `5fed770` 相同；方法分支退役，回滚 tag 为 `archive/classic-gepa-20261105`。下一条唯一发布方法分支为 `codex/classic-funsearch`，本地在 CI 期间准备的提交须先衔接新 main。
 - 回滚标签 `archive/pre-classic-main-20261105`、`archive/pre-classic-development-20261105` 与已验证本地 bundle 保留。保留有未提交文件的本地工作区，不用远端分支清理覆盖用户文件。
 - 未推的 `/tmp/mori27-classic-integrate@4df353f` FunSearch WIP 保留备份。已核对其额外 supervisor、价格门禁等不属 C02 最小缺口，不能整包导入。
 

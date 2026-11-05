@@ -13,4 +13,6 @@
 
 应用 Goal 控件：用户已于 2026-11-05 将目标更新为“按 docs/CURRENT_GOAL.md 收敛分支，并从 GEPA 开始逐项完成 spec、实现、实测和合入”，并点击继续；工具查询已确认状态为 active。此前 paused 和无法由工具恢复的限制已由此次用户操作解除。后续按本页顺序持续推进，单个方法交付不代表整个 Goal 完成。
 
-执行进度：PR #4 已合入 main `9648aa3`，候选与合并后 Mac/Linux/MLE 检查通过；旧串联 PR 已处理，远端已收敛至 main 加一条 GEPA 方法分支。GEPA 公共入口、配对反思、冻结 test 与记录回放已接通，真实试跑及失败见 [GSM8K 交付记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)。本轮交付 PR #5 合入后，下一项是 C02 FunSearch 的冻结留出评估和真实程序搜索，不再扩建外围 supervisor。Goal 已恢复 active，按本页继续推进。
+执行进度：分支收敛已完成，GEPA 的 [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 已于 2026-11-05 合入 main `b16b4c6`，两组最终候选 Mac/Linux/MLE 检查全部通过，合并树与候选相同。GEPA 远端方法分支已归档退役；真实结果及失败见 [GSM8K 交付记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)，尚无优化收益或论文复现结论。
+
+当前施工为 C02 FunSearch，唯一下一方法分支 `codex/classic-funsearch`。为利用 CI 等待时间，本地工程增量从 GEPA 最终候选开始；发布前须衔接新 main。已冻结 [C02 spec](specs/classic/FUNSEARCH.md) 和 [实施计划](superpowers/plans/2026-11-05-funsearch-delivery.md)，补齐有效程序供亲、原始岛屿历史校验、双 split 隔离评分及冻结终评入口。11-cycle 离线试跑和记录回放通过，三 seed 真实试跑与合入尚未完成。下一步完成审查修复及完整检查，然后沿原累计账本实测、保留全部失败、交付独立报告。Goal 保持 active，后续方法顺序不变。

@@ -4,11 +4,11 @@
 
 用户已批准按 [经典工作接入计划](CLASSIC_WORKS_PLAN.md) 收敛分支，并从 GEPA 起逐项施工；执行目标与 Goal 状态记录于 [CURRENT_GOAL](CURRENT_GOAL.md)。
 
-整合 [PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 已保留历史合入 `main=9648aa3`。候选 `7ef8d48` 的 push/PR 两轮 Mac、Linux v75、MLE 检查全部通过；main 合并树与候选完全相同。合并后的 main 检查也已通过，15 条历史开发分支已清理，旧串联 PR 已处理，远端核对仅 main 与 GEPA 方法分支。历史回滚 tag 和完整本地 bundle 已保留。未推 FunSearch WIP 不整体导入。唯一新方法分支为从该 main 创建的 `codex/classic-gepa`。
+分支收敛已完成：[PR #4](https://github.com/YixuanZhang99/mori-27/pull/4) 整合历史开发链并通过合并后检查；GEPA [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 随后合入 `main=b16b4c6`。最终 `5fed770` 的 push/PR 两组 Mac、Linux v75、MLE 检查通过，合并树与候选相同。历史回滚 tag 和完整 bundle 保留；GEPA 方法分支已退役并归档为 `archive/classic-gepa-20261105`。下一条唯一方法分支是 `codex/classic-funsearch`，未推旧 WIP 不整体导入。
 
 GEPA C01 已冻结规格并实现配对训练反思、完整 validation 的实例赢家保留、冻结后的 test、计量与记录回放；154 项针对性回归通过，独立审查发现的预算早停恢复问题已修复并单测通过，完整 `make check` 通过（2285 portable tests、188 Linux-dependent cases 显式排除；全部示例、架构检查及 106 tooling tests 通过），后补的运行 manifest/数据准备 2 项测试也通过。可运行命令及差异见 [GEPA provenance](../m0/zoo/gepa_gsm8k/PROVENANCE.md)。工程测试不能代替真实成绩；本轮实测见下段，等预算对照和论文公开区间复现仍未完成。
 
-后续顺序为 GEPA → FunSearch → AIDE → Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
+当前是 FunSearch 工程候选：有效非最优程序保留供亲，原始事件重建岛屿状态，冻结留出评分和独立终评命令已接通；11-cycle 离线试跑完成两次重置、终评和回放，107 项相关测试通过。独立审查发现的未知用量缺少失败报告问题已复现并修复，三 seed 真实结果和合入仍待完成。后续顺序为 FunSearch → AIDE → Arbor → OpenEvolve → AIRA → LoongFlow → R&D-Agent。下文保留历史证据，不把此前分支数量或“下一步”当作最新排期。
 
 真实 GEPA/GSM8K 运行、逐题成绩、费用与失败记录见 [本轮交付报告](../research/experiments/2026-11-05-gepa-gsm8k/README.md)。它是 adapted 小规模运行验证；输出截断、无效构造等失败不删除，不据此宣称方法优化收益或论文成绩复现。
 
