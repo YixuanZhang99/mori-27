@@ -277,3 +277,17 @@ def test_checkpoint_does_not_expose_a_partially_committed_host_operation(monkeyp
         state = reader.result(timeout=5)
     assert state['program_order'] == ['root']
     assert len(adapter.events) == 1
+
+
+def test_adapter_does_not_patch_shared_vendor_module(monkeypatch):
+    from core.openevolve_interop import ProgramDatabase  # initializes vendored import path
+    import openevolve.database as vendor
+    originals = (vendor.random, vendor.time, vendor.uuid, vendor.Program)
+    adapter = new_adapter()
+    perform = adapter._perform
+    def checked(*args):
+        assert (vendor.random, vendor.time, vendor.uuid, vendor.Program) == originals
+        return perform(*args)
+    monkeypatch.setattr(adapter, '_perform', checked)
+    measured(adapter, 'root', .4, iteration=0)
+    adapter.select('child', {'root'})

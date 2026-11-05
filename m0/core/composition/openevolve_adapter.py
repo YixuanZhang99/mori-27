@@ -5,11 +5,34 @@ import copy
 import json
 import random
 import threading
+import types
 
 from core.composition.contracts import json_copy
 from core.openevolve_interop import DatabaseConfig, ProgramDatabase
 
 _HOST_LOCK = threading.RLock()
+
+
+def _isolated_host_class():
+    """Use vendor method code with private globals, preserving its class contract."""
+    import openevolve.database as vendor
+    namespace = dict(vars(vendor))
+    methods = {}
+    for name, value in vars(ProgramDatabase).items():
+        static = isinstance(value, staticmethod)
+        original = value.__func__ if static else value
+        if not isinstance(original, types.FunctionType):
+            continue
+        function = types.FunctionType(original.__code__, namespace, original.__name__,
+                                      original.__defaults__, original.__closure__)
+        function.__kwdefaults__ = original.__kwdefaults__
+        function.__annotations__ = original.__annotations__
+        function.__dict__.update(original.__dict__)
+        methods[name] = staticmethod(function) if static else function
+    return type('IsolatedProgramDatabase', (ProgramDatabase,), methods), namespace
+
+
+_IsolatedProgramDatabase, _HOST_GLOBALS = _isolated_host_class()
 
 
 class OpenEvolveAdapter:
@@ -37,7 +60,7 @@ class OpenEvolveAdapter:
                                      in_memory=True, novelty_llm=None,
                                      embedding_model=None, embedding_api_base=None,
                                      artifacts_base_path=None)
-        self.database = ProgramDatabase(host_config)
+        self.database = _IsolatedProgramDatabase(host_config)
         host_config.random_seed = seed
         self._host_rng = random.Random(seed).getstate()
         self._events = []
@@ -78,7 +101,6 @@ class OpenEvolveAdapter:
         import time
         from unittest.mock import patch
         from core.openevolve_interop import Program
-        import openevolve.database as host
         from core.x1.checkpoint import payload_digest
 
         tape, index = [], 0
@@ -103,7 +125,8 @@ class OpenEvolveAdapter:
         before = payload_digest(self._state())
         host_rng = random.Random()
         host_rng.setstate(self._host_rng)
-        with _HOST_LOCK, patch.object(host, 'random', host_rng), patch.object(host, 'time', time_proxy), patch.object(host, 'uuid', uuid_proxy), patch.object(host, 'Program', RecordedProgram):
+        with _HOST_LOCK, patch.dict(_HOST_GLOBALS, {'random': host_rng, 'time': time_proxy,
+                                            'uuid': uuid_proxy, 'Program': RecordedProgram}):
             result = self._perform(kind, args, RecordedProgram)
             if replay_tape is not None and index != len(replay_tape):
                 raise ValueError('unused host nondeterminism journal')
