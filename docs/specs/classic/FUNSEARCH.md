@@ -1,6 +1,6 @@
 # C02 — FunSearch 程序进化
 
-状态：规格草案；继承 [COMMON](COMMON.md)。目标：现有 OR3 开发集接入真实程序搜索和一次冻结留出评估。
+状态：施工规格冻结，2026-11-05；继承 [COMMON](COMMON.md)。目标：现有 OR3 开发集接入真实程序搜索和一次冻结留出评估。
 
 ## 来源与现状
 
@@ -46,3 +46,31 @@ GEPA 已提供可复用的 `metric_final`：只按 dev 选定并冻结，再进�
 已审阅本机 `4df353f` WIP：额外 supervisor、authority broker、价格门禁、owner seal 和源码镜像栈不属于 C02 的必要增量，不整体导入。可复用的是留出泄漏、数据变更和函数边界的测试思路。当前固定模板及既有构造器负责只允许改写 `priority(item, bins)`。
 
 拟用两个岛、prompt_size=2、temperature=1.0、temperature_period=10、每五个搜索 cycle 重置弱岛；按代数重置、独立 RNG、保留历史及治理资格过滤均显式标 adapted。初始独立 control 只作 sanity check；固定 best-fit 在 dev/held-out 的分数单独作为任务参考，不宣称同预算搜索对照。正式冻结前，用公开 fixture 确认这些现有接口和重置参数，然后按 F1–F5 开发；此核对不是实现完成声明。
+
+
+## 施工前反例与确定的数据流
+
+2026-11-05 对 GEPA 最终候选 `5fed770` 的离线复查发现：现有树 frontier 将没有超过全局 incumbent 的有效候选标为 pruned；三次同分构造中只有初始候选可继续供亲。直接配置 population frontier 又因岛屿抽样不属于其内置采样器而拒绝。因此先前 11-cycle best-fit fixture 仅证明入口和重置可执行，不证明完整岛屿搜索语义。
+
+C02 必须使用 capacity=max(2, max_proposals+1) 的 PopulationFrontier 保留所有可能的有效候选。全局 dev mean 只决定最终 incumbent；岛屿成员/簇及下一次供亲不以是否提升 incumbent 为条件。预算耗尽、无效评价仍排除供亲，弱岛 reset 仍按方法替换活动成员，历史不删除。
+
+唯一必要的 core 增量是把现有 FunSearchCoordinator 的 `funsearch_selection` 和 `verify_selection` 接到 population 抽样授权与恢复校验：在当时有效成员及剩余预算集合上验证有序样本、重复样本、去重血缘和状态转移；恢复时从原始事件重算。不得跳过采样验证、把岛屿抽样改成 tournament，或让 checkpoint 的自证 hash 代替原始事件。
+
+一次迭代：域固定 dev IDs/模板 → policy 按岛屿/簇/长度抽程序 → M7 仅修改 priority 函数 → 独立 worker 接收逐个 item 与可容纳 bins → 可信 scorer 记录完整 dev 分数向量 → 有效候选登记到抽中的岛屿、单独比较 dev mean 更新 incumbent → 每五个成功登记（含初始候选）触发弱岛 reset，失败不增加重置计数。最后冻结 dev incumbent → 用相同沙箱和 scorer 评一次 held_out → reporting-only 结果，不更新岛屿、记忆或最终选择。
+
+保持现有参考簇目标为分数向量最后一个排序 case 的值，最终 incumbent 为 dev mean；这两个目标不可混称。保留独立 RNG、以成功登记计数替代墙钟调度的 adapted 差异。模板固定为 `def priority(item, bins): return -(bins - item)` 的两行 Python 定义，worker 提供 np；固定 best-fit 是外部任务参考，模型的初始程序仍由 M7 构造。
+
+## 运行与证据冻结
+
+- 官方 notebook 和双 split hash 见上文。live 要求来源干净、原累计账本和可用 Linux 沙箱；在模型请求前核对整份 manifest、10/10 count、disjoint IDs、实例字段及当前文件内容。
+- 双 split adapter 保留旧 OR3DevDomain 的 dev-only 接口。dev 的 evaluation_context、FunSearch binding 和生成输入不包含 held-out 内容；整份运行 manifest 单独固定两份数据。
+- 固定 seeds 0/1/2，每 seed 一个初始候选及最多10提案，输出上限16384，partition timeout30秒。现有初始独立 control 只测 dev。所有费用继续原累计 ¥200；候选评价/终评无模型调用，以现有 eval_count 和实际墙钟记录。
+- 当前任务参考在相同真实沙箱上验证：best-fit dev 平均213.9 bins，held_out 平均210.1 bins（对应负分-213.9/-210.1）。这不是模型搜索结果，也不参与模型挑选；交付报告保留逐实例 bin 数并重算。
+- `--resume` 不得改变源代码、数据、方法参数、provider/预算身份。已完成 final 的恢复与记录 replay 不执行模型或程序。生成失败、超时和无可用 winner 均作为失败/跳过结果保留，不改分母或用 baseline 填补。
+
+新增验收 F6：公共 Framework 中同分及较差但有效程序仍可参与岛屿选择；population 恢复必须拒绝篡改的原始选亲凭证或不满足当时预算的 eligible 集合。F1–F6 全部满足并报告真实三 seed 后才称 C02 已接入；论文区间复现仍单列。
+
+
+独立终评入口明确为同一 runner 的 `--resume --final-only`：只接受已存在的 `metric_final_frozen`，读取并验证原候选及绑定后执行未完成的终评；已完成则返回原报告。尚未冻结时立即拒绝，不能借终评命令生成候选、继续搜索、重新选择或调用模型。它复用 Framework 的持久化 final 恢复路径，不复制终选权威。
+
+恢复必须从冻结初始配置重建 FunSearch 岛屿状态并逐事件校验，不能仅验证每张凭证自带的 before/after；policy 完成恢复后还须核对最终 RNG/成员/reset/pending 状态。平台原有 generic population sampler 不变，FunSearch 的抽样通过独立等价验证接入。
