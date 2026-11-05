@@ -147,4 +147,4 @@ class GSM8KDomain:
                 encoded({'training_rollouts': rollouts}) if split == 'train' else 'Numeric-answer evaluation completed.'),
             contract=EvaluationContract(binding_for(proposal, request, evaluator_version=self.evaluator_version,
                 evaluation_context=self.evaluation_context_for(request)), self.measured_cost_units,
-                items=tuple(outcomes)))
+                items=tuple(outcomes), token_accounting='total_only'))

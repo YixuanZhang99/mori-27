@@ -53,6 +53,12 @@ uses the same cumulative CNY authority. Replay consumes recorded outcomes.
 `--resume` restores the same run; extending a search after final selection is
 frozen is rejected.
 
+Evaluation contracts declare aggregate solver usage as `total_only`; detailed
+input/output usage remains in the governed provider's currency receipts. Token
+reservations use that provider's declared call bound. Same-plan recovery can
+settle a durably saved response without repeating the request; a new run cannot
+start while the shared campaign has unresolved calls.
+
 Observed live runs and failures are preserved in the [GSM8K report](../../../research/experiments/2026-11-05-gepa-gsm8k/README.md). A 4,096-token allowance produced a reasoning-only truncated response in the first smoke; subsequent attempts used an explicitly frozen 16,384-token allowance. A failed response stops that evaluation and does not receive a full-set accuracy. A single-attempt M7 constructor can also reject malformed model output; failed controls remain visible. Increasing the allowance is not a guarantee of completion.
 
 Fixture mode can run from an installed package or an isolated source copy without Git, recording null source fields. Live mode continues to require a clean Git checkout before any provider dispatch.

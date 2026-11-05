@@ -3,9 +3,11 @@ from core.composition.defaults import composed_profile, default_registry
 from zoo.gepa_gsm8k.domain import GSM8KDomain
 
 
-def build_profile(data, *, seed, minibatch_size, max_proposals):
+def build_profile(data, *, seed, minibatch_size, max_proposals, call_token_bound=1_100_000):
     if type(max_proposals) is not int or max_proposals < 0:
         raise ValueError('max_proposals must be a nonnegative integer')
+    if type(call_token_bound) is not int or call_token_bound <= 0:
+        raise ValueError('call_token_bound must be a positive integer')
     from core.composition.gepa_recipe import epoch_batch
     epoch_batch(data.ids('train'), seed=seed, size=minibatch_size, iteration=0)
     profile = composed_profile(name='gepa-gsm8k-v1')
@@ -22,7 +24,7 @@ def build_profile(data, *, seed, minibatch_size, max_proposals):
     profile['admission'] = {'name': 'metric_final', 'options': {'final_request': {
         'fidelity': 'final_audit', 'split_id': 'final_audit', 'seed_set': [seed]}}}
     # Token reservations bound complete solver batches, not merely one call.
-    per_call = 1_100_000
+    per_call = call_token_bound
     batch_tokens = max(len(data.ids('validation')), minibatch_size, len(data.ids('test'))) * per_call
     limit = (max_proposals + 1) * (3 * batch_tokens + per_call)
     profile['budget'] = {'name': 'hierarchical', 'options': {
@@ -51,20 +53,23 @@ def registry_for(data):
 
 def governed_setup(data, *, seed, minibatch_size, max_proposals, ledger, api_key,
                    max_completion_tokens=4096, base_url=None):
-    from zoo.mle_bench_lite.cny_budget import POLICY
     from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
     from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
-    profile = build_profile(data, seed=seed, minibatch_size=minibatch_size, max_proposals=max_proposals)
     registry = registry_for(data)
     snapshot = ledger.snapshot()
-    if snapshot.get('pending_calls') or snapshot.get('protection_breaches') or snapshot.get('journal_schema_version') != 2:
-        raise ValueError('existing campaign must be quiescent and governance enabled')
+    if snapshot.get('protection_breaches') or snapshot.get('journal_schema_version') != 2:
+        raise ValueError('existing campaign must have valid protection and governance enabled')
+    # The bridge rejects pending calls for a new plan, but can settle a saved
+    # response when recovering the same plan. Do not block that recovery here.
     binding = ledger.manifest_binding()
     def fresh_provider(evaluations):
         return GovernedCNYProvider(binding['model'], base_url or binding['provider_base_url'],
             campaign_binding=binding, api_key=api_key, max_completion_tokens=max_completion_tokens,
             phase_call_limits={'operator': 1, 'evaluation': evaluations})
     main = fresh_provider(max(minibatch_size, len(data.ids('validation')), len(data.ids('test'))))
+    bound = main.governance_binding()['call_bound']['units']['token']
+    profile = build_profile(data, seed=seed, minibatch_size=minibatch_size,
+        max_proposals=max_proposals, call_token_bound=bound)
     control_calls = len(data.ids('validation'))
     declaration = fresh_provider(control_calls).governance_binding()
     registry.install_external_bridge('cny_invocation_v1', lambda: CNYInvocationBridge(ledger))
@@ -73,7 +78,6 @@ def governed_setup(data, *, seed, minibatch_size, max_proposals, ledger, api_key
     registry.register('domain', 'gepa-validation-control', lambda ctx, opts: GSM8KDomain(
         data, ctx.llm, seed=seed, minibatch_size=minibatch_size, max_proposals=max_proposals),
         governance={'schema_version': 1, 'fresh_session': True, 'state_independent': True})
-    bound = POLICY['context_tokens'] + max_completion_tokens
     reservations = {'operator': {'token': bound, 'node': 1, 'eval_count': 0},
                     'evaluation': {'token': bound * control_calls, 'node': 0, 'eval_count': 1}}
     limits = profile['budget']['options']['limits']['global']
