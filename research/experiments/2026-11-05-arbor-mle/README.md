@@ -2,7 +2,7 @@
 
 The first real pilot stopped in planning after one completed candidate; its original
 [nine-cell failed packet](parent-identity-v1/README.md) and costs are retained.
-The [v2 packet](audit-coverage-v2/README.md) retains completed search with four construction failures and a phase-coverage audit failure; eight cells remained unrun. There is no successful real matrix or official Arbor score yet. These tools export a declared
+The [v2 packet](audit-coverage-v2/README.md) retains completed search with four construction failures and a phase-coverage audit failure; eight cells remained unrun. The [v3 packet](parent-reference-v3/README.md) retains three valid candidates and one incomplete planning cycle caused by candidate-reference syntax; eight cells remained unrun. There is no successful real matrix or official Arbor score yet. These tools export a declared
 matrix and independently recalculate its selection, coverage and currency from
 original records. They do not call a model, retrain programs, read credential
 contents, or recompute hidden-label losses.

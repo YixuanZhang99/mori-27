@@ -126,13 +126,14 @@ def test_invalid_or_exhausted_parent_is_not_dispatched(tmp_path, mode, generatio
     assert len([call for call in domain.calls if call['request']['split_id'] == 'dev']) == constructed
 
 
-def test_exhausted_parent_budget_is_excluded_before_ideation(tmp_path):
+@pytest.mark.parametrize('reference_parent', [False, True])
+def test_exhausted_parent_budget_is_excluded_before_ideation(tmp_path, reference_parent):
     configured = assembly()
     configured['budget']['options']['limits']['direction']['token'] = 8
     configured['budget']['options']['operation_reservations']['operator']['token'] = 1
     configured['budget']['options']['operation_reservations']['planning']['token'] = 4
     configured['budget']['options']['reservation']['token'] = 7
-    provider, domain = ArborProvider(), Domain()
+    provider, domain = (CandidateReferenceParents() if reference_parent else ArborProvider()), Domain()
     provider.tokens = 1
     fw = build(tmp_path, assembly=configured, provider=provider, domain=domain, generations=1)
     with pytest.raises(ValueError, match='Arbor.*parent'):
@@ -233,6 +234,7 @@ def test_planner_parent_candidates_are_explicit_and_distinct_from_pending_hypoth
                         and n['eval_status'] == 'ok' and n['score'] is not None
                         and n['depth'] < request['max_tree_depth']]
             assert request['eligible_parent_ids'] == eligible
+            assert request['eligible_parent_refs'] == ['candidate:' + identifier for identifier in eligible]
             assert not set(request['eligible_parent_ids']) & {i['id'] for i in request['pending']}
             if nodes:
                 # The real response confused these namespaces. Choose a parent from
@@ -270,3 +272,68 @@ def test_invalid_unselected_idea_parent_is_rejected_atomically(tmp_path):
     assert len(records(fw, 'composed_evidence')) == 1
     assert len(records(fw, 'arbor_ideas_proposed')) == 1
     assert fw._composed.parts['policy'].checkpoint_state()['observation']['cycle'] == 0
+
+
+class CandidateReferenceParents(ArborProvider):
+    def __call__(self, prompt):
+        result = super().__call__(prompt)
+        if json.loads(prompt).get('kind') == 'arbor_ideation':
+            value = json.loads(result)
+            for idea in value['new_ideas']:
+                if idea['parent_id'] is not None:
+                    idea['parent_id'] = 'candidate:' + idea['parent_id']
+            return json.dumps(value)
+        return result
+
+
+def test_candidate_reference_parent_preserves_lineage_pending_resume_and_replay(tmp_path):
+    provider, domain = CandidateReferenceParents(), Domain()
+    first = build(tmp_path, assembly=assembly(), provider=provider, domain=domain, generations=2, stop=1)
+    first.evolve(TASK)
+    parent = records(first, 'composed_evidence')[0]['proposal']['candidate']['id']
+    batch = records(first, 'arbor_ideas_proposed')[1]
+    assert all(idea['parent_id'] == parent for idea in batch['ideas'])
+    assert any('candidate:' + parent in r['result'] for r in records(first, 'composed_provider_completed'))
+    # A process restart creates fresh external adapters; replay must not capture
+    # the already-consumed fixture's mutable counters as its initial state.
+    provider, domain = CandidateReferenceParents(), Domain()
+    resumed = build(tmp_path, assembly=assembly(), provider=provider, domain=domain, generations=2, resume=True)
+    resumed.evolve(TASK)
+    candidates = [r['proposal']['candidate'] for r in records(resumed, 'composed_evidence')]
+    assert len(candidates) == 3 and candidates[1]['parents'] == candidates[2]['parents'] == [parent]
+    assert candidates[2]['hypothesis'] == 'pending sibling'
+    assert provider.calls == 5
+    before = provider.calls, len(domain.calls)
+    assert resumed.replay(TASK)['replay_certificate']['passed']
+    assert (provider.calls, len(domain.calls)) == before
+
+
+@pytest.mark.parametrize('invalid', ['missing', 'pending', 'double_prefix', 'empty', 'non_text'])
+def test_candidate_reference_does_not_authorize_invalid_unselected_parent(tmp_path, invalid):
+    class InvalidReference(CandidateReferenceParents):
+        def __call__(self, prompt):
+            result = super().__call__(prompt)
+            request = json.loads(prompt)
+            if request.get('kind') == 'arbor_ideation' and request['observation']['cycle'] == 1:
+                value = json.loads(result)
+                parent = request['eligible_parent_ids'][0]
+                value['new_ideas'][1]['parent_id'] = {
+                    'missing': 'candidate:missing', 'pending': 'candidate:' + request['pending'][0]['id'],
+                    'double_prefix': 'candidate:candidate:' + parent, 'empty': 'candidate:',
+                    'non_text': ['candidate:' + parent]}[invalid]
+                return json.dumps(value)
+            return result
+
+    fw = build(tmp_path, assembly=assembly(), provider=InvalidReference(), domain=Domain(), generations=1)
+    with pytest.raises(ValueError, match='Arbor.*parent'):
+        fw.evolve(TASK)
+    assert len(records(fw, 'composed_evidence')) == len(records(fw, 'arbor_ideas_proposed')) == 1
+    assert fw._composed.parts['policy'].checkpoint_state()['observation']['cycle'] == 0
+
+
+def test_candidate_reference_parent_still_obeys_depth_limit(tmp_path):
+    fw = build(tmp_path, assembly=assembly(), provider=CandidateReferenceParents('depth'),
+               domain=Domain(), generations=3)
+    with pytest.raises(ValueError, match='Arbor.*depth'):
+        fw.evolve(TASK)
+    assert len(records(fw, 'composed_evidence')) == 3
