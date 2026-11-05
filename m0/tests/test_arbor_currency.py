@@ -143,3 +143,71 @@ def test_capacity_refused_ideation_resumes_without_retry(tmp_path, arbor_endpoin
     assert domain.training_invocations == 0 and len(arbor_endpoint.requests) == 1
     assert ledger.snapshot() == before
     assert resumed.replay()['replay_certificate']['passed']
+
+
+def test_independent_currency_audit_covers_planning_and_construction(tmp_path, arbor_endpoint, monkeypatch):
+    from zoo.mle_bench_lite.m7_pilot_audit import audit_currency_receipts
+    fw, ledger, _ = build(tmp_path, arbor_endpoint, monkeypatch)
+    fw.evolve('Fit public training priors.')
+    before = ledger.snapshot()
+    audited = audit_currency_receipts(tmp_path / 'composed', ledger, expected_model='deepseek-flash')
+    assert audited['construction']['provider_calls'] == 4
+    assert audited['provider_calls_by_phase'] == {'operator': 4, 'planning': 12}
+    assert audited['settled_micro_cny'] == 16 * 38
+    assert ledger.snapshot() == before
+    path = tmp_path / 'composed/x1.jsonl'
+    original = path.read_text()
+    rows = [json.loads(line) for line in original.splitlines()]
+    start = next(i for i, row in enumerate(rows) if row['kind'] == 'composed_provider_started'
+                 and row['payload']['invocation']['external_context']['phase'] == 'planning')
+    end = next(i for i in range(start + 1, len(rows)) if rows[i]['kind'] == 'composed_provider_completed')
+    import copy
+    for mutation in ('missing', 'tokens', 'result', 'context'):
+        changed = copy.deepcopy(rows)
+        if mutation == 'missing':
+            del changed[start:end + 1]
+        elif mutation == 'context':
+            changed[start]['payload']['invocation']['external_context']['phase'] = 'operator'
+        else:
+            changed[end]['payload'][mutation] = 1000 if mutation == 'tokens' else 'forged planner answer'
+        path.write_text(''.join(json.dumps(row) + '\n' for row in changed))
+        with pytest.raises(ValueError):
+            audit_currency_receipts(tmp_path / 'composed', ledger, expected_model='deepseek-flash')
+        path.write_text(original)
+
+
+def test_complete_live_runner_audits_all_phases_and_resumes_without_http(tmp_path, arbor_endpoint, monkeypatch):
+    # The test replaces only the HTTP endpoint, source marker and sandbox with a
+    # trusted test-program runner; it exercises the actual live orchestration,
+    # independent currency/physical audits, submission, and terminal resume.
+    from zoo.mle_bench_lite import arbor_runner, composed_domain, governed_provider
+    original = governed_provider.GovernedCNYProvider
+    class LocalProvider(original):
+        def __init__(self, model, base_url, **kwargs):
+            super().__init__(model, arbor_endpoint.url, **kwargs)
+    class LocalRunner(TrustedFixtureRunner):
+        @staticmethod
+        def validate_paths(*_paths):
+            pass
+        def preflight(self, **_options):
+            return {'ready': True, 'fixture': True}
+    monkeypatch.setattr(governed_provider, 'GovernedCNYProvider', LocalProvider)
+    monkeypatch.setattr(composed_domain, 'SandboxRunner', LocalRunner)
+    monkeypatch.setattr(arbor_runner, 'source_identity', lambda: {'commit': 'test-source', 'dirty': False})
+    ledger = campaign_fixture(tmp_path)
+    public = fixture_public(tmp_path / 'public')
+    key = tmp_path / 'key'; key.write_bytes(TEST_ANONYMIZATION_KEY); key.chmod(0o600)
+    options = dict(output=tmp_path / 'run', public_root=public, task_id='spooky-author-identification',
+                   max_cycles=3, ledger=ledger, api_key='fixture-only-secret', anonymization_key_path=key)
+    report = arbor_runner.run(**options)
+    assert report['run_state'] == 'completed'
+    assert report['independent_currency_receipts']['provider_calls_by_phase'] == {'operator': 4, 'planning': 12}
+    assert report['independent_physical_submission']
+    assert report['replay_certificate']['passed'] and report['replay_certificate']['external_calls'] == 0
+    assert (tmp_path / 'run/submission.csv').is_file()
+    before = ledger.snapshot(), len(arbor_endpoint.requests)
+    resumed = arbor_runner.run(**options, resume=True)
+    assert resumed['run_state'] == 'completed'
+    assert resumed['submission'] == report['submission']
+    assert resumed['training_invocations_this_process'] == 0
+    assert (ledger.snapshot(), len(arbor_endpoint.requests)) == before

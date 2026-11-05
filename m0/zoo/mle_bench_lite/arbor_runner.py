@@ -2,7 +2,7 @@
 from core.composition.defaults import composed_profile
 from zoo.mle_bench_lite.recipe_support import FIXTURE_PROGRAM, fixture_data, source_identity
 
-RECIPE = 'arbor-mle-v2'
+RECIPE = 'arbor-mle-v3'
 REFERENCE_REVISION = 'a633f56f2601387402194481e846e3375e822afa'
 
 
@@ -23,7 +23,7 @@ def build_profile(*, split_seed=7, search_seed=0, call_token_bound, max_cycles=2
             'trust_floor': 'ungated', 'include_negative': True, 'include_imported': False,
             'top_k': 20, 'max_chars': 160000}},
         execution={'schema_version': 1, 'spec': {'role': 'general', 'hypothesis_frozen': True,
-            'context_projection': ['memory']}, 'constructor': {'name': 'prompt', 'options': {'max_attempts': 2}}},
+            'context_projection': ['memory']}, 'constructor': {'name': 'prompt', 'options': {'max_attempts': 2, 'explicit_json_output': True}}},
         admission={'name': 'layered', 'options': {'metric': 'gate/score', 'dev_metric': 'dev/score',
             'margin': 0, 'call_budget': 3, 'admission_seeds': [split_seed], 'final_seeds': [split_seed]}})
     limits = {'token': max_cycles * 7 * call_token_bound, 'node': max_cycles, 'eval_count': max_cycles + 4}

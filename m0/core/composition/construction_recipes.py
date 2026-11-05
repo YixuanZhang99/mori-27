@@ -12,9 +12,11 @@ DEFAULT_ROLES = {name: RoleDefinition(name, "1", text) for name, text in (
 
 
 def constructor_options(options):
-    if type(options) is not dict or set(options) - {"max_attempts"} \
+    if type(options) is not dict or set(options) - {"max_attempts", "explicit_json_output"} \
             or type(options.get("max_attempts", 1)) is not int or options.get("max_attempts", 1) < 1:
         raise ValueError("prompt constructor requires a positive max_attempts")
+    if type(options.get("explicit_json_output", False)) is not bool:
+        raise ValueError("explicit_json_output must be boolean")
 
 
 class RecipeOperator:

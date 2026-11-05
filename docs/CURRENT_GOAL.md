@@ -28,3 +28,5 @@ AIDE 本批费用上界 ¥9.723236；原累计 campaign 已使用 ¥30.891206，
 C04 Arbor 已实现六步假设循环、当前 trunk 构造、来源绑定 insight 上溯/消费、独立准入与冻结终评，以及专用 MLE 入口和导出重算。独立审查的三项重要问题均经 RED→GREEN 修复；完整本地检查 2,408 portable、126 tooling 通过，另有 14 项含 Linux 沙箱的 runner/currency 用例通过。干净默认 CLI、终态 resume 和零调用 replay 通过；接续 AIDE 后 134 项 tooling 全部通过。下一步是预声明九组真实 MLE 矩阵、官方评分、证据归档及最终 CI/合入；合成结果不作为 benchmark 成绩。
 
 Arbor v1 首组真实 smoke 在第二轮规划停止：1 个主候选完成、1 轮未完成，另外 8 组未运行；模型把待选假设 ID 当作父候选，整批提案被正确拒绝。[失败证据与费用](../research/experiments/2026-11-05-arbor-mle/parent-identity-v1/README.md)已独立重算并保留，未重跑覆盖。v2 明确提供可用父候选 ID，仍严格校验全部提案；修复正在完成验证，随后单独声明新矩阵。v1 费用上界 ¥0.183060，原 campaign 累计 ¥31.074266，剩余 ¥168.925734，零未决调用。
+
+Arbor v2 已跑完五轮但交付核验失败：1 个有效候选、4 次构造格式失败，另外 8 组未运行。原始 replay 通过且账本平衡；审计错误是将 operator-only 构造次数与含 planning 的全部调用数比较。v3 已按阶段核对全部原始回执，并仅为 Arbor 构造启用明确 JSON 输出指令；112 项相关回归（含完整 HTTP live 入口/物理核验/终态恢复）通过，完整检查通过：2,414 项 portable、134 项 tooling，架构与离线示例通过。[v2 原始失败及只读诊断](../research/experiments/2026-11-05-arbor-mle/audit-coverage-v2/README.md)保留。v2 费用上界 ¥0.686746，原 campaign 累计 ¥31.761012，剩余 ¥168.238988，零未决调用。下一步单独声明 v3，不重跑覆盖 v1/v2。

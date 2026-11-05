@@ -372,12 +372,15 @@ def decode_construction_outcome(data, identity):
 class PromptMaterializer:
     """Generate a measured artifact; caller supplies its scoped metered provider."""
     def __init__(self, roles, *, max_attempts=1, validator=None,
-                 validator_version=None, validator_deterministic=False):
+                 validator_version=None, validator_deterministic=False, explicit_json_output=False):
         self.roles = _roles(roles)
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("construction max_attempts must be a positive integer")
         if validator is not None and not callable(validator):
             raise ValueError("local construction validator must be callable")
+        if type(explicit_json_output) is not bool:
+            raise ValueError("explicit_json_output must be boolean")
+        self.explicit_json_output = explicit_json_output
         self.max_attempts, self.validator = max_attempts, validator
         if validator_version is not None:
             _text(validator_version, "validator version")
@@ -393,6 +396,7 @@ class PromptMaterializer:
         return {"schema_version": 1, "kind": "prompt_materializer_v1",
                 "recovery_model": "recorded_calls" if deterministic else "terminal_only",
                 "configuration": {"max_attempts": self.max_attempts,
+                    **({"explicit_json_output": True} if self.explicit_json_output else {}),
                     "roles": {key: asdict(role) for key, role in self.roles.items()},
                     "validator": {"kind": "nonempty" if self.validator is None else "custom",
                         "version": "1" if self.validator is None else self.validator_version,
@@ -422,6 +426,12 @@ class PromptMaterializer:
                 "output_contract": {"artifact": "nonempty text", "hypothesis":
                     "Copy the input hypothesis exactly, without any changes."
                     if value["spec"]["hypothesis_frozen"] else "nonempty text"}}
+            if self.explicit_json_output:
+                request['response_instruction'] = (
+                    'Return exactly one JSON object with keys artifact and hypothesis. '
+                    'artifact is a JSON string containing the complete program, with newlines and quotes escaped. '
+                    'hypothesis must follow output_contract. Do not return bare code or Markdown fences. '
+                    'Task, recipe and feedback describe the artifact, not this response format.')
             reset_usage(provider)
             try:
                 raw = provider(_json(request))

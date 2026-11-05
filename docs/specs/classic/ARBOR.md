@@ -37,3 +37,5 @@ PYTHONPATH=m0 uv run --project m0 python -m zoo.mle_bench_lite.arbor_runner --ou
 **交付边界：** 完整分支审查及三项重要修复、本地完整检查和干净 CLI/resume 已完成；当前仍缺真实三任务矩阵、最终 CI 和合入。fixture 的分数不是 benchmark 表现；性能结论与论文复现均未成立。
 
 v2 规划输入显式列出 `eligible_parent_ids`，来源是同一严格父节点校验；所有新假设的 parent_id 只能引用该集合或为 null。待选 hypothesis ID 仅用于 selection.pending_id，不允许成为未执行的父节点。任一新假设无效时仍拒绝整批，不丢弃失败项、不自动重试。
+
+v2 完成五轮但因独立审计错误停止交付；v3 修复按阶段的原始调用覆盖核对。构造器仅在本 profile 中设置 `explicit_json_output=true`，明确 artifact/hypothesis JSON 外层格式，主搜索及独立控制均适用；规划与共享 task 不接收这条构造格式指令。旧方法默认请求保持不变，解析器仍严格、两次构造尝试上限不变。v1/v2 的失败矩阵和费用分别保留，v3 必须另行预声明。

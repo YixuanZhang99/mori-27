@@ -194,3 +194,23 @@ def test_failed_constructor_records_original_failure_before_synthesis(tmp_path, 
     assert failed[0]['proposal']['artifact'] == ''
     assert any(r['kind'] == 'construction_outcome' and r['payload']['outcome']['kind'] == 'failed' for r in rows)
     assert not any(r['kind'] == 'composed_physical_evidence' for r in rows)
+
+
+def test_construction_json_instruction_does_not_enter_planning_task(tmp_path):
+    from zoo.mle_bench_lite.arbor_runner import run, FixtureProvider
+    class FormatSensitive(FixtureProvider):
+        def __call__(self, prompt):
+            request = json.loads(prompt)
+            answer = super().__call__(prompt)
+            if 'recipe' in request:
+                if 'JSON object' not in request.get('response_instruction', ''):
+                    return json.loads(answer)['artifact']  # Observed real v2 response shape.
+            else:
+                assert 'response_instruction' not in request
+            return answer
+    report = run(output=tmp_path / 'run', public_root=fixture_public(tmp_path / 'public'),
+        task_id='spooky-author-identification', max_cycles=2,
+        provider=FormatSensitive(), runner=TrustedFixtureRunner())
+    assert report['run_state'] == 'completed'
+    assert report['search']['successful'] == 2
+    assert report['replay_certificate']['passed']

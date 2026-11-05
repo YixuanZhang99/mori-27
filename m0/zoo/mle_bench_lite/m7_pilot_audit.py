@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+from collections import Counter
 from pathlib import Path
 
 from core.x1.checkpoint import payload_digest
@@ -55,6 +56,7 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         raise ValueError('currency response coverage differs')
     total = 0
     provider_arguments = {}
+    response_receipts = {}
     truncated_calls = set()
     for path in responses:
         context_hash = path.name.removeprefix('call-').removesuffix('.response.json')
@@ -69,7 +71,10 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         operation = operations.pop(prepared['call_id'], None)
         wire = json.loads(body)
         prompt = wire['messages'][0]['content']
-        provider_arguments[payload_digest(context.to_dict())] = prompt
+        context_ref = payload_digest(context.to_dict())
+        if payload_digest({'args': (prompt,), 'kwargs': {}}) != context.argument_sha256:
+            raise ValueError('provider prompt differs from original invocation')
+        provider_arguments[context_ref] = prompt
         response = _record(path)
         # A truncated provider response is a known, billed failed call, not a
         # corrupted receipt. It must contain no usable result and cannot claim
@@ -88,6 +93,7 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         if usage != operation.get('usage') or operation.get('bound_violation'):
             raise ValueError('response usage differs from settled currency journal')
         total += usage['total_tokens']
+        response_receipts[context_ref] = {'context': context.to_dict(), 'response': response, 'usage': usage}
     if operations:
         raise ValueError('currency operations lack responses')
     preparation = _record(spool / 'plan-prepared.json')
@@ -99,6 +105,31 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
     if transcript.is_symlink() or not transcript.is_file():
         raise ValueError('construction transcript is missing or unsafe')
     rows = [json.loads(line) for line in transcript.read_text().splitlines()]
+    # Join ALL phases to the original provider transcript. Construction auditing
+    # below deliberately covers only operator calls, not planner/synthesis calls.
+    observed_receipts, calls_by_phase, pending_receipt = set(), Counter(), None
+    for row in rows:
+        if row['kind'] == 'composed_provider_started':
+            context = row['payload']['invocation'].get('external_context')
+            context_ref = payload_digest(context) if context is not None else None
+            receipt = response_receipts.get(context_ref)
+            if receipt is None or context_ref in observed_receipts or pending_receipt is not None:
+                raise ValueError('provider transcript differs from currency response coverage')
+            observed_receipts.add(context_ref)
+            calls_by_phase[context['phase']] += 1
+            pending_receipt = (row['payload']['binding'], receipt)
+        elif row['kind'] == 'composed_provider_completed':
+            value = row['payload']
+            if pending_receipt is None or value['binding'] != pending_receipt[0]:
+                raise ValueError('provider terminal lacks its original currency call')
+            receipt = pending_receipt[1]
+            if value['tokens'] != receipt['usage']['total_tokens'] or (
+                    receipt['response'].get('integrity_reason') is None
+                    and value['result'] != receipt['response'].get('result')):
+                raise ValueError('provider terminal differs from original currency response')
+            pending_receipt = None
+    if pending_receipt is not None or observed_receipts != set(response_receipts):
+        raise ValueError('currency responses lack complete provider transcripts')
     # The receipt envelope alone is not independent proof of failure: require
     # the original provider transcript to mark the same invocation as failed.
     observed_truncated = set()
@@ -120,10 +151,11 @@ def audit_currency_receipts(run_root, ledger, *, expected_model):
         raise ValueError('truncated call lacks a unique failed provider transcript')
     construction = audit_construction(rows, run['construction'], logical_run_id=run['logical_run_id'],
                                       provider_arguments=provider_arguments)
-    if construction['provider_calls'] != len(responses):
+    if construction['provider_calls'] != calls_by_phase['operator']:
         raise ValueError('construction transcript does not cover currency calls')
     return {'total_tokens': total, 'settled_micro_cny': audit['settled_upper_bound_micro_cny'],
             'model': expected_model, 'journal_head': head, 'invoice_verified': False,
+            'provider_calls_by_phase': dict(calls_by_phase),
             'construction': construction,
             'coverage': 'currency and construction provenance; physical settlement and selected artifact require separate audit'}
 

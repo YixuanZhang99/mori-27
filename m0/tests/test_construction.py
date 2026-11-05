@@ -201,3 +201,16 @@ def test_unfrozen_hypothesis_output_contract_allows_revision():
     raw = Scripted([(response(hypothesis='A revised hypothesis'), 3)])
     construct(plan(frozen=False), raw)
     assert raw.requests[0]['output_contract']['hypothesis'] == 'nonempty text'
+
+
+def test_explicit_json_output_is_opt_in_and_preserves_legacy_requests():
+    default, disabled, enabled = [Scripted([(response(), 7)]) for _ in range(3)]
+    construct(plan(), default)
+    construct(plan(), disabled, explicit_json_output=False)
+    built = construct(plan(), enabled, explicit_json_output=True)
+    assert default.requests == disabled.requests
+    assert 'response_instruction' not in default.requests[0]
+    assert 'JSON object' in enabled.requests[0]['response_instruction']
+    assert built.artifact == 'built' and built.cost.tokens_in == 7
+    assert PromptMaterializer(ROLES).manifest_binding == PromptMaterializer(
+        ROLES, explicit_json_output=False).manifest_binding

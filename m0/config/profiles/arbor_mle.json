@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "name": "arbor-mle-v2",
+  "name": "arbor-mle-v3",
   "mode": "benchmark",
   "provider": {
     "name": "provided"
@@ -129,7 +129,8 @@
     "constructor": {
       "name": "prompt",
       "options": {
-        "max_attempts": 2
+        "max_attempts": 2,
+        "explicit_json_output": true
       }
     }
   }
