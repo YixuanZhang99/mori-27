@@ -19,6 +19,9 @@ TEST_ROOT = Path(__file__).resolve().parent
 
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {
+    "test_composed_worktree_durable_flush.py": "fault injection reads Linux /proc descriptor paths",
+    "test_funsearch_priority_sandbox.py": "real Bubblewrap and x86_64 priority seccomp execution",
+    "test_funsearch_governed_or3.py": "OR3 priority workers require Bubblewrap and Linux seccomp",
     "test_external_batch_control_recovery.py": "Bubblewrap evaluator and Linux process identity",
     "test_external_batch_partial_start_recovery.py": "Bubblewrap evaluator and Linux process identity",
     "test_external_batch_post_settlement_recovery.py": "Bubblewrap evaluator and Linux process identity",
@@ -42,6 +45,14 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_funsearch_sandbox_framework.py": {
+        "test_funsearch_uses_sandboxed_worktree_and_replays_without_workers",
+    },
+    "test_funsearch_or3_domain.py": {
+        "test_or3_development_run_scores_and_replays_without_processes",
+        "test_timeout_returns_billed_failure_without_candidate_output",
+        "test_dataset_bytes_are_checked_at_the_actual_read",
+    },
     "test_batch_execution_recovery.py": {
         "test_real_batch_owner_crash_recovers_settles_and_admits_exactly_once",
     },
