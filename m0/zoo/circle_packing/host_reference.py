@@ -143,9 +143,13 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
     for name, value in host_database_options(2).items():
         setattr(config.database, name, value)
     evaluator = Path(__file__).with_name('reference_evaluator.py')
-    with contextlib.redirect_stdout(sys.stderr), _hide_stage_receipts_from_prompts():
+    from openevolve.process_parallel import ProcessParallelController
+    from zoo.circle_packing.reference_iteration_trace import capture_reference_iterations
+    with contextlib.redirect_stdout(sys.stderr), _hide_stage_receipts_from_prompts(), \
+            capture_reference_iterations(ProcessParallelController) as capture:
         result = run_evolution(seed_code, evaluator, config=config, iterations=iterations,
                                output_dir=str(root / 'host'), cleanup=False)
+        iteration_trace = capture.snapshot()
     calls = None if fixture_broker else len(list(AppendOnlyStore(root / 'fixture-provider.jsonl').read('provider')))
     stages = len(list(AppendOnlyStore(root / 'fixture-stages.jsonl').read('stage')))
     if list(AppendOnlyStore(root / 'fixture-unresolved.jsonl').read('unresolved')):
@@ -161,6 +165,7 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
     report = {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
               'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
               'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker,
+              'iteration_trace': iteration_trace,
               'model_config': {'model': model.name, 'max_completion_tokens': model.max_tokens},
               'selected_program': selected}
     if fixture_stage_broker:

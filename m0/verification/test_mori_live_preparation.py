@@ -591,6 +591,10 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert mori_audit['measurement'] == mori_report['final_measurement'] and mori_report['replay_passed']
         assert vendor_audit['metrics'] == vendor_report['selected_program']['metrics']
         assert vendor_audit['selection_frozen'] and vendor_audit['performance_claim'] is False
+        trace = vendor_audit['iteration_trace']
+        assert trace['scope'] == 'reference_submitted_future_outcomes' and len(trace['iterations']) == 6
+        assert len({item['iteration'] for item in trace['iterations']}) == 6
+        assert all(item['state'] not in ('unresolved', 'not_submitted') for item in trace['iterations'])
         vendor_currency = vendor_view.audit_run(vendor_run, vendor_physical_ref)
         assert not vendor_currency['pending_calls'] and vendor_currency['settled_upper_bound_micro_cny'] > 0
         assert mori_audit['settled_upper_bound_micro_cny'] > 0

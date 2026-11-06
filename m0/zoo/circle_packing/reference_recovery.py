@@ -81,8 +81,17 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
         anchor = view.reference_physical_snapshot(run_id)
         if type(anchor) is not dict:
             raise ValueError('reference recovery requires the original physical snapshot')
-        return recalculate_reference_snapshot(view, clock, run_id, plan=plan, expected_plan_ref=expected_plan_ref,
+        result = recalculate_reference_snapshot(view, clock, run_id, plan=plan, expected_plan_ref=expected_plan_ref,
             worker_proof=proof, stdout=process['stdout'], stderr=process['stderr'], selected=report['selected_program'],
             options=options, stamp=stamp, governance=governance, rows=rows, request_ids=anchor['request_ids'])
+        trace = report.get('iteration_trace')
+        if trace is not None:
+            if type(trace) is not dict or set(trace) != {'schema_version', 'scope', 'performance_claim', 'iterations'} or \
+                    type(trace['schema_version']) is not int or trace['schema_version'] != 1 or \
+                    trace['scope'] != 'reference_submitted_future_outcomes' or trace['performance_claim'] is not False or \
+                    type(trace['iterations']) is not list or len(trace['iterations']) > plan['iterations']:
+                raise ValueError('reference worker iteration trace is invalid')
+            result['iteration_trace'] = trace
+        return result
     except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:
         raise ValueError('invalid original reference recovery evidence') from error
