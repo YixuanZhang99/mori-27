@@ -102,14 +102,17 @@ def _verify_failed_construction_cycle(rows, event, logical_run_id):
         from core.composition.construction import _json
         from core.composition.openevolve_registration import constructor_factory
         decoder = constructor_factory(None, {})
-        if len(provider_starts) != decoder.max_attempts:
-            raise ValueError('failed patch construction lacks its exhausted attempts')
-        total, feedback, previous_completion, bindings = 0, [], starts[0], set()
+        if not 1 <= len(provider_starts) <= decoder.max_attempts:
+            raise ValueError('failed construction has an invalid number of attempts')
+        total, feedback, previous_completion, bindings, failure_detail = 0, [], starts[0], set(), None
         for ordinal, (index, started) in enumerate(provider_starts):
             completions = [(j, row['payload']) for j, row in enumerate(rows)
                            if row['kind'] == 'composed_provider_completed' and
                            row['payload'].get('binding') == started['binding']]
-            if len(completions) != 1 or started['invocation'].get('ordinal') != ordinal or \
+            invocation = started['invocation']
+            if len(completions) != 1 or invocation.get('ordinal') != ordinal or \
+                    invocation.get('fingerprint') != fingerprint or invocation.get('run_id') != logical_run_id or \
+                    invocation.get('lane') != 'main' or invocation.get('slot_id') is not None or \
                     started['binding'] in bindings:
                 raise ValueError('failed construction lacks unique provider receipts')
             completed_i, completed = completions[0]
@@ -120,16 +123,30 @@ def _verify_failed_construction_cycle(rows, event, logical_run_id):
                                             attempt=ordinal + 1, feedback=feedback)
             if started.get('request_sha256') != payload_digest({'args': (_json(request),), 'kwargs': {}}):
                 raise ValueError('failed patch request differs from original plan')
-            try:
-                decoder.decode_output(completed['result'], plan['plan'])
-            except (TypeError, ValueError, RecursionError) as error:
-                feedback = [str(error)]
+            outcome = completed.get('outcome', 'returned')
+            if outcome == 'failed':
+                if ordinal != len(provider_starts) - 1 or completed['result'] not in {
+                        'provider invocation failed (ValueError)', 'provider invocation failed (RuntimeError)',
+                        'provider invocation failed (TypeError)', 'provider invocation failed (Exception)'}:
+                    raise ValueError('failed provider receipt is invalid or followed by another attempt')
+                failure_detail = 'RuntimeError: ' + completed['result']
+            elif outcome == 'returned':
+                try:
+                    decoder.decode_output(completed['result'], plan['plan'])
+                except (TypeError, ValueError, RecursionError) as error:
+                    feedback = [str(error)]
+                else:
+                    raise ValueError('successful patch cannot prove failed construction')
             else:
-                raise ValueError('successful patch cannot prove failed construction')
+                raise ValueError('unsupported failed construction provider outcome')
             total += tokens
             bindings.add(started['binding'])
             previous_completion = completed_i
-        if str(failure) != 'construction attempts exhausted: ' + '; '.join(feedback) or \
+        if failure_detail is None:
+            if len(provider_starts) != decoder.max_attempts:
+                raise ValueError('failed patch construction lacks its exhausted attempts')
+            failure_detail = 'construction attempts exhausted: ' + '; '.join(feedback)
+        if str(failure) != failure_detail or \
                 total != failure.cost.tokens_in or \
                 payload_digest(settled['actual_costs']) != payload_digest({
                     'token': failure.cost.tokens_in + failure.cost.tokens_out,
