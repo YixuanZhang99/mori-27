@@ -355,6 +355,8 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
             directory=tmp_path / 'reference-supervisor', api_key='fixture-only-secret')
         assert vendor['returncode'] == 0 and not vendor['timeout'] and not vendor['wrapper_error'], vendor['stderr']
         vendor_report = json.loads(vendor['stdout'])
+        reference_bundle = json.loads((Path(vendor_config['output']) / 'reference-currency.json').read_text())
+        assert payload_digest(reference_bundle) == vendor_report['currency_bundle_sha256']
         mori_rows = list(ContinuationStore(Path(config['output']) / 'framework' / 'x1.jsonl').read())
         vendor_rows = list(ContinuationStore(Path(vendor_config['output']) / 'events.jsonl').read())
         context = next(row['payload']['invocation']['external_context'] for row in mori_rows
@@ -395,7 +397,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
             mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
             mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
             reference_view=vendor_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
-            reference_worker_directory=vendor_config['worker_directory'])
+            reference_worker_directory=vendor_config['worker_directory'], reference_bundle=reference_bundle)
         assert pair['performance_claim'] is False and len(pair['cells']) == 6
         assert [row['state'] for row in pair['cells']].count('audited_final_snapshot') == 2
         assert [row['state'] for row in pair['cells']].count('not_claimed') == 4
@@ -406,13 +408,22 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
                 mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
                 mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
                 reference_view=vendor_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
-                reference_worker_directory=vendor_config['worker_directory'])
+                reference_worker_directory=vendor_config['worker_directory'], reference_bundle=reference_bundle)
         with pytest.raises(ValueError):
             audit_pair_snapshot(seed=0, plan=config['plan'], expected_plan_ref=config['ref'],
                 mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
                 mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
                 reference_view=mori_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
-                reference_worker_directory=vendor_config['worker_directory'])
+                reference_worker_directory=vendor_config['worker_directory'], reference_bundle=reference_bundle)
+        import copy
+        altered_bundle = copy.deepcopy(reference_bundle)
+        altered_bundle['calls'][0]['prepared']['bound']['reserved_micro_cny'] += 1
+        with pytest.raises(ValueError):
+            audit_pair_snapshot(seed=0, plan=config['plan'], expected_plan_ref=config['ref'],
+                mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
+                mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
+                reference_view=vendor_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
+                reference_worker_directory=vendor_config['worker_directory'], reference_bundle=altered_bundle)
         for root in (tmp_path / 'mori-supervisor', Path(config['output']), tmp_path / 'reference-supervisor',
                      Path(vendor_config['output']), Path(vendor_config['worker_directory']), Path(workspace)):
             for file in root.rglob('*'):

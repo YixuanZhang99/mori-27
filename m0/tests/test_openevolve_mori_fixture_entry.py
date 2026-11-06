@@ -234,6 +234,25 @@ def test_reference_recorded_bridge_cannot_be_constructed_for_live_work():
         CNYInvocationBridge(None, recorded_reference=True)
 
 
+def test_pair_audit_requires_reference_currency_evidence():
+    from zoo.circle_packing.pair_audit import audit_pair_snapshot
+    with pytest.raises(ValueError, match='pinned evidence'):
+        audit_pair_snapshot(seed=0, plan={}, expected_plan_ref='', mori_rows=[], mori_rows_sha256='',
+            mori_view=None, mori_clock=None, mori_run_id='', reference_rows=[], reference_view=None,
+            reference_clock=None, reference_run_id='', reference_worker_directory='', reference_bundle={})
+
+
+def test_reference_currency_prefix_accepts_later_campaign_events_and_rejects_changes():
+    from zoo.circle_packing.pair_audit import _require_currency_prefix
+    first = {'seq': 1, 'sha256': 'a' * 64, 'payload': 'first'}
+    second = {'seq': 2, 'sha256': 'b' * 64, 'payload': 'second'}
+    original = {'policy_json': 'same', 'events': [first], 'journal_head': {'seq': 1, 'sha256': 'a' * 64}}
+    common = {'policy_json': 'same', 'events': [first, second]}
+    _require_currency_prefix(original, common)
+    with pytest.raises(ValueError, match='prefix'):
+        _require_currency_prefix(original, {**common, 'events': [{**first, 'payload': 'changed'}, second]})
+
+
 def test_recorded_replay_cli_removes_key_before_reading_config(tmp_path, monkeypatch):
     import sys
     from zoo.circle_packing import mori_recorded

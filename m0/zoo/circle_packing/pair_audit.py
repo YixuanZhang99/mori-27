@@ -6,13 +6,23 @@ benchmark result; unverified and unrun matrix cells remain explicit.
 from zoo.circle_packing.cell_deadline import RecordedCellClock
 from zoo.circle_packing.host_runtime import reference_budget_config
 from zoo.circle_packing.mori_final import audit_anchored_mori_geometry
+from zoo.circle_packing.reference_currency import audit_reference_currency
 from zoo.circle_packing.reference_recovery import recover_reference_snapshot
 from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
 
 
+def _require_currency_prefix(original, common):
+    prefix = original['events']
+    if original['policy_json'] != common['policy_json'] or type(prefix) is not list or \
+            len(prefix) > len(common['events']) or prefix != common['events'][:len(prefix)] or \
+            original['journal_head']['seq'] != len(prefix) or \
+            (prefix and prefix[-1]['sha256'] != original['journal_head']['sha256']):
+        raise ValueError('reference currency evidence is not a prefix of the paired campaign head')
+
+
 def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_sha256, mori_view, mori_clock,
                         mori_run_id, reference_rows, reference_view, reference_clock, reference_run_id,
-                        reference_worker_directory):
+                        reference_worker_directory, reference_bundle):
     """Recalculate one pair's anchored final snapshots and recorded costs."""
     if type(seed) is not int or seed not in (0, 1, 2) or \
             any(type(view) is not RecordedCurrencyView or not view._pinned_head
@@ -44,6 +54,14 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                 reference_currency['pending_calls'] or reference_currency['outstanding_micro_cny'] or \
                 reference_currency['reserved_micro_cny']:
             raise ValueError('reference currency run is unresolved or invalid')
+        common = reference_view.export_governance_evidence(reference_run_id, next(iter(reference_plans)))
+        original = reference_bundle['currency_evidence']
+        _require_currency_prefix(original, common)
+        reference_receipts = audit_reference_currency(reference_bundle, rows=reference_rows,
+            expected_head=original['journal_head'], expected_plan_ref=expected_plan_ref, plan=plan, seed=seed)
+        if reference_receipts['run_id'] != reference_run_id or \
+                reference_receipts['settled_upper_bound_micro_cny'] != reference_currency['settled_upper_bound_micro_cny']:
+            raise ValueError('reference receipt audit differs from paired currency state')
         mori = audit_anchored_mori_geometry(mori_rows, view=mori_view, clock=mori_clock, run_id=mori_run_id,
             plan=plan, expected_plan_ref=expected_plan_ref, expected_rows_sha256=mori_rows_sha256)
         options, stamp, governance = reference_budget_config(plan, reference_view.manifest_binding(), seed=seed)

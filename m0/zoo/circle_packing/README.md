@@ -302,7 +302,9 @@ cost. The temporary source and campaign are isolated; the production plan
 retains its 2700-second limit. These tests do not resolve unknown charges.
 `pair_audit.audit_pair_snapshot` independently reconstructs both final
 snapshots and currency upper bounds from views pinned to the same campaign
-head, checks their declared seed and plan, and reports all six claim states.
+head. It also audits the reference provider receipts and requires their original
+campaign evidence to be an exact prefix of that head, checks the declared seed
+and plan, and reports all six claim states.
 Its two audited cells are final snapshots, not proof of complete-run coverage,
 certified replay, real benchmark performance, or invoice amounts.
 `live_cell.start_live_cell` is the common named entry for a single declared
