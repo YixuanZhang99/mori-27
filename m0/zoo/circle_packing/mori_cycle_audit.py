@@ -11,6 +11,45 @@ from zoo.circle_packing.pilot_plan import build_draft_plan
 from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
 
 
+def summarize_recorded_mori_stop(checkpoint, rows, *, planned_iterations):
+    """Describe a caller-pinned stop; this does not prove its cause or completeness."""
+    if type(checkpoint) is not dict or type(rows) is not list or type(planned_iterations) is not int or \
+            not 1 <= planned_iterations <= 6:
+        raise ValueError('Mori stop summary requires bounded recorded inputs')
+    try:
+        cycle, reason = checkpoint['next_cycle'], checkpoint['halted_reason']
+        if type(cycle) is not int or not 0 <= cycle <= planned_iterations or \
+                type(reason) is not str or not reason:
+            raise ValueError('Mori checkpoint does not describe an early stop')
+        stops = [(index, row) for index, row in enumerate(rows)
+                 if row['kind'] in ('composed_stopped', 'composed_cycle_aborted')]
+        governed = [(index, row) for index, row in enumerate(rows) if row['kind'] == 'governed_main_stopped']
+        starts = [(index, row['payload']['cycle']) for index, row in enumerate(rows)
+                  if row['kind'] == 'composed_cycle_started']
+        if len(stops) != 1 or len(governed) != 1:
+            raise ValueError('Mori transcript lacks a unique stop')
+        stop_index, stop = stops[0]
+        governed_index, governed_stop = governed[0]
+        started = stop['kind'] == 'composed_cycle_aborted'
+        if type(stop['payload'].get('cycle')) is not int or \
+                type(governed_stop['payload'].get('main_cycles')) is not int or \
+                any(type(item) is not int for _, item in starts) or \
+                stop['payload'] != {'cycle': cycle, 'reason': reason} or \
+                governed_stop['payload'] not in ({'main_cycles': cycle, 'disposition': 'ordinary'},
+                                                  {'main_cycles': cycle, 'disposition': 'integrity'}) or \
+                stop_index >= governed_index or \
+                [item for _, item in starts] != list(range(cycle + int(started))) or \
+                any(index >= stop_index for index, _ in starts) or \
+                any(row['kind'] == 'composed_cycle_failed' for row in rows):
+            raise ValueError('Mori stop differs from its checkpoint or cycle transcript')
+        return {'schema_version': 1, 'scope': 'caller_pinned_mori_stop_observation',
+                'stop_cycle': cycle, 'started': started, 'reason': reason,
+                'disposition': governed_stop['payload']['disposition'],
+                'complete_run_certified': False}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid recorded Mori stop evidence') from error
+
+
 def audit_completed_mori_cycles(evidence, *, expected_input_sha256, view, clock, run_id, plan, expected_plan_ref):
     """Check every seed/search cycle against its recorded decision and clock anchor."""
     if type(evidence) is not dict or payload_digest(evidence) != expected_input_sha256 or \

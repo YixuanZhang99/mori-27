@@ -234,6 +234,10 @@ def audit_replayed_supervised_pair(*, replay_input, ledger, runner, replay_outpu
         else:
             cycles = {'schema_version': 1, 'scope': 'mori_cycle_coverage_unverified', 'performance_claim': False,
                       'next_cycle': checkpoint['next_cycle'], 'stop_reason': checkpoint['halted_reason']}
+            if checkpoint['halted_reason'] is not None:
+                from zoo.circle_packing.mori_cycle_audit import summarize_recorded_mori_stop
+                cycles['stop_observation'] = summarize_recorded_mori_stop(
+                    checkpoint, rows, planned_iterations=pair_arguments['plan']['iterations'])
         return {**result, 'scope': 'paired_supervised_snapshots_with_independent_replay',
                 'replay': replay, 'mori_cycle_coverage': cycles}
     except (KeyError, TypeError, AttributeError, StopIteration) as error:

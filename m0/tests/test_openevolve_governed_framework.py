@@ -100,6 +100,13 @@ def test_timed_zero_candidate_run_replays_without_external_work(tmp_path, local_
         campaign.anchor_cycle_eligibility(run_id, 'a' * 64, 'mori-0', claim['observation_sequence'],
                                           claim['observation_sha256'], 'b' * 64)
     rows = bridge._root_rows()
+    from core.x1.checkpoint import RunCheckpoint
+    from zoo.circle_packing.mori_cycle_audit import summarize_recorded_mori_stop
+    checkpoint = RunCheckpoint.load(fw._composed.workdir / 'checkpoint.json').payload
+    stop = summarize_recorded_mori_stop(checkpoint, rows, planned_iterations=1)
+    assert stop['stop_cycle'] == 0 and stop['started'] is False
+    assert stop['reason'] == result['stop_reason'] and stop['disposition'] == 'ordinary'
+    assert stop['complete_run_certified'] is False
     import copy
     # A missing ordinary stop is damaged evidence, not another valid stop.
     with monkeypatch.context() as patch:
