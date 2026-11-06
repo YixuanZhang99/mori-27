@@ -150,3 +150,77 @@ def audit_recorded_reference_cascade(view, clock, run_id, stages):
                 first['eligibility']['observation']['observation']['sequence']:
             raise ValueError('reference cascade predecessor or clock order differs')
     return {**verified[-1], 'stage_count': len(stages)}
+
+
+def audit_recorded_reference_physical(view, clock, run_id, *, options, stamp, governance, rows,
+                                      expected_rows_ref, request_ids):
+    """Rebuild a pinned physical transcript and check selected stage settlement.
+
+    The caller must obtain the transcript reference independently. This does not
+    anchor the transcript or certify the worker's final selection.
+    """
+    from core.budget.types import AccountingStamp
+    from core.composition.budget import HierarchicalBudget, JOURNAL_KIND
+    from core.composition.provider_evidence import invocation_records
+    if type(rows) is not list or type(expected_rows_ref) is not str or type(request_ids) is not list or \
+            len(request_ids) not in (1, 2) or \
+            any(type(item) is not str or not re.fullmatch(r'[0-9a-f]{32}', item) for item in request_ids) or \
+            len(set(request_ids)) != len(request_ids):
+        raise ValueError('physical transcript or stage identities differ from pinned evidence')
+    try:
+        frozen_rows = json.loads(json.dumps(rows, allow_nan=False))
+        if expected_rows_ref != 'sha256:' + payload_digest(frozen_rows):
+            raise ValueError('physical transcript differs from pinned evidence')
+        class ReadOnlyRows:
+            def read(self, kind=None):
+                return (row for row in frozen_rows if kind is None or row.get('kind') == kind)
+        store = ReadOnlyRows()
+        budget = HierarchicalBudget(options, AccountingStamp(**stamp), store, governance=governance)
+        data, _, _ = budget._rebuild()
+        physical = budget.audit_governance()
+        if not physical.get('protection_valid'):
+            raise ValueError('physical transcript has invalid budget protection')
+        view.audit_run(run_id, data['control_plan']['plan_ref'])
+        provider_records = invocation_records(store)
+        recorded, positions = [], []
+        for request_id in request_ids:
+            stage = {}
+            indexes = {}
+            for kind in ('started', 'completed', 'eligibility'):
+                matches = [(i, row['payload']) for i, row in enumerate(frozen_rows)
+                           if row.get('kind') == 'host_stage_' + kind and
+                           row.get('payload', {}).get('request_id') == request_id]
+                if len(matches) != 1:
+                    raise ValueError('physical transcript lacks a unique stage record')
+                indexes[kind], stage[kind] = matches[0]
+            intent_id = stage['started']['intent_id']
+            transitions = {}
+            for event in ('start', 'settle'):
+                matches = [i for i, row in enumerate(frozen_rows) if row.get('kind') == JOURNAL_KIND and
+                           row.get('payload', {}).get('event') == event and
+                           row['payload'].get('data', {}).get('intent_id') == intent_id]
+                if len(matches) != 1:
+                    raise ValueError('physical stage transition is missing or duplicated')
+                transitions[event] = matches[0]
+            operation = data['operations'].get(intent_id)
+            if operation is None or operation['status'] != 'settled' or \
+                    operation['fingerprint'] != stage['started']['fingerprint'] or \
+                    operation['intent']['candidate']['id'] != 'host-stage-' + request_id or \
+                    operation['intent']['operation'] != 'dev' or operation['intent']['lane'] != 'main' or \
+                    operation['intent']['amounts'] != {'token': 0, 'node': 0, 'eval_count': 1} or \
+                    operation['actual_costs'] != {'token': 0, 'node': 0, 'eval_count': 1} or \
+                    operation['provider_evidence_ref'] != 'sha256:' + payload_digest([]) or \
+                    operation.get('measurement_evidence_ref') != stage['completed']['evidence_ref'] or \
+                    provider_records.get(intent_id):
+                raise ValueError('physical stage settlement differs from its measured evidence')
+            if not transitions['start'] < indexes['started'] < indexes['completed'] < \
+                    transitions['settle'] < indexes['eligibility']:
+                raise ValueError('physical stage transition order differs')
+            recorded.append(stage)
+            positions.append((transitions['start'], indexes['eligibility']))
+        if len(positions) == 2 and positions[0][1] >= positions[1][0]:
+            raise ValueError('physical cascade stage order differs')
+        result = audit_recorded_reference_cascade(view, clock, run_id, recorded)
+        return {**result, 'stage_eval_count': len(recorded), 'physical': physical}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid recorded physical transcript') from error

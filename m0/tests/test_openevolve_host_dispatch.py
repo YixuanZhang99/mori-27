@@ -450,6 +450,52 @@ def test_detached_reference_cascade_accepts_one_below_threshold_stage(timed_auth
         audit_recorded_reference_cascade(view, clock, run_id, [row, row])
 
 
+def test_detached_reference_physical_audit_rebuilds_stage_settlements_and_order(timed_authority, tmp_path, monkeypatch):
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_physical
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.7))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    stages.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    rows = list(budget.store.read())
+    options, stamp, governance = budget.options, asdict(budget.stamp), budget._governed.config
+    def audit(transcript, ref):
+        return audit_recorded_reference_physical(view, clock, run_id, options=options, stamp=stamp,
+            governance=governance, rows=transcript, expected_rows_ref=ref,
+            request_ids=['a' * 32, 'b' * 32])
+    reference = 'sha256:' + payload_digest(rows)
+    result = audit(rows, reference)
+    assert result['stage_count'] == 2
+    assert result['stage_eval_count'] == 2
+    assert result['physical']['protection_valid']
+    with pytest.raises(ValueError):
+        audit(rows[:-1], reference)
+    moved = list(rows)
+    first = next(i for i, row in enumerate(moved) if row['kind'] == 'host_stage_eligibility' and
+                 row['payload']['request_id'] == 'a' * 32)
+    proof = moved.pop(first)
+    second = next(i for i, row in enumerate(moved) if row['kind'] == 'host_stage_started' and
+                  row['payload']['request_id'] == 'b' * 32)
+    moved.insert(second + 1, proof)
+    with pytest.raises(ValueError, match='order'):
+        audit(moved, 'sha256:' + payload_digest(moved))
+
+
 def test_host_stage_audit_rejects_changed_eligibility(timed_authority, tmp_path, monkeypatch):
     import copy
     from test_openevolve_host_stage_budget import fake_result

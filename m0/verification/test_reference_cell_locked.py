@@ -108,7 +108,9 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert authority.stages.audit()['stage_calls'] == 3
     assert authority.budget.audit_governance()['physical_totals']['token'] == 7
     from zoo.circle_packing.cell_deadline import RecordedCellClock
-    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade, audit_recorded_reference_physical
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
     run_id = authority.dispatch.ready.authority_binding['currency_run_id']
     evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
@@ -125,6 +127,13 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     audited = audit_recorded_reference_cascade(view, recorded_clock, run_id, recorded)
     assert audited['metrics'] == result['selected_program']['metrics']
     assert audited['evidence_ref'] == result['stage_evidence_ref']
+    rows = list(authority.budget.store.read())
+    physical_audit = audit_recorded_reference_physical(view, recorded_clock, run_id,
+        options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+        governance=authority.budget._governed.config, rows=rows,
+        expected_rows_ref='sha256:' + payload_digest(rows), request_ids=ids)
+    assert physical_audit['evidence_ref'] == result['stage_evidence_ref']
+    assert physical_audit['stage_eval_count'] == len(ids)
     assert len(local_endpoint.requests) == 1
     reference_limits = authority.budget.options['limits']['global']
     authority.close()
