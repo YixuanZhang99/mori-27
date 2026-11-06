@@ -221,6 +221,38 @@ class ReferenceAuthorities:
         self.close()
 
 
+def build_reference_provider(ledger, plan, *, api_key, base_url, operator_cap, fixture=False):
+    """Construct a reference transport without admitting or starting a call."""
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    if type(ledger) is not CampaignBudget or type(plan) is not dict or type(fixture) is not bool or \
+            type(operator_cap) is not int or operator_cap not in (1, 2) or \
+            type(api_key) is not str or not api_key.strip():
+        raise ValueError('reference provider requires a campaign, plan and bounded call limit')
+    policy = ledger.manifest_binding()
+    try:
+        expected = build_draft_plan(policy, source_commit=plan['source_commit'],
+                                    dependency_lock_sha256=plan['dependency_lock_sha256'])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError('reference provider plan differs from its campaign') from error
+    if plan != expected or payload_digest(plan) != payload_digest(expected):
+        raise ValueError('reference provider plan differs from its campaign')
+    if fixture:
+        try:
+            url = urllib.parse.urlsplit(base_url)
+            if api_key != 'fixture-only-secret' or url.scheme != 'http' or \
+                    url.hostname not in {'127.0.0.1', '::1'} or not url.port or \
+                    url.username or url.password or url.query or url.fragment:
+                raise ValueError('fixture reference requires its fake key and loopback provider')
+        except (TypeError, ValueError) as error:
+            raise ValueError('fixture reference requires its fake key and loopback provider') from error
+    elif ledger.is_fixture_campaign() or base_url != policy['provider_base_url']:
+        raise ValueError('reference requires the original campaign provider')
+    return GovernedCNYProvider(policy['model'], base_url, campaign_binding=policy,
+        max_completion_tokens=plan['max_completion_tokens'], api_key=api_key,
+        message_mode='openevolve_host_v1', reasoning_effort=plan['reasoning_effort'],
+        phase_call_limits={'operator': operator_cap, 'evaluation': 0})
+
+
 def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expected_campaign_id,
                                 deadline, snapshot, source_manifest, runner, api_key, base_url=None):
     """Prepare one bounded reference cell; callers still own process supervision."""
@@ -313,10 +345,8 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
     policy = ledger.manifest_binding()
 
     def provider(operator_cap):
-        return GovernedCNYProvider(policy['model'], base_url,
-            campaign_binding=policy, max_completion_tokens=plan['max_completion_tokens'],
-            api_key=api_key, message_mode='openevolve_host_v1', reasoning_effort=plan['reasoning_effort'],
-            phase_call_limits={'operator': operator_cap, 'evaluation': 0})
+        return build_reference_provider(ledger, plan, api_key=api_key, base_url=base_url,
+                                        operator_cap=operator_cap, fixture=True)
 
     main, control_provider = provider(1), provider(2)
     bound = main.governance_binding()['call_bound']['units']['token']

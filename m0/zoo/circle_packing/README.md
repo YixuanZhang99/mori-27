@@ -207,3 +207,7 @@ The same verification module also runs six Mori rounds using the real-provider
 configuration and a temporary unmarked ledger while intercepting transport and
 blocking socket connections. It tests the real configuration path, simulated
 currency accounting and recorded replay; it does not contact the provider.
+`build_reference_provider` prepares the reference-side transport for the
+original campaign endpoint without sending a request. The existing reference
+cell launcher remains fixture-only; preparation alone does not authorize a
+real reference run.

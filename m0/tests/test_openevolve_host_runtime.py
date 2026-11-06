@@ -8,6 +8,47 @@ from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
+
+def test_reference_provider_uses_original_real_service_config_without_dispatch(tmp_path, monkeypatch):
+    import copy
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.host_runtime import build_reference_provider
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+    ledger = campaign_fixture(tmp_path)
+    policy = ledger.manifest_binding()
+    plan = build_draft_plan(policy, source_commit='a' * 40, dependency_lock_sha256='b' * 64)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('preparation attempted a provider call')
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    before = ledger.snapshot()
+    provider = build_reference_provider(ledger, plan, api_key='fixture-only-secret',
+                                        base_url=policy['provider_base_url'], operator_cap=1)
+    manifest = provider.manifest_binding()
+    assert manifest['base_url'] == policy['provider_base_url']
+    assert manifest['requested_model'] == plan['model']
+    assert manifest['max_completion_tokens'] == plan['max_completion_tokens']
+    assert 'fixture-only-secret' not in str(manifest)
+    assert ledger.snapshot() == before
+    with pytest.raises(ValueError, match='campaign provider'):
+        build_reference_provider(ledger, plan, api_key='fixture-only-secret',
+                                 base_url='http://127.0.0.1:1234', operator_cap=1)
+    with pytest.raises(ValueError, match='fixture'):
+        build_reference_provider(ledger, plan, api_key='different-fake-key',
+                                 base_url='http://127.0.0.1:1234', operator_cap=1, fixture=True)
+    altered = copy.deepcopy(plan)
+    altered['cells'][0]['seed'] = False
+    with pytest.raises(ValueError, match='plan'):
+        build_reference_provider(ledger, altered, api_key='fixture-only-secret',
+                                 base_url=policy['provider_base_url'], operator_cap=1)
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    fixture = CampaignBudget.create_fixture(tmp_path / 'fixture.db')
+    fixture_plan = build_draft_plan(fixture.manifest_binding(), source_commit='a' * 40,
+                                    dependency_lock_sha256='b' * 64)
+    with pytest.raises(ValueError, match='campaign provider'):
+        build_reference_provider(fixture, fixture_plan, api_key='fixture-only-secret',
+                                 base_url=policy['provider_base_url'], operator_cap=1)
+
 pytestmark = pytest.mark.linux
 
 
