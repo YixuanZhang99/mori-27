@@ -251,7 +251,9 @@ class CirclePackingDomain:
                     expected_metrics=record['metrics'])
                 geometry_metrics = verified['metrics']
                 status = EvalStatus.OK
-                metrics = {'test/score': geometry_metrics['combined_score']}
+                metrics = {'test/score': geometry_metrics['combined_score'],
+                           'test/sum_radii': geometry_metrics['sum_radii'],
+                           'test/validity': geometry_metrics['validity']}
                 cost = CostVec(wall_seconds=time.monotonic() - started, eval_count=1)
                 private = {'geometry_ref': record['geometry_ref']}
                 public = {}

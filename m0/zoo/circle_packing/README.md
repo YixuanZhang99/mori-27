@@ -143,6 +143,10 @@ implementations differ at the tolerance boundary.
 Mori's frozen final audit now uses the same independent upstream cross-check
 on its original selected stage; it does not rerun candidate code or call a
 model. The validator implementations are bound in the domain identity.
+When Mori's final audit completes, its Framework evidence exposes
+`test/sum_radii` and `test/validity` alongside the normalized `test/score`.
+These values come from the selected candidate's frozen, cross-checked geometry;
+an absent or skipped final audit must not be reported as a benchmark score.
 
 `recover_reference_snapshot` reconstructs the original worker proof from its
 bounded no-follow journal and execution-bound output files, then invokes the

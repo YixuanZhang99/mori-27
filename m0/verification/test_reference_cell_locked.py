@@ -360,4 +360,9 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
     assert iterations + 1 <= len(local_endpoint.requests) <= iterations + 2 * plan['iterations']
     rows = [json.loads(line) for line in (mori_output / 'framework' / 'x1.jsonl').read_text().splitlines()]
     assert len([row for row in rows if row['kind'] == 'composed_evidence']) == plan['iterations'] + 1
+    finals = [row['payload'] for row in rows if row['kind'] == 'metric_final_completed']
+    assert len(finals) == 1 and finals[0]['state'] == 'completed' and finals[0]['candidate_id'] == mori['candidate']
+    final_metrics = finals[0]['evidence']['evidence']['eval_result']['metrics']
+    assert final_metrics['test/validity'] == 1.0
+    assert final_metrics['test/sum_radii'] == pytest.approx(final_metrics['test/score'] * 2.635)
     assert not ledger.snapshot()['pending_calls']

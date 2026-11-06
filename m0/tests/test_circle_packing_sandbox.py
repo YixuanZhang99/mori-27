@@ -99,6 +99,8 @@ def test_domain_freezes_geometry_and_final_validation_never_reruns_candidate(tmp
     final = asyncio.run(domain.evaluate(proposal, EvalRequest(fidelity='final_audit', split_id='final_audit')))
     assert final.status == EvalStatus.OK and len(calls) == 1
     assert final.metrics['test/score'] == pytest.approx(dev.metrics['dev/score'])
+    assert final.metrics['test/sum_radii'] == pytest.approx(dev.contract.private.data['record']['metrics']['sum_radii'])
+    assert final.metrics['test/validity'] == 1.0
     assert final.contract.private.data['geometry_ref'] == dev.contract.private.data['geometry_ref']
     changed = Proposal(proposal.candidate, proposal.artifact + '\n# altered')
     with pytest.raises(ValueError, match='identity'):

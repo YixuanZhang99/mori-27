@@ -718,6 +718,9 @@ def test_mori_final_audit_preserves_timing_and_score(tmp_path, local_endpoint, m
     final = result['reporting']['final_audit']
     if not late:
         assert final['state'] == 'completed' and 'evidence' in final
+        metrics = final['evidence']['evidence']['eval_result']['metrics']
+        assert metrics['test/validity'] == 1.0
+        assert metrics['test/sum_radii'] == pytest.approx(metrics['test/score'] * 2.635)
         assert fw._composed.governed.external.audit()['protection_valid']
         return
     assert final['state'] == 'skipped' and 'deadline' in final['reason'] and 'evidence' not in final
