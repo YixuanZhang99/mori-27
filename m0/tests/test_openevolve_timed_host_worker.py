@@ -1,6 +1,7 @@
 """Offline timed host controller reaches the existing physical/CNY broker."""
 import asyncio
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +15,7 @@ from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_host_control import control_authority
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.frozen_source import freeze_source_plan, verify_frozen_source
+from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
 from zoo.circle_packing.host_control import HostSeedControl
 from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
 from zoo.circle_packing.host_physical import HostStageAdmission
@@ -43,9 +45,19 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
     ref = 'sha256:' + plan['draft_sha256']
     campaign_id = ledger.manifest_binding()['campaign_id']
+    offline_cache = os.environ.get('MORI_TEST_OFFLINE_CACHE')
     exported = freeze_source_plan(ledger, plan, checkout=checkout, destination=tmp_path / 'exported-source',
-                                  expected_plan_ref=ref, expected_campaign_id=campaign_id)
+                                  expected_plan_ref=ref, expected_campaign_id=campaign_id,
+                                  require_runtime=offline_cache is not None)
     assert exported['source_commit'] == commit
+    runtime_args = {}
+    if offline_cache is not None:
+        runtime = tmp_path / 'locked-runtime'
+        frozen_runtime = prepare_frozen_runtime(ledger, plan, snapshot=tmp_path / 'exported-source',
+            source_manifest=exported['manifest'], expected_plan_ref=ref, expected_campaign_id=campaign_id,
+            destination=runtime, base_python='/usr/bin/python3.12', uv_cache=offline_cache)
+        runtime_args = {'runtime': runtime, 'runtime_manifest': frozen_runtime['manifest'],
+                        'base_python': '/usr/bin/python3.12'}
     deadline = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='vendor-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
     verify_frozen_source(ledger, plan, snapshot=tmp_path / 'exported-source', manifest=exported['manifest'],
@@ -71,7 +83,7 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
         result = run_reference_fixture(deadline, tmp_path / 'worker', workspace,
             snapshot=tmp_path / 'exported-source', source_manifest=exported['manifest'],
             frozen_plan=plan, expected_plan_ref=ref, expected_campaign_id=campaign_id,
-            broker=broker, broker_token_file=token_path, iterations=1)
+            broker=broker, broker_token_file=token_path, iterations=1, **runtime_args)
         thread.join(timeout=5)
         assert not thread.is_alive()
     assert result['state'] == 'completed'

@@ -180,16 +180,30 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
     if not governance["enabled"]:
         raise ValueError("currency governance events precede explicit migration")
     if kind == "freeze_circle_pilot":
-        if set(event) != {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}:
+        fields = {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}
+        if set(event) not in (fields, fields | {"require_runtime"}) or \
+                ("require_runtime" in event and event["require_runtime"] is not True):
             raise ValueError("circle pilot binding has invalid fields")
         seconds = _integer(event["wallclock_seconds"], "cell duration", 1)
         if seconds > 86400:
             raise ValueError("cell duration exceeds the supported limit")
         value = {"plan_ref": _plan_ref(event["plan_ref"]), "tree_ref": _plan_ref(event["tree_ref"]),
                  "wallclock_seconds": seconds}
+        if "require_runtime" in event:
+            value['require_runtime'] = True
         if governance["circle_pilot"] is not None or governance["cell_claims"] or pending is not None:
             raise ValueError("circle pilot must freeze once before any cell or unresolved call")
         governance["circle_pilot"] = value
+    elif kind == "freeze_circle_runtime":
+        if set(event) != {"kind", "schema_version", "plan_ref", "tree_ref", "runtime_ref", "python_sha256"}:
+            raise ValueError("circle runtime binding has invalid fields")
+        value = {"plan_ref": _plan_ref(event["plan_ref"]), "tree_ref": _plan_ref(event["tree_ref"]),
+                 "runtime_ref": _plan_ref(event["runtime_ref"]), "python_sha256": _sha(event["python_sha256"])}
+        pilot = governance["circle_pilot"]
+        if pilot is None or pilot["plan_ref"] != value["plan_ref"] or pilot["tree_ref"] != value["tree_ref"] or \
+                governance["circle_runtime"] is not None or governance["cell_claims"] or pending is not None:
+            raise ValueError("circle runtime must freeze once before any cell or unresolved call")
+        governance["circle_runtime"] = value
     elif kind == "claim_cell_deadline":
         fields = {"kind", "schema_version", "cell_id", "plan_ref", "record_sha256"}
         pilot = governance["circle_pilot"]
@@ -199,6 +213,8 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         plan_ref = _plan_ref(event["plan_ref"])
         digest = _sha(event["record_sha256"])
         if pilot is not None:
+            if pilot.get('require_runtime') and governance['circle_runtime'] is None:
+                raise ValueError("cell requires the frozen runtime")
             if pilot["plan_ref"] != plan_ref:
                 raise ValueError("cell deadline differs from the frozen pilot plan")
             if re.fullmatch(r'(?:vendor|mori)-[012]', cell_id) is None:
@@ -357,7 +373,7 @@ def _reduce_history(policies, events, heads):
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
-                  "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None}
+                  "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -611,19 +627,38 @@ class CampaignBudget:
                 event["seconds"] = seconds
             self._append(db, state, event)
 
-    def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds):
+    def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds, *, require_runtime=False):
         """Anchor one draft and source tree before any cell starts."""
         _plan_ref(plan_ref)
         _plan_ref(tree_ref)
         _integer(wallclock_seconds, "cell duration", 1)
+        if type(require_runtime) is not bool:
+            raise ValueError('runtime requirement must be boolean')
         with self._transaction() as (db, _policy, state):
-            self._append(db, state, {"kind": "freeze_circle_pilot", "schema_version": 2,
-                                    "plan_ref": plan_ref, "tree_ref": tree_ref,
-                                    "wallclock_seconds": wallclock_seconds})
+            event = {"kind": "freeze_circle_pilot", "schema_version": 2,
+                     "plan_ref": plan_ref, "tree_ref": tree_ref, "wallclock_seconds": wallclock_seconds}
+            if require_runtime:
+                event['require_runtime'] = True
+            self._append(db, state, event)
 
     def circle_pilot_binding(self):
         with self._transaction() as (_db, _policy, state):
             value = state["governance"]["circle_pilot"]
+            return dict(value) if value is not None else None
+
+    def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
+        _plan_ref(plan_ref)
+        _plan_ref(tree_ref)
+        _plan_ref(runtime_ref)
+        _sha(python_sha256)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "freeze_circle_runtime", "schema_version": 2,
+                                    "plan_ref": plan_ref, "tree_ref": tree_ref,
+                                    "runtime_ref": runtime_ref, "python_sha256": python_sha256})
+
+    def circle_runtime_binding(self):
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["circle_runtime"]
             return dict(value) if value is not None else None
 
     def anchor_cell_deadline_observation(self, cell_id, sequence, previous, observation_sha256):

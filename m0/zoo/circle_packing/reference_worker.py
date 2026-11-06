@@ -36,7 +36,8 @@ def _token(path):
 
 def run_reference_fixture(deadline, directory, workspace, *, snapshot, source_manifest,
                           frozen_plan, expected_plan_ref, expected_campaign_id,
-                          broker, broker_token_file, iterations=1):
+                          broker, broker_token_file, iterations=1, runtime=None,
+                          runtime_manifest=None, base_python=None):
     """Run the pinned offline host; caller supplies the broker's authority."""
     if type(deadline) is not CellDeadline or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('reference fixture requires a bounded cell and iterations')
@@ -63,14 +64,25 @@ def run_reference_fixture(deadline, directory, workspace, *, snapshot, source_ma
     output = workspace / 'host-run'
     if output.is_symlink() or output.exists() and (not output.is_dir() or any(output.iterdir())):
         raise ValueError('reference fixture output must be empty')
+    binding = deadline._lifecycle.ledger.circle_runtime_binding()
+    if binding is not None:
+        if runtime is None or runtime_manifest is None or base_python is None:
+            raise ValueError('reference fixture requires the frozen runtime')
+        runtime_root = Path(runtime).resolve(strict=True)
+        python = runtime_root / 'bin' / 'python'
+    else:
+        if runtime is not None or runtime_manifest is not None or base_python is not None:
+            raise ValueError('reference fixture has no frozen runtime binding')
+        runtime_root = Path(sys.prefix)
+        python = Path(sys.executable)
     probe_broker(socket, capability)
-    command = ['/usr/bin/env', 'PYTHONHASHSEED=0', sys.executable, '-c', _BOOTSTRAP, str(source),
+    command = ['/usr/bin/env', 'PYTHONHASHSEED=0', str(python), '-c', _BOOTSTRAP, str(source),
                '--socket', str(socket), '--token-file', str(token), '--output', str(output),
                '--seed', cell_id.split('-')[1], '--iterations', str(iterations)]
     return run_cell_worker(deadline, directory, workspace, command, readonly_source=source,
-        readonly_runtime=Path(sys.prefix), frozen_plan=frozen_plan, snapshot=snapshot,
+        readonly_runtime=runtime_root, frozen_plan=frozen_plan, snapshot=snapshot,
         source_manifest=source_manifest, expected_plan_ref=expected_plan_ref,
-        expected_campaign_id=expected_campaign_id)
+        expected_campaign_id=expected_campaign_id, runtime_manifest=runtime_manifest, base_python=base_python)
 
 
 def main():

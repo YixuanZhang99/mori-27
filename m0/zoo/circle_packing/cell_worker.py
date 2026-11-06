@@ -35,7 +35,7 @@ def _stop_watch(deadline):
 
 def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=None, readonly_runtime=None,
                     frozen_plan=None, snapshot=None, source_manifest=None,
-                    expected_plan_ref=None, expected_campaign_id=None):
+                    expected_plan_ref=None, expected_campaign_id=None, runtime_manifest=None, base_python=None):
     """Launch one worker without inherited environment; expiry never certifies it."""
     if type(deadline) is not CellDeadline or type(command) is not list or not command or \
             any(type(part) is not str or not part for part in command):
@@ -78,6 +78,19 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
             return verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
                 expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
         verify_source()
+    runtime_binding = ledger.circle_runtime_binding()
+    if runtime_binding is None:
+        if runtime_manifest is not None or base_python is not None:
+            raise ValueError('worker has no frozen runtime binding')
+        verify_runtime = None
+    else:
+        if runtime is None or runtime_manifest is None or base_python is None or pilot is None or \
+                runtime_binding['plan_ref'] != expected_plan_ref or runtime_binding['tree_ref'] != pilot['tree_ref']:
+            raise ValueError('worker requires the frozen runtime binding')
+        from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+        def verify_runtime():
+            return verify_frozen_runtime(ledger, runtime=runtime, manifest=runtime_manifest, base_python=base_python)
+        verify_runtime()
     remaining = deadline.remaining()
     if remaining <= 0:
         raise DeadlineExpired('cell deadline expired before worker claim')
@@ -125,6 +138,8 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
         result = journal.wait(process, execution)
         if verify_source is not None:
             verify_source()
+        if verify_runtime is not None:
+            verify_runtime()
         if result['timeout'] or deadline.remaining() <= 0:
             return {'state': 'expired_unresolved'}
         return {'state': 'completed' if result['returncode'] == 0 and not result['wrapper_error'] else 'failed',
