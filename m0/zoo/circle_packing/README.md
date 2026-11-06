@@ -34,3 +34,9 @@ This command passes only an allowlisted environment to the host worker; it does
 not load credentials. It records fixture stage and message evidence for local
 debugging. It is not the governed reference runner, does not enforce a paired
 physical budget, and cannot be used to make a benchmark claim.
+
+`governed_setup` is an internal composition factory for the existing CNY
+bridge and a fresh circle control. Its loopback tests cover role-bound requests,
+settlement, unknown usage and recorded replay. It does not freeze a fair paired
+plan or start a real run; the named runner continues to reject live mode until
+the complete comparison and audit are ready.
