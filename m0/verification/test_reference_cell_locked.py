@@ -334,60 +334,14 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
                                     for _ in range(2 * plan['iterations']))
     setup_path = tmp_path / 'mori-fixture.json'
     setup_path.write_text(json.dumps({'plan': plan, 'ref': ref, 'runtime_manifest': frozen['manifest'],
+        'source_manifest': exported['manifest'], 'campaign_id': campaign_id, 'seed': 0,
         'source': str(source / 'm0'), 'runtime': str(runtime), 'ledger': str(ledger.path),
         'clock': str(mori_clock._store.path), 'output': str(mori_output), 'base_url': local_endpoint.url}))
-    script = r'''
-import json, sys
-from pathlib import Path
-config = json.loads(Path(sys.argv[1]).read_text())
-sys.path.insert(0, config['source'])
-import core.loop
-from core.loop import Framework, LoopConfig
-from core.composition.recovery import ContinuationStore
-from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
-from zoo.circle_packing.domain import CirclePackingDomain
-from zoo.circle_packing.governed import governed_setup
-from zoo.circle_packing import governed
-from zoo.circle_packing.runner import TASK
-from zoo.mle_bench_lite.cny_budget import CampaignBudget
-from zoo.mle_bench_lite.composed_domain import SandboxRunner
-from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
-ledger = CampaignBudget(config['ledger'])
-plan = config['plan']
-clock = CellDeadline.restore(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
-    cell_id='mori-0', plan_ref=config['ref'], seconds=plan['limits']['wallclock_seconds'])
-runner = SandboxRunner.for_campaign_runtime(ledger, runtime=config['runtime'],
-    manifest=config['runtime_manifest'], base_python='/usr/bin/python3.12')
-root = Path(config['output'])
-options = dict(ledger=ledger, api_key='fixture-only-secret', seed=0, iterations=plan['iterations'],
-    base_url=config['base_url'], max_completion_tokens=plan['max_completion_tokens'],
-    total_token_ceiling=plan['limits']['token'], cell_deadline=clock,
-    draft_plan=plan, expected_plan_ref=config['ref'], runner=runner)
-profile, registry, provider = governed_setup(root, **options)
-cfg = LoopConfig(max_generations=plan['iterations'], total_budget=plan['limits']['token'],
-                 reeval_floor=0, baseline_every=100)
-domain = CirclePackingDomain(root / 'domain', runner=runner.independent_runner())
-fw = Framework.from_profile(profile, provider, domain, cfg, str(root / 'framework'), component_registry=registry)
-outcome = fw.evolve(TASK)
-def adapters(path, store):
-    _, _, replay_provider = governed_setup(root, **options)
-    return replay_provider, CirclePackingDomain(root / 'replay-domain', runner=runner.independent_runner())
-def forbidden(*args, **kwargs):
-    raise AssertionError('paired recorded replay performed live work')
-GovernedCNYProvider.perform_request = forbidden
-CirclePackingDomain.evaluate = forbidden
-certificate = fw.replay(adapter_factory=adapters)['replay_certificate']
-import openevolve
-print(json.dumps({'limits': profile['budget']['options']['limits']['global'],
-    'candidate': outcome['best_candidate_id'], 'final_state': outcome['reporting']['final_audit']['state'],
-    'replay_passed': certificate['passed'], 'source': core.loop.__file__,
-    'governed_source': governed.__file__, 'vendor_source': openevolve.__file__, 'executable': sys.executable}))
-'''
     journal = ProcessJournal(ContinuationStore(tmp_path / 'mori-coordinator.jsonl'))
     clock_record = mori_clock._record
     process, execution = journal.launch(
-        [str(runtime / 'bin' / 'python'), '-c', script, str(setup_path)], tmp_path,
-        {'PATH': os.defpath, 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}, 240,
+        [str(runtime / 'bin' / 'python'), '-m', 'zoo.circle_packing.mori_fixture_worker', str(setup_path)], tmp_path,
+        {'PATH': os.defpath, 'PYTHONPATH': str(source / 'm0'), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}, 240,
         {'candidate_id': 'fixture-coordinator', 'attempt': 1}, die_with_parent=True,
         absolute_deadline={'boot_id': clock_record['boot_id'],
             'deadline_ns': clock_record['start_ns'] + clock_record['seconds'] * 1_000_000_000})
@@ -395,6 +349,7 @@ print(json.dumps({'limits': profile['budget']['options']['limits']['global'],
     assert process_result['returncode'] == 0 and not process_result['timeout'], process_result['stderr']
     assert process_result['wrapper_error'] is None
     mori = json.loads(process_result['stdout'])
+    assert mori['mode'] == 'fixture' and mori['performance_claim'] is False
     assert mori['limits'] == reference_limits
     assert mori['candidate'] is not None and mori['final_state'] == 'completed' and mori['replay_passed']
     assert Path(mori['source']).resolve() == (source / 'm0' / 'core' / 'loop.py').resolve()

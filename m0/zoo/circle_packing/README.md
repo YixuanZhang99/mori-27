@@ -155,3 +155,9 @@ it is not proof that every descendant terminated or that the cell is a live
 benchmark result. A crash between the snapshot and freeze remains unresolved.
 The new campaign event is used only by temporary fixtures and requires a reader
 that understands it.
+
+`mori_fixture_worker` is the named controller used by the frozen paired
+loopback integration. It accepts only an explicit loopback HTTP endpoint and a
+fixed fake credential, verifies the frozen source, runtime and original cell
+clock, then runs the public Framework and its zero-external-work replay. It is
+not a live entry point or proof of whole-cell supervision.
