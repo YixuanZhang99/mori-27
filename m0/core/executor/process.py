@@ -93,7 +93,7 @@ class ProcessJournal:
                          "result == 0 or (_ for _ in ()).throw(OSError(ctypes.get_errno(), 'prctl')); "
                          "os.getppid() == expected or os._exit(125); " + bootstrap)
             prefix = [str(os.getpid())]
-        proc = subprocess.Popen([sys.executable, "-c", bootstrap, *prefix,
+        proc = subprocess.Popen([sys.executable, "-B", "-c", bootstrap, *prefix,
                                  str(wrapper), paths["spec_path"]],
                                 cwd=cwd, env=env, start_new_session=True)
         record = {**metadata, "execution_id": execution_id,
