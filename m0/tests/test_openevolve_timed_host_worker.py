@@ -2,15 +2,17 @@
 import asyncio
 import hashlib
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import threading
+
+import pytest
 
 from core.composition.recovery import ContinuationStore
 from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_host_control import control_authority
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
-from zoo.circle_packing.cell_worker import run_cell_worker
 from zoo.circle_packing.frozen_source import freeze_source_plan, verify_frozen_source
 from zoo.circle_packing.host_control import HostSeedControl
 from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
@@ -18,6 +20,8 @@ from zoo.circle_packing.host_physical import HostStageAdmission
 from zoo.circle_packing.host_transport import HostBroker
 from zoo.circle_packing.pilot_plan import build_draft_plan
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
+
+pytestmark = pytest.mark.linux
 
 
 def test_timed_isolated_host_routes_model_and_stages_through_authorities(control_authority, local_endpoint, tmp_path):
@@ -27,6 +31,14 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     checkout = tmp_path / 'clean-checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+    # Include the candidate named entry even when testing before its commit.
+    shutil.copyfile(repository / 'm0/zoo/circle_packing/reference_worker.py',
+                    checkout / 'm0/zoo/circle_packing/reference_worker.py')
+    subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/reference_worker.py'], check=True)
+    subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
+                    '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '--allow-empty',
+                    '-m', 'fixture worker entry'], check=True)
+    commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
     plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
     ref = 'sha256:' + plan['draft_sha256']
@@ -50,29 +62,16 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     token_path.write_text('a' * 64)
     token_path.chmod(0o600)
     source = tmp_path / 'exported-source' / 'm0'
-    program = """import os,sys
-sys.path.insert(0,sys.argv[1])
-os.environ['MORI_CIRCLE_BROKER_SOCKET']=sys.argv[2]
-os.environ['MORI_CIRCLE_BROKER_TOKEN']=open(sys.argv[3]).read().strip()
-os.environ['MORI_CIRCLE_STAGE_BROKER']='1'
-from zoo.circle_packing.host_reference import run_fixture, _ALLOWED_ENV, _BROKER_ENV
-allowed=set(_ALLOWED_ENV)|set(_BROKER_ENV)|{'MORI_CIRCLE_STAGE_BROKER'}
-for key in set(os.environ)-allowed:
-    del os.environ[key]
-result=run_fixture(sys.argv[4], seed=0, iterations=1, fixture_broker=True, fixture_stage_broker=True)
-assert result['stage_calls']==3 and result['performance_claim'] is False
-"""
     provider = HostDispatchCoordinator(budget, bridge, run, ready)
     stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'stages', control_authority=provider)
     with HostBroker(socket_path, 'a' * 64, HostDispatchRouter(provider, stages)) as broker:
-        thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(4)], daemon=True)
+        from zoo.circle_packing.reference_worker import run_reference_fixture
+        thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(5)], daemon=True)
         thread.start()
-        result = run_cell_worker(deadline, tmp_path / 'worker', workspace,
-            ['/usr/bin/env', 'PYTHONHASHSEED=0', sys.executable, '-c', program,
-             str(source), str(socket_path), str(token_path), str(workspace / 'host-run')],
-            readonly_source=source, readonly_runtime=Path(sys.prefix), frozen_plan=plan,
+        result = run_reference_fixture(deadline, tmp_path / 'worker', workspace,
             snapshot=tmp_path / 'exported-source', source_manifest=exported['manifest'],
-            expected_plan_ref=ref, expected_campaign_id=campaign_id)
+            frozen_plan=plan, expected_plan_ref=ref, expected_campaign_id=campaign_id,
+            broker=broker, broker_token_file=token_path, iterations=1)
         thread.join(timeout=5)
         assert not thread.is_alive()
     assert result['state'] == 'completed'

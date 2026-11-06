@@ -10,6 +10,8 @@ from test_governed_cny_framework import campaign_fixture
 from test_openevolve_source_preflight import checkout, draft
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 
+pytestmark = pytest.mark.linux
+
 
 def fixture(tmp_path):
     root = tmp_path / 'checkout'

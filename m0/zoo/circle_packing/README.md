@@ -64,3 +64,13 @@ arms) from a verified campaign policy and explicit source/dependency hashes.
 It records the proposed common numeric caps, but labels the result
 `draft_not_executable`: reference-side enforcement and final source freezing
 must be completed before it can authorize any call.
+
+The internal `reference_worker.run_reference_fixture` entry runs the upstream
+fixture from a campaign-bound source snapshot through a local broker. It checks
+a disposable broker capability with a no-dispatch handshake before consuming
+the cell's worker claim. This synthetic fixture is not a live benchmark
+entrypoint. A trusted caller supplies the actual in-process broker object and
+capability; the fixture checks socket identity and the peer process before
+sending it. A standalone probe does not authenticate an arbitrary service in
+the same process. The worker can read the capability, which is not a provider
+API key.

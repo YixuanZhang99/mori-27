@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import struct
 import threading
 import uuid
 
@@ -20,6 +21,32 @@ from core.x1.checkpoint import payload_digest
 from zoo.mle_bench_lite.cny_budget import validate_detailed_usage
 
 _MAX_FRAME = 8 * 1024 * 1024
+
+
+def probe_broker(path, token):
+    """Verify a local capability without dispatching a provider or stage call."""
+    if not Path(path).is_absolute() or type(token) is not str or not re.fullmatch(r'[0-9a-f]{64}', token):
+        raise ValueError('invalid local broker capability')
+    request = {'schema_version': 1, 'request_id': uuid.uuid4().hex, 'token': token,
+               'argument': {'probe': True}}
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(5)
+            connection.connect(str(path))
+            if not hasattr(socket, 'SO_PEERCRED'):
+                raise ValueError('local broker peer identity is unavailable')
+            peer = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i'))
+            pid, uid, _gid = struct.unpack('3i', peer)
+            if pid != os.getpid() or uid != os.getuid():
+                raise ValueError('local broker peer identity differs from the trusted caller')
+            connection.sendall(json.dumps(request, separators=(',', ':')).encode() + b'\n')
+            with connection.makefile('rb') as stream:
+                raw = stream.readline(_MAX_FRAME + 1)
+        if not raw.endswith(b'\n') or len(raw) > _MAX_FRAME or \
+                json.loads(raw) != {'state': 'ready', 'result': None, 'usage': None}:
+            raise ValueError('broker rejected capability probe')
+    except (OSError, TypeError, UnicodeError, struct.error, json.JSONDecodeError) as error:
+        raise ValueError('local broker capability probe failed') from error
 
 
 class StageEvidenceFailure(BaseException):
@@ -110,6 +137,8 @@ class HostEvaluationClient(HostBridgeClient):
 def _validate_argument(argument):
     if type(argument) is not dict:
         raise ValueError('invalid host invocation')
+    if set(argument) == {'probe'} and type(argument['probe']) is bool and argument['probe'] is True:
+        return
     if set(argument) == {'host_messages', 'host_prompt_ref'}:
         messages = argument['host_messages']
         if type(messages) is not dict or set(messages) != {'system', 'user'} or \
@@ -198,10 +227,15 @@ class HostBroker:
                 _validate_argument(argument)
                 self._seen.add(request['request_id'])
                 try:
-                    response = self._dispatch(request['request_id'], argument)
+                    if argument == {'probe': True}:
+                        response = {'state': 'ready', 'result': None, 'usage': None}
+                    else:
+                        response = self._dispatch(request['request_id'], argument)
                     if type(response) is not dict or set(response) != {'state', 'result', 'usage'} or \
-                            response['state'] not in {'ok', 'known_failed', 'known_refused', 'unknown'}:
+                            response['state'] not in {'ok', 'known_failed', 'known_refused', 'unknown', 'ready'}:
                         raise ValueError('invalid dispatcher result')
+                    if response['state'] == 'ready' and argument != {'probe': True}:
+                        raise ValueError('only a probe may return readiness')
                     if response['state'] == 'known_refused' and response['usage'] != {'total_tokens': 0}:
                         raise ValueError('known refusal requires proof of zero usage')
                     if response['usage'] is not None and response['state'] != 'known_refused':
@@ -213,7 +247,7 @@ class HostBroker:
                         raise ValueError('known failure requires measured usage')
                     if response['state'] != 'ok' and response['result'] is not None:
                         raise ValueError('failed dispatcher cannot return a result')
-                    if response['state'] != 'ok':
+                    if response['state'] not in {'ok', 'ready'}:
                         self._halted = True
                 except Exception:
                     self._halted = True
