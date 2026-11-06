@@ -1,11 +1,8 @@
 """Offline timed host controller reaches the existing physical/CNY broker."""
 import asyncio
 import hashlib
-import os
 from pathlib import Path
-import shutil
 import subprocess
-import sys
 import threading
 
 import pytest
@@ -15,55 +12,45 @@ from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_host_control import control_authority
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.frozen_source import freeze_source_plan, verify_frozen_source
-from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
 from zoo.circle_packing.host_control import HostSeedControl
 from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
 from zoo.circle_packing.host_physical import HostStageAdmission
 from zoo.circle_packing.host_transport import HostBroker
 from zoo.circle_packing.pilot_plan import build_draft_plan
-from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 pytestmark = pytest.mark.linux
 
 
+@pytest.mark.parametrize('control_authority', ['locked'], indirect=True)
 def test_timed_isolated_host_routes_model_and_stages_through_authorities(control_authority, local_endpoint, tmp_path):
     ledger, budget, bridge, run, ready, domain = control_authority
-    repository = Path(__file__).resolve().parents[2]
-    commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
-    checkout = tmp_path / 'clean-checkout'
-    subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
-    subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
-    # Include the candidate named entry even when testing before its commit.
-    shutil.copyfile(repository / 'm0/zoo/circle_packing/reference_worker.py',
-                    checkout / 'm0/zoo/circle_packing/reference_worker.py')
-    subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/reference_worker.py'], check=True)
-    subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
-                    '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '--allow-empty',
-                    '-m', 'fixture worker entry'], check=True)
-    commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
-    lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
-    plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
-    ref = 'sha256:' + plan['draft_sha256']
-    campaign_id = ledger.manifest_binding()['campaign_id']
-    offline_cache = os.environ.get('MORI_TEST_OFFLINE_CACHE')
-    exported = freeze_source_plan(ledger, plan, checkout=checkout, destination=tmp_path / 'exported-source',
-                                  expected_plan_ref=ref, expected_campaign_id=campaign_id,
-                                  require_runtime=offline_cache is not None)
-    assert exported['source_commit'] == commit
-    runtime_args = {}
-    if offline_cache is not None:
-        runtime = tmp_path / 'locked-runtime'
-        frozen_runtime = prepare_frozen_runtime(ledger, plan, snapshot=tmp_path / 'exported-source',
-            source_manifest=exported['manifest'], expected_plan_ref=ref, expected_campaign_id=campaign_id,
-            destination=runtime, base_python='/usr/bin/python3.12', uv_cache=offline_cache)
-        runtime_args = {'runtime': runtime, 'runtime_manifest': frozen_runtime['manifest'],
+    frozen = domain._fixture_frozen
+    if frozen:
+        plan, ref, campaign_id = frozen['plan'], frozen['ref'], frozen['campaign_id']
+        snapshot, manifest = frozen['source'], frozen['source_manifest']
+        runtime_args = {'runtime': frozen['runtime'], 'runtime_manifest': frozen['runtime_manifest'],
                         'base_python': '/usr/bin/python3.12'}
+    else:
+        repository = Path(__file__).resolve().parents[2]
+        commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+        checkout = tmp_path / 'clean-checkout'
+        subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
+        subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+        lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
+        plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
+        ref = 'sha256:' + plan['draft_sha256']
+        campaign_id = ledger.manifest_binding()['campaign_id']
+        snapshot = tmp_path / 'exported-source'
+        exported = freeze_source_plan(ledger, plan, checkout=checkout, destination=snapshot,
+                                      expected_plan_ref=ref, expected_campaign_id=campaign_id)
+        manifest, runtime_args = exported['manifest'], {}
     deadline = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='vendor-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
-    verify_frozen_source(ledger, plan, snapshot=tmp_path / 'exported-source', manifest=exported['manifest'],
+    verify_frozen_source(ledger, plan, snapshot=snapshot, manifest=manifest,
                          expected_plan_ref=ref, expected_campaign_id=campaign_id)
     bridge.bind_cell_deadline(deadline, plan=plan, expected_plan_ref=ref, cell_id='vendor-0')
-    assert asyncio.run(HostSeedControl(budget, bridge, run, ready, domain).execute('control-0000'))['status'] == 'evaluated'
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    assert asyncio.run(control.execute('control-0000'))['status'] == 'evaluated'
     diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
             '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
             '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
@@ -73,21 +60,26 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     socket_path, token_path = workspace / 'broker.sock', workspace / 'token'
     token_path.write_text('a' * 64)
     token_path.chmod(0o600)
-    source = tmp_path / 'exported-source' / 'm0'
-    provider = HostDispatchCoordinator(budget, bridge, run, ready)
-    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'stages', control_authority=provider)
+    provider = HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
+    stages = HostStageAdmission(budget, runner=domain.runner.independent_runner(),
+                                workspace=tmp_path / 'stages', control_authority=provider)
+    if frozen:
+        runtime_ref = ledger.circle_runtime_binding()['runtime_ref']
+        assert control.domain.runner.manifest_binding['runtime_ref'] == runtime_ref
+        assert provider.control_domain.runner.manifest_binding['runtime_ref'] == runtime_ref
+        assert stages.runner.manifest_binding['runtime_ref'] == runtime_ref
     with HostBroker(socket_path, 'a' * 64, HostDispatchRouter(provider, stages)) as broker:
         from zoo.circle_packing.reference_worker import run_reference_fixture
         thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(5)], daemon=True)
         thread.start()
         result = run_reference_fixture(deadline, tmp_path / 'worker', workspace,
-            snapshot=tmp_path / 'exported-source', source_manifest=exported['manifest'],
+            snapshot=snapshot, source_manifest=manifest,
             frozen_plan=plan, expected_plan_ref=ref, expected_campaign_id=campaign_id,
             broker=broker, broker_token_file=token_path, iterations=1, **runtime_args)
         thread.join(timeout=5)
         assert not thread.is_alive()
     assert result['state'] == 'completed'
-    verify_frozen_source(ledger, plan, snapshot=tmp_path / 'exported-source', manifest=exported['manifest'],
+    verify_frozen_source(ledger, plan, snapshot=snapshot, manifest=manifest,
                          expected_plan_ref=ref, expected_campaign_id=campaign_id)
     assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
     assert budget.audit_governance()['physical_totals']['token'] == 7

@@ -24,6 +24,7 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 def control_authority(tmp_path, local_endpoint, request):
     ledger = campaign_fixture(tmp_path)
     runner = SandboxRunner()
+    frozen_fixture = None
     cache = os.environ.get('MORI_TEST_OFFLINE_CACHE') if getattr(request, 'param', None) == 'locked' else None
     if cache:
         from test_openevolve_source_preflight import draft
@@ -45,6 +46,9 @@ def control_authority(tmp_path, local_endpoint, request):
             base_python='/usr/bin/python3.12', uv_cache=cache)
         runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
                                                     base_python='/usr/bin/python3.12')
+        frozen_fixture = {'plan': plan, 'ref': ref, 'campaign_id': campaign_id, 'source': source,
+                          'source_manifest': exported['manifest'], 'runtime': runtime,
+                          'runtime_manifest': frozen['manifest']}
     campaign = ledger.manifest_binding()
     def fresh(operator_cap):
         return GovernedCNYProvider('deepseek-flash', local_endpoint.url, campaign_binding=campaign,
@@ -68,6 +72,7 @@ def control_authority(tmp_path, local_endpoint, request):
     budget = HierarchicalBudget(options, AccountingStamp('offline', 'fixture-v1', 'tokens-v1', 'price-v1', 'today'),
                                 store, governance=config)
     main_domain = CirclePackingDomain(tmp_path / 'main-domain', runner=runner)
+    main_domain._fixture_frozen = frozen_fixture
     plan = ControlPlan.freeze(config, task_desc='Improve circle packing',
                               initial_context={'circle_domain_binding': main_domain.manifest_binding},
                               max_generations=6, units=budget.units).to_dict()
@@ -109,6 +114,55 @@ def test_dispatch_coordinator_accepts_independent_matching_runner(control_author
     authority = HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
     assert authority.control_domain.runner is not domain.runner
     assert authority.control_domain.runner.manifest_binding == domain.runner.manifest_binding
+
+
+def test_frozen_campaign_rejects_unbound_control_runtime(control_authority, monkeypatch):
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    monkeypatch.setattr(ledger, 'circle_runtime_binding', lambda: {'runtime_ref': 'sha256:' + 'a' * 64})
+    with pytest.raises(ValueError, match='campaign runtime'):
+        HostSeedControl(budget, bridge, run, ready, domain)
+
+
+def test_frozen_campaign_rejects_unbound_dispatch_runtime(control_authority, monkeypatch):
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    ledger, budget, bridge, run, ready, domain = control_authority
+    monkeypatch.setattr(ledger, 'circle_runtime_binding', lambda: {'runtime_ref': 'sha256:' + 'a' * 64})
+    with pytest.raises(ValueError, match='campaign runtime'):
+        HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
+
+
+@pytest.mark.parametrize('kind', ['control', 'dispatch'])
+def test_pilot_requiring_missing_runtime_blocks_host_work(control_authority, monkeypatch, kind):
+    from zoo.circle_packing.host_control import HostSeedControl
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    ledger, budget, bridge, run, ready, domain = control_authority
+    monkeypatch.setattr(ledger, 'circle_pilot_binding', lambda: {'require_runtime': True})
+    with pytest.raises(ValueError, match='campaign runtime'):
+        if kind == 'control':
+            HostSeedControl(budget, bridge, run, ready, domain)
+        else:
+            HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
+    assert budget.audit_governance()['physical_totals']['eval_count'] == 0
+
+
+def test_control_rechecks_campaign_runtime_before_execution(control_authority, monkeypatch):
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    monkeypatch.setattr(ledger, 'circle_runtime_binding', lambda: {'runtime_ref': 'sha256:' + 'a' * 64})
+    with pytest.raises(ValueError, match='campaign runtime'):
+        asyncio.run(control.execute('control-0000'))
+    assert budget.audit_governance()['physical_totals']['eval_count'] == 0
+
+
+def test_dispatch_rechecks_campaign_runtime_before_work(control_authority, monkeypatch):
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    ledger, budget, bridge, run, ready, domain = control_authority
+    dispatch = HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
+    monkeypatch.setattr(ledger, 'circle_runtime_binding', lambda: {'runtime_ref': 'sha256:' + 'a' * 64})
+    with pytest.raises(ValueError, match='campaign runtime'):
+        dispatch._require_control()
 
 
 @pytest.mark.linux

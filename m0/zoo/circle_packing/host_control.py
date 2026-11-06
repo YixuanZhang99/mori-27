@@ -26,6 +26,16 @@ from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 
+def _require_campaign_runtime(ledger, runner):
+    pilot = ledger.circle_pilot_binding()
+    frozen = ledger.circle_runtime_binding()
+    if pilot is not None and pilot.get('require_runtime') and frozen is None:
+        raise ValueError('pilot requires a frozen campaign runtime')
+    if frozen is not None and (type(runner) is not SandboxRunner or runner._campaign_runtime is None or
+            runner._campaign_runtime[0] is not ledger or runner.manifest_binding.get('runtime_ref') != frozen['runtime_ref']):
+        raise ValueError('host requires the frozen campaign runtime')
+
+
 class _NoProvider:
     last_usage = {'total_tokens': 0}
     def __call__(self, *_args, **_kwargs):
@@ -71,6 +81,7 @@ class HostSeedControl:
             raise ValueError('main domain must start without prior candidate state')
         if domain.runner._campaign_runtime is not None and domain.runner._campaign_runtime[0] is not bridge.ledger:
             raise ValueError('control runtime must belong to the campaign')
+        _require_campaign_runtime(bridge.ledger, domain.runner)
         if len(run.physical_plan.get('slots', [])) != 1 or \
                 run.physical_plan['slots'][0]['operator']['name'] != 'draft' or \
                 not re.fullmatch(r'control-[0-9]{4}', run.physical_plan['slots'][0]['slot_id']):
@@ -304,6 +315,7 @@ class HostSeedControl:
 
     async def execute(self, slot_id):
         with self.budget._lock:
+            _require_campaign_runtime(self.bridge.ledger, self.domain.runner)
             if self._running:
                 raise ValueError('control is already running')
             self._running = True
