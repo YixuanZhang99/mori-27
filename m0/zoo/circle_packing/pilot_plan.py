@@ -1,7 +1,12 @@
 """Construct a non-executable draft of the paired circle pilot matrix."""
 from __future__ import annotations
 
+import hashlib
+import os
+from pathlib import Path
 import re
+import stat
+import subprocess
 
 from core.composition.openevolve_registration import _DATABASE_SHA, _SEED_SHA
 from core.x1.checkpoint import payload_digest
@@ -65,3 +70,73 @@ def validate_draft_cell(ledger, plan, cell_id, *, expected_plan_ref):
         raise ValueError('cell is not in the frozen draft')
     return {'campaign_id': plan['campaign_id'], 'plan_ref': 'sha256:' + plan['draft_sha256'],
             'cell_id': cell_id, 'wallclock_seconds': plan['limits']['wallclock_seconds']}
+
+
+def validate_source_preflight(ledger, plan, cell_id, *, checkout, expected_plan_ref):
+    """Check current checkout identity; this snapshot cannot authorize a launch.
+
+    Git-ignored files are not checked. The future supervisor must isolate them,
+    prevent changes after this check, and verify the actual worker environment
+    and original campaign authority.
+    """
+    binding = validate_draft_cell(ledger, plan, cell_id, expected_plan_ref=expected_plan_ref)
+    try:
+        root = Path(checkout).resolve(strict=True)
+    except (OSError, RuntimeError, TypeError) as error:
+        raise ValueError('checkout must be an existing directory') from error
+    if not root.is_dir():
+        raise ValueError('checkout must be a directory')
+    env = {'PATH': os.defpath, 'GIT_CONFIG_NOSYSTEM': '1',
+           'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_NO_REPLACE_OBJECTS': '1',
+           'GIT_OPTIONAL_LOCKS': '0'}
+    def git(*args):
+        try:
+            return subprocess.check_output(['git', '-C', str(root), '-c', 'core.fsmonitor=false',
+                '-c', 'core.untrackedCache=false', '-c', 'core.filemode=true', *args], stderr=subprocess.DEVNULL,
+                env=env, timeout=30).decode('utf-8').strip()
+        except (OSError, subprocess.SubprocessError, UnicodeError) as error:
+            raise ValueError('cannot verify source checkout') from error
+    if Path(git('rev-parse', '--show-toplevel')).resolve() != root or \
+            git('rev-parse', 'HEAD') != plan['source_commit'] or \
+            git('ls-files', '--others', '--exclude-standard', '-z'):
+        raise ValueError('source checkout differs from the frozen draft')
+    git('diff-index', '--cached', '--quiet', '--no-ext-diff', 'HEAD', '--')
+    flags = git('ls-files', '-v', '-z').split('\0')
+    if any(entry and not entry.startswith('H ') for entry in flags):
+        raise ValueError('source checkout has hidden index changes')
+    # Git status can apply configured clean filters, making changed execution
+    # bytes look clean. Compare actual bytes to each tracked Git blob instead.
+    try:
+        for entry in git('ls-files', '--stage', '-z').split('\0'):
+            if not entry:
+                continue
+            header, name = entry.split('\t', 1)
+            mode, oid, stage = header.split(' ')
+            relative = Path(name)
+            if relative.is_absolute() or '..' in relative.parts or stage != '0' or \
+                    mode not in {'100644', '100755', '120000'}:
+                raise ValueError('unsupported source index entry')
+            path = root / relative
+            info = path.lstat()
+            if mode == '120000':
+                if not stat.S_ISLNK(info.st_mode):
+                    raise ValueError('source file type differs from index')
+                data = os.fsencode(os.readlink(path))
+            else:
+                if not stat.S_ISREG(info.st_mode) or bool(info.st_mode & stat.S_IXUSR) != (mode == '100755'):
+                    raise ValueError('source file mode differs from index')
+                data = path.read_bytes()
+            digest = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data,
+                                  usedforsecurity=False).hexdigest()
+            if digest != oid:
+                raise ValueError('source bytes differ from the frozen index')
+    except (OSError, UnicodeError) as error:
+        raise ValueError('cannot inspect tracked source bytes') from error
+    lock = root / 'm0' / 'uv.lock'
+    if lock.is_symlink() or not lock.is_file() or \
+            not git('ls-files', '--error-unmatch', '--', 'm0/uv.lock'):
+        raise ValueError('dependency lock must be a tracked regular file')
+    if hashlib.sha256(lock.read_bytes()).hexdigest() != plan['dependency_lock_sha256']:
+        raise ValueError('dependency lock differs from the frozen draft')
+    return {**binding, 'source_commit': plan['source_commit'],
+            'dependency_lock_sha256': plan['dependency_lock_sha256']}
