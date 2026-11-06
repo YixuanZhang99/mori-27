@@ -40,3 +40,9 @@ bridge and a fresh circle control. Its loopback tests cover role-bound requests,
 settlement, unknown usage and recorded replay. It does not freeze a fair paired
 plan or start a real run; the named runner continues to reject live mode until
 the complete comparison and audit are ready.
+
+`pilot_plan.build_draft_plan` computes a six-cell draft (three seeds times two
+arms) from a verified campaign policy and explicit source/dependency hashes.
+It records the proposed common numeric caps, but labels the result
+`draft_not_executable`: reference-side enforcement and final source freezing
+must be completed before it can authorize any call.
