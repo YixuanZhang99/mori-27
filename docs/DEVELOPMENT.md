@@ -66,7 +66,7 @@ Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不�
 
 ## GitHub Actions 实际运行路径
 
-根目录 `.github/workflows/ci.yml` 在 push、pull_request 和手动触发时运行。新增 `macos-14` / Python 3.12 job 执行锁定安装及 `make check`，上传 portable 日志；其显式排除的 Linux 用例由独立 Linux job 验证。以下是 `ubuntu-24.04` x86_64 job：
+根目录 `.github/workflows/ci.yml` 在 push、pull_request 和手动触发时运行。`macos-15` / Python 3.12 job 执行锁定安装及 `make check`，上传 portable 日志；其显式排除的 Linux 用例由独立 Linux job 验证。以下是 `ubuntu-24.04` x86_64 job：
 
 1. 安装固定版本 uv、系统 Python 3.12、Bubblewrap 与 AppArmor 工具。
 2. 验证 user namespace 可用；必要时只给一份 root-owned CI 专用 bwrap 加允许 userns 的 AppArmor profile，保留全局限制。
