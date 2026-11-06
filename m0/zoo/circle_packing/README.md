@@ -115,3 +115,7 @@ per Mori mutation across six configured iterations. This is a capacity ceiling,
 not a grant of money; the original shared currency ledger still gates each
 actual call, and budget, deadline, or other termination can stop either arm
 before six iterations. No paid pilot is enabled by this draft.
+Drafts produced by the earlier 4-bound formula do not validate under this
+new formula. Those drafts were used only with temporary fixture campaigns;
+they cannot be resumed by this code. Do not reinterpret old evidence as the
+new plan.
