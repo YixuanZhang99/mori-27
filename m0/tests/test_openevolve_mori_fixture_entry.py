@@ -107,6 +107,52 @@ def test_fixture_marker_is_durable_from_creation(tmp_path):
     assert not ledger.snapshot()['pending_calls']
 
 
+def test_shared_controller_rejects_mismatched_ledger_before_setup(tmp_path):
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.mori_controller import build_controller
+    ledger = campaign_fixture(tmp_path)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='ledger'):
+        build_controller({**config(), 'ledger': str(tmp_path / 'other.db')},
+                         ledger=ledger, clock=None, runner=None, api_key='fixture-only-secret')
+    assert ledger.snapshot() == before
+
+
+def test_shared_controller_rejects_loopback_for_real_campaign(tmp_path):
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.mori_controller import build_controller
+    ledger = campaign_fixture(tmp_path)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='campaign provider'):
+        build_controller({**config(), 'ledger': str(ledger.path)},
+                         ledger=ledger, clock=None, runner=None, api_key='fixture-only-secret')
+    assert ledger.snapshot() == before
+
+
+def test_shared_controller_rejects_remote_for_fixture_campaign(tmp_path):
+    from zoo.circle_packing.mori_controller import build_controller
+    ledger = fixture_campaign(tmp_path)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='loopback'):
+        build_controller({**config(), 'ledger': str(ledger.path), 'base_url': 'https://api.deepseek.com'},
+                         ledger=ledger, clock=None, runner=None, api_key='fixture-only-secret')
+    assert ledger.snapshot() == before
+
+
+def test_shared_controller_rejects_wrong_campaign_and_clock_before_setup(tmp_path):
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.mori_controller import build_controller
+    ledger = campaign_fixture(tmp_path)
+    policy, before = ledger.manifest_binding(), ledger.snapshot()
+    cfg = {**config(), 'ledger': str(ledger.path), 'base_url': policy['provider_base_url']}
+    with pytest.raises(ValueError, match='campaign'):
+        build_controller(cfg, ledger=ledger, clock=None, runner=None, api_key='fixture-only-secret')
+    with pytest.raises(ValueError, match='clock'):
+        build_controller({**cfg, 'campaign_id': policy['campaign_id']}, ledger=ledger, clock=None,
+                         runner=None, api_key='fixture-only-secret')
+    assert ledger.snapshot() == before
+
+
 def test_fixture_supervisor_rejects_missing_clock_before_creating_files(tmp_path):
     from zoo.circle_packing.mori_supervisor import launch_fixture_controller
     ledger = fixture_campaign(tmp_path)
