@@ -134,7 +134,7 @@ def test_mori_governance_control_uses_original_campaign_runtime(tmp_path):
     from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
     from zoo.circle_packing.governed import governed_setup
     from zoo.mle_bench_lite.composed_domain import SandboxRunner
-    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True, fixture_campaign=True)
     options = dict(ledger=ledger, api_key='fixture-only-secret', seed=0, iterations=1,
                    max_completion_tokens=4)
     with pytest.raises(ValueError, match='runtime'):

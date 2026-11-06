@@ -72,6 +72,24 @@ def validate_draft_cell(ledger, plan, cell_id, *, expected_plan_ref):
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
     if type(ledger) is not CampaignBudget or type(plan) is not dict:
         raise ValueError('cell requires the original campaign and a frozen draft plan')
+    if type(plan.get('schema_version')) is int and plan['schema_version'] == 3:
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        try:
+            experiment_id, arm, seed = parse_cell_identity(cell_id)
+            if experiment_id is None or seed != 0 or not ledger.is_fixture_campaign():
+                raise ValueError('continuation cell requires its fixture first pair')
+            bound = ledger.circle_continuation_binding(experiment_id)
+            if bound is None or 'artifact_verification_sha256' not in bound or \
+                    payload_digest(plan) != payload_digest(bound['draft']) or \
+                    plan['campaign_id'] != ledger.manifest_binding()['campaign_id'] or \
+                    expected_plan_ref != 'sha256:' + bound['draft']['draft_sha256'] or \
+                    not any(item['cell_id'] == cell_id and item['arm'] == arm and item['seed'] == seed
+                            for item in bound['draft']['cells']):
+                raise ValueError('continuation cell differs from its fixture binding')
+            return {'campaign_id': plan['campaign_id'], 'plan_ref': expected_plan_ref,
+                    'cell_id': cell_id, 'wallclock_seconds': plan['limits']['wallclock_seconds']}
+        except (KeyError, TypeError) as error:
+            raise ValueError('continuation cell has an invalid plan') from error
     try:
         expected = build_draft_plan(ledger.manifest_binding(), source_commit=plan['source_commit'],
                                     dependency_lock_sha256=plan['dependency_lock_sha256'])

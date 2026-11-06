@@ -67,9 +67,13 @@ def build_controller(config, *, ledger, clock, runner, api_key):
         raise ValueError('controller campaign identity differs')
     from zoo.circle_packing.cell_deadline import CellDeadline
     try:
+        cell_id = f"mori-{config['seed']}"
+        if type(config['plan']) is dict and type(config['plan'].get('schema_version')) is int and \
+                config['plan']['schema_version'] == 3:
+            cell_id = f"{config['plan'].get('experiment_id')}--{cell_id}"
         if type(clock) is not CellDeadline or clock._lifecycle.ledger is not ledger or \
                 type(config['seed']) is not int or config['seed'] not in (0, 1, 2) or \
-                clock._record['cell_id'] != f"mori-{config['seed']}" or \
+                clock._record['cell_id'] != cell_id or \
                 clock._record['plan_ref'] != config['ref'] or type(config['clock']) is not str or \
                 Path(config['clock']).resolve(strict=True) != clock._store.path.resolve(strict=True):
             raise ValueError('controller clock differs from its original cell')

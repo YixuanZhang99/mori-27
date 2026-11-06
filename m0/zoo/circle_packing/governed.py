@@ -26,6 +26,20 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
         raise ValueError('existing campaign must be quiescent and governance enabled')
     pilot = ledger.circle_pilot_binding()
     binding = ledger.circle_runtime_binding()
+    versioned = type(draft_plan) is dict and type(draft_plan.get('schema_version')) is int and draft_plan['schema_version'] == 3
+    cell_id = f'mori-{seed}'
+    effort = 'low'
+    if versioned:
+        from zoo.circle_packing.pilot_plan import validate_draft_cell
+        if type(seed) is not int or seed != 0:
+            raise ValueError('continuation controller requires its fixture first pair')
+        cell_id = f"{draft_plan.get('experiment_id')}--mori-{seed}"
+        validate_draft_cell(ledger, draft_plan, cell_id, expected_plan_ref=expected_plan_ref)
+        if iterations != draft_plan['iterations'] or max_completion_tokens != draft_plan['max_completion_tokens'] or \
+                total_token_ceiling != draft_plan['limits']['token']:
+            raise ValueError('continuation controller parameters differ from its frozen plan')
+        binding = ledger.circle_continuation_binding(draft_plan['experiment_id'])
+        effort = draft_plan['reasoning_effort']
     if not recorded_only and pilot is not None and not ledger.is_fixture_campaign() and \
             not pilot.get('require_single_run'):
         raise ValueError('live governed setup requires a single-run pilot')
@@ -38,6 +52,9 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
         raise ValueError('control runner requires a trusted sandbox')
     if binding is not None:
         if runner is None or runner._campaign_runtime is None or runner._campaign_runtime[0] is not ledger or \
+                (versioned and (runner._continuation_runtime is None or
+                 runner._continuation_runtime[0] != draft_plan)) or \
+                (not versioned and runner._continuation_runtime is not None) or \
                 runner.manifest_binding.get('runtime_ref') != binding['runtime_ref']:
             raise ValueError('control runner must use the original campaign runtime')
     elif runner is not None and runner._campaign_runtime is not None:
@@ -49,7 +66,7 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
     def fresh():
         return GovernedCNYProvider(policy['model'], base_url or policy['provider_base_url'],
             campaign_binding=policy, api_key=api_key, max_completion_tokens=max_completion_tokens,
-            phase_call_limits={'operator': 2, 'evaluation': 0}, reasoning_effort='low',
+            phase_call_limits={'operator': 2, 'evaluation': 0}, reasoning_effort=effort,
             message_mode='openevolve_v1')
     provider = fresh()
     bound = provider.governance_binding()['call_bound']['units']['token']
@@ -60,7 +77,6 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
         from zoo.circle_packing.pilot_plan import validate_draft_cell
         if type(cell_deadline) is not CellDeadline or draft_plan is None or expected_plan_ref is None:
             raise ValueError('timed Mori setup requires clock and independently pinned draft')
-        cell_id = f'mori-{seed}'
         binding = validate_draft_cell(ledger, draft_plan, cell_id, expected_plan_ref=expected_plan_ref)
         if cell_deadline._lifecycle.ledger is not ledger or cell_deadline._record['cell_id'] != cell_id or \
                 cell_deadline._record['plan_ref'] != binding['plan_ref'] or \

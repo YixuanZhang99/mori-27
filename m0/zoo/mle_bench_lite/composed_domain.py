@@ -31,6 +31,7 @@ class SandboxRunner:
         self.interpreter = sys.executable
         self.runtime_root = _PROCESS_RUNTIME_ROOT
         self._campaign_runtime = None
+        self._continuation_runtime = None
 
     @classmethod
     def for_campaign_runtime(cls, ledger, *, runtime, manifest, base_python):
@@ -43,19 +44,44 @@ class SandboxRunner:
         runner._campaign_runtime = (ledger, copy.deepcopy(manifest), str(base_python), verified['runtime_ref'])
         return runner
 
+    @classmethod
+    def for_fixture_continuation(cls, ledger, *, draft, source_directory, runtime_directory, base_python):
+        from zoo.circle_packing.continuation_binding import verify_bound_fixture_continuation
+        result = verify_bound_fixture_continuation(ledger, draft, source_directory=source_directory,
+            runtime_directory=runtime_directory, base_python=base_python,
+            expected_head=ledger.snapshot()['journal_head'])
+        runner = cls()
+        runner.runtime_root = Path(result['runtime'])
+        runner.interpreter = str(runner.runtime_root / 'bin' / 'python')
+        runner._campaign_runtime = (ledger, None, str(base_python), result['runtime_ref'])
+        runner._continuation_runtime = (copy.deepcopy(draft), str(source_directory), str(runtime_directory))
+        return runner
+
     def independent_runner(self):
         if self._campaign_runtime is None:
             return type(self)()
         ledger, manifest, base_python, _ = self._campaign_runtime
+        if self._continuation_runtime is not None:
+            draft, source, runtime = self._continuation_runtime
+            return type(self).for_fixture_continuation(ledger, draft=draft, source_directory=source,
+                runtime_directory=runtime, base_python=base_python)
         return type(self).for_campaign_runtime(ledger, runtime=self.runtime_root, manifest=manifest,
                                                 base_python=base_python)
 
     def _verify_campaign_runtime(self):
         if self._campaign_runtime is None:
             return
-        from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
         ledger, manifest, base_python, reference = self._campaign_runtime
-        result = verify_frozen_runtime(ledger, runtime=self.runtime_root, manifest=manifest, base_python=base_python)
+        if self._continuation_runtime is not None:
+            from zoo.circle_packing.continuation_binding import verify_bound_fixture_continuation
+            draft, source, runtime = self._continuation_runtime
+            result = verify_bound_fixture_continuation(ledger, draft, source_directory=source,
+                runtime_directory=runtime, base_python=base_python, expected_head=ledger.snapshot()['journal_head'])
+            if result['runtime'] != str(self.runtime_root):
+                raise ValueError('continuation runtime identity changed')
+        else:
+            from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+            result = verify_frozen_runtime(ledger, runtime=self.runtime_root, manifest=manifest, base_python=base_python)
         if result['runtime_ref'] != reference or self.interpreter != str(self.runtime_root / 'bin' / 'python'):
             raise ValueError('campaign runtime identity changed')
 
