@@ -274,3 +274,9 @@ not older versions. After supervisor death, the same reconciliation entry can
 check the original reference-host claim and clean its surviving group; the
 whole cell and accounting stay unresolved, with no automatic retry. Independent
 paired audits and the remaining pilot gates are still required before paid use.
+`reference_budget_config` independently reconstructs the reference physical
+budget from the frozen plan and campaign, without a provider credential. An
+offline pair test uses one temporary campaign and source plan, runs each arm
+for six configured rounds with fake transport, and audits both at the same
+campaign head. The test records the other four cells as unclaimed; it is not a
+fairness, live-readiness or benchmark certification.

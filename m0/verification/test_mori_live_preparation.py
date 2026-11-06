@@ -35,7 +35,7 @@ def prepared_cell(tmp_path, request):
     checkout = tmp_path / 'checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
-    if getattr(request, 'param', None) in ('reference_fake_live', 'reference_fake_live_stall'):
+    if getattr(request, 'param', None) in ('reference_fake_live', 'reference_fake_live_stall', 'paired_fake_live'):
         host = checkout / 'm0/zoo/circle_packing/host_runtime.py'
         worker = checkout / 'm0/zoo/circle_packing/reference_live_worker.py'
         code = host.read_text()
@@ -80,7 +80,7 @@ def prepared_cell(tmp_path, request):
                         '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
                         '-m', 'offline reference live host test'], check=True)
         commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
-    if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall'):
+    if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall', 'paired_fake_live'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
         gate = "    raise ValueError('live pilot gate is not complete')"
@@ -143,6 +143,78 @@ def prepared_cell(tmp_path, request):
         'clock': str(clock._store.path), 'output': str(output),
         'base_url': ledger.manifest_binding()['provider_base_url']}
     return config, ledger, clock, runner
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['paired_fake_live'], indirect=True)
+def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_cell, tmp_path, monkeypatch):
+    from core.x1.checkpoint import payload_digest
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_runtime import reference_budget_config
+    from zoo.circle_packing.mori_final import audit_anchored_mori_geometry
+    from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
+    from zoo.circle_packing.pilot_matrix import snapshot_matrix
+    from zoo.circle_packing.reference_recovery import recover_reference_snapshot
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+
+    config, ledger, mori_clock, _runner = prepared_cell
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    mori = launch_live_controller(config, deadline=mori_clock, directory=tmp_path / 'mori-supervisor',
+                                  api_key='fixture-only-secret')
+    assert mori['returncode'] == 0 and not mori['timeout'] and not mori['wrapper_error'], mori['stderr']
+    mori_report = json.loads(mori['stdout'])
+    vendor_clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'),
+        lifecycle=CellLifecycle(ledger), cell_id='vendor-0', plan_ref=config['ref'],
+        seconds=config['plan']['limits']['wallclock_seconds'])
+    with tempfile.TemporaryDirectory(prefix='mori-pair-', dir='/tmp') as workspace:
+        vendor_config = {**config, 'clock': str(vendor_clock._store.path), 'output': str(tmp_path / 'reference'),
+                         'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
+        vendor = launch_reference_live_controller(vendor_config, deadline=vendor_clock,
+            directory=tmp_path / 'reference-supervisor', api_key='fixture-only-secret')
+        assert vendor['returncode'] == 0 and not vendor['timeout'] and not vendor['wrapper_error'], vendor['stderr']
+        vendor_report = json.loads(vendor['stdout'])
+        mori_rows = list(ContinuationStore(Path(config['output']) / 'framework' / 'x1.jsonl').read())
+        vendor_rows = list(ContinuationStore(Path(vendor_config['output']) / 'events.jsonl').read())
+        context = next(row['payload']['invocation']['external_context'] for row in mori_rows
+                       if row['kind'] == 'composed_provider_started')
+        mori_run, mori_physical_ref = context['currency_run_id'], context['physical_plan_ref']
+        vendor_run = ledger.reference_authority_claim('vendor-0')['currency_run_id']
+        vendor_physical_ref = next(row['payload']['plan_ref'] for row in vendor_rows
+                                   if row['kind'] == 'governed_control_started')
+        head = ledger.snapshot()['journal_head']
+        def view(run_id, plan_ref):
+            return RecordedCurrencyView(ledger.export_governance_evidence(run_id, plan_ref),
+                                        expected_run_id=run_id, expected_head=head)
+        mori_view, vendor_view = view(mori_run, mori_physical_ref), view(vendor_run, vendor_physical_ref)
+        recorded_mori = RecordedCellClock(mori_clock.export_evidence(), mori_view.cell_deadline_claim('mori-0'))
+        recorded_vendor = RecordedCellClock(vendor_clock.export_evidence(), vendor_view.cell_deadline_claim('vendor-0'))
+        def forbidden(*args, **kwargs):
+            raise AssertionError('independent pair audit attempted external work')
+        monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+        monkeypatch.setattr('zoo.circle_packing.domain.CirclePackingDomain.evaluate', forbidden)
+        monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', forbidden)
+        mori_audit = audit_anchored_mori_geometry(mori_rows, view=mori_view, clock=recorded_mori,
+            run_id=mori_run, plan=config['plan'], expected_plan_ref=config['ref'], expected_rows_sha256=payload_digest(mori_rows))
+        options, stamp, governance = reference_budget_config(config['plan'], ledger.manifest_binding(), seed=0)
+        vendor_audit = recover_reference_snapshot(vendor_view, recorded_vendor, vendor_run, plan=config['plan'],
+            expected_plan_ref=config['ref'], worker_directory=vendor_config['worker_directory'],
+            options=options, stamp=stamp, governance=governance, rows=vendor_rows)
+        assert mori_audit['measurement'] == mori_report['final_measurement'] and mori_report['replay_passed']
+        assert vendor_audit['metrics'] == vendor_report['selected_program']['metrics']
+        assert vendor_audit['selection_frozen'] and vendor_audit['performance_claim'] is False
+        vendor_currency = vendor_view.audit_run(vendor_run, vendor_physical_ref)
+        assert not vendor_currency['pending_calls'] and vendor_currency['settled_upper_bound_micro_cny'] > 0
+        assert mori_audit['settled_upper_bound_micro_cny'] > 0
+        matrix = snapshot_matrix(ledger, config['plan'], expected_plan_ref=config['ref'], expected_head=head)
+        assert len(matrix['cells']) == 6
+        assert [row['state'] for row in matrix['cells']].count('claimed_outcome_unverified') == 2
+        assert [row['state'] for row in matrix['cells']].count('not_claimed') == 4
+        for root in (tmp_path / 'mori-supervisor', Path(config['output']), tmp_path / 'reference-supervisor',
+                     Path(vendor_config['output']), Path(vendor_config['worker_directory']), Path(workspace)):
+            for file in root.rglob('*'):
+                if file.is_file() and not file.is_symlink():
+                    assert b'fixture-only-secret' not in file.read_bytes(), f'fixture key persisted in {file}'
 
 
 @pytest.mark.linux
@@ -470,7 +542,7 @@ print(json.dumps({'candidate': result['candidate'], 'state': result['final_state
 @pytest.mark.linux
 def test_reference_real_provider_path_with_test_gate_override_and_no_network(prepared_cell, tmp_path, monkeypatch):
     """Exercise real-provider wiring with a fake transport and test-only gate override."""
-    from zoo.circle_packing.host_runtime import (build_reference_authorities, run_reference_cell_fixture,
+    from zoo.circle_packing.host_runtime import (build_reference_authorities, reference_budget_config, run_reference_cell_fixture,
                                                 run_reference_cell_live)
     config, ledger, _mori_clock, runner = prepared_cell
     plan = config['plan']
@@ -508,6 +580,10 @@ def test_reference_real_provider_path_with_test_gate_override_and_no_network(pre
         snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'], runner=runner,
         api_key='fixture-only-secret', base_url=config['base_url'], mode='live_preparation')
     try:
+        from dataclasses import asdict
+        options, stamp, governance = reference_budget_config(plan, ledger.manifest_binding(), seed=0)
+        assert options == authority.budget.options and stamp == asdict(authority.budget.stamp)
+        assert governance == authority.budget._governed.config
         with pytest.raises(ValueError, match='fixture requires'):
             run_reference_cell_fixture(authority, clock, tmp_path / 'worker', tmp_path / 'unused',
                 snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'],

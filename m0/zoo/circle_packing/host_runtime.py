@@ -6,7 +6,7 @@ the existing physical and currency journals and does not persist provider keys.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import asyncio
 import fcntl
 import hashlib
@@ -346,20 +346,23 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
         raise
 
 
-def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref, runner, api_key,
-                       base_url, authority_ref, existing_claim, currency_run_id, lease, mode):
-    policy = ledger.manifest_binding()
-
-    def provider(operator_cap):
-        return build_reference_provider(ledger, plan, api_key=api_key, base_url=base_url,
-                                        operator_cap=operator_cap, fixture=mode == 'fixture')
-
-    main, control_provider = provider(1), provider(2)
-    bound = main.governance_binding()['call_bound']['units']['token']
+def reference_budget_config(plan, campaign, *, seed):
+    """Derive the reference physical budget without credentials or a live authority."""
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    if type(plan) is not dict or type(seed) is not int or seed not in (0, 1, 2):
+        raise ValueError('reference budget requires its frozen plan and seed')
+    try:
+        expected = build_draft_plan(campaign, source_commit=plan['source_commit'],
+                                    dependency_lock_sha256=plan['dependency_lock_sha256'])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError('reference budget differs from its frozen campaign') from error
+    if payload_digest(plan) != payload_digest(expected):
+        raise ValueError('reference budget differs from its frozen campaign')
+    bound = campaign['context_tokens'] + plan['max_completion_tokens']
     if plan['limits']['token'] != 2 * (plan['iterations'] + 1) * bound:
         raise ValueError('reference token limit differs from the frozen provider capacity')
     limits = {unit: plan['limits'][unit] for unit in ('token', 'node', 'eval_count')}
-    controls = {'after_main_cycles': [0], 'seed': int(cell.split('-')[1]),
+    controls = {'after_main_cycles': [0], 'seed': seed,
         'provider': {'name': 'control'}, 'domain': {'name': 'control'}, 'operator': {'name': 'draft'},
         'request': {'fidelity': 'dev', 'split_id': 'dev'},
         'reservations': {'operator': {'token': 2 * bound, 'node': 1, 'eval_count': 0},
@@ -369,6 +372,22 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
         'require_initial_control': True, 'reservation': {'token': 0, 'node': 0, 'eval_count': 1},
         'operation_reservations': {'operator': {'token': bound, 'node': 1, 'eval_count': 0}},
         'fidelity_rungs': [{'fidelity': 'dev', 'split_id': 'dev'}]}
+    stamp = AccountingStamp('deepseek', campaign['model'], 'service-capacity-v1', campaign['policy_sha256'], 'campaign')
+    return options, asdict(stamp), governance
+
+
+def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref, runner, api_key,
+                       base_url, authority_ref, existing_claim, currency_run_id, lease, mode):
+    policy = ledger.manifest_binding()
+
+    def provider(operator_cap):
+        return build_reference_provider(ledger, plan, api_key=api_key, base_url=base_url,
+                                        operator_cap=operator_cap, fixture=mode == 'fixture')
+
+    main, control_provider = provider(1), provider(2)
+    options, stamp_values, governance = reference_budget_config(plan, policy, seed=int(cell.split('-')[1]))
+    if main.governance_binding()['call_bound']['units']['token'] != policy['context_tokens'] + plan['max_completion_tokens']:
+        raise ValueError('reference provider capacity differs from its frozen plan')
     journal_path = root / 'events.jsonl'
     if journal_path.is_symlink():
         raise ValueError('reference physical journal cannot be a symlink')
@@ -377,7 +396,7 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid():
             raise ValueError('reference physical journal must be a private regular file')
     store = ContinuationStore(journal_path)
-    stamp = AccountingStamp('deepseek', policy['model'], 'service-capacity-v1', policy['policy_sha256'], 'campaign')
+    stamp = AccountingStamp(**stamp_values)
     budget = HierarchicalBudget(options, stamp, store, governance=governance)
     prior_events = list(store.read(JOURNAL_KIND))
     if existing_claim is not None and not prior_events:
