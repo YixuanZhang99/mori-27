@@ -27,7 +27,7 @@
 | AIDE / MLE 三任务 | 官方 score 均值：spooky 0.369990、leaf 0.080923、nomad 0.062363，越低越好 | 每任务 3/3 份提交有效；nomad 的历史阈值映射为铜／银／银。[九组结果](research/experiments/2026-11-05-aide-mle/README.md) |
 | Arbor / MLE 三任务 | 官方 score 均值：spooky 0.453330、leaf 0.172093、nomad 0.061257，越低越好 | 每任务 3/3 份提交有效；nomad 三组达到历史银牌阈值。[九组结果](research/experiments/2026-11-05-arbor-mle/README.md) |
 
-MLE 历史阈值由固定评分器映射，不是新的 Kaggle 在线排名或实际获奖；两个方法的预算与搜索设置不同，不应仅凭表格比较方法优劣。GEPA 各 seed 的输出上限并不完全一致，也不计算三 seed 均值。OpenEvolve 正在开发，尚无真实配对 benchmark 成绩；AIRA、LoongFlow 和 R&D-Agent 仍在后续计划中。
+MLE 历史阈值由固定评分器映射，不是新的 Kaggle 在线排名或实际获奖；两个方法的预算与搜索设置不同，不应仅凭表格比较方法优劣。GEPA 各 seed 的输出上限并不完全一致，也不计算三 seed 均值。OpenEvolve 的单 seed 双臂真实试跑已完成：最终有效快照为 Mori 0.959764、参考侧 1.582126；参考侧完整运行覆盖未认证，不能作为完整 benchmark 对比。其余 seed 尚未运行，详见[首对试跑及限制](research/experiments/2026-11-07-openevolve-circle/README.md)。AIRA、LoongFlow 和 R&D-Agent 仍在后续计划中。
 
 GEPA 新入口（默认离线、不访问模型）：
 
@@ -119,7 +119,7 @@ S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最�
 
 新增 [外部费用治理桥接](docs/GOVERNED_CURRENCY.md) 提供独立的 loopback HTTP 示例、双重准入和记录恢复；真实付费三任务试跑已使用该桥接，但尚未完成同搜索治理收益对照。
 
-**当前代码位置：** `main` 已包含 GEPA、FunSearch、AIDE 和 Arbor 的适配及小规模真实结果；Arbor 已通过 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入。当前开发分支为 `codex/classic-openevolve`：离线工程验证正在推进，真实配对试跑及合入尚未完成。后续顺序和详细状态见[当前执行目标](docs/CURRENT_GOAL.md)。
+**当前代码位置：** `main` 已包含 GEPA、FunSearch、AIDE 和 Arbor 的适配及小规模真实结果；Arbor 已通过 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入。当前开发分支为 `codex/classic-openevolve`：单 seed 真实双臂试跑已记录，完整运行覆盖、其余 seed 和合入尚未完成。后续顺序和详细状态见[当前执行目标](docs/CURRENT_GOAL.md)。
 
 ## 目录
 

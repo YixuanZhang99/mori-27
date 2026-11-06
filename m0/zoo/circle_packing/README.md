@@ -1,5 +1,11 @@
 # OpenEvolve circle-packing fixture
 
+> Current status (2026-11-07): the original seed-0 live pair has run under the
+> frozen `49fb076` source. See the [real-trial report](../../../research/experiments/2026-11-07-openevolve-circle/README.md)
+> for its partial audit and limitations. The historical development notes below
+> describe individual fixture components at their original stage; they do not
+> supersede the current trial report or authorize later live cells.
+
 The named runner exercises Mori's public Framework, the pinned OpenEvolve host
 and the sandboxed 26-circle evaluator with deterministic synthetic patches.
 It makes no model requests and its scores are **not benchmark results**.
