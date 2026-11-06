@@ -21,35 +21,47 @@ from core.executor.types import CostVec, EvalResult, EvalStatus
 from zoo.mle_bench_lite.agent_common import _extract_solution_code
 from zoo.mle_bench_lite.public_train import PROTOCOL, SPLITS, digest, file_digest
 
+_PROCESS_RUNTIME_ROOT = Path(sys.prefix).resolve()
+
 
 class SandboxRunner:
     """Production runner: no host credentials, network, original data or grader."""
     def __init__(self):
         self.sandbox = BubblewrapSandbox()
         self.interpreter = sys.executable
+        self.runtime_root = _PROCESS_RUNTIME_ROOT
 
     @staticmethod
     def validate_paths(*paths):
         # bwrap needs the system interpreter/libraries, so those trees are
         # readable. Dataset, cache and private-source roots must not be there.
         visible = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
+        visible.append(_PROCESS_RUNTIME_ROOT)
         for value in paths:
             if value is None:
                 continue
             path = Path(value).resolve()
-            if any(path == root or root in path.parents for root in visible):
+            if any(path == root or root in path.parents or path in root.parents for root in visible):
                 raise ValueError("benchmark data/artifacts must be outside sandbox-visible system trees")
 
     @property
     def manifest_binding(self):
-        return {"kind": "bubblewrap-seccomp-csv-v1", "python": self.interpreter,
+        binding = {"kind": "bubblewrap-seccomp-csv-v1", "python": self.interpreter,
                 "python_sha256": hashlib.sha256(Path(self.interpreter).read_bytes()).hexdigest(),
                 "threads": {name: 2 for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")},
                 "seccomp": self.sandbox.seccomp_spec()}
+        if not any(self.runtime_root == Path(name).resolve() or Path(name).resolve() in self.runtime_root.parents
+                   for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")):
+            binding['runtime_root'] = str(self.runtime_root)
+        return binding
 
     def execute(self, workspace, timeout):
+        self.validate_paths(workspace)
+        system_roots = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
+        runtime_mount = () if any(self.runtime_root == root or root in self.runtime_root.parents
+                                  for root in system_roots) else (self.runtime_root,)
         command = self.sandbox.wrap([self.interpreter, "program.py"], cwd=workspace,
-                                   protected_paths=("program.py", "data"))
+                                   protected_paths=("program.py", "data"), readonly_paths=runtime_mount)
         thread_settings = []
         for name, value in self.manifest_binding["threads"].items():
             thread_settings.extend(["--setenv", name, str(value)])

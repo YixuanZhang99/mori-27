@@ -331,7 +331,7 @@ assert result=='fixture patch' and client.last_usage['total_tokens']==7
         thread.start()
         result = run_cell_worker(deadline, tmp_path / 'worker', workspace,
             [sys.executable, '-c', program, str(source), str(socket_path), str(token_path)],
-            readonly_source=source)
+            readonly_source=source, readonly_runtime=Path(sys.prefix))
         thread.join(timeout=5)
         assert not thread.is_alive()
     assert result['state'] == 'completed'

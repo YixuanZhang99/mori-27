@@ -38,7 +38,7 @@ class BubblewrapSandbox:
                 command.extend(["--dir", str(directory)])
 
     def wrap(self, args: list[str], cwd: Path, protected_paths=(),
-             data_dir: str = "", env: dict | None = None) -> list[str]:
+             data_dir: str = "", env: dict | None = None, readonly_paths=()) -> list[str]:
         root = cwd.resolve()
         if not args or not root.is_dir():
             raise ValueError("sandbox requires a command and existing workspace")
@@ -76,5 +76,11 @@ class BubblewrapSandbox:
                 raise ValueError("sandbox data_dir must be an existing directory")
             self._directories(command, data)
             command.extend(["--ro-bind", str(data), str(data)])
+        for value in readonly_paths:
+            readonly = Path(value).resolve(strict=True)
+            if not readonly.is_dir() or readonly == root or root in readonly.parents or readonly in root.parents:
+                raise ValueError("read-only runtime must be a separate directory")
+            self._directories(command, readonly)
+            command.extend(["--ro-bind", str(readonly), str(readonly)])
         command.extend(["--chdir", str(root), "--", *args])
         return command

@@ -33,7 +33,7 @@ def _stop_watch(deadline):
     return remaining
 
 
-def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=None):
+def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=None, readonly_runtime=None):
     """Launch one worker without inherited environment; expiry never certifies it."""
     if type(deadline) is not CellDeadline or type(command) is not list or not command or \
             any(type(part) is not str or not part for part in command):
@@ -51,11 +51,18 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
             directory in source.parents or source in deadline._store.path.resolve().parents or
             source in deadline._lifecycle.ledger.path.resolve().parents):
         raise ValueError('read-only source must be separate from workspace and authorities')
+    runtime = None if readonly_runtime is None else Path(readonly_runtime).resolve(strict=True)
+    if runtime is not None and (not runtime.is_dir() or runtime == workspace or runtime in workspace.parents or
+            workspace in runtime.parents or runtime == directory or runtime in directory.parents or
+            directory in runtime.parents or runtime in deadline._store.path.resolve().parents or
+            runtime in deadline._lifecycle.ledger.path.resolve().parents):
+        raise ValueError('read-only runtime must be separate from workspace and authorities')
     remaining = deadline.remaining()
     if remaining <= 0:
         raise DeadlineExpired('cell deadline expired before worker claim')
     sandbox = BubblewrapSandbox()
-    args = sandbox.wrap(command, workspace, data_dir='' if source is None else str(source))
+    args = sandbox.wrap(command, workspace, data_dir='' if source is None else str(source),
+                        readonly_paths=() if runtime is None else (runtime,))
     directory.mkdir(mode=0o700, parents=False, exist_ok=False)
     store = ContinuationStore(directory / 'worker.jsonl')
     journal = ProcessJournal(store)
@@ -63,7 +70,8 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
     reference = payload_digest({'schema_version': 1, 'cell_id': record['cell_id'],
         'deadline_ref': record['record_sha256'], 'workspace': str(workspace),
         'command': command, 'sandbox': 'bubblewrap-seccomp-v1',
-        'readonly_source': None if source is None else str(source)})
+        'readonly_source': None if source is None else str(source),
+        'readonly_runtime': None if runtime is None else str(runtime)})
     # This irreversible claim is the authority if local process evidence is lost.
     deadline._lifecycle.ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], reference)
     store.append('circle_cell_worker_claimed', {'cell_id': record['cell_id'],

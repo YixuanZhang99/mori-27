@@ -1,6 +1,8 @@
 """Offline timed host controller reaches the existing physical/CNY broker."""
 import asyncio
+import hashlib
 from pathlib import Path
+import subprocess
 import sys
 import threading
 
@@ -9,6 +11,7 @@ from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_host_control import control_authority
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.cell_worker import run_cell_worker
+from zoo.circle_packing.clean_source import export_clean_source, verify_clean_source
 from zoo.circle_packing.host_control import HostSeedControl
 from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
 from zoo.circle_packing.host_physical import HostStageAdmission
@@ -19,10 +22,20 @@ from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 def test_timed_isolated_host_routes_model_and_stages_through_authorities(control_authority, local_endpoint, tmp_path):
     ledger, budget, bridge, run, ready, domain = control_authority
-    plan = build_draft_plan(ledger.manifest_binding(), source_commit='a' * 40, dependency_lock_sha256='b' * 64)
+    repository = Path(__file__).resolve().parents[2]
+    commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+    checkout = tmp_path / 'clean-checkout'
+    subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
+    subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+    lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
+    plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
     ref = 'sha256:' + plan['draft_sha256']
     deadline = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='vendor-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    exported = export_clean_source(ledger, plan, 'vendor-0', checkout=checkout,
+                                   destination=tmp_path / 'exported-source', expected_plan_ref=ref)
+    assert exported['source_commit'] == commit
+    verify_clean_source(tmp_path / 'exported-source', exported['manifest'], expected_tree_ref=exported['tree_ref'])
     bridge.bind_cell_deadline(deadline, plan=plan, expected_plan_ref=ref, cell_id='vendor-0')
     assert asyncio.run(HostSeedControl(budget, bridge, run, ready, domain).execute('control-0000'))['status'] == 'evaluated'
     diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
@@ -34,7 +47,7 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     socket_path, token_path = workspace / 'broker.sock', workspace / 'token'
     token_path.write_text('a' * 64)
     token_path.chmod(0o600)
-    source = Path(__file__).resolve().parents[1]
+    source = tmp_path / 'exported-source' / 'm0'
     program = """import os,sys
 sys.path.insert(0,sys.argv[1])
 os.environ['MORI_CIRCLE_BROKER_SOCKET']=sys.argv[2]
@@ -54,10 +67,12 @@ assert result['stage_calls']==3 and result['performance_claim'] is False
         thread.start()
         result = run_cell_worker(deadline, tmp_path / 'worker', workspace,
             ['/usr/bin/env', 'PYTHONHASHSEED=0', sys.executable, '-c', program,
-             str(source), str(socket_path), str(token_path), str(workspace / 'host-run')], readonly_source=source)
+             str(source), str(socket_path), str(token_path), str(workspace / 'host-run')],
+            readonly_source=source, readonly_runtime=Path(sys.prefix))
         thread.join(timeout=5)
         assert not thread.is_alive()
     assert result['state'] == 'completed'
+    verify_clean_source(tmp_path / 'exported-source', exported['manifest'], expected_tree_ref=exported['tree_ref'])
     assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
     assert budget.audit_governance()['physical_totals']['token'] == 7
     assert provider.audit()['currency']['protection_valid']
