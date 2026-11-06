@@ -274,9 +274,14 @@ def test_resume_original_unstarted_cell_runs_under_its_existing_clock(prepared_c
         if reference:
             config = {**config, 'output': str(tmp_path / 'reference-host'),
                       'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
-        original = CellDeadline.start(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
-            cell_id=f'{arm}-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
-        saved = dict(original._record)
+        lifecycle = CellLifecycle(ledger)
+        monkeypatch.setattr(lifecycle, 'create', lambda _: (_ for _ in ()).throw(SystemExit('before claim')))
+        with pytest.raises(SystemExit):
+            CellDeadline.start(ContinuationStore(config['clock']), lifecycle=lifecycle,
+                cell_id=f'{arm}-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
+        saved = next(row['payload'] for row in ContinuationStore(config['clock']).read()
+                     if row['kind'] == 'circle_cell_deadline_started')
+        assert ledger.cell_deadline_claim(f'{arm}-0') is None
         result = resume_unstarted_live_cell(arm, config, directory=tmp_path / 'resumed-supervisor',
                                             api_key='fixture-only-secret')
         assert result['returncode'] == 0 and not result['timeout'] and not result['wrapper_error'], result['stderr']
