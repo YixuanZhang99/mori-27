@@ -14,11 +14,11 @@ from core.x1.store import AppendOnlyStore
 from zoo.circle_packing.cell_deadline import _boot_identity
 
 
-def _private_json(path):
+def _private_json(path, *, max_bytes=1048576):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd, 'rb') as stream:
         info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_size > 1048576:
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_size > max_bytes:
             raise ValueError('supervisor identity file is not a private regular file')
         return json.load(stream)
 
@@ -78,7 +78,7 @@ def require_supervised_process(ledger, deadline):
         if record.get('worker_ref') != worker_ref or claim != {
                 'deadline_ref': clock['record_sha256'], 'host_ref' if reference else 'worker_ref': worker_ref}:
             raise ValueError('supervisor binding differs from the original claim')
-        config = _private_json(root / 'config.json')
+        config = _private_json(root / 'config.json', max_bytes=64 * 1024 * 1024)
         if payload_digest(config) != binding['config_sha256'] or config['ref'] != clock['plan_ref'] or \
                 type(config['seed']) is not int or cell != f"{'vendor' if reference else 'mori'}-{config['seed']}" or \
                 Path(config['ledger']).resolve(strict=True) != ledger.path.resolve(strict=True) or \

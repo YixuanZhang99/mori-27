@@ -1,6 +1,7 @@
 """A claimed pilot cannot authorize work in an unsupervised process."""
 import pytest
 import os
+import json
 from pathlib import Path
 import sys
 
@@ -23,3 +24,11 @@ def test_contained_process_receives_its_own_published_target_path(tmp_path):
     result = journal.wait(process, record, before_record=lambda: None)
     assert result['returncode'] == 0
     assert Path(record['stdout_path']).read_text().strip() == record['target_path']
+
+
+def test_supervisor_config_accepts_large_frozen_manifests(tmp_path):
+    from zoo.circle_packing.supervisor_attestation import _private_json
+    config = {'runtime_manifest': 'a' * (2 * 1024 * 1024)}
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps(config))
+    assert _private_json(path, max_bytes=64 * 1024 * 1024) == config
