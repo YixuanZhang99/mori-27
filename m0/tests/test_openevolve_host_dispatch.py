@@ -266,6 +266,135 @@ def test_host_stage_rejects_late_result_after_measured_settlement(timed_authorit
         stages.execute('a' * 32, 'program', stage=1)
     assert budget.audit_governance()['physical_totals']['eval_count'] == 2
     assert not budget.state()['open_intents']
+    anchor = ledger.stage_eligibility(ready.authority_binding['currency_run_id'], 'a' * 32)
+    assert anchor is not None
+    proof = list(budget.store.read('host_stage_eligibility'))[0]['payload']
+    assert proof['observation']['eligible'] is False
+    assert stages.audit()['ontime_stage_observations'] == 0
+
+
+def test_host_stage_anchors_ontime_eligibility_to_original_result(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    assert stages.execute('a' * 32, 'program', stage=1)['status'] == 'ok'
+    proof = list(budget.store.read('host_stage_eligibility'))[0]['payload']
+    assert proof['observation']['eligible'] is True
+    assert ledger.stage_eligibility(ready.authority_binding['currency_run_id'], 'a' * 32)['proof_sha256'] == __import__(
+        'core.x1.checkpoint', fromlist=['payload_digest']).payload_digest(proof)
+    assert stages.audit()['ontime_stage_observations'] == 1
+
+
+def test_host_stage_audit_rejects_changed_eligibility(timed_authority, tmp_path, monkeypatch):
+    import copy
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    original = budget.store.read
+    def altered(kind=None):
+        rows = copy.deepcopy(list(original(kind)))
+        for row in rows:
+            if row['kind'] == 'host_stage_eligibility':
+                row['payload']['observation']['eligible'] = False
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', altered)
+    with pytest.raises(ValueError, match='eligibility'):
+        stages.audit()
+
+
+def test_host_stage_audit_requires_prior_eligibility_before_second_stage(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    stages.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+    assert stages.audit()['stage_calls'] == 2
+    original = budget.store.read
+    def reordered(kind=None):
+        rows = list(original(kind))
+        if kind is None:
+            proof_index = next(i for i, row in enumerate(rows) if row['kind'] == 'host_stage_eligibility'
+                               and row['payload']['request_id'] == 'a' * 32)
+            proof = rows.pop(proof_index)
+            second = next(i for i, row in enumerate(rows) if row['kind'] == 'host_stage_started'
+                          and row['payload']['request_id'] == 'b' * 32)
+            rows.insert(second + 1, proof)
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', reordered)
+    with pytest.raises(ValueError, match='eligibility'):
+        stages.audit()
+
+
+def test_host_stage_two_rejects_prior_proof_before_settlement(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    original = budget.store.read
+    def reordered(kind=None):
+        rows = list(original(kind))
+        if kind is None:
+            index = next(i for i, row in enumerate(rows) if row['kind'] == 'host_stage_eligibility')
+            proof = rows.pop(index)
+            settle = next(i for i, row in enumerate(rows) if row['kind'] == 'hierarchical_budget'
+                          and row['payload'].get('event') == 'settle'
+                          and row['payload'].get('data', {}).get('intent_id') == 'host-stage:' + 'a' * 32)
+            rows.insert(settle, proof)
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', reordered)
+    with pytest.raises(ValueError, match='eligibility'):
+        stages.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+
+
+def test_host_stage_anchor_crash_keeps_cost_and_blocks_audit(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    def crash(*args, **kwargs):
+        raise RuntimeError('fixture anchor failure')
+    monkeypatch.setattr(ledger, 'anchor_stage_eligibility', crash)
+    with pytest.raises(RuntimeError, match='anchor failure'):
+        stages.execute('a' * 32, 'program', stage=1)
+    assert budget.audit_governance()['physical_totals']['eval_count'] == 2
+    assert not budget.state()['open_intents']
+    with pytest.raises(ValueError, match='eligibility'):
+        stages.audit()
 
 
 def test_host_stage_uses_remaining_cell_time_as_sandbox_timeout(timed_authority, tmp_path, monkeypatch):

@@ -254,6 +254,25 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
             raise ValueError('response eligibility must bind the current original call and clock')
         governance['response_eligibility'][call_id] = {'run_id': run_id, 'cell_id': cell_id,
             'sequence': sequence, 'observation_sha256': digest, 'proof_sha256': proof}
+    elif kind == "anchor_stage_eligibility":
+        if set(event) != {'kind', 'schema_version', 'run_id', 'request_id', 'cell_id', 'sequence',
+                          'observation_sha256', 'proof_sha256'}:
+            raise ValueError('stage eligibility anchor has invalid fields')
+        run_id = _sha(event['run_id'])
+        request_id = _identifier(event['request_id'], 'stage request identity')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        proof = _sha(event['proof_sha256'])
+        claim = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        key = (run_id, request_id)
+        if claim is None or binding is None or binding['cell_id'] != cell_id or \
+                claim['observation_sequence'] != sequence or claim['observation_sha256'] != digest or \
+                key in governance['stage_eligibility']:
+            raise ValueError('stage eligibility must bind the original run and clock')
+        governance['stage_eligibility'][key] = {'cell_id': cell_id, 'sequence': sequence,
+            'observation_sha256': digest, 'proof_sha256': proof}
     elif kind == "claim_cell_worker":
         if set(event) != {"kind", "schema_version", "cell_id", "deadline_ref", "worker_ref"}:
             raise ValueError("cell worker claim has invalid fields")
@@ -393,7 +412,7 @@ def _reduce_history(policies, events, heads):
     operations, pending, spent = {}, None, 0
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
-                  "response_eligibility": {}}
+                  "response_eligibility": {}, "stage_eligibility": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -707,6 +726,19 @@ class CampaignBudget:
         _identifier(call_id, 'call identity')
         with self._transaction() as (_db, _policy, state):
             value = state['governance']['response_eligibility'].get(call_id)
+            return dict(value) if value is not None else None
+
+    def anchor_stage_eligibility(self, run_id, request_id, cell_id, sequence, observation_sha256, proof_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_stage_eligibility', 'schema_version': 2,
+                'run_id': run_id, 'request_id': request_id, 'cell_id': cell_id, 'sequence': sequence,
+                'observation_sha256': observation_sha256, 'proof_sha256': proof_sha256})
+
+    def stage_eligibility(self, run_id, request_id):
+        _sha(run_id)
+        _identifier(request_id, 'stage request identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['stage_eligibility'].get((run_id, request_id))
             return dict(value) if value is not None else None
 
     def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):

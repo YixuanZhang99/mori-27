@@ -182,6 +182,8 @@ class HostDispatchCoordinator:
             if receipt_outcome != 'returned':
                 completion['outcome'] = receipt_outcome
             self.store.append('composed_provider_completed', completion)
+            if deadline_expired:
+                self.store.append('composed_provider_deadline_expired', {'binding': binding})
             self.physical.settle(receipt, tokens=outcome.usage['total_tokens'])
             public_reply = {'state': state, 'result': outcome.result if state == 'ok' else None, 'usage': outcome.usage}
         except Exception:

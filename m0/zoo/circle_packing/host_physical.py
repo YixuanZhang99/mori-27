@@ -128,6 +128,23 @@ class HostStageAdmission:
                 raise ValueError('main stage sandbox differs from frozen independent control')
             self.control_authority._require_control()
 
+    def _verify_stage_eligibility(self, proof, start, terminal, deadline):
+        if type(proof) is not dict or set(proof) != {'request_id', 'intent_id', 'fingerprint',
+                                                       'evidence_ref', 'observation'} or \
+                proof['request_id'] != start['request_id'] or proof['intent_id'] != start['intent_id'] or \
+                proof['fingerprint'] != start['fingerprint'] or proof['evidence_ref'] != terminal['evidence_ref']:
+            raise ValueError('stage eligibility differs from original measured execution')
+        deadline.verify_observation(proof['observation'])
+        ledger = self.control_authority.bridge.ledger
+        run_id = self.control_authority.ready.authority_binding['currency_run_id']
+        anchor = ledger.stage_eligibility(run_id, start['request_id'])
+        observation = proof['observation']['observation']
+        if anchor is None or anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != observation['sequence'] or anchor['observation_sha256'] != observation['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('stage eligibility differs from campaign anchor')
+        return proof['observation']['eligible']
+
     def audit(self):
         """Join original stage records to the physical journal and geometry."""
         from core.composition.budget import JOURNAL_KIND
@@ -136,7 +153,7 @@ class HostStageAdmission:
             operations = self.budget._rebuild()[0]['operations']
             provider_records = invocation_records(self.budget.store)
             rows = list(self.budget.store.read())
-            starts, completed, positions = {}, {}, {}
+            starts, completed, positions, eligibility = {}, {}, {}, {}
             for index, row in enumerate(rows):
                 payload = row['payload']
                 if row['kind'] == JOURNAL_KIND and payload.get('event') in {'start', 'settle'}:
@@ -155,12 +172,20 @@ class HostStageAdmission:
                     if request_id in completed or set(payload) != {'request_id', 'fingerprint', 'result', 'result_ref', 'evidence_ref'}:
                         raise ValueError('duplicate or invalid stage terminal')
                     completed[request_id] = (index, payload)
+                elif row['kind'] == 'host_stage_eligibility':
+                    request_id = payload.get('request_id')
+                    if request_id in eligibility:
+                        raise ValueError('duplicate stage eligibility')
+                    eligibility[request_id] = (index, payload)
             if set(starts) != set(completed):
                 raise ValueError('stage evidence has an unresolved operation')
+            deadline = self.control_authority.bridge.cell_deadline() if self.control_authority is not None else None
+            if (deadline is not None and set(eligibility) != set(completed)) or (deadline is None and eligibility):
+                raise ValueError('stage eligibility coverage differs')
             physical_ids = {key for key in operations if key.startswith('host-stage:')}
             if physical_ids != {'host-stage:' + key for key in starts}:
                 raise ValueError('physical stage and evidence coverage differ')
-            used = set()
+            used, eligible_count = set(), 0
             for key, (start_index, start) in starts.items():
                 terminal_index, terminal = completed[key]
                 result, intent_id = terminal['result'], start['intent_id']
@@ -184,6 +209,11 @@ class HostStageAdmission:
                             positions.get(('settle', intent_id), -1):
                     raise ValueError('stage evidence differs from its physical operation')
                 _validate_stage_result(result, stage=start['stage'], program_ref=start['program_ref'])
+                if deadline is not None:
+                    proof_index, proof = eligibility[key]
+                    if proof_index <= positions.get(('settle', intent_id), len(rows)):
+                        raise ValueError('stage eligibility precedes physical settlement')
+                    eligible_count += self._verify_stage_eligibility(proof, start, terminal, deadline)
                 prior = start['prior_id']
                 if start['stage'] == 1:
                     if prior is not None:
@@ -193,6 +223,10 @@ class HostStageAdmission:
                         raise ValueError('second stage lacks a unique earlier first stage')
                     previous = completed[prior][1]['result']
                     previous_start = starts[prior][1]
+                    if deadline is not None and (eligibility[prior][0] >= start_index or not
+                            self._verify_stage_eligibility(eligibility[prior][1], previous_start,
+                                                           completed[prior][1], deadline)):
+                        raise ValueError('stage two requires earlier first-stage eligibility evidence')
                     if previous_start['stage'] != 1 or previous_start['program_ref'] != start['program_ref'] or \
                             previous['status'] != 'ok' or previous['metrics']['combined_score'] < .5:
                         raise ValueError('second stage differs from qualifying first stage')
@@ -201,9 +235,12 @@ class HostStageAdmission:
                     raise ValueError('unsupported recorded stage')
             return {'schema_version': 1, 'stage_calls': len(starts),
                     'stage_one_calls': sum(value[1]['stage'] == 1 for value in starts.values()),
-                    'stage_two_calls': sum(value[1]['stage'] == 2 for value in starts.values())}
+                    'stage_two_calls': sum(value[1]['stage'] == 2 for value in starts.values()),
+                    **({'ontime_stage_observations': eligible_count} if deadline is not None else {})}
 
     def _prior(self, prior_id, program_ref):
+        # Admission and offline audit must enforce the same original ordering.
+        self.audit()
         starts = [row['payload'] for row in self.budget.store.read('host_stage_started')]
         if any(row['stage'] == 2 and row['prior_id'] == prior_id for row in starts):
             raise ValueError('stage one has already been used for stage two')
@@ -227,6 +264,12 @@ class HostStageAdmission:
                 op.get('measurement_evidence_ref') != first['evidence_ref'] or \
                 op['actual_costs']['eval_count'] != 1:
             raise ValueError('stage one is not qualifying original measured evidence')
+        deadline = self.control_authority.bridge.cell_deadline() if self.control_authority is not None else None
+        if deadline is not None:
+            proofs = [row['payload'] for row in self.budget.store.read('host_stage_eligibility')
+                      if row['payload'].get('request_id') == prior_id]
+            if len(proofs) != 1 or not self._verify_stage_eligibility(proofs[0], start, first, deadline):
+                raise ValueError('stage one lacks eligible original timing')
 
     def execute(self, request_id, program, *, stage, prior_id=None, timeout=60):
         with self._lock:
@@ -280,6 +323,20 @@ class HostStageAdmission:
                     provider_evidence_ref=evidence_reference(self.budget.store, receipt.intent_id),
                     measurement_evidence_ref=measured_ref)
                 if deadline is not None:
+                    from zoo.circle_packing.cell_deadline import DeadlineExpired
+                    run_id = self.control_authority.ready.authority_binding['currency_run_id']
+                    ledger = self.control_authority.bridge.ledger
+                    def anchor(observation):
+                        proof = {'request_id': request_id, 'intent_id': receipt.intent_id,
+                                 'fingerprint': receipt.fingerprint, 'evidence_ref': measured_ref,
+                                 'observation': observation}
+                        self.budget.store.append('host_stage_eligibility', proof)
+                        ledger.anchor_stage_eligibility(run_id, request_id, deadline._record['cell_id'],
+                            observation['observation']['sequence'], observation['observation']['sha256'],
+                            payload_digest(proof))
+                    observation = deadline.observe_and_anchor(anchor)
+                    if not observation['eligible']:
+                        raise DeadlineExpired('cell deadline expired after stage accounting')
                     deadline.check()
                 return result
             except Exception:
