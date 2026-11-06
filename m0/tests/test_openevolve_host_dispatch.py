@@ -97,6 +97,34 @@ def test_host_refuses_underreserved_provider_before_dispatch(authority, local_en
     assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
 
 
+def test_broker_preserves_proven_zero_cost_refusal(authority, local_endpoint, tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from core.llm import ProviderBudgetExhausted
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_transport import HostBroker, HostBridgeClient
+    ledger, budget, bridge, run, ready, main = authority
+    def refuse(*args, **kwargs):
+        raise ValueError('fixture refusal')
+    monkeypatch.setattr(main, 'validate_dispatch', refuse)
+    dispatch = HostDispatchCoordinator(budget, bridge, run, ready)
+    path = tmp_path / 'refused.sock'
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        client = HostBridgeClient(SimpleNamespace(name='fixture'))
+        with pytest.raises(ProviderBudgetExhausted):
+            asyncio.run(client.generate_with_context('host system', [{'role': 'user', 'content': 'host user'}]))
+        thread.join(timeout=5)
+    assert client.last_usage == {'total_tokens': 0}
+    assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
+    assert not budget.state()['open_intents']
+    assert dispatch.audit()['currency']['protection_valid']
+
+
 def test_billed_provider_failure_settles_both_authorities(authority, local_endpoint):
     from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
     ledger, budget, bridge, run, ready, main = authority

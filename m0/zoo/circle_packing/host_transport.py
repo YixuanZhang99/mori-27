@@ -15,11 +15,15 @@ import socket
 import threading
 import uuid
 
-from core.llm import UsageError
+from core.llm import ProviderBudgetExhausted, UsageError
 from core.x1.checkpoint import payload_digest
 from zoo.mle_bench_lite.cny_budget import validate_detailed_usage
 
 _MAX_FRAME = 8 * 1024 * 1024
+
+
+class StageEvidenceFailure(BaseException):
+    """Abort the upstream worker if an unresolved stage cannot be recorded."""
 
 
 class HostBridgeClient:
@@ -58,12 +62,18 @@ class HostBridgeClient:
             reply = json.loads(raw)
             if type(reply) is not dict or set(reply) != {'state', 'result', 'usage'}:
                 raise ValueError('invalid broker response')
+            if reply['state'] == 'known_refused' and reply['result'] is None and reply['usage'] == {'total_tokens': 0}:
+                self.last_usage = {'total_tokens': 0}
+                self._halted = True
+                raise ProviderBudgetExhausted('host provider request was refused before dispatch')
             if reply['usage'] is not None:
                 self.last_usage = validate_detailed_usage(reply['usage'])
             if reply['state'] != 'ok' or self.last_usage is None or \
                     type(reply['result']) is not str or not reply['result'].strip():
                 raise ValueError('broker did not return a successful measured response')
             return reply['result']
+        except ProviderBudgetExhausted:
+            raise
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             self._halted = True
             raise UsageError('host broker operation failed or is unresolved') from None
@@ -190,9 +200,11 @@ class HostBroker:
                 try:
                     response = self._dispatch(request['request_id'], argument)
                     if type(response) is not dict or set(response) != {'state', 'result', 'usage'} or \
-                            response['state'] not in {'ok', 'known_failed', 'unknown'}:
+                            response['state'] not in {'ok', 'known_failed', 'known_refused', 'unknown'}:
                         raise ValueError('invalid dispatcher result')
-                    if response['usage'] is not None:
+                    if response['state'] == 'known_refused' and response['usage'] != {'total_tokens': 0}:
+                        raise ValueError('known refusal requires proof of zero usage')
+                    if response['usage'] is not None and response['state'] != 'known_refused':
                         validate_detailed_usage(response['usage'])
                     if response['state'] == 'ok' and (response['usage'] is None or
                             type(response['result']) is not str or not response['result'].strip()):

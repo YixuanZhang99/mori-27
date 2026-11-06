@@ -4,15 +4,14 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 import json
-import os
 from pathlib import Path
 
 from core.loop import Framework, LoopConfig
 from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.circle_packing.profile import build_profile
+from zoo.circle_packing.reproducibility import fixture_source_identity, require_hash_seed_zero
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
-from zoo.mle_bench_lite.recipe_support import source_identity
 from zoo.mle_bench_lite.agent_common import _atomic_json
 
 TASK = 'Improve the arrangement of 26 circles in a square'
@@ -39,11 +38,10 @@ def run(output: Path, *, mode='fixture', seed=0, iterations=1, ledger=None, prov
         raise ValueError('live OpenEvolve runner requires completed governance and reference integration')
     if provider is not None and type(provider) is not FixtureProvider:
         raise ValueError('fixture mode accepts only its offline provider')
-    if os.environ.get('PYTHONHASHSEED') != '0':
-        raise ValueError('fixture runner requires PYTHONHASHSEED=0 at process start')
+    require_hash_seed_zero()
     profile = build_profile(seed=seed, iterations=iterations, call_token_bound=128, migration_interval=2)
     output = Path(output).resolve()
-    source = source_identity()
+    source = fixture_source_identity()
     manifest = {'schema_version': 1, 'mode': mode, 'source': source, 'task': TASK,
                 'profile': profile, 'seed': seed, 'iterations': iterations}
     manifest_ref = payload_digest(manifest)

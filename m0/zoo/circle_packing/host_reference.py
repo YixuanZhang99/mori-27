@@ -13,9 +13,12 @@ import sys
 
 # Installs the pinned vendored OpenEvolve package path.
 from core.openevolve_interop import ProgramDatabase as _ProgramDatabase  # noqa: F401
-from core.composition.openevolve_registration import _SEED, _SEED_SHA, _frozen_source, policy_options
+from core.composition.openevolve_registration import (
+    _SEED, _SEED_SHA, _frozen_source, host_database_options, policy_options,
+)
 from core.composition.openevolve_prompt import _CONFIG, _verify_sources
 from core.x1.store import AppendOnlyStore
+from zoo.circle_packing.reproducibility import require_hash_seed_zero
 
 _ALLOWED_ENV = ('PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'PYTHONPATH',
                 'PYTHONHASHSEED', 'LD_LIBRARY_PATH')
@@ -61,6 +64,7 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_s
               ({'MORI_CIRCLE_STAGE_BROKER'} if fixture_stage_broker else set())
     if set(os.environ) - allowed:
         raise ValueError('host fixture worker requires a sanitized environment')
+    require_hash_seed_zero()
     _verify_sources()
     policy_options({'seed': seed, 'migration_interval': 2})
     seed_code = _frozen_source(_SEED, _SEED_SHA).decode('utf-8')
@@ -87,20 +91,21 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_s
     config.log_level = 'WARNING'
     config.evaluator.parallel_evaluations = 1
     config.evaluator.max_retries = 0
-    config.evaluator.timeout = 120
+    # Broker requests time out at 120 seconds; leave headroom for their
+    # fail-closed response before the upstream outer timeout can fire.
+    config.evaluator.timeout = 180
     config.evaluator.cascade_evaluation = True
     config.evaluator.cascade_thresholds = [.5, .75]
-    for name, value in {'num_islands': 4, 'population_size': 60, 'archive_size': 25,
-            'feature_dimensions': ['complexity', 'diversity'], 'feature_bins': 10,
-            'elite_selection_ratio': .3, 'exploration_ratio': .2, 'exploitation_ratio': .7,
-            'migration_interval': 2, 'migration_rate': .1}.items():
+    for name, value in host_database_options(2).items():
         setattr(config.database, name, value)
     evaluator = Path(__file__).with_name('reference_evaluator.py')
     with contextlib.redirect_stdout(sys.stderr):
         result = run_evolution(seed_code, evaluator, config=config, iterations=iterations,
                                output_dir=str(root / 'host'), cleanup=False)
-    calls = len(list(AppendOnlyStore(root / 'fixture-provider.jsonl').read('provider')))
+    calls = None if fixture_broker else len(list(AppendOnlyStore(root / 'fixture-provider.jsonl').read('provider')))
     stages = len(list(AppendOnlyStore(root / 'fixture-stages.jsonl').read('stage')))
+    if list(AppendOnlyStore(root / 'fixture-unresolved.jsonl').read('unresolved')):
+        raise RuntimeError('host fixture has unresolved stage execution')
     if result.best_code is None:
         raise RuntimeError('pinned host returned no evaluated program')
     return {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,

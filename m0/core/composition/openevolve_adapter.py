@@ -1,4 +1,4 @@
-"""C05 host adapter under development; not registered with the Framework."""
+"""Evidence-bound adapter over the pinned OpenEvolve host database."""
 from __future__ import annotations
 
 import copy
@@ -38,8 +38,8 @@ _IsolatedProgramDatabase, _HOST_GLOBALS = _isolated_host_class()
 class OpenEvolveAdapter:
     """Own the pinned host and isolate its global RNG from other components.
 
-    Host registration, selection, and journal-bound restoration are implemented;
-    policy wiring and production acceptance remain in progress.
+    The public Framework uses this adapter; live benchmark acceptance remains
+    subject to the separate governed reference and evidence checks.
     """
 
     def __init__(self, config: dict, *, seed: int, source_binding: dict):

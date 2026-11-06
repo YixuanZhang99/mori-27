@@ -110,7 +110,7 @@ class HostDispatchCoordinator:
             elif outcome.outcome == 'known_failed':
                 state, public_result, receipt_outcome = 'known_failed', 'provider invocation failed (RuntimeError)', 'failed'
             elif outcome.outcome == 'known_refused':
-                state, public_result, receipt_outcome = 'known_failed', 'provider invocation refused before dispatch', 'budget_exhausted'
+                state, public_result, receipt_outcome = 'known_refused', 'provider invocation refused before dispatch', 'budget_exhausted'
             else:
                 raise UsageError('host provider outcome is unsupported')
             if type(public_result) is not str:

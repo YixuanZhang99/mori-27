@@ -34,12 +34,18 @@ def policy_options(options):
     _frozen_source(_DATABASE, _DATABASE_SHA)
 
 
+def host_database_options(migration_interval):
+    if type(migration_interval) is not int or migration_interval < 1:
+        raise ValueError('OpenEvolve migration interval must be positive')
+    return {'num_islands': 4, 'population_size': 60, 'archive_size': 25,
+            'feature_dimensions': ['complexity', 'diversity'], 'feature_bins': 10,
+            'elite_selection_ratio': .3, 'exploration_ratio': .2, 'exploitation_ratio': .7,
+            'migration_interval': migration_interval, 'migration_rate': .1}
+
+
 def policy_factory(context, options):
     policy_options(options)
-    config = {'num_islands': 4, 'population_size': 60, 'archive_size': 25,
-              'feature_dimensions': ['complexity', 'diversity'], 'feature_bins': 10,
-              'elite_selection_ratio': .3, 'exploration_ratio': .2, 'exploitation_ratio': .7,
-              'migration_interval': options['migration_interval'], 'migration_rate': .1}
+    config = host_database_options(options['migration_interval'])
     binding = {'upstream_commit': '5153a7d74ee615b7090ec52903629870ecdacdf1',
                'database_ref': 'sha256:' + _DATABASE_SHA}
     return OpenEvolvePolicy(context.scope_context, adapter=OpenEvolveAdapter(
