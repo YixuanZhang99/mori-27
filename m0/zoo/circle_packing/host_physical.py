@@ -29,11 +29,17 @@ def _validate_stage_result(result, *, stage, program_ref):
             geometry = result['geometry']
             encoded = json.dumps(geometry, sort_keys=True, ensure_ascii=False,
                                  separators=(',', ':'), allow_nan=False).encode()
-            if result['metrics'] != validate_geometry(geometry) or \
+            observed = json.dumps(result['metrics'], sort_keys=True, ensure_ascii=False,
+                                  separators=(',', ':'), allow_nan=False)
+            expected = json.dumps(validate_geometry(geometry), sort_keys=True, ensure_ascii=False,
+                                  separators=(',', ':'), allow_nan=False)
+            if observed != expected or \
                     result['geometry_ref'] != 'sha256:' + hashlib.sha256(encoded).hexdigest():
                 raise ValueError('stage geometry differs from measured metrics')
         except (KeyError, TypeError) as error:
             raise ValueError('stage outcome lacks verified geometry') from error
+    elif any(key in result for key in ('metrics', 'geometry', 'geometry_ref')):
+        raise ValueError('failed stage cannot expose metrics or geometry')
 
 
 class HostPhysicalAdmission:

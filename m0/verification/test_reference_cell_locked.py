@@ -224,6 +224,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             governance=authority.budget._governed.config, rows=rows, request_ids=ids)
     assert joined['scope'] == 'host_attested_reference_snapshot' and not joined['performance_claim']
     assert joined['stage']['evidence_ref'] == result['stage_evidence_ref']
+    assert joined['stage']['all_stage_count'] == authority.stages.audit()['stage_calls']
     with pytest.raises(ValueError):
         audit_anchored_reference_physical(view, recorded_clock, run_id,
             options=authority.budget.options, stamp=asdict(authority.budget.stamp),

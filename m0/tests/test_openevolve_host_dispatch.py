@@ -496,6 +496,204 @@ def test_detached_reference_physical_audit_rebuilds_stage_settlements_and_order(
         audit(moved, 'sha256:' + payload_digest(moved))
 
 
+def test_detached_physical_audit_cannot_omit_a_failed_stage(timed_authority, tmp_path, monkeypatch):
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_physical
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', lambda program, *, stage, **kwargs:
+                        fake_result(program, stage, score=.7, status='failed_to_run' if program == 'bad' else 'ok'))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    stages.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+    earlier_rows = list(budget.store.read())
+    assert stages.execute('c' * 32, 'bad', stage=1)['status'] == 'failed_to_run'
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    rows = list(budget.store.read())
+    def audit(transcript):
+        return audit_recorded_reference_physical(view, clock, run_id, options=budget.options,
+            stamp=asdict(budget.stamp), governance=budget._governed.config, rows=transcript,
+            expected_rows_ref='sha256:' + payload_digest(transcript), request_ids=['a' * 32, 'b' * 32])
+    missing = [row for row in rows if not (row['kind'].startswith('host_stage_') and
+                                          row['payload'].get('request_id') == 'c' * 32)]
+    with pytest.raises(ValueError, match='stage.*coverage'):
+        audit(missing)
+    with pytest.raises(ValueError, match='stage.*coverage'):
+        audit(earlier_rows)
+    duplicate = rows + [next(row for row in rows if row['kind'] == 'host_stage_started' and
+                             row['payload']['request_id'] == 'c' * 32)]
+    with pytest.raises(ValueError, match='stage.*coverage'):
+        audit(duplicate)
+    result = audit(rows)
+    assert result['all_stage_count'] == 3
+    assert result['failed_stage_count'] == 1
+
+
+def test_detached_physical_audit_distinguishes_failed_and_unattempted_cascades(timed_authority, tmp_path, monkeypatch):
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_physical
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    def measure(program, *, stage, **kwargs):
+        status = 'failed_to_run' if program == 'fails-second' and stage == 2 else 'ok'
+        return fake_result(program, stage, score=.7, status=status)
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', measure)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'winner', stage=1)
+    stages.execute('b' * 32, 'winner', stage=2, prior_id='a' * 32)
+    stages.execute('c' * 32, 'fails-second', stage=1)
+    assert stages.execute('d' * 32, 'fails-second', stage=2, prior_id='c' * 32)['status'] == 'failed_to_run'
+    stages.execute('e' * 32, 'unattempted', stage=1)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    rows = list(budget.store.read())
+    result = audit_recorded_reference_physical(view, clock, run_id, options=budget.options,
+        stamp=asdict(budget.stamp), governance=budget._governed.config, rows=rows,
+        expected_rows_ref='sha256:' + payload_digest(rows), request_ids=['a' * 32, 'b' * 32])
+    assert result['all_stage_count'] == 5 and result['failed_stage_count'] == 1
+    assert result['unattempted_first_stages'] == ['e' * 32]
+    assert result['cascade_issues'] == [{'first_request_id': 'c' * 32, 'second_request_id': 'd' * 32,
+                                         'reason': 'failed'}]
+
+
+@pytest.mark.parametrize('failed', [False, True])
+def test_detached_physical_audit_reports_late_second_stage(timed_authority, tmp_path, monkeypatch, failed):
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_physical
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    def measure(program, *, stage, **kwargs):
+        late = program == 'late' and stage == 2
+        value = fake_result(program, stage, score=.7, status='failed_to_run' if late and failed else 'ok')
+        if late:
+            current['ns'] += 2700 * 1_000_000_000
+        return value
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', measure)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'winner', stage=1)
+    stages.execute('b' * 32, 'winner', stage=2, prior_id='a' * 32)
+    stages.execute('c' * 32, 'late', stage=1)
+    with pytest.raises(TimeoutError):
+        stages.execute('d' * 32, 'late', stage=2, prior_id='c' * 32)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    rows = list(budget.store.read())
+    result = audit_recorded_reference_physical(view, clock, run_id, options=budget.options,
+        stamp=asdict(budget.stamp), governance=budget._governed.config, rows=rows,
+        expected_rows_ref='sha256:' + payload_digest(rows), request_ids=['a' * 32, 'b' * 32])
+    assert result['late_stage_count'] == 1
+    assert result['failed_stage_count'] == int(failed)
+    assert result['unattempted_first_stages'] == []
+    assert result['cascade_issues'] == [{'first_request_id': 'c' * 32, 'second_request_id': 'd' * 32,
+                                         'reason': 'failed_and_late' if failed else 'late'}]
+
+
+def test_detached_physical_audit_rejects_metrics_on_failed_stage(timed_authority, tmp_path, monkeypatch):
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_physical
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    def measure(program, *, stage, **kwargs):
+        value = fake_result(program, stage, score=.4, status='failed_to_run' if program == 'bad' else 'ok')
+        if program == 'bad':
+            value['metrics'] = {'combined_score': 99}
+        return value
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', measure)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    from zoo.circle_packing import host_physical
+    validate = host_physical._validate_stage_result
+    monkeypatch.setattr(host_physical, '_validate_stage_result', lambda *args, **kwargs: None)
+    stages.execute('a' * 32, 'program', stage=1)
+    stages.execute('b' * 32, 'bad', stage=1)
+    monkeypatch.setattr(host_physical, '_validate_stage_result', validate)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    rows = list(budget.store.read())
+    with pytest.raises(ValueError, match='failed.*metrics'):
+        audit_recorded_reference_physical(view, clock, run_id, options=budget.options,
+            stamp=asdict(budget.stamp), governance=budget._governed.config, rows=rows,
+            expected_rows_ref='sha256:' + payload_digest(rows), request_ids=['a' * 32])
+
+
+def test_host_stage_rejects_failed_result_with_metrics(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    def malformed(program, *, stage, **kwargs):
+        value = fake_result(program, stage, status='failed_to_run')
+        value['metrics'] = {'combined_score': 99}
+        return value
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', malformed)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    with pytest.raises(ValueError, match='failed.*metrics'):
+        stages.execute('a' * 32, 'program', stage=1)
+    assert budget.state()['open_intents']
+
+
+def test_host_stage_rejects_boolean_metric_equal_to_numeric_value(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    def malformed(program, *, stage, **kwargs):
+        value = fake_result(program, stage, score=.4)
+        value['metrics']['validity'] = True
+        return value
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', malformed)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    with pytest.raises(ValueError, match='geometry.*metrics'):
+        stages.execute('a' * 32, 'program', stage=1)
+    assert budget.state()['open_intents']
+
+
 def test_host_stage_audit_rejects_changed_eligibility(timed_authority, tmp_path, monkeypatch):
     import copy
     from test_openevolve_host_stage_budget import fake_result

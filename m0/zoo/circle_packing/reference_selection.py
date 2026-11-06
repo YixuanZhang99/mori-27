@@ -79,8 +79,7 @@ def read_reference_selection(workspace, selected):
             os.close(fd)
 
 
-def audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof):
-    """Recompute one anchored stage; this is not a full physical-run audit."""
+def _audit_reference_stage(view, clock, run_id, start, terminal, proof, *, require_success, require_eligible):
     from zoo.circle_packing.cell_deadline import RecordedCellClock
     from zoo.circle_packing.host_physical import _validate_stage_result
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
@@ -112,7 +111,7 @@ def audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof):
             terminal['evidence_ref'] != 'sha256:' + payload_digest({'start': start, 'result': result}):
         raise ValueError('recorded reference stage evidence differs')
     _validate_stage_result(result, stage=start['stage'], program_ref=start['program_ref'])
-    if result['status'] != 'ok':
+    if require_success and result['status'] != 'ok':
         raise ValueError('recorded reference stage did not succeed')
     binding = view.run_deadline_binding(run_id)
     record = clock._record
@@ -123,13 +122,21 @@ def audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof):
     clock.verify_observation(proof['observation'])
     observation = proof['observation']['observation']
     anchor = view.stage_eligibility(run_id, request_id)
-    if not proof['observation']['eligible'] or anchor != {
+    if (require_eligible and not proof['observation']['eligible']) or anchor != {
             'cell_id': record['cell_id'], 'sequence': observation['sequence'],
             'observation_sha256': observation['sha256'], 'proof_sha256': payload_digest(proof)}:
         raise ValueError('recorded reference stage eligibility differs from its campaign anchor')
-    return {'program_ref': start['program_ref'], 'stage': start['stage'],
-            'evidence_ref': terminal['evidence_ref'], 'geometry_ref': result['geometry_ref'],
-            'metrics': dict(result['metrics'])}
+    return {'program_ref': start['program_ref'], 'stage': start['stage'], 'status': result['status'],
+            'eligible': proof['observation']['eligible'], 'evidence_ref': terminal['evidence_ref'],
+            'geometry_ref': result.get('geometry_ref'),
+            'metrics': dict(result['metrics']) if result['status'] == 'ok' else None}
+
+
+def audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof):
+    """Recompute one successful eligible stage; not a complete run audit."""
+    result = _audit_reference_stage(view, clock, run_id, start, terminal, proof,
+                                    require_success=True, require_eligible=True)
+    return {key: value for key, value in result.items() if key not in {'status', 'eligible'}}
 
 
 def audit_recorded_reference_cascade(view, clock, run_id, stages):
@@ -182,8 +189,22 @@ def audit_recorded_reference_physical(view, clock, run_id, *, options, stamp, go
             raise ValueError('physical transcript has invalid budget protection')
         view.audit_run(run_id, data['control_plan']['plan_ref'])
         provider_records = invocation_records(store)
-        recorded, positions = [], []
-        for request_id in request_ids:
+        ids_by_kind = {}
+        for kind in ('started', 'completed', 'eligibility'):
+            ids = [row['payload']['request_id'] for row in frozen_rows if row.get('kind') == 'host_stage_' + kind]
+            if any(type(item) is not str or not re.fullmatch(r'[0-9a-f]{32}', item) for item in ids) or \
+                    len(set(ids)) != len(ids):
+                raise ValueError('physical stage evidence coverage is invalid or duplicated')
+            ids_by_kind[kind] = set(ids)
+        stage_ids = ids_by_kind['started']
+        physical_ids = {key for key in data['operations'] if key.startswith('host-stage:')}
+        if any(ids_by_kind[kind] != stage_ids for kind in ids_by_kind) or \
+                physical_ids != {'host-stage:' + key for key in stage_ids} or not set(request_ids) <= stage_ids:
+            raise ValueError('physical stage evidence coverage differs from its reservations')
+        if set(view.stage_eligibility_ids(run_id)) != stage_ids:
+            raise ValueError('physical stage evidence coverage differs from the campaign anchors')
+        recorded, positions, audited = {}, {}, {}
+        for request_id in sorted(stage_ids):
             stage = {}
             indexes = {}
             for kind in ('started', 'completed', 'eligibility'):
@@ -216,12 +237,37 @@ def audit_recorded_reference_physical(view, clock, run_id, *, options, stamp, go
             if not transitions['start'] < indexes['started'] < indexes['completed'] < \
                     transitions['settle'] < indexes['eligibility']:
                 raise ValueError('physical stage transition order differs')
-            recorded.append(stage)
-            positions.append((transitions['start'], indexes['eligibility']))
-        if len(positions) == 2 and positions[0][1] >= positions[1][0]:
-            raise ValueError('physical cascade stage order differs')
-        result = audit_recorded_reference_cascade(view, clock, run_id, recorded)
-        return {**result, 'stage_eval_count': len(recorded), 'physical': physical}
+            recorded[request_id] = stage
+            positions[request_id] = (transitions['start'], indexes['eligibility'])
+            audited[request_id] = _audit_reference_stage(view, clock, run_id, stage['started'],
+                stage['completed'], stage['eligibility'], require_success=False, require_eligible=False)
+        used, cascade_issues = set(), []
+        for request_id, stage in recorded.items():
+            if stage['started']['stage'] != 2:
+                continue
+            prior = stage['started']['prior_id']
+            first = audited.get(prior)
+            if first is None or prior in used or first['stage'] != 1 or first['status'] != 'ok' or \
+                    not first['eligible'] or first['metrics']['combined_score'] < .5 or \
+                    first['program_ref'] != audited[request_id]['program_ref'] or \
+                    positions[prior][1] >= positions[request_id][0]:
+                raise ValueError('physical cascade stage order or predecessor differs')
+            used.add(prior)
+            second = audited[request_id]
+            if second['status'] != 'ok' or not second['eligible']:
+                reason = ('failed_and_late' if second['status'] != 'ok' and not second['eligible'] else
+                          'failed' if second['status'] != 'ok' else 'late')
+                cascade_issues.append({'first_request_id': prior, 'second_request_id': request_id, 'reason': reason})
+        unattempted = sorted(key for key, value in audited.items() if value['stage'] == 1 and \
+                             value['status'] == 'ok' and value['eligible'] and \
+                             value['metrics']['combined_score'] >= .5 and key not in used)
+        result = audit_recorded_reference_cascade(view, clock, run_id, [recorded[key] for key in request_ids])
+        outcomes = [{'request_id': key, **audited[key]} for key in sorted(audited)]
+        return {**result, 'stage_eval_count': len(request_ids), 'all_stage_count': len(outcomes),
+                'failed_stage_count': sum(value['status'] != 'ok' for value in audited.values()),
+                'late_stage_count': sum(not value['eligible'] for value in audited.values()),
+                'unattempted_first_stages': unattempted, 'cascade_issues': cascade_issues,
+                'stage_outcomes': outcomes, 'physical': physical}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid recorded physical transcript') from error
 
