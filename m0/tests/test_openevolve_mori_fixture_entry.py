@@ -1,4 +1,5 @@
 """The named paired Mori fixture must never accept a real service endpoint."""
+import os
 import pytest
 
 
@@ -114,6 +115,28 @@ def test_live_controller_preparation_rejects_fixture_before_work(tmp_path):
     with pytest.raises(ValueError, match='non-fixture'):
         prepare_live_controller({**config(), 'ledger': str(ledger.path)}, api_key='fixture-only-secret')
     assert ledger.snapshot() == before
+
+
+def test_live_host_consumes_key_from_environment_before_preparation(monkeypatch):
+    from zoo.circle_packing import mori_live_worker
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'fixture-only-secret')
+    observed = []
+    def prepare(value, *, api_key):
+        assert 'DEEPSEEK_API_KEY' not in os.environ
+        observed.append(api_key == 'fixture-only-secret')
+        return 'prepared'
+    monkeypatch.setattr(mori_live_worker, '_prepare', prepare)
+    assert mori_live_worker.prepare(config()) == 'prepared'
+    assert observed == [True]
+    with pytest.raises(ValueError, match='credential'):
+        mori_live_worker.prepare(config())
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'fixture-only-secret')
+    def fail(*args, **kwargs):
+        raise RuntimeError('preparation failed')
+    monkeypatch.setattr(mori_live_worker, '_prepare', fail)
+    with pytest.raises(RuntimeError, match='preparation failed'):
+        mori_live_worker.prepare(config())
+    assert 'DEEPSEEK_API_KEY' not in os.environ
 
 
 def test_shared_controller_rejects_mismatched_ledger_before_setup(tmp_path):

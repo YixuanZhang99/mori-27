@@ -203,6 +203,9 @@ the provider URL frozen in that campaign.
 from the campaign's frozen source and Python runtime and restores the original
 clock. It prepares the controller without starting search; the caller still
 needs the completed pilot gate and whole-cell supervision before live use.
+The trusted `mori_live_worker.prepare` handoff removes `DEEPSEEK_API_KEY` from
+its process environment before preparing the controller, retaining the value
+only in memory. It is a preparation function, not a live launch command.
 `verification/test_mori_live_preparation.py` exercises the latter composition
 with a disposable unmarked ledger and a fake key. It forbids provider and
 sandbox execution and checks that no calls or charges occurred. This is a

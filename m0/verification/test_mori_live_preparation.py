@@ -87,12 +87,12 @@ def test_real_provider_mode_runs_six_rounds_with_network_blocked(prepared_cell, 
     setup = tmp_path / 'setup.json'
     setup.write_text(json.dumps(config))
     script = r'''
-import json, pathlib, socket, sys, urllib.request
+import json, os, pathlib, socket, sys, urllib.request
 import core.loop
 from core.composition.recovery import ContinuationStore
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.domain import CirclePackingDomain
-from zoo.circle_packing.mori_live_controller import prepare_live_controller
+from zoo.circle_packing.mori_live_worker import prepare
 from zoo.circle_packing.runner import TASK
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
@@ -124,7 +124,8 @@ class Opener:
         calls.append(1)
         return Response()
 urllib.request.build_opener = lambda *args: Opener()
-framework, provider, profile, adapters = prepare_live_controller(config, api_key='fixture-only-secret')
+framework, provider, profile, adapters = prepare(config)
+assert 'DEEPSEEK_API_KEY' not in os.environ
 assert not calls and ledger.snapshot()['settled_upper_bound_micro_cny'] == 0
 outcome = framework.evolve(TASK)
 GovernedCNYProvider.perform_request = forbidden
@@ -137,7 +138,7 @@ print(json.dumps({'candidate': outcome['best_candidate_id'], 'state': final['sta
 '''
     code = tmp_path / 'blocked_transport.py'
     code.write_text(script)
-    env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'],
+    env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'DEEPSEEK_API_KEY': 'fixture-only-secret',
            'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
     process = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-B', str(code), str(setup)],
                              cwd=tmp_path, env=env, capture_output=True, text=True, timeout=240)
