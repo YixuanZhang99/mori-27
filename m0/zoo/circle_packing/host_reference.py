@@ -54,14 +54,23 @@ def fixture_broker_client(model):
     return HostBridgeClient(model)
 
 
-def reference_model(name, max_completion_tokens, *, fixture_broker):
+def fixture_broker_continuing_client(model):
+    from zoo.circle_packing.host_transport import HostBridgeClient
+    return HostBridgeClient(model, continue_settled_failures=True)
+
+
+def reference_model(name, max_completion_tokens, *, fixture_broker, fixture_continue_settled_failures=False):
     """Build the upstream model configuration without giving it a credential."""
     from openevolve.config import LLMModelConfig
     if type(name) is not str or not name.strip() or type(max_completion_tokens) is not int or \
-            not 1 <= max_completion_tokens <= 16384 or type(fixture_broker) is not bool:
+            not 1 <= max_completion_tokens <= 16384 or type(fixture_broker) is not bool or \
+            type(fixture_continue_settled_failures) is not bool or \
+            fixture_continue_settled_failures and not fixture_broker:
         raise ValueError('invalid reference model configuration')
+    client = (fixture_broker_continuing_client if fixture_continue_settled_failures else
+              fixture_broker_client if fixture_broker else fixture_client)
     return LLMModelConfig(name=name, api_key=None,
-        init_client=fixture_broker_client if fixture_broker else fixture_client,
+        init_client=client,
         max_tokens=max_completion_tokens, timeout=120, retries=0)
 
 
@@ -81,14 +90,15 @@ def _hide_stage_receipts_from_prompts():
 
 
 def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_stage_broker=False,
-                model_name='circle-fixture', max_completion_tokens=128):
+                model_name='circle-fixture', max_completion_tokens=128, fixture_continue_settled_failures=False):
     # The pinned controller and its environment use process-global state.
     with _FIXTURE_LOCK:
         previous_root = os.environ.get('MORI_CIRCLE_REFERENCE_ROOT')
         try:
             return _run_fixture(output, seed=seed, iterations=iterations, fixture_broker=fixture_broker,
                                 fixture_stage_broker=fixture_stage_broker, model_name=model_name,
-                                max_completion_tokens=max_completion_tokens)
+                                max_completion_tokens=max_completion_tokens,
+                                fixture_continue_settled_failures=fixture_continue_settled_failures)
         finally:
             if previous_root is None:
                 os.environ.pop('MORI_CIRCLE_REFERENCE_ROOT', None)
@@ -97,7 +107,7 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_s
 
 
 def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_broker,
-                 model_name, max_completion_tokens):
+                 model_name, max_completion_tokens, fixture_continue_settled_failures):
     if type(seed) is not int or seed < 0 or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('fixture requires nonnegative seed and one to six iterations')
     if os.environ.get('PYTHONHASHSEED') != '0':
@@ -123,7 +133,8 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
     from openevolve.config import Config, PromptConfig
     import yaml
     config = Config()
-    model = reference_model(model_name, max_completion_tokens, fixture_broker=fixture_broker)
+    model = reference_model(model_name, max_completion_tokens, fixture_broker=fixture_broker,
+                            fixture_continue_settled_failures=fixture_continue_settled_failures)
     config.llm.api_key = None
     config.llm.models = [model]
     config.llm.evaluator_models = [model]
@@ -200,6 +211,7 @@ def main():
     parser.add_argument('--iterations', type=int, default=1)
     parser.add_argument('--fixture-broker', action='store_true')
     parser.add_argument('--fixture-stage-broker', action='store_true')
+    parser.add_argument('--fixture-continue-settled-failures', action='store_true')
     args = parser.parse_args()
     # The vendored worker serializes its environment: start with a small
     # allowlist so no model credentials are copied to that worker.
@@ -211,7 +223,8 @@ def main():
     os.environ.update(clean)
     print(json.dumps(run_fixture(args.output, seed=args.seed, iterations=args.iterations,
                                  fixture_broker=args.fixture_broker,
-                                 fixture_stage_broker=args.fixture_stage_broker), sort_keys=True))
+                                 fixture_stage_broker=args.fixture_stage_broker,
+                                 fixture_continue_settled_failures=args.fixture_continue_settled_failures), sort_keys=True))
 
 
 if __name__ == '__main__':

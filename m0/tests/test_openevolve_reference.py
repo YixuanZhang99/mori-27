@@ -294,3 +294,15 @@ def test_reference_model_uses_frozen_alias_and_output_allowance():
     for name, limit in [('', 16384), ('deepseek-flash', True), ('deepseek-flash', 0)]:
         with pytest.raises(ValueError):
             reference_model(name, limit, fixture_broker=True)
+
+
+def test_continuing_client_requires_explicit_fixture_broker():
+    from zoo.circle_packing.host_reference import reference_model, fixture_broker_client, fixture_broker_continuing_client
+    default = reference_model('fixture', 128, fixture_broker=True)
+    enabled = reference_model('fixture', 128, fixture_broker=True, fixture_continue_settled_failures=True)
+    assert default.init_client is fixture_broker_client
+    assert enabled.init_client is fixture_broker_continuing_client
+    with pytest.raises(ValueError):
+        reference_model('fixture', 128, fixture_broker=False, fixture_continue_settled_failures=True)
+    with pytest.raises(ValueError):
+        reference_model('fixture', 128, fixture_broker=True, fixture_continue_settled_failures=1)

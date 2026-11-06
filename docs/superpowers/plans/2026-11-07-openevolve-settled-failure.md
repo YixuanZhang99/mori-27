@@ -41,3 +41,18 @@
 - [x] Implement both opt-in paths and the typed failure; do not change the dispatcher or any live constructor.
 - [x] Run transport and dispatcher regression tests; verify their complete outputs and review the diff.
 - [ ] Commit only after the fixture tests pass. Full epoch admission, durable artifacts, journal namespace and complete coverage remain separate required work.
+
+### Task 2: Verify the actual upstream worker offline
+
+**Files:**
+- Modify: `m0/zoo/circle_packing/host_reference.py`
+- Test: `m0/tests/test_openevolve_host_dispatch.py`, `m0/tests/test_openevolve_reference.py`
+
+**Interfaces:**
+- The local fixture CLI may opt in with `--fixture-broker --fixture-continue-settled-failures`.
+- Existing reference worker and live supervisor constructors continue to use the disabled default.
+
+- [x] With the pinned upstream worker and a local synthetic provider, verify a billed failure is followed by a distinct successful candidate and both calls settle in the same fixture authorities.
+- [x] Verify unknown provider usage yields an upstream failure, one request, and retained pending currency and physical intent.
+- [x] Verify the opt-in requires a fixture broker and the default client remains unchanged.
+- [x] Run the four targeted tests and independently review the diff; do not interpret fixture results as real benchmark evidence.

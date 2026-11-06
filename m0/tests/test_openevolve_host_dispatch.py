@@ -886,3 +886,70 @@ def test_settled_failure_then_next_request_share_original_authorities(authority,
     assert not ledger.snapshot()['pending_calls'] and not budget.state()['open_intents']
     assert budget.audit_governance()['physical_totals']['token'] == 14
     assert dispatch.audit()['currency']['protection_valid']
+
+
+def test_upstream_fixture_can_continue_after_settled_failure(authority, local_endpoint, tmp_path, short_socket_dir):
+    import os
+    import subprocess
+    import sys
+    import threading
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_transport import HostBroker
+    ledger, budget, bridge, run, ready, main = authority
+    diff = ('<<<<<<< SEARCH\n    n = 26\n=======\n'
+            '    n = 26\n    # subsequent fixture iteration\n>>>>>>> REPLACE\n')
+    local_endpoint.responses.extend([
+        reply(choices=[{'finish_reason': 'length', 'message': {'content': 'partial'}}]),
+        reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]),
+    ])
+    path = short_socket_dir / 'continue-host.sock'
+    env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR') if key in os.environ}
+    env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
+               MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64)
+    with HostBroker(path, 'a' * 64, HostDispatchCoordinator(budget, bridge, run, ready),
+                    continue_settled_failures=True) as broker:
+        thread = threading.Thread(target=lambda: (broker.serve_one(), broker.serve_one()), daemon=True)
+        thread.start()
+        completed = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.host_reference',
+            '--output', str(tmp_path / 'host-run'), '--iterations', '2', '--fixture-broker',
+            '--fixture-continue-settled-failures'], env=env, capture_output=True, text=True, timeout=120)
+        assert completed.returncode == 0, completed.stderr[-2000:]
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert len(local_endpoint.requests) == 2
+    assert not ledger.snapshot()['pending_calls'] and not budget.state()['open_intents']
+    assert budget.audit_governance()['physical_totals']['token'] == 14
+    report = json.loads(completed.stdout)
+    assert report['mode'] == 'fixture' and report['performance_claim'] is False
+    states = [item['state'] for item in report['iteration_trace']['iterations']]
+    assert 'worker_error' in states and 'candidate' in states
+
+
+def test_upstream_fixture_does_not_retry_unknown_usage(authority, local_endpoint, tmp_path, short_socket_dir):
+    import os
+    import subprocess
+    import sys
+    import threading
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_transport import HostBroker
+    ledger, budget, bridge, run, ready, main = authority
+    local_endpoint.responses.append(reply(usage=None))
+    path = short_socket_dir / 'unknown-host.sock'
+    env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR') if key in os.environ}
+    env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
+               MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64)
+    with HostBroker(path, 'a' * 64, HostDispatchCoordinator(budget, bridge, run, ready),
+                    continue_settled_failures=True) as broker:
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        completed = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.host_reference',
+            '--output', str(tmp_path / 'host-run'), '--iterations', '2', '--fixture-broker',
+            '--fixture-continue-settled-failures'], env=env, capture_output=True, text=True, timeout=120)
+        assert completed.returncode != 0
+        assert 'unresolved operation' in completed.stderr
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert len(local_endpoint.requests) == 1
+    assert len(ledger.snapshot()['pending_calls']) == 1
+    assert budget.state()['open_intents']
+    assert not completed.stdout.strip()
