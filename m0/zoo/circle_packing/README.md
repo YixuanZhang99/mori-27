@@ -203,3 +203,7 @@ the provider URL frozen in that campaign.
 with a disposable unmarked ledger and a fake key. It forbids provider and
 sandbox execution and checks that no calls or charges occurred. This is a
 preparation check, not permission to execute the draft or a live result.
+The same verification module also runs six Mori rounds using the real-provider
+configuration and a temporary unmarked ledger while intercepting transport and
+blocking socket connections. It tests the real configuration path, simulated
+currency accounting and recorded replay; it does not contact the provider.
