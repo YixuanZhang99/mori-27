@@ -749,6 +749,57 @@ class CNYInvocationBridge:
             elif row['kind'] in {'composed_checkpoint', 'governed_main_stopped'} and pending:
                 raise ValueError('committed cycle lacks a decision after eligibility evidence')
 
+    def _audit_final_eligibility(self):
+        from dataclasses import asdict
+        from core.composition.evaluation import decode_evidence, request_digest
+        from core.executor.types import EvalRequest, EvalStatus
+        rows = self._root_rows()
+        frozen = [(index, row['payload']) for index, row in enumerate(rows) if row['kind'] == 'metric_final_frozen']
+        terminal = [(index, row['payload']) for index, row in enumerate(rows) if row['kind'] == 'metric_final_completed']
+        if len(frozen) > 1 or len(terminal) > 1:
+            raise ValueError('final eligibility has duplicate freeze or report')
+        if not terminal:
+            return
+        index, result = terminal[0]
+        if len(frozen) != 1 or frozen[0][0] >= index or result.get('candidate_id') != frozen[0][1].get('candidate_id'):
+            raise ValueError('final eligibility lacks original selection freeze')
+        selection = frozen[0][1]
+        binding = selection.get('binding')
+        if selection.get('candidate_id') is not None and (type(binding) is not dict or
+                binding.get('candidate_id') != selection['candidate_id']):
+            raise ValueError('final eligibility candidate differs from frozen binding')
+        if selection.get('candidate_id') is None and binding is not None:
+            raise ValueError('final eligibility has binding without a selected candidate')
+        try:
+            request = EvalRequest(**selection['request'])
+            digest = request_digest(request)
+            if request.split_id != 'final_audit' or (binding is not None and
+                    binding['request_sha256'] != digest):
+                raise ValueError('final eligibility differs from frozen request')
+        except (KeyError, TypeError) as error:
+            raise ValueError('final eligibility lacks a valid frozen request') from error
+        state = result.get('state')
+        if state == 'skipped':
+            if set(result) != {'candidate_id', 'state', 'reason'} or type(result['reason']) is not str:
+                raise ValueError('final eligibility cannot report evidence for skipped audit')
+            return
+        if state not in {'completed', 'evaluation_failed'} or set(result) != {'candidate_id', 'state', 'evidence'}:
+            raise ValueError('invalid final eligibility report')
+        try:
+            evidence = decode_evidence(result['evidence'])
+            normalized_binding = json.loads(json.dumps(asdict(evidence.eval_result.contract.binding), allow_nan=False))
+            if normalized_binding != binding or \
+                    (state == 'completed') != (evidence.eval_result.status is EvalStatus.OK):
+                raise ValueError('final eligibility differs from frozen result')
+        except (KeyError, TypeError, AttributeError) as error:
+            raise ValueError('final eligibility lacks valid original evidence') from error
+        physical = [(position, row) for position, row in enumerate(rows[:index])
+                    if row['kind'] == 'composed_physical_evidence'
+                    and row['payload'].get('request') == selection['request']
+                    and row['payload'].get('evidence') == result['evidence']]
+        if len(physical) != 1 or physical[0][0] <= frozen[0][0]:
+            raise ValueError('final eligibility lacks matching original final evaluation')
+
     def recover(self, context, argument_sha256):
         outcome = self._recover(context, argument_sha256, refusal_reason='capacity_refused')
         deadline = self.cell_deadline()
@@ -920,6 +971,7 @@ class CNYInvocationBridge:
             if deadline is not None:
                 self._audit_evaluation_eligibility(deadline)
                 self._audit_cycle_eligibility(deadline)
+                self._audit_final_eligibility()
         authority = self._ready.authority_binding
         evidence = self._authority.export_governance_evidence(authority['currency_run_id'],
                                                               self._ready.physical_plan_ref)

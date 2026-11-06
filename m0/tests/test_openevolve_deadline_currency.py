@@ -298,6 +298,47 @@ def test_evaluation_eligibility_audit_requires_original_completion(setup, tmp_pa
         bridge._audit_evaluation_eligibility(bridge.cell_deadline())
 
 
+def test_final_eligibility_rejects_selection_binding_for_another_candidate(setup, monkeypatch):
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    monkeypatch.setattr(bridge, '_root_rows', lambda: [
+        {'kind': 'metric_final_frozen', 'payload': {'candidate_id': 'x', 'binding': {'candidate_id': 'y'}}},
+        {'kind': 'metric_final_completed', 'payload': {'candidate_id': 'x', 'state': 'completed', 'evidence': {}}},
+    ])
+    with pytest.raises(ValueError, match='final.*candidate'):
+        bridge._audit_final_eligibility()
+
+
+def test_final_eligibility_roundtrips_seed_set_and_checks_freeze(setup, monkeypatch):
+    import copy
+    import json
+    from dataclasses import asdict
+    from core.composition.evaluation import encode_evidence
+    from core.executor.types import EvalRequest
+    from test_evaluation_contract import evidence
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    request = EvalRequest('final_audit', split_id='final_audit', seed_set=[1, 2])
+    original = evidence('candidate', request=request)
+    encoded = encode_evidence(original)
+    frozen = json.loads(json.dumps({'candidate_id': 'candidate', 'request': asdict(request),
+                                   'binding': asdict(original.eval_result.contract.binding)}))
+    rows = [{'kind': 'metric_final_frozen', 'payload': frozen},
+            {'kind': 'composed_physical_evidence', 'payload': {'request': asdict(request), 'evidence': encoded}},
+            {'kind': 'metric_final_completed', 'payload': {'candidate_id': 'candidate', 'state': 'completed',
+                                                           'evidence': encoded}}]
+    monkeypatch.setattr(bridge, '_root_rows', lambda: copy.deepcopy(rows))
+    bridge._audit_final_eligibility()
+    rows[0]['payload']['candidate_id'] = rows[2]['payload']['candidate_id'] = 'other'
+    with pytest.raises(ValueError, match='final.*candidate'):
+        bridge._audit_final_eligibility()
+    rows[0]['payload']['candidate_id'] = rows[2]['payload']['candidate_id'] = 'candidate'
+    rows[0]['payload']['request']['seed_set'] = [1, 3]
+    with pytest.raises(ValueError, match='final.*eligibility'):
+        bridge._audit_final_eligibility()
+    rows[2]['payload'] = {'candidate_id': 'candidate', 'state': 'skipped', 'reason': 'deadline'}
+    with pytest.raises(ValueError, match='final.*eligibility'):
+        bridge._audit_final_eligibility()
+
+
 def test_recorded_bridge_rejects_unqualified_timed_run_bundle(setup, tmp_path, monkeypatch):
     from core.composition.external_provider import ExternalRunContext
     from core.llm import UsageError

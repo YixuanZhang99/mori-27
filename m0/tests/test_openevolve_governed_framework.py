@@ -549,7 +549,8 @@ def test_mori_control_expiry_between_stages_preserves_first_stage_cost(tmp_path,
     assert not list(fw._composed.store.read('governed_control_terminal'))
 
 
-def test_mori_late_final_audit_is_measured_but_not_reported_as_score(tmp_path, local_endpoint, monkeypatch):
+@pytest.mark.parametrize('late', [False, True])
+def test_mori_final_audit_preserves_timing_and_score(tmp_path, local_endpoint, monkeypatch, late):
     from core.composition.recovery import ContinuationStore
     from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
     from zoo.circle_packing.governed import governed_setup
@@ -571,7 +572,7 @@ def test_mori_late_final_audit_is_measured_but_not_reported_as_score(tmp_path, l
     original = CirclePackingDomain.evaluate
     async def late_final(self, proposal, request):
         result = await original(self, proposal, request)
-        if request.split_id == 'final_audit':
+        if late and request.split_id == 'final_audit':
             now['ns'] += 2700 * 1_000_000_000
         return result
     monkeypatch.setattr(CirclePackingDomain, 'evaluate', late_final)
@@ -582,9 +583,36 @@ def test_mori_late_final_audit_is_measured_but_not_reported_as_score(tmp_path, l
                                 component_registry=registry)
     result = fw.evolve('Improve the arrangement of 26 circles in a square')
     final = result['reporting']['final_audit']
+    if not late:
+        assert final['state'] == 'completed' and 'evidence' in final
+        assert fw._composed.governed.external.audit()['protection_valid']
+        return
     assert final['state'] == 'skipped' and 'deadline' in final['reason'] and 'evidence' not in final
     assert not fw._composed.budget.state()['open_intents']
     assert campaign.snapshot()['settled_upper_bound_micro_cny'] == 38
+    import copy
+    original_read = fw._composed.store.read
+    def forged(kind=None):
+        rows = copy.deepcopy(list(original_read(kind)))
+        if kind is None:
+            dev = next(row['payload']['evidence'] for row in rows if row['kind'] == 'composed_physical_evidence'
+                       and row['payload']['request']['split_id'] == 'dev')
+            for row in rows:
+                if row['kind'] == 'metric_final_completed':
+                    row['payload'] = {'candidate_id': final['candidate_id'], 'state': 'completed', 'evidence': dev}
+        return iter(rows)
+    monkeypatch.setattr(fw._composed.store, 'read', forged)
+    with pytest.raises(ValueError, match='final.*eligibility'):
+        fw._composed.governed.external.audit()
+    def score_on_skipped(kind=None):
+        rows = copy.deepcopy(list(original_read(kind)))
+        for row in rows:
+            if row['kind'] == 'metric_final_completed':
+                row['payload']['score'] = 99.0
+        return iter(rows)
+    monkeypatch.setattr(fw._composed.store, 'read', score_on_skipped)
+    with pytest.raises(ValueError, match='final.*eligibility'):
+        fw._composed.governed.external.audit()
 
 
 def test_mori_candidate_cannot_be_committed_after_deadline(tmp_path, local_endpoint, monkeypatch):
