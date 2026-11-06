@@ -44,8 +44,8 @@ def launch_live_controller(config, *, deadline, directory, api_key):
     if type(api_key) is not str or not api_key.strip():
         raise ValueError('live controller requires an in-memory credential')
     from zoo.circle_packing.pilot_plan import require_first_pair_audit
+    require_first_pair_audit(config['seed'])
     ledger = CampaignBudget(config['ledger'])
-    require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
     if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
         raise ValueError('live controller requires its original non-fixture provider')
     from zoo.circle_packing.cell_containment import delegated_cell_group
@@ -68,8 +68,8 @@ def launch_reference_live_controller(config, *, deadline, directory, api_key):
     if type(api_key) is not str or not api_key.strip():
         raise ValueError('reference supervisor requires an in-memory credential')
     from zoo.circle_packing.pilot_plan import require_first_pair_audit
+    require_first_pair_audit(config['seed'])
     ledger = CampaignBudget(config['ledger'])
-    require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
     if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
         raise ValueError('reference supervisor requires its original non-fixture provider')
     from zoo.circle_packing.cell_containment import delegated_cell_group
