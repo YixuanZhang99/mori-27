@@ -91,4 +91,43 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert authority.dispatch.audit()['currency']['protection_valid']
     assert authority.stages.audit()['stage_calls'] == 3
     assert authority.budget.audit_governance()['physical_totals']['token'] == 7
+    reference_limits = authority.budget.options['limits']['global']
     authority.close()
+    # Mori uses the same campaign, plan, sandbox runtime, seed and nominal
+    # resource ceilings. Its controller runs in this pytest process, not from
+    # the frozen source/runtime. Vendor runs one iteration while Mori is
+    # configured for six: this is not a fair performance comparison.
+    from core.loop import Framework, LoopConfig
+    from zoo.circle_packing.domain import CirclePackingDomain
+    from zoo.circle_packing.governed import governed_setup
+    from zoo.circle_packing.runner import TASK
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+    mori_clock = CellDeadline.start(ContinuationStore(tmp_path / 'mori-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                                    cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    mori_output = tmp_path / 'mori'
+    options = dict(ledger=ledger, api_key='fixture-only-secret', seed=0, iterations=plan['iterations'],
+                   base_url=local_endpoint.url, max_completion_tokens=plan['max_completion_tokens'],
+                   total_token_ceiling=plan['limits']['token'], cell_deadline=mori_clock,
+                   draft_plan=plan, expected_plan_ref=ref, runner=runner)
+    profile, registry, provider = governed_setup(mori_output, **options)
+    assert profile['budget']['options']['limits']['global'] == reference_limits
+    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
+    cfg = LoopConfig(max_generations=plan['iterations'], total_budget=plan['limits']['token'],
+                     reeval_floor=0, baseline_every=100)
+    domain = CirclePackingDomain(mori_output / 'domain', runner=runner.independent_runner())
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(mori_output / 'framework'),
+                                component_registry=registry)
+    outcome = fw.evolve(TASK)
+    assert outcome['best_candidate_id'] is not None
+    assert outcome['reporting']['final_audit']['state'] == 'completed'
+    assert len(local_endpoint.requests) == 2 and not ledger.snapshot()['pending_calls']
+
+    def adapters(path, store):
+        _, _, replay_provider = governed_setup(mori_output, **options)
+        return replay_provider, CirclePackingDomain(tmp_path / 'mori-replay', runner=runner.independent_runner())
+    def forbidden(*args, **kwargs):
+        raise AssertionError('paired recorded replay performed live work')
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
+    assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
+    assert len(local_endpoint.requests) == 2
