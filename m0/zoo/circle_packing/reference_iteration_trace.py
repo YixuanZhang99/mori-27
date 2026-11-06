@@ -514,7 +514,7 @@ def summarize_reference_run_coverage(trace, receipts, provider, stages, *, plann
         raise ValueError('invalid reference run coverage evidence') from error
 
 
-def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, plan, physical_coverage):
+def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, plan, physical_coverage, patches=None):
     """Account for planned calls and stages, including the initial seed stage.
 
     Inputs must already be verified against the original worker and campaign.
@@ -551,14 +551,20 @@ def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, pla
             reasons.append('provider_coverage_incomplete')
         provider_rows = provider['iterations']
         stage_rows = stages['stages']
+        patch_rows = patches.get('iterations', []) if type(patches) is dict else []
+        if type(patch_rows) is not list:
+            raise ValueError('reference patch coverage is invalid')
         for item in outcomes:
             number, state = item['iteration'], item['submission_state']
             calls = [row for row in provider_rows if row['iteration'] == number]
             physical = [row for row in stage_rows if row['iteration'] == number]
             if state not in ('candidate', 'worker_error'):
                 reasons.append(f'iteration_{number}_outcome_unverified')
-            if state == 'worker_error':
+            patch = [row for row in patch_rows if row['iteration'] == number]
+            if state == 'worker_error' and (len(patch) != 1 or patch[0].get('worker_error_explained') is not True):
                 reasons.append(f'iteration_{number}_error_phase_unverified')
+            if state == 'candidate' and (len(patch) != 1 or patch[0].get('patch_state') != 'candidate'):
+                reasons.append(f'iteration_{number}_patch_unverified')
             if len(calls) != 1 or calls[0]['state'] != 'matched':
                 reasons.append(f'iteration_{number}_provider_unverified')
             if state == 'candidate' and (not physical or any(row['state'] != 'matched' or

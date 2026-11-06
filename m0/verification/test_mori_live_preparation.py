@@ -652,6 +652,11 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert supervised['scope'] == 'paired_supervised_anchored_final_snapshots'
         assert supervised['mori']['candidate'] == mori_report['candidate']
         assert supervised['performance_claim'] is False
+        patches = supervised['reference_patch_outcomes']['iterations']
+        assert len(patches) == 6
+        assert all(item['patch_state'] == 'candidate' or item['worker_error_explained'] for item in patches)
+        assert supervised['reference_accounting_coverage']['iteration_accounting_complete'] is True
+        assert supervised['reference_accounting_coverage']['complete_run_certified'] is False
         replay_input = json.loads((Path(config['output']) / 'replay-input.json').read_text())
         replay_payload = {'mori_config': config, 'reference_config': vendor_config,
             'mori_directory': str(tmp_path / 'mori-supervisor'),

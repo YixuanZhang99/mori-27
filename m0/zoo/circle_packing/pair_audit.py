@@ -126,6 +126,8 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                 'reference_iteration_stages': reference_stages,
                 'reference_run_coverage': reference_coverage,
                 'reference_accounting_coverage': accounting_coverage,
+                'reference_iteration_trace': reference_trace,
+                'reference_physical_coverage': reference['physical_coverage'],
                 'sum_radii_difference': summaries['mori']['sum_radii'] - summaries['reference']['sum_radii'],
                 'invoice_verified': False}
     except (KeyError, TypeError, AttributeError, IndexError) as error:
@@ -161,6 +163,19 @@ def audit_supervised_pair_snapshot(*, mori_config, reference_config, mori_superv
                 reference_report['selected_program']['metrics']['sum_radii'] != result['reference']['sum_radii'] or \
                 reference_report['selected_program']['metrics']['validity'] != result['reference']['validity']:
             raise ValueError('supervisor reports differ from the independently audited snapshots')
+        trace = result.get('reference_iteration_trace')
+        if trace is not None and 'iterations' in result['reference_iteration_provider']:
+            from pathlib import Path
+            from zoo.circle_packing.reference_patch_audit import audit_reference_patches
+            from zoo.circle_packing.reference_iteration_trace import audit_reference_accounting_coverage
+            patches = audit_reference_patches(trace, result['reference_iteration_provider'],
+                pair_arguments['reference_bundle'], parent_directory=Path(reference_config['workspace']) / 'host-run' / 'parent-programs')
+            result['reference_patch_outcomes'] = patches
+            if 'controller_run' in trace and 'request_bindings' in trace and 'stage_bindings' in trace:
+                result['reference_accounting_coverage'] = audit_reference_accounting_coverage(
+                    result['reference_run_coverage'], result['reference_iteration_provider'],
+                    result['reference_iteration_stages'], rows=pair_arguments['reference_rows'],
+                    plan=pair_arguments['plan'], physical_coverage=result['reference_physical_coverage'], patches=patches)
         return {**result, 'scope': 'paired_supervised_anchored_final_snapshots'}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid supervised pair evidence') from error
