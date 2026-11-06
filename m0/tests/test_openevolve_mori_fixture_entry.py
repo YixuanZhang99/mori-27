@@ -269,8 +269,11 @@ def test_resume_unstarted_cell_uses_original_clock_and_refuses_started_worker(tm
 
 @pytest.mark.parametrize('arm', ['mori', 'vendor'])
 def test_later_seed_supervisor_refuses_before_any_launch(tmp_path, monkeypatch, arm):
+    from test_governed_cny_framework import campaign_fixture
     from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
-    cfg = {**config(), 'seed': 1}
+    ledger = campaign_fixture(tmp_path)
+    before = ledger.snapshot()['journal_head']
+    cfg = {**config(), 'seed': 1, 'ledger': str(ledger.path)}
     if arm == 'vendor':
         cfg.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
@@ -278,6 +281,8 @@ def test_later_seed_supervisor_refuses_before_any_launch(tmp_path, monkeypatch, 
     launch = launch_reference_live_controller if arm == 'vendor' else launch_live_controller
     with pytest.raises(ValueError, match='first pair'):
         launch(cfg, deadline=None, directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
+    assert ledger.snapshot()['journal_head'] == before
+    assert ledger.cell_deadline_claim(f'{arm}-1') is None
 
 
 def test_recorded_only_currency_bridge_refuses_live_binding():
