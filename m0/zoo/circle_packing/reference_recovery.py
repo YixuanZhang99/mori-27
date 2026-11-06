@@ -87,7 +87,7 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
         admissions = report.get('admission_trace')
         if admissions is not None:
             if type(admissions) is not dict or set(admissions) != {'schema_version', 'scope', 'events'} or \
-                    type(admissions['schema_version']) is not int or admissions['schema_version'] != 1 or \
+                    type(admissions['schema_version']) is not int or admissions['schema_version'] not in (1, 2) or \
                     admissions['scope'] != 'host_observed_reference_admissions' or \
                     type(admissions['events']) is not list or not 1 <= len(admissions['events']) <= 1000:
                 raise ValueError('reference worker admission trace is invalid')

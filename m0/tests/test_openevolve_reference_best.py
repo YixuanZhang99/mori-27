@@ -102,12 +102,14 @@ def test_capture_observes_actual_seed_child_and_migration():
         database = ProgramDatabase(DatabaseConfig(num_islands=2, feature_dimensions=['complexity', 'diversity']))
         database.add(Program(id='seed', code='x=1', metrics={'combined_score': 1.0}), target_island=0)
         database.add(Program(id='child', code='x=2', parent_id='seed', generation=1,
-                             metrics={'combined_score': 2.0}), target_island=0)
+                             metrics={'combined_score': 2.0}), iteration=1, target_island=0)
         database._migrate_one('child', 1)
         events = capture.snapshot()['events']
     measured = {event['id']: {'program_ref': event['program_ref'], 'metrics': event['metrics']}
                 for event in events if event['kind'] != 'migrant'}
     assert [event['kind'] for event in events] == ['seed', 'candidate', 'migrant']
+    assert events[1]['iteration'] == 1 and events[1]['target_island'] == 0
+    assert events[2]['iteration'] is None and events[2]['target_island'] == 1
     assert audit_reference_best(events, evaluated=measured, selected_id='child')['fitness'] == 2.0
 
 
@@ -149,6 +151,18 @@ def test_best_reconstruction_uses_original_stage_geometry_and_candidate_identity
     with pytest.raises(ValueError):
         audit_reference_best_from_physical(events, trace=trace, rows=forged, accounting=accounting,
                                            seed_sha256='1' * 64, selected_id='child')
+    extended = deepcopy(events)
+    extended[0].update(iteration=None, target_island=None)
+    extended[1].update(iteration=1, target_island=0)
+    extended_trace = deepcopy(trace)
+    extended_trace['iterations'][0]['target_island'] = 0
+    verified = audit_reference_best_from_physical(extended, trace=extended_trace, rows=rows, accounting=accounting,
+        seed_sha256='1' * 64, selected_id='child')
+    assert verified['selected_id'] == 'child' and verified['candidate_iteration_and_island_verified'] is True
+    extended[1]['target_island'] = 1
+    with pytest.raises(ValueError):
+        audit_reference_best_from_physical(extended, trace=extended_trace, rows=rows, accounting=accounting,
+            seed_sha256='1' * 64, selected_id='child')
 
 
 @pytest.mark.parametrize('status', ['timeout', 'failed_to_run'])

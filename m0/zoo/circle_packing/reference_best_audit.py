@@ -30,12 +30,28 @@ def audit_reference_best(events, *, evaluated, selected_id):
         raise ValueError('invalid caller-supplied reference admissions')
     by_id, kinds, observed, best, best_fitness = {}, {}, set(), None, None
     keys = {'kind', 'id', 'parent_id', 'program_ref', 'metrics', 'best_before', 'best_after'}
+    v2_keys = keys | {'iteration', 'target_island'}
+    schema = set(events[0]) if type(events[0]) is dict else set()
+    if schema not in (keys, v2_keys):
+        raise ValueError('invalid reference admission schema')
     for index, event in enumerate(events):
-        if (type(event) is not dict or set(event) != keys or
+        if (type(event) is not dict or set(event) != schema or
                 event['kind'] not in {'seed', 'candidate', 'migrant'} or
                 type(event['id']) is not str or not event['id'] or event['id'] in by_id or
                 event['best_before'] != best):
             raise ValueError('invalid reference admission or best transition')
+        if schema == v2_keys and (
+                (event['iteration'] is not None and
+                 (type(event['iteration']) is not int or event['iteration'] < 0)) or
+                (event['target_island'] is not None and
+                 (type(event['target_island']) is not int or not 0 <= event['target_island'] < 4))):
+            raise ValueError('invalid reference admission iteration or island')
+        if schema == v2_keys and (
+                (event['kind'] in ('seed', 'migrant') and event['iteration'] is not None) or
+                (event['kind'] == 'migrant' and event['target_island'] is None) or
+                (event['kind'] == 'candidate' and
+                 (event['iteration'] is None or event['iteration'] < 1 or event['target_island'] is None))):
+            raise ValueError('reference admission does not match its host operation')
         ident, kind = event['id'], event['kind']
         measurement = {'program_ref': event['program_ref'], 'metrics': event['metrics']}
         if not _valid_measurement(measurement):
@@ -132,10 +148,18 @@ def audit_reference_best_from_physical(events, *, trace, rows, accounting, seed_
             ident, number = item['child_id'], item['iteration']
             if type(ident) is not str or not ident or ident in evaluated or type(number) is not int:
                 raise ValueError('reference candidate identity is duplicated or invalid')
+            admissions = [event for event in events if event.get('id') == ident and event.get('kind') == 'candidate']
+            if len(admissions) != 1:
+                raise ValueError('reference candidate lacks its unique host admission')
+            if 'iteration' in admissions[0] and (admissions[0]['iteration'] != number or
+                    type(item.get('target_island')) is not int or
+                    admissions[0]['target_island'] != item['target_island']):
+                raise ValueError('reference candidate admission differs from its iteration or island')
             ref = 'sha256:' + item['program_sha256']
             ids = [binding['request_id'] for binding in trace['stage_bindings'] if binding['iteration'] == number]
             evaluated[ident] = {'program_ref': ref, 'metrics': measured(ref, ids)}
         result = audit_reference_best(events, evaluated=evaluated, selected_id=selected_id)
-        return {**result, 'scope': 'caller_pinned_reference_best_from_physical'}
+        return {**result, 'scope': 'caller_pinned_reference_best_from_physical',
+                'candidate_iteration_and_island_verified': 'iteration' in events[0]}
     except (KeyError, TypeError, AttributeError, IndexError) as error:
         raise ValueError('invalid reference best physical evidence') from error

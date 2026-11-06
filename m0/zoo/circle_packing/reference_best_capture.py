@@ -13,7 +13,7 @@ class _AdmissionCapture:
     def snapshot(self):
         if self.failed or not 1 <= len(self.events) <= 1000:
             raise ValueError('reference admission capture failed or is incomplete')
-        return {'schema_version': 1, 'scope': 'host_observed_reference_admissions',
+        return {'schema_version': 2, 'scope': 'host_observed_reference_admissions',
                 'events': copy.deepcopy(self.events)}
 
 
@@ -32,7 +32,8 @@ def capture_reference_admissions(database_class):
                     'seed' if not capture.events else 'candidate')
             event = {'kind': kind, 'id': program.id, 'parent_id': program.parent_id,
                      'program_ref': 'sha256:' + hashlib.sha256(program.code.encode('utf-8')).hexdigest(),
-                     'metrics': copy.deepcopy(program.metrics), 'best_before': database.best_program_id}
+                     'metrics': copy.deepcopy(program.metrics), 'best_before': database.best_program_id,
+                     'iteration': iteration, 'target_island': target_island}
             result = original(database, program, iteration=iteration, target_island=target_island)
             if result != program.id:
                 raise ValueError('reference admission did not accept the program')
