@@ -169,7 +169,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     from dataclasses import asdict
     from core.x1.checkpoint import payload_digest
     from zoo.circle_packing.reference_selection import (audit_recorded_reference_cascade,
-        audit_anchored_reference_physical, audit_anchored_reference_worker)
+        audit_anchored_reference_physical, audit_anchored_reference_worker, audit_anchored_reference_cell)
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
     run_id = authority.dispatch.ready.authority_binding['currency_run_id']
     evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
@@ -210,6 +210,20 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         request_ids=ids)
     assert physical_audit['evidence_ref'] == result['stage_evidence_ref']
     assert physical_audit['stage_eval_count'] == len(ids)
+    from zoo.circle_packing.domain import CirclePackingDomain
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+    def forbidden(*args, **kwargs):
+        raise AssertionError('reference recorded audit performed live work')
+    with monkeypatch.context() as guard:
+        guard.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+        guard.setattr(CirclePackingDomain, 'evaluate', forbidden)
+        guard.setattr('zoo.circle_packing.host_physical.run_stage', forbidden)
+        joined = audit_anchored_reference_cell(view, recorded_clock, run_id, worker_proof=worker_proof,
+            stdout=process_output['stdout'], stderr=process_output['stderr'], selected=result['selected_program'],
+            options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+            governance=authority.budget._governed.config, rows=rows, request_ids=ids)
+    assert joined['scope'] == 'host_attested_reference_snapshot' and not joined['performance_claim']
+    assert joined['stage']['evidence_ref'] == result['stage_evidence_ref']
     with pytest.raises(ValueError):
         audit_anchored_reference_physical(view, recorded_clock, run_id,
             options=authority.budget.options, stamp=asdict(authority.budget.stamp),

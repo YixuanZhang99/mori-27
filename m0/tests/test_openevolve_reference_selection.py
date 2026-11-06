@@ -51,3 +51,22 @@ def test_reference_selection_rejects_substituted_artifacts(tmp_path, change):
         info.write_text('{"id":"candidate-1","id":"candidate-1","metrics":{}}')
     with pytest.raises(ValueError):
         read_reference_selection(tmp_path, selected)
+
+
+@pytest.mark.parametrize('difference', ['program_ref', 'metrics', 'metric_type'])
+def test_reference_cell_rejects_worker_and_physical_stage_disagreement(monkeypatch, difference):
+    from zoo.circle_packing import reference_selection as module
+    selected = {'id': 'candidate-1', 'program_ref': 'sha256:' + 'a' * 64,
+                'metrics': {'validity': 1.0, 'combined_score': .5}}
+    stage = {'program_ref': selected['program_ref'], 'metrics': dict(selected['metrics']), 'stage_count': 1}
+    if difference == 'program_ref':
+        stage['program_ref'] = 'sha256:' + 'b' * 64
+    elif difference == 'metric_type':
+        stage['metrics'] = {'validity': True, 'combined_score': .5}
+    else:
+        stage['metrics'] = {'validity': 0.0}
+    monkeypatch.setattr(module, 'audit_anchored_reference_worker', lambda *args, **kwargs: {'worker_ref': 'a' * 64})
+    monkeypatch.setattr(module, 'audit_anchored_reference_physical', lambda *args, **kwargs: stage)
+    with pytest.raises(ValueError, match='worker.*stage'):
+        module.audit_anchored_reference_cell(None, None, 'run', worker_proof={}, stdout='', stderr='',
+            selected=selected, options={}, stamp={}, governance={}, rows=[], request_ids=['a' * 32])

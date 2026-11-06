@@ -305,3 +305,22 @@ def audit_anchored_reference_worker(view, clock, run_id, worker_proof, *, stdout
     except (TypeError, UnicodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError('anchored worker report is invalid') from error
     return {'worker_ref': anchor['worker_ref'], 'execution_id': started['execution_id']}
+
+
+def audit_anchored_reference_cell(view, clock, run_id, *, worker_proof, stdout, stderr, selected,
+                                  options, stamp, governance, rows, request_ids):
+    """Join host-attested worker and stage evidence, not a complete run audit."""
+    try:
+        selected = json.loads(json.dumps(selected, allow_nan=False))
+        worker = audit_anchored_reference_worker(view, clock, run_id, worker_proof,
+            stdout=stdout, stderr=stderr, selected=selected)
+        stage = audit_anchored_reference_physical(view, clock, run_id, options=options, stamp=stamp,
+            governance=governance, rows=rows, request_ids=request_ids)
+        if selected['program_ref'] != stage['program_ref'] or \
+                json.dumps(selected['metrics'], sort_keys=True, allow_nan=False) != \
+                json.dumps(stage['metrics'], sort_keys=True, allow_nan=False):
+            raise ValueError('reference worker and physical stage evidence differ')
+        return {'scope': 'host_attested_reference_snapshot', 'performance_claim': False,
+                'selected_program': selected, 'worker': worker, 'stage': stage}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid reference worker or stage evidence') from error
