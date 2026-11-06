@@ -244,7 +244,7 @@ def test_reference_supervisor_runs_live_host_with_fake_transport_and_original_au
 @pytest.mark.parametrize('prepared_cell', ['supervised_fake_live'], indirect=True)
 def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepared_cell, tmp_path, monkeypatch):
     from zoo.circle_packing.mori_supervisor import launch_live_controller
-    from zoo.circle_packing.mori_final import recalculate_mori_geometry
+    from zoo.circle_packing.mori_final import recalculate_mori_geometry, audit_anchored_mori_geometry
     config, ledger, clock, _runner = prepared_cell
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
     directory = tmp_path / 'live-supervisor'
@@ -271,6 +271,23 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
                                          public_range_threshold=config['plan']['public_range_sum_radii'])
     assert verified['measurement'] == report['final_measurement']
     assert verified['candidate'] == report['candidate'] and verified['performance_claim'] is False
+    context = next(row['payload']['invocation']['external_context'] for row in rows
+                   if row['kind'] == 'composed_provider_started')
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    run_id, physical_plan_ref = context['currency_run_id'], context['physical_plan_ref']
+    head = ledger.snapshot()['journal_head']
+    evidence = ledger.export_governance_evidence(run_id, physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=head)
+    recorded_clock = RecordedCellClock(clock.export_evidence(), view.cell_deadline_claim('mori-0'))
+    anchored = audit_anchored_mori_geometry(rows, view=view, clock=recorded_clock, run_id=run_id,
+        plan=config['plan'], expected_plan_ref=config['ref'], expected_rows_sha256=payload_digest(rows))
+    assert anchored['measurement'] == report['final_measurement']
+    assert anchored['settled_upper_bound_micro_cny'] == ledger.snapshot()['settled_upper_bound_micro_cny']
+    assert anchored['performance_claim'] is False
+    with pytest.raises(ValueError, match='pinned'):
+        audit_anchored_mori_geometry(rows, view=RecordedCurrencyView(evidence), clock=recorded_clock, run_id=run_id,
+            plan=config['plan'], expected_plan_ref=config['ref'], expected_rows_sha256=payload_digest(rows))
     with pytest.raises(ValueError, match='journal'):
         recalculate_mori_geometry(rows, expected_rows_sha256='0' * 64,
                                  public_range_threshold=config['plan']['public_range_sum_radii'])
@@ -289,6 +306,16 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
     with pytest.raises(ValueError):
         recalculate_mori_geometry(altered, expected_rows_sha256=payload_digest(altered),
                                  public_range_threshold=config['plan']['public_range_sum_radii'])
+    altered = copy.deepcopy(rows)
+    final_intent = next(row['payload']['intent_id'] for row in altered
+                        if row['kind'] == 'composed_physical_evidence'
+                        and row['payload']['request']['split_id'] == 'final_audit')
+    proof = next(row['payload'] for row in altered if row['kind'] == 'governed_work_eligibility'
+                 and row['payload'].get('phase') == 'evaluation' and row['payload'].get('intent_id') == final_intent)
+    proof['fingerprint'] = 'sha256:' + '0' * 64
+    with pytest.raises(ValueError):
+        audit_anchored_mori_geometry(altered, view=view, clock=recorded_clock, run_id=run_id,
+            plan=config['plan'], expected_plan_ref=config['ref'], expected_rows_sha256=payload_digest(altered))
     snapshot = ledger.snapshot()
     assert snapshot['settled_upper_bound_micro_cny'] > 0
     assert snapshot['settled_upper_bound_micro_cny'] % 38 == 0

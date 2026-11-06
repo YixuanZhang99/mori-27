@@ -243,6 +243,11 @@ against the frozen candidate and its original development geometry, rechecking
 the geometry with both validators without model or candidate execution. This
 does not itself establish that the caller's journal digest is authoritative,
 audit the currency ledger, or certify a complete run or benchmark result.
+`audit_anchored_mori_geometry` additionally checks the final evaluation's
+original eligibility proof against a caller-pinned campaign head and recorded
+clock, and reports the independently reduced currency upper bound only when
+that run has no unresolved calls or reservations. It does not establish that
+the supplied head is the latest or that every part of the run was audited.
 It also exercises the reference controller with a test-only override of the
 closed live gate, fake responses, and only local socket connections. The test
 reconstructs the anchored selection and geometry without any new model or
