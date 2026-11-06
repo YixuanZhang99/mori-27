@@ -7,7 +7,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
+import tempfile
+import urllib.request
 
 import pytest
 
@@ -157,3 +160,88 @@ print(json.dumps({'candidate': outcome['best_candidate_id'], 'state': final['sta
     for path in Path(config['output']).rglob('*'):
         if path.is_file() and not path.is_symlink():
             assert b'fixture-only-secret' not in path.read_bytes(), f'fixture credential persisted in {path}'
+
+
+@pytest.mark.linux
+def test_reference_real_provider_path_with_test_gate_override_and_no_network(prepared_cell, tmp_path, monkeypatch):
+    """Exercise real-provider wiring with a fake transport and test-only gate override."""
+    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    config, ledger, _mori_clock, runner = prepared_cell
+    plan = config['plan']
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+        cell_id='vendor-0', plan_ref=config['ref'], seconds=plan['limits']['wallclock_seconds'])
+    diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
+            '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
+            '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
+    calls = []
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self):
+            return json.dumps({'model': plan['model'],
+                'usage': {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7},
+                'choices': [{'finish_reason': 'stop', 'message': {'content': diff}}]}).encode()
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == config['base_url'] + '/chat/completions'
+            assert request.get_header('Authorization') == 'Bearer fixture-only-secret'
+            wire = json.loads(request.data)
+            assert wire['model'] == plan['model'] and wire['max_tokens'] == plan['max_completion_tokens']
+            assert [message['role'] for message in wire['messages']] == ['system', 'user']
+            calls.append(1)
+            return Response()
+    monkeypatch.setattr(urllib.request, 'build_opener', lambda *args: Opener())
+    original_connect = socket.socket.connect
+    def local_only(sock, address):
+        if sock.family != socket.AF_UNIX:
+            raise AssertionError('test forbids external socket connections')
+        return original_connect(sock, address)
+    monkeypatch.setattr(socket.socket, 'connect', local_only)
+    authority = build_reference_authorities(tmp_path / 'reference', ledger=ledger, plan=plan,
+        expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'], deadline=clock,
+        snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'], runner=runner,
+        api_key='fixture-only-secret', base_url=config['base_url'], mode='live_preparation')
+    try:
+        # Only this offline test bypasses the unfinished live gate. It uses a
+        # disposable ledger, fake key, intercepted transport and no network.
+        ref = ledger.reference_authority_claim('vendor-0')['authority_ref']
+        monkeypatch.setattr(authority._lease, '_on_start',
+                            lambda: ledger.start_reference_authority_work('vendor-0', ref))
+        with tempfile.TemporaryDirectory(prefix='mori-reference-', dir='/tmp') as path:
+            workspace = Path(path).resolve()
+            result = run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace,
+                snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'],
+                frozen_plan=plan, expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'],
+                runtime=config['runtime'], runtime_manifest=config['runtime_manifest'],
+                base_python='/usr/bin/python3.12', iterations=plan['iterations'])
+            assert result['state'] == 'completed' and result['performance_claim'] is False
+            assert result['selected_program']['metrics']['validity'] == 1.0
+            for root in (tmp_path / 'reference', tmp_path / 'worker', workspace):
+                for file in root.rglob('*'):
+                    if file.is_file() and not file.is_symlink():
+                        assert b'fixture-only-secret' not in file.read_bytes(), f'fixture key persisted in {file}'
+        assert len(calls) == plan['iterations']
+        assert ledger.snapshot()['settled_upper_bound_micro_cny'] == len(calls) * 38
+        assert not ledger.snapshot()['pending_calls']
+        run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+        assert ledger.reference_selection(run_id) is not None
+        from dataclasses import asdict
+        from zoo.circle_packing.cell_deadline import RecordedCellClock
+        from zoo.circle_packing.reference_recovery import recover_reference_snapshot
+        from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+        evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
+        view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+        recorded_clock = RecordedCellClock(clock.export_evidence(), view.cell_deadline_claim('vendor-0'))
+        def no_work(*args, **kwargs):
+            raise AssertionError('recorded recovery attempted external work')
+        monkeypatch.setattr(GovernedCNYProvider, 'perform_request', no_work)
+        monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', no_work)
+        monkeypatch.setattr('zoo.circle_packing.stage.run_stage', no_work)
+        recovered = recover_reference_snapshot(view, recorded_clock, run_id, plan=plan,
+            expected_plan_ref=config['ref'], worker_directory=tmp_path / 'worker',
+            options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+            governance=authority.budget._governed.config, rows=list(authority.budget.store.read()))
+        assert recovered['metrics'] == result['selected_program']['metrics']
+        assert recovered['selection_frozen'] and recovered['performance_claim'] is False
+    finally:
+        authority.close()

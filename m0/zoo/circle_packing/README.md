@@ -207,6 +207,10 @@ The same verification module also runs six Mori rounds using the real-provider
 configuration and a temporary unmarked ledger while intercepting transport and
 blocking socket connections. It tests the real configuration path, simulated
 currency accounting and recorded replay; it does not contact the provider.
+It also exercises the reference controller with a test-only override of the
+closed live gate, fake responses, and only local socket connections. The test
+reconstructs the anchored selection and geometry without any new model or
+candidate work; this is not a real result or a live readiness certification.
 `build_reference_provider` prepares the reference-side transport for the
 original campaign endpoint without sending a request. The existing reference
 cell launcher remains fixture-only; preparation alone does not authorize a
