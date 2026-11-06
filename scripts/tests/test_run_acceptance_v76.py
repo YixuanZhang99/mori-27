@@ -49,12 +49,16 @@ with Path('verifier/runs/v76.jsonl').open('a') as f:
                 body += f"Path({str(root / 'scripts/setup_ci_tmpdir.sh')!r}).write_text('changed\\n')\n"
             if mutation == 'new_control':
                 body += f"Path({str(root / 'scripts/verify_acceptance_v76.py')!r}).write_text('changed\\n')\n"
+            if mutation == 'git_context':
+                body += "import subprocess\nassert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == subprocess.check_output(['git', '-C', __SOURCE_ROOT__, 'rev-parse', 'HEAD'], text=True).strip()\nassert not Path('../untracked-secret-sentinel').exists()\n"
+            body = body.replace('__SOURCE_ROOT__', repr(str(root)))
             (root / 'm0/verifier/v76/verify.py').write_text(body)
             subprocess.run(['git', 'init', '-q', str(root)], check=True)
             subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
             subprocess.run(['git', '-C', str(root), '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test',
                             'commit', '-qm', 'fixture'], check=True)
             sha = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+            (root / 'untracked-secret-sentinel').write_text('fake sentinel')
             if dirty:
                 (root / 'm0/core/fixture.py').write_text('VALUE = 3\n')
             child = subprocess.run([sys.executable, str(root / 'scripts/run_acceptance_v76.py'),
@@ -77,6 +81,11 @@ with Path('verifier/runs/v76.jsonl').open('a') as f:
         self.assertTrue(report['source_binding']['unchanged'])
         self.assertTrue(report['execution_source_unchanged'])
         self.assertEqual(report['source_binding']['source_manifest_sha256'], report['execution_source_manifest_sha256'])
+
+    def test_execution_checkout_has_exact_git_commit_and_excludes_untracked_files(self):
+        code, report = self.run_fixture('git_context')
+        self.assertEqual(code, 0)
+        self.assertTrue(report['passed'])
 
     def test_dirty_source_cannot_claim_same_commit_acceptance(self):
         code, report = self.run_fixture(dirty=True)
