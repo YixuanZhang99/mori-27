@@ -661,7 +661,7 @@ args=dict(mori_config=c,reference_config=v,mori_supervisor_directory=p['mori_dir
  reference_run_id=p['reference_run'],reference_worker_directory=v['worker_directory'],reference_bundle=p['reference_bundle'])
 cycles=audit_completed_mori_cycles(p['replay_input'],expected_input_sha256=payload_digest(p['replay_input']),
  view=mv,clock=mc,run_id=p['mori_run'],plan=c['plan'],expected_plan_ref=c['ref'])
-assert cycles['scope']=='caller_pinned_complete_mori_cycles' and len(cycles['cycles'])==7
+assert cycles['scope']=='caller_pinned_mori_cycle_commits' and len(cycles['cycles'])==7
 assert [row['cycle'] for row in cycles['cycles']]==list(range(7))
 assert any(row['evaluation_status']!='ok' for row in cycles['cycles'])
 missing=copy.deepcopy(p['replay_input'])

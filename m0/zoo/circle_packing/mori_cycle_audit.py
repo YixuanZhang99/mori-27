@@ -37,12 +37,14 @@ def audit_completed_mori_cycles(evidence, *, expected_input_sha256, view, clock,
             raise ValueError('cycle transcript must be a list')
         starts = [(index, row['payload']['cycle']) for index, row in enumerate(rows)
                   if row['kind'] == 'composed_cycle_started']
-        if [cycle for _, cycle in starts] != list(range(count)) or any(
+        if any(type(cycle) is not int for _, cycle in starts) or \
+                [cycle for _, cycle in starts] != list(range(count)) or any(
                 row['kind'] in ('composed_cycle_aborted', 'composed_cycle_failed', 'composed_stopped') for row in rows):
             raise ValueError('cycle transcript has missing, repeated or interrupted cycles')
         proofs = [(index, row['payload']) for index, row in enumerate(rows)
                   if row['kind'] == 'governed_work_eligibility' and row['payload'].get('phase') == 'cycle_commit']
-        if [proof['cycle'] for _, proof in proofs] != list(range(count)):
+        if any(type(proof['cycle']) is not int for _, proof in proofs) or \
+                [proof['cycle'] for _, proof in proofs] != list(range(count)):
             raise ValueError('cycle transcript lacks complete ordered eligibility proofs')
         outcomes = []
         for cycle, ((start_index, _), (proof_index, proof)) in enumerate(zip(starts, proofs)):
@@ -72,7 +74,7 @@ def audit_completed_mori_cycles(evidence, *, expected_input_sha256, view, clock,
             outcomes.append({'cycle': cycle, 'candidate': candidate,
                 'evaluation_status': event['evidence']['eval_result']['status'],
                 'admitted': decision['decision']['admit']})
-        return {'schema_version': 1, 'scope': 'caller_pinned_complete_mori_cycles',
+        return {'schema_version': 1, 'scope': 'caller_pinned_mori_cycle_commits',
                 'performance_claim': False, 'cycles': outcomes}
     except (KeyError, TypeError, AttributeError, IndexError) as error:
         raise ValueError('invalid recorded Mori cycle evidence') from error
