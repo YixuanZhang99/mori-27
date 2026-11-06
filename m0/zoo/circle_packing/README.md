@@ -41,6 +41,12 @@ The broker is only a transport: its caller must supply an authenticated,
 durable physical-and-currency dispatcher. No such live dispatcher or full
 reference recovery is enabled by this fixture.
 
+`HostPhysicalAdmission` exercises the existing hierarchical budget and its
+journal: it blocks a second call while a prior physical operation is open and
+only settles against an original completed provider receipt. It is a component,
+not a live dispatcher; integrating and independently joining the physical
+and currency authorities is still required.
+
 `governed_setup` is an internal composition factory for the existing CNY
 bridge and a fresh circle control. Its loopback tests cover role-bound requests,
 settlement, unknown usage and recorded replay. It does not freeze a fair paired
