@@ -11,6 +11,7 @@ from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
 from zoo.mle_bench_lite.provider_protocol import parse_response
+from test_governed_cny_provider import local_endpoint, reply
 
 
 class Store:
@@ -24,6 +25,10 @@ class Store:
 @pytest.fixture
 def setup(tmp_path, request):
     mode = getattr(request, 'param', 'single_user_v1')
+    loopback = mode == 'openevolve_host_loopback'
+    endpoint = request.getfixturevalue('local_endpoint') if loopback else None
+    if loopback:
+        mode = 'openevolve_host_v1'
     if mode == 'openevolve_v1':
         from test_openevolve_governed_transport import prompt
         argument = prompt()
@@ -35,11 +40,11 @@ def setup(tmp_path, request):
     ledger = CampaignBudget.create(tmp_path / 'campaign.db')
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
         expected_head=ledger.snapshot()['journal_head'])
-    providers = {key: GovernedCNYProvider('deepseek-flash', 'http://127.0.0.1:1',
-        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture', message_mode=mode)
+    providers = {key: GovernedCNYProvider('deepseek-flash', endpoint.url if loopback else 'http://127.0.0.1:1',
+        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture-only-secret', message_mode=mode)
         for key in ('main', 'control-0000')}
     calls = []
-    for key, provider in providers.items():
+    for key, provider in (() if loopback else providers.items()):
         def transport(body, provider=provider, key=key, **_kwargs):
             assert ledger.snapshot()['pending_calls']
             calls.append((key, body))
@@ -131,6 +136,113 @@ def test_host_role_bridge_preserves_exact_messages_and_audits_record(setup):
     complete(store)
     assert bridge.audit()['protection_valid']
     assert bridge.replay_bundle()['calls'][0]['prepared']['argument'] == host_prompt()
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
+def test_host_socket_calls_existing_currency_bridge_after_physical_admission(setup, tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from zoo.circle_packing.host_transport import HostBroker, HostBridgeClient
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    def dispatch(request_id, argument):
+        result = bridge.invoke(context, (json.dumps(argument),), {})
+        return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
+    path = tmp_path / 'host.sock'
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        worker = threading.Thread(target=broker.serve_one, daemon=True)
+        worker.start()
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        client = HostBridgeClient(SimpleNamespace(name='fixture'))
+        assert asyncio.run(client.generate_with_context('host system',
+            [{'role': 'user', 'content': 'host user'}])) == 'answer'
+        worker.join(timeout=5)
+    complete(store)
+    assert bridge.audit()['protection_valid'] and len(calls) == 1
+    assert not ledger.snapshot()['pending_calls']
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
+def test_host_broker_stops_after_unknown_currency_usage(setup, tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from zoo.circle_packing.host_transport import HostBroker, HostBridgeClient
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    def missing_usage(body, **kwargs):
+        calls.append(body)
+        return parse_response(json.dumps({'model': 'deepseek-flash',
+            'choices': [{'finish_reason': 'stop', 'message': {'content': 'answer'}}]}).encode(),
+            providers['control-0000'].protocol_binding())
+    providers['control-0000'].perform_request = missing_usage
+    def dispatch(request_id, argument):
+        result = bridge.invoke(context, (json.dumps(argument),), {})
+        return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
+    path = tmp_path / 'unknown.sock'
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(2)], daemon=True)
+        thread.start()
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        for _ in range(2):
+            client = HostBridgeClient(SimpleNamespace(name='fixture'))
+            with pytest.raises(UsageError):
+                asyncio.run(client.generate_with_context('host system',
+                    [{'role': 'user', 'content': 'host user'}]))
+        thread.join(timeout=5)
+    assert len(calls) == 1 and len(ledger.snapshot()['pending_calls']) == 1
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_loopback'], indirect=True)
+def test_actual_host_worker_routes_to_currency_bridge_over_loopback(setup, tmp_path, local_endpoint):
+    import os
+    import subprocess
+    import sys
+    import threading
+    from core.composition.external_provider import GovernedCallContext
+    from zoo.circle_packing.host_transport import HostBroker
+    ledger, bridge, run, initial, providers, calls, store, physical = setup
+    diff = ('<<<<<<< SEARCH\n    n = 26\n=======\n'
+            '    n = 26\n    # bridged host fixture\n>>>>>>> REPLACE\n')
+    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
+    invoked = []
+    def dispatch(request_id, argument):
+        raw = json.dumps(argument)
+        argument_sha = payload_digest({'args': (raw,), 'kwargs': {}})
+        context = GovernedCallContext(**{**initial.to_dict(), 'argument_sha256': argument_sha})
+        inv = {'schema_version': 2, 'external_context': context.to_dict(), 'intent_id': context.intent_id,
+            'fingerprint': context.physical_fingerprint, 'lane': context.lane, 'slot_id': context.slot_id,
+            'run_id': context.logical_run_id, 'adapter_binding_sha256': context.adapter_binding_sha256, 'ordinal': 0}
+        binding = payload_digest({'request_sha256': argument_sha, 'invocation': inv})
+        store.rows.clear()
+        store.append('composed_provider_started', {'binding': binding, 'request_sha256': argument_sha, 'invocation': inv})
+        result = bridge.invoke(context, (raw,), {})
+        store.append('composed_provider_completed', {'binding': binding, 'result': result, 'tokens': 7,
+            'state': None, 'observed_binding_sha256': context.adapter_binding_sha256})
+        invoked.append(context)
+        return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
+    path = tmp_path / 'real-host.sock'
+    env = {key: value for key, value in os.environ.items() if 'API_KEY' not in key}
+    env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
+               MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,
+               OPENAI_API_KEY='fixture-only-secret')
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        result = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.host_reference',
+            '--output', str(tmp_path / 'host-run'), '--iterations', '1', '--fixture-broker'],
+            env=env, capture_output=True, text=True, timeout=120, check=True)
+        thread.join(timeout=5)
+    assert json.loads(result.stdout)['stage_calls'] == 2
+    assert len(invoked) == len(local_endpoint.requests) == 1
+    assert bridge.audit()['protection_valid'] and not ledger.snapshot()['pending_calls']
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 38
+    wire = json.loads(local_endpoint.requests[0])
+    assert [message['role'] for message in wire['messages']] == ['system', 'user']
+    for item in (tmp_path / 'host-run').rglob('*'):
+        if item.is_file():
+            assert b'fixture-only-secret' not in item.read_bytes()
 
 
 @pytest.mark.parametrize('setup', ['openevolve_v1'], indirect=True)

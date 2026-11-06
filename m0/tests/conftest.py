@@ -55,6 +55,9 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_governed_cny_bridge.py": {
+        "test_actual_host_worker_routes_to_currency_bridge_over_loopback",
+    },
     "test_openevolve_runner.py": {
         "test_default_cli_runs_without_credentials_or_external_network",
         "test_fixture_terminal_recovery_replays_without_new_calls",

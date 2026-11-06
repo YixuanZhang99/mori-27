@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -54,3 +55,33 @@ def test_fixture_refuses_unsanitized_worker_environment(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='sanitized environment'):
         run_fixture(tmp_path / 'host')
     assert not (tmp_path / 'host').exists()
+
+
+def test_actual_host_worker_uses_fixture_broker_without_credentials(tmp_path):
+    from zoo.circle_packing.host_transport import HostBroker
+    path = tmp_path / 'fixture.sock'
+    requests = []
+    def dispatch(request_id, argument):
+        requests.append(argument)
+        return {'state': 'ok', 'result': ('<<<<<<< SEARCH\n    n = 26\n=======\n'
+            '    n = 26\n    # broker fixture\n>>>>>>> REPLACE\n'),
+            'usage': {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}}
+    env = {key: value for key, value in os.environ.items()
+           if 'API_KEY' not in key and not key.startswith('KAGGLE_')}
+    env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
+               MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,
+               OPENAI_API_KEY='fixture-api-secret-not-for-network')
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        result = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.host_reference',
+            '--output', str(tmp_path / 'host'), '--iterations', '1', '--fixture-broker'],
+            env=env, capture_output=True, text=True, timeout=120, check=True)
+        thread.join(timeout=5)
+    report = json.loads(result.stdout)
+    assert report['fixture_broker'] and report['stage_calls'] == 2
+    assert len(requests) == 1 and requests[0]['host_messages']['system']
+    for item in (tmp_path / 'host').rglob('*'):
+        if item.is_file():
+            data = item.read_bytes()
+            assert b'fixture-api-secret-not-for-network' not in data and b'a' * 64 not in data

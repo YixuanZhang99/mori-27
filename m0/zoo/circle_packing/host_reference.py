@@ -19,6 +19,7 @@ from core.x1.store import AppendOnlyStore
 
 _ALLOWED_ENV = ('PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'PYTHONPATH',
                 'PYTHONHASHSEED', 'LD_LIBRARY_PATH')
+_BROKER_ENV = ('MORI_CIRCLE_BROKER_SOCKET', 'MORI_CIRCLE_BROKER_TOKEN')
 
 
 class FixtureHostClient:
@@ -42,12 +43,18 @@ def fixture_client(model):
     return FixtureHostClient(model)
 
 
-def run_fixture(output, *, seed=0, iterations=1):
+def fixture_broker_client(model):
+    from zoo.circle_packing.host_transport import HostBridgeClient
+    return HostBridgeClient(model)
+
+
+def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False):
     if type(seed) is not int or seed < 0 or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('fixture requires nonnegative seed and one to six iterations')
     if os.environ.get('PYTHONHASHSEED') != '0':
         raise ValueError('fixture requires PYTHONHASHSEED=0 at process start')
-    if set(os.environ) - set(_ALLOWED_ENV):
+    allowed = set(_ALLOWED_ENV) | (set(_BROKER_ENV) if fixture_broker else set())
+    if set(os.environ) - allowed:
         raise ValueError('host fixture worker requires a sanitized environment')
     _verify_sources()
     policy_options({'seed': seed, 'migration_interval': 2})
@@ -61,7 +68,8 @@ def run_fixture(output, *, seed=0, iterations=1):
     from openevolve.config import Config, LLMModelConfig, PromptConfig
     import yaml
     config = Config()
-    model = LLMModelConfig(name='circle-fixture', api_key=None, init_client=fixture_client,
+    model = LLMModelConfig(name='circle-fixture', api_key=None,
+                           init_client=fixture_broker_client if fixture_broker else fixture_client,
                            max_tokens=128, timeout=120, retries=0)
     config.llm.api_key = None
     config.llm.models = [model]
@@ -91,7 +99,8 @@ def run_fixture(output, *, seed=0, iterations=1):
     if result.best_code is None:
         raise RuntimeError('pinned host returned no evaluated program')
     return {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
-            'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages}
+            'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
+            'fixture_broker': fixture_broker}
 
 
 def main():
@@ -99,13 +108,16 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--iterations', type=int, default=1)
+    parser.add_argument('--fixture-broker', action='store_true')
     args = parser.parse_args()
     # The vendored worker serializes its environment: start with a small
     # allowlist so no model credentials are copied to that worker.
-    clean = {key: os.environ[key] for key in _ALLOWED_ENV if key in os.environ}
+    allowed = _ALLOWED_ENV + (_BROKER_ENV if args.fixture_broker else ())
+    clean = {key: os.environ[key] for key in allowed if key in os.environ}
     os.environ.clear()
     os.environ.update(clean)
-    print(json.dumps(run_fixture(args.output, seed=args.seed, iterations=args.iterations), sort_keys=True))
+    print(json.dumps(run_fixture(args.output, seed=args.seed, iterations=args.iterations,
+                                 fixture_broker=args.fixture_broker), sort_keys=True))
 
 
 if __name__ == '__main__':
