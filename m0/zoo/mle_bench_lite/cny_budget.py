@@ -153,6 +153,21 @@ def _circle_audit_identity(proof):
     return {**{key: proof[key] for key in keys}, 'proof_sha256': _hash(proof)}
 
 
+def _circle_continuation_projection(policy, governance, *, head, pending, spent, reserved):
+    protected = _outstanding(governance)
+    value = {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
+             'governance_enabled': governance['enabled'], 'pilot': governance['circle_pilot'],
+             'runtime': governance['circle_runtime'],
+             'first_pair_audit': _circle_audit_identity(governance['first_pair_audit']),
+             'claims': governance['cell_claims'], 'currency': {
+                 'settled_upper_bound_micro_cny': spent, 'reserved_micro_cny': reserved,
+                 'protected_micro_cny': protected,
+                 'remaining_micro_cny': policy['limit_micro_cny'] - spent - reserved - protected,
+                 'pending_calls': [pending] if pending else [],
+                 'protection_breaches': governance['breaches'], 'invoice_verified': False}}
+    return json.loads(_json(value))
+
+
 def _run(governance, run_id, plan_ref=None):
     _sha(run_id)
     if not governance["enabled"]:
@@ -224,6 +239,35 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                 governance["circle_runtime"] is not None or governance["cell_claims"] or pending is not None:
             raise ValueError("circle runtime must freeze once before any cell or unresolved call")
         governance["circle_runtime"] = value
+    elif kind == 'bind_circle_continuation':
+        fields = {'kind', 'schema_version', 'previous_head', 'draft', 'tree_ref', 'runtime_ref',
+                  'python_sha256', 'runtime_manifest_sha256'}
+        if set(event) != fields or not governance['fixture_campaign'] or pending is not None or \
+                _outstanding(governance) or governance['breaches'] or \
+                _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
+            raise ValueError('continuation binding requires a quiescent fixture campaign at its exact head')
+        _plan_ref(event['tree_ref'])
+        _plan_ref(event['runtime_ref'])
+        _sha(event['python_sha256'])
+        _sha(event['runtime_manifest_sha256'])
+        draft = event['draft']
+        if type(draft) is not dict:
+            raise ValueError('continuation binding requires a versioned draft')
+        from zoo.circle_packing.continuation_draft import build_continuation_draft
+        try:
+            inventory = _circle_continuation_projection(policy, governance, head=event['previous_head'],
+                                                        pending=None, spent=spent, reserved=0)
+            expected = build_continuation_draft(inventory, experiment_id=draft['experiment_id'],
+                source_commit=draft['source_commit'], dependency_lock_sha256=draft['dependency_lock_sha256'],
+                method_changes=draft['method_changes'])
+            if draft != expected or draft['experiment_id'] in governance['circle_continuations']:
+                raise ValueError('continuation draft differs or experiment identity already exists')
+        except (KeyError, TypeError) as error:
+            raise ValueError('continuation binding has an invalid draft') from error
+        governance['circle_continuations'][draft['experiment_id']] = json.loads(_json({
+            'previous_head': event['previous_head'], 'draft': draft, 'tree_ref': event['tree_ref'],
+            'runtime_ref': event['runtime_ref'], 'python_sha256': event['python_sha256'],
+            'runtime_manifest_sha256': event['runtime_manifest_sha256']}))
     elif kind == 'record_first_pair_audit':
         if set(event) != {'kind', 'schema_version', 'previous_head', 'proof'} or \
                 _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
@@ -637,7 +681,7 @@ def _reduce_history(policies, events, heads):
                   "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
                   "reference_host_claims": {},
                   "reference_physical_snapshots": {}, "reference_selections": {}, "fixture_campaign": False,
-                  "first_pair_audit": None}
+                  "first_pair_audit": None, "circle_continuations": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -963,19 +1007,8 @@ class CampaignBudget:
             head = {'seq': state['seq'], 'sha256': state['hash']}
             if head != expected_head:
                 raise ValueError('campaign head changed before continuation inventory')
-            governance = state['governance']
-            protected = _outstanding(governance)
-            value = {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
-                     'governance_enabled': governance['enabled'], 'pilot': governance['circle_pilot'],
-                     'runtime': governance['circle_runtime'],
-                     'first_pair_audit': _circle_audit_identity(governance['first_pair_audit']),
-                     'claims': governance['cell_claims'], 'currency': {
-                         'settled_upper_bound_micro_cny': state['spent'],
-                         'reserved_micro_cny': state['reserved'], 'protected_micro_cny': protected,
-                         'remaining_micro_cny': policy['limit_micro_cny'] - state['spent'] - state['reserved'] - protected,
-                         'pending_calls': [state['pending']] if state['pending'] else [],
-                         'protection_breaches': governance['breaches'], 'invoice_verified': False}}
-            return json.loads(_json(value))
+            return _circle_continuation_projection(policy, state['governance'], head=head,
+                pending=state['pending'], spent=state['spent'], reserved=state['reserved'])
 
     def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
         _plan_ref(plan_ref)

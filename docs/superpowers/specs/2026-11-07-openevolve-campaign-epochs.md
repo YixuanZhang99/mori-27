@@ -77,3 +77,14 @@ documents this combination. Freeze the changed setting in the new experiment,
 provider binding, request receipts and report; it is a different protocol, not
 an extension of the original fixed-source matrix. This is a testable hypothesis,
 not evidence of improved performance. It does not authorize paid calls.
+
+## Fixture-only journal event
+
+The `bind_circle_continuation` journal event currently rejects all campaigns
+without the immutable fixture marker. It checks the previous head, original
+proof identity, quiescence, unique experiment ID and declared artifact digest
+formats, but it does not verify source/runtime files or permit any new cell.
+An older reader does not understand this event and must fail closed. Before
+removing the fixture-only guard, the real binding path must verify durable
+artifacts and prove that the frozen first-pair replay remains available after
+migration; a test-only event is not evidence of that compatibility.
