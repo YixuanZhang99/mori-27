@@ -147,6 +147,9 @@ When Mori's final audit completes, its Framework evidence exposes
 `test/sum_radii` and `test/validity` alongside the normalized `test/score`.
 These values come from the selected candidate's frozen, cross-checked geometry;
 an absent or skipped final audit must not be reported as a benchmark score.
+The Mori fixture report exposes those values and the frozen public-range
+threshold as `final_measurement`; skipped and failed audits produce `null`.
+Fixture measurements are simulated engineering evidence, not live results.
 
 `recover_reference_snapshot` reconstructs the original worker proof from its
 bounded no-follow journal and execution-bound output files, then invokes the

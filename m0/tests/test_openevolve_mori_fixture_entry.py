@@ -25,6 +25,25 @@ def test_fixture_rejects_extra_fields_and_invalid_seed():
     assert validate_config(config())['seed'] == 0
 
 
+def test_final_measurement_only_exposes_completed_bound_metrics():
+    from zoo.circle_packing.mori_fixture_worker import final_measurement
+    metrics = {'test/score': 1.82 / 2.635, 'test/sum_radii': 1.82, 'test/validity': 1.0}
+    final = {'state': 'completed', 'candidate_id': 'candidate',
+             'evidence': {'evidence': {'candidate_id': 'candidate', 'eval_result': {
+                 'status': 'ok', 'metrics': metrics,
+                 'contract': {'binding': {'candidate_id': 'candidate', 'split_id': 'final_audit'}}}}}}
+    assert final_measurement(final, 'candidate', 2.37) == {
+        'validity': 1.0, 'sum_radii': 1.82, 'normalized_score': metrics['test/score'],
+        'public_range_threshold': 2.37, 'public_range_condition_met': False}
+    assert final_measurement({'state': 'skipped'}, 'candidate', 2.37) is None
+    assert final_measurement({'state': 'evaluation_failed'}, 'candidate', 2.37) is None
+    with pytest.raises(ValueError):
+        final_measurement(final, 'other', 2.37)
+    final['evidence']['evidence']['eval_result']['metrics']['test/sum_radii'] = float('nan')
+    with pytest.raises(ValueError):
+        final_measurement(final, 'candidate', 2.37)
+
+
 def test_named_fixture_rejects_unmarked_campaign_before_source_or_work(tmp_path):
     from test_governed_cny_framework import campaign_fixture
     from zoo.circle_packing.mori_fixture_worker import run

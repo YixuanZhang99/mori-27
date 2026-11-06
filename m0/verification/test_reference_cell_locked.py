@@ -365,4 +365,8 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
     final_metrics = finals[0]['evidence']['evidence']['eval_result']['metrics']
     assert final_metrics['test/validity'] == 1.0
     assert final_metrics['test/sum_radii'] == pytest.approx(final_metrics['test/score'] * 2.635)
+    assert mori['final_measurement'] == {
+        'validity': final_metrics['test/validity'], 'sum_radii': final_metrics['test/sum_radii'],
+        'normalized_score': final_metrics['test/score'], 'public_range_threshold': plan['public_range_sum_radii'],
+        'public_range_condition_met': final_metrics['test/sum_radii'] >= plan['public_range_sum_radii']}
     assert not ledger.snapshot()['pending_calls']
