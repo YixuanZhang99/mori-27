@@ -87,3 +87,14 @@ def test_cell_binding_rejects_different_independently_pinned_plan(tmp_path):
     with pytest.raises(ValueError, match='plan'):
         validate_draft_cell(campaign, replacement, 'vendor-0',
                             expected_plan_ref='sha256:' + original['draft_sha256'])
+
+
+def test_final_snapshot_audit_does_not_admit_later_seeds(tmp_path, monkeypatch):
+    from zoo.circle_packing.pilot_plan import require_first_pair_audit
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    campaign = campaign_fixture(tmp_path)
+    ref = 'sha256:' + 'a' * 64
+    monkeypatch.setattr(CampaignBudget, 'first_pair_audit', lambda _: {'plan_ref': ref})
+    monkeypatch.setattr(CampaignBudget, 'circle_pilot_binding', lambda _: {'plan_ref': ref})
+    with pytest.raises(ValueError, match='complete'):
+        require_first_pair_audit(1, ledger=campaign, expected_plan_ref=ref)

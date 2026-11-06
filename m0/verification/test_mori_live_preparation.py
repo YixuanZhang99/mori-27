@@ -603,6 +603,7 @@ from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import RecordedCellClock
 from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.circle_packing.pair_audit import record_first_pair_audit
+from zoo.circle_packing.pair_recorded import record_first_pair_from_supervisors
 from zoo.circle_packing.pilot_plan import require_first_pair_audit
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
@@ -634,15 +635,18 @@ assert ledger.snapshot()['journal_head']==p['head'] and ledger.first_pair_audit(
 try: require_first_pair_audit(1, ledger=ledger, expected_plan_ref=c['ref'])
 except ValueError: pass
 else: raise AssertionError('later seed accepted without an audit')
-proof=record_first_pair_audit(replay_input=p['replay_input'],ledger=ledger,runner=runner,
- replay_output=Path(sys.argv[2]),**args)
+proof=record_first_pair_from_supervisors(mori_directory=Path(p['mori_directory']),
+ reference_directory=Path(p['reference_directory']),expected_head=p['head'],replay_output=Path(sys.argv[2]))
 result=proof['result']
 assert result['scope']=='paired_supervised_snapshots_with_independent_replay'
 assert result['replay']['passed'] and result['replay']['external_calls']==0
 assert result['replay']['candidate']==result['mori']['candidate']
 assert result['performance_claim'] is False and ledger.first_pair_audit()==proof
 assert ledger.snapshot()['journal_head']['seq']==p['head']['seq']+1
-for seed in (1,2): require_first_pair_audit(seed, ledger=ledger, expected_plan_ref=c['ref'])
+for seed in (1,2):
+ try: require_first_pair_audit(seed, ledger=ledger, expected_plan_ref=c['ref'])
+ except ValueError: pass
+ else: raise AssertionError('final snapshots alone must not admit later seeds')
 try: require_first_pair_audit(1, ledger=ledger, expected_plan_ref='sha256:'+'0'*64)
 except ValueError: pass
 else: raise AssertionError('audit for a different plan accepted')

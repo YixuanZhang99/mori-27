@@ -29,6 +29,7 @@ def require_first_pair_audit(seed, *, ledger=None, expected_plan_ref=None):
         if proof is None or type(expected_plan_ref) is not str or proof['plan_ref'] != expected_plan_ref or \
                 ledger.circle_pilot_binding()['plan_ref'] != expected_plan_ref:
             raise ValueError('later seeds require the first pair independent audit for the original plan')
+        raise ValueError('later seeds require independent complete-run coverage for both arms')
 
 
 def build_draft_plan(campaign, *, source_commit, dependency_lock_sha256):

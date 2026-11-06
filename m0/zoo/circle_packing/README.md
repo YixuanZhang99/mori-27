@@ -313,7 +313,20 @@ clock before launching that arm's supervisor. Its CLI accepts an arm, a
 credential-free JSON configuration and supervisor directory; the provider key
 is taken from the environment and is not written to the configuration. The
 entry does not open either live gate or authorize the six-cell matrix.
-The entry refuses seeds 1 and 2 before starting their clocks, and both live
-supervisors also refuse them before launch. This remains fail-closed until an
-independently verified seed-0 pair can be durably recorded; the existing
-final-snapshot report alone is not sufficient for that decision.
+The entry and both supervisors refuse seeds 1 and 2 until independent coverage
+of both complete runs, including explicit early-stop reasons, is available.
+The existing recorded final-snapshot audit does not establish that coverage.
+
+Once both seed-0 supervisors have completed, the frozen runtime can rebuild
+their original journals, verify the supplied campaign head, replay Mori without
+provider calls or candidate execution, and record a final-snapshot audit:
+
+```sh
+PYTHONPATH="$FROZEN_SOURCE/m0" "$FROZEN_RUNTIME/bin/python" -m zoo.circle_packing.pair_recorded \
+  "$MORI_SUPERVISOR" "$REFERENCE_SUPERVISOR" "$CAMPAIGN_HEAD_JSON" "$FRESH_REPLAY_DIRECTORY"
+```
+
+The head is a JSON object with `seq` and `sha256` from the original campaign
+snapshot. The replay directory must be a fresh absolute path under a private
+parent. The command removes an inherited `DEEPSEEK_API_KEY` and does not require
+credentials. Its record does not certify complete runs or open the live gate.
