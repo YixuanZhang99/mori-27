@@ -121,3 +121,10 @@ Drafts with schema 1 produced by the earlier 4-bound formula do not validate und
 new schema 2 formula. Those drafts were used only with temporary fixture campaigns;
 they cannot be resumed by this code. Do not reinterpret old evidence as the
 new plan.
+
+`snapshot_matrix` inventories the original six declared cells at an
+independently pinned campaign journal head. `not_claimed` refers only to that
+head; `claimed_outcome_unverified` does not say whether a cell completed,
+failed, or is still running. Scores remain null until a separate terminal
+result and its accounting and geometry evidence can be independently verified.
+This read-only inventory does not authorize or start a run.

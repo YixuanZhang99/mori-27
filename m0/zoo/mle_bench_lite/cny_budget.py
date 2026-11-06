@@ -797,6 +797,17 @@ class CampaignBudget:
             value = state["governance"]["circle_pilot"]
             return dict(value) if value is not None else None
 
+    def circle_claim_inventory(self, *, expected_head):
+        """Read pilot and cell claims together at a caller-pinned journal head."""
+        _head_anchor(expected_head)
+        with self._transaction() as (_db, policy, state):
+            head = {'seq': state['seq'], 'sha256': state['hash']}
+            if head != expected_head:
+                raise ValueError('campaign head changed before the matrix snapshot')
+            return {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
+                    'pilot': json.loads(_json(state['governance']['circle_pilot'])),
+                    'claims': json.loads(_json(state['governance']['cell_claims']))}
+
     def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
         _plan_ref(plan_ref)
         _plan_ref(tree_ref)
