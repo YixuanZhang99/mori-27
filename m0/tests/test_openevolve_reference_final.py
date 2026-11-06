@@ -52,3 +52,32 @@ def test_result_refuses_changed_predeclared_threshold_before_audit(tmp_path, mon
         reference_final.recalculate_reference_snapshot(ledger, SimpleNamespace(_record={'plan_ref': ref}),
             'run', plan=changed, expected_plan_ref=ref, worker_proof={}, stdout='', stderr='', selected={},
             options={}, stamp={}, governance={}, rows=[], request_ids=[])
+
+
+def test_final_check_refuses_when_pinned_upstream_validator_rejects(monkeypatch):
+    from zoo.circle_packing import reference_final
+    result = fake_result('fixture program', 2)
+    monkeypatch.setattr(reference_final, '_validate_with_pinned_upstream', lambda geometry: False)
+    with pytest.raises(ValueError, match='upstream'):
+        reference_final.recalculate_geometry(result, expected_program_ref=result['program_ref'],
+            expected_geometry_ref=result['geometry_ref'], expected_metrics=result['metrics'])
+
+
+def test_pinned_upstream_validator_checks_frozen_geometry():
+    from zoo.circle_packing.reference_final import _validate_with_pinned_upstream
+    result = fake_result('fixture program', 2)
+    assert _validate_with_pinned_upstream(result['geometry']) is True
+    invalid = copy.deepcopy(result['geometry'])
+    invalid['centers'][1] = invalid['centers'][0]
+    assert _validate_with_pinned_upstream(invalid) is False
+
+
+def test_changed_upstream_validator_source_is_never_executed(tmp_path, monkeypatch):
+    from zoo.circle_packing import reference_final
+    source = tmp_path / 'evaluator.py'
+    marker = tmp_path / 'executed'
+    source.write_text(f"from pathlib import Path\nPath({str(marker)!r}).touch()\n")
+    monkeypatch.setattr(reference_final, '_EVALUATOR', source)
+    with pytest.raises(ValueError, match='source changed'):
+        reference_final._validate_with_pinned_upstream(fake_result('program', 2)['geometry'])
+    assert not marker.exists()

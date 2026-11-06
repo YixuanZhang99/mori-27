@@ -5,6 +5,8 @@ It never executes the candidate or calls a model.
 """
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
 
 from core.x1.checkpoint import payload_digest
@@ -12,10 +14,29 @@ from zoo.circle_packing.geometry import validate_geometry
 from zoo.circle_packing.host_physical import _validate_stage_result
 from zoo.circle_packing.pilot_plan import build_draft_plan
 from zoo.circle_packing.reference_selection import audit_anchored_reference_cell
+from zoo.circle_packing.stage import _EVALUATOR, EVALUATOR_SHA256
 
 
 def _json(value):
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+
+
+def _validate_with_pinned_upstream(geometry):
+    """Run only the pinned upstream geometry function, never candidate code."""
+    import numpy as np
+    source = _EVALUATOR.read_bytes()
+    if hashlib.sha256(source).hexdigest() != EVALUATOR_SHA256:
+        raise ValueError('pinned upstream evaluator source changed')
+    tree = ast.parse(source, filename='pinned-circle-evaluator')
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                 and node.name == 'validate_packing']
+    if len(functions) != 1:
+        raise ValueError('pinned upstream geometry validator is missing')
+    module = ast.fix_missing_locations(ast.Module(body=functions, type_ignores=[]))
+    namespace = {'np': np, 'print': lambda *args, **kwargs: None}
+    exec(compile(module, 'pinned-circle-evaluator', 'exec'), namespace)
+    return bool(namespace['validate_packing'](np.asarray(geometry['centers'], dtype=float),
+                                               np.asarray(geometry['radii'], dtype=float)))
 
 
 def recalculate_geometry(result, *, expected_program_ref, expected_geometry_ref, expected_metrics):
@@ -31,6 +52,8 @@ def recalculate_geometry(result, *, expected_program_ref, expected_geometry_ref,
         metrics = validate_geometry(geometry)
         if _json(metrics) != _json(expected_metrics):
             raise ValueError('final geometry metrics differ from independent calculation')
+        if not _validate_with_pinned_upstream(geometry):
+            raise ValueError('pinned upstream geometry validator rejected the result')
         return {'geometry': geometry, 'geometry_ref': expected_geometry_ref, 'metrics': metrics}
     except (KeyError, TypeError, OverflowError) as error:
         raise ValueError('invalid final geometry evidence') from error
