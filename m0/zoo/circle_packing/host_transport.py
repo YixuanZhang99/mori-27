@@ -53,9 +53,16 @@ class StageEvidenceFailure(BaseException):
     """Abort the upstream worker if an unresolved stage cannot be recorded."""
 
 
+class SettledProviderFailure(UsageError):
+    """A provider attempt failed after its usage was durably accounted for."""
+
+
 class HostBridgeClient:
-    def __init__(self, model):
+    def __init__(self, model, *, continue_settled_failures=False):
+        if type(continue_settled_failures) is not bool:
+            raise ValueError('settled failure continuation must be boolean')
         self.model = model.name
+        self._continue_settled_failures = continue_settled_failures
         self.last_usage = None
         self._halted = False
         self._path = os.environ.get('MORI_CIRCLE_BROKER_SOCKET', '')
@@ -98,11 +105,16 @@ class HostBridgeClient:
                 raise ProviderBudgetExhausted('host provider request was refused before dispatch')
             if reply['usage'] is not None:
                 self.last_usage = validate_detailed_usage(reply['usage'])
+            if self._continue_settled_failures and 'host_messages' in argument and \
+                    reply['state'] == 'known_failed' and reply['result'] is None and self.last_usage is not None:
+                raise SettledProviderFailure('host provider attempt failed with settled usage')
             if reply['state'] != 'ok' or self.last_usage is None or \
                     type(reply['result']) is not str or not reply['result'].strip():
                 raise ValueError('broker did not return a successful measured response')
             return reply['result']
         except ProviderBudgetExhausted:
+            raise
+        except SettledProviderFailure:
             raise
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             self._halted = True
@@ -168,13 +180,16 @@ class HostBroker:
     The caller must supply the existing durable budget/currency dispatcher;
     this class itself provides no admission authority.
     """
-    def __init__(self, path, token, dispatch):
+    def __init__(self, path, token, dispatch, *, continue_settled_failures=False):
         import hmac
         import stat
         self._hmac = hmac
         self.path = Path(path)
         self._token = token
         self._dispatch = dispatch
+        if type(continue_settled_failures) is not bool:
+            raise ValueError('settled failure continuation must be boolean')
+        self._continue_settled_failures = continue_settled_failures
         self._halted = False
         self._seen = set()
         self._serve_lock = threading.Lock()
@@ -279,7 +294,9 @@ class HostBroker:
                         raise ValueError('known failure requires measured usage')
                     if response['state'] != 'ok' and response['result'] is not None:
                         raise ValueError('failed dispatcher cannot return a result')
-                    if response['state'] not in {'ok', 'ready'}:
+                    continuing = self._continue_settled_failures and response['state'] == 'known_failed' \
+                        and 'host_messages' in argument
+                    if response['state'] not in {'ok', 'ready'} and not continuing:
                         self._halted = True
                 except Exception:
                     self._halted = True

@@ -139,3 +139,104 @@ def test_known_billed_failure_retains_usage_and_stops_client(short_socket_dir, m
             asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'user'}]))
         thread.join(timeout=5)
     assert client.last_usage == usage
+
+
+def test_opted_in_measured_failure_allows_next_distinct_provider_request(short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker, SettledProviderFailure
+    path = short_socket_dir / 'settled.sock'
+    usage = {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}
+    calls = []
+    def dispatch(request_id, argument):
+        calls.append(request_id)
+        return {'state': 'known_failed' if len(calls) == 1 else 'ok',
+                'result': None if len(calls) == 1 else 'next diff', 'usage': usage}
+    with HostBroker(path, 'a' * 64, dispatch, continue_settled_failures=True) as broker:
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        client = HostBridgeClient(SimpleNamespace(name='fixture'), continue_settled_failures=True)
+        thread = threading.Thread(target=lambda: (broker.serve_one(), broker.serve_one()), daemon=True)
+        thread.start()
+        with pytest.raises(SettledProviderFailure):
+            asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'first'}]))
+        assert client.last_usage == usage
+        assert asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'second'}])) == 'next diff'
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert len(calls) == 2 and calls[0] != calls[1]
+
+
+@pytest.mark.parametrize('reply', [
+    None,
+    {'state': 'known_failed', 'result': 'forbidden', 'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}},
+    {'state': 'unknown', 'result': None, 'usage': None},
+    {'state': 'known_failed', 'result': None, 'usage': None},
+    {'state': 'known_failed', 'result': None, 'usage': {'prompt_tokens': 1, 'completion_tokens': 2, 'total_tokens': 4}},
+])
+def test_opt_in_never_continues_after_uncertain_or_invalid_response(short_socket_dir, monkeypatch, reply):
+    from zoo.circle_packing.host_transport import HostBridgeClient
+    path = short_socket_dir / 'uncertain.sock'
+    received = []
+    thread = serve_once(path, received, reply)
+    monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+    monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+    client = HostBridgeClient(SimpleNamespace(name='fixture'), continue_settled_failures=True)
+    with pytest.raises(UsageError):
+        asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'first'}]))
+    thread.join(timeout=5)
+    with pytest.raises(UsageError):
+        asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'second'}]))
+    assert len(received) == 1
+
+
+def test_opt_in_does_not_allow_stage_failures_to_continue(short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_transport import HostBroker, HostEvaluationClient
+    path = short_socket_dir / 'stage.sock'
+    usage = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+    calls = []
+    def dispatch(*args):
+        calls.append(args)
+        return {'state': 'known_failed', 'result': None, 'usage': usage}
+    with HostBroker(path, 'a' * 64, dispatch, continue_settled_failures=True) as broker:
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        client = HostEvaluationClient(SimpleNamespace(name='fixture'), continue_settled_failures=True)
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        with pytest.raises(UsageError):
+            client.evaluate('print(1)', stage=1)
+        thread.join(timeout=5)
+        with pytest.raises(UsageError):
+            client.evaluate('print(2)', stage=1)
+    assert len(calls) == 1
+
+
+def test_opt_in_requires_boolean_configuration(short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker
+    path = short_socket_dir / 'config.sock'
+    monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+    monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+    with pytest.raises(ValueError):
+        HostBridgeClient(SimpleNamespace(name='fixture'), continue_settled_failures=1)
+    with pytest.raises(ValueError):
+        HostBroker(path, 'a' * 64, lambda *_: None, continue_settled_failures=1)
+
+
+def test_opted_in_broker_blocks_a_new_client_after_unknown_result(short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker
+    path = short_socket_dir / 'unknown-broker.sock'
+    calls = []
+    def dispatch(*args):
+        calls.append(args)
+        return {'state': 'unknown', 'result': None, 'usage': None}
+    with HostBroker(path, 'a' * 64, dispatch, continue_settled_failures=True) as broker:
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        thread = threading.Thread(target=lambda: (broker.serve_one(), broker.serve_one()), daemon=True)
+        thread.start()
+        for _ in range(2):
+            client = HostBridgeClient(SimpleNamespace(name='fixture'), continue_settled_failures=True)
+            with pytest.raises(UsageError):
+                asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'user'}]))
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert len(calls) == 1

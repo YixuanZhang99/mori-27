@@ -854,3 +854,35 @@ def test_host_sandbox_timeout_is_bounded_by_remaining_cell_time(timed_authority,
     assert result['status'] == 'timeout'
     assert time.monotonic() - started < 5
     assert budget.audit_governance()['physical_totals']['eval_count'] == 2
+
+
+def test_settled_failure_then_next_request_share_original_authorities(authority, local_endpoint, monkeypatch, short_socket_dir):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker, SettledProviderFailure
+    ledger, budget, bridge, run, ready, main = authority
+    local_endpoint.responses.extend([
+        reply(choices=[{'finish_reason': 'length', 'message': {'content': 'partial'}}]),
+        reply(),
+    ])
+    path = short_socket_dir / 'settled-authority.sock'
+    dispatch = HostDispatchCoordinator(budget, bridge, run, ready)
+    with HostBroker(path, 'a' * 64, dispatch, continue_settled_failures=True) as broker:
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        client = HostBridgeClient(SimpleNamespace(name='fixture'), continue_settled_failures=True)
+        thread = threading.Thread(target=lambda: (broker.serve_one(), broker.serve_one()), daemon=True)
+        thread.start()
+        with pytest.raises(SettledProviderFailure):
+            asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'first'}]))
+        assert client.last_usage['total_tokens'] == 7
+        assert not ledger.snapshot()['pending_calls'] and not budget.state()['open_intents']
+        assert asyncio.run(client.generate_with_context('system', [{'role': 'user', 'content': 'second'}]))
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert len(local_endpoint.requests) == 2
+    assert not ledger.snapshot()['pending_calls'] and not budget.state()['open_intents']
+    assert budget.audit_governance()['physical_totals']['token'] == 14
+    assert dispatch.audit()['currency']['protection_valid']
