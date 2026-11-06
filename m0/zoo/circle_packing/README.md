@@ -313,6 +313,11 @@ clock before launching that arm's supervisor. Its CLI accepts an arm, a
 credential-free JSON configuration and supervisor directory; the provider key
 is taken from the environment and is not written to the configuration. The
 entry does not open either live gate or authorize the six-cell matrix.
+For a cell interrupted before any worker or reference host claim, the same
+entry accepts `--resume-unstarted` after the supervisor directory. It restores
+the original clock and may reconcile its one durable, unanchored observation;
+it never extends the original deadline. If the original clock is missing or a
+worker or host was already claimed, it refuses this recovery path.
 The entry and both supervisors refuse seeds 1 and 2 until independent coverage
 of both complete runs, including explicit early-stop reasons, is available.
 The existing recorded final-snapshot audit does not establish that coverage.
