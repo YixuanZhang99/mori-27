@@ -244,6 +244,7 @@ def test_reference_supervisor_runs_live_host_with_fake_transport_and_original_au
 @pytest.mark.parametrize('prepared_cell', ['supervised_fake_live'], indirect=True)
 def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepared_cell, tmp_path, monkeypatch):
     from zoo.circle_packing.mori_supervisor import launch_live_controller
+    from zoo.circle_packing.mori_final import recalculate_mori_geometry
     config, ledger, clock, _runner = prepared_cell
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
     directory = tmp_path / 'live-supervisor'
@@ -260,6 +261,34 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
     assert report['mode'] == 'live' and report['performance_claim'] is False
     assert report['candidate'] and report['final_state'] == 'completed' and report['replay_passed']
     assert report['final_measurement']['validity'] == 1.0
+    rows = list(ContinuationStore(Path(config['output']) / 'framework' / 'x1.jsonl').read())
+    from core.x1.checkpoint import payload_digest
+    def forbidden(*args, **kwargs):
+        raise AssertionError('geometry recalculation attempted external work')
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    monkeypatch.setattr('zoo.circle_packing.domain.CirclePackingDomain.evaluate', forbidden)
+    verified = recalculate_mori_geometry(rows, expected_rows_sha256=payload_digest(rows),
+                                         public_range_threshold=config['plan']['public_range_sum_radii'])
+    assert verified['measurement'] == report['final_measurement']
+    assert verified['candidate'] == report['candidate'] and verified['performance_claim'] is False
+    with pytest.raises(ValueError, match='journal'):
+        recalculate_mori_geometry(rows, expected_rows_sha256='0' * 64,
+                                 public_range_threshold=config['plan']['public_range_sum_radii'])
+    import copy
+    altered = copy.deepcopy(rows)
+    dev = next(row['payload']['evidence']['evidence'] for row in altered
+               if row['kind'] == 'composed_physical_evidence' and row['payload']['request']['split_id'] == 'dev'
+               and row['payload']['evidence']['evidence']['candidate_id'] == report['candidate'])
+    dev['eval_result']['contract']['private']['data']['record']['geometry']['radii'][0] += .01
+    with pytest.raises(ValueError):
+        recalculate_mori_geometry(altered, expected_rows_sha256=payload_digest(altered),
+                                 public_range_threshold=config['plan']['public_range_sum_radii'])
+    altered = copy.deepcopy(rows)
+    final = next(row['payload'] for row in altered if row['kind'] == 'metric_final_completed')
+    final['evidence']['evidence']['eval_result']['metrics']['test/sum_radii'] += .01
+    with pytest.raises(ValueError):
+        recalculate_mori_geometry(altered, expected_rows_sha256=payload_digest(altered),
+                                 public_range_threshold=config['plan']['public_range_sum_radii'])
     snapshot = ledger.snapshot()
     assert snapshot['settled_upper_bound_micro_cny'] > 0
     assert snapshot['settled_upper_bound_micro_cny'] % 38 == 0

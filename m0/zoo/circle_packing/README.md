@@ -238,6 +238,11 @@ Another test exercises the public live supervisor and worker together using a
 disposable source commit with a test-only gate override, a temporary ledger,
 fake credential, and blocked network. It does not open the production gate or
 prove that every descendant is terminated.
+`mori_final.recalculate_mori_geometry` checks a caller-pinned journal snapshot
+against the frozen candidate and its original development geometry, rechecking
+the geometry with both validators without model or candidate execution. This
+does not itself establish that the caller's journal digest is authoritative,
+audit the currency ledger, or certify a complete run or benchmark result.
 It also exercises the reference controller with a test-only override of the
 closed live gate, fake responses, and only local socket connections. The test
 reconstructs the anchored selection and geometry without any new model or
