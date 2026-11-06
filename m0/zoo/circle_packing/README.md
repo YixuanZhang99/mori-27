@@ -136,3 +136,7 @@ upstream geometry function, then checks the predeclared public-range condition w
 running the candidate or calling a provider. Its result is explicitly a
 host-attested snapshot, not proof that the run ended or that the selection is
 the final winner; fixture output is not a benchmark score.
+The upstream cross-check validates the recorded coordinates independently of
+the shared validator; it does not rerun the candidate or establish provenance
+on its own. Borderline coordinates may be rejected when the two floating-point
+implementations differ at the tolerance boundary.
