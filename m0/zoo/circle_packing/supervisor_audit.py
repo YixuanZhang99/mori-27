@@ -1,4 +1,4 @@
-"""Read a successful supervised terminal against its recorded campaign claim.
+"""Read supervised terminals against their recorded campaign claims.
 
 This checks the trusted supervisor's records, not an independently observed OS
 history. It does not certify a complete run, provider invoice, or benchmark.
@@ -13,8 +13,8 @@ from zoo.circle_packing.host_runtime import _read_verified_worker_result
 from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
 
 
-def audit_supervisor_result(config, *, directory, view, clock):
-    """Return only the original successful report tied to a pinned claim."""
+def _contained_process(config, *, directory, view, clock):
+    """Bind an original contained terminal to its pinned run and cell."""
     if type(config) is not dict or type(view) is not RecordedCurrencyView or not view._pinned_head or \
             type(clock) is not RecordedCellClock:
         raise ValueError('supervisor audit requires a pinned campaign and recorded clock')
@@ -56,13 +56,42 @@ def audit_supervisor_result(config, *, directory, view, clock):
                     'boot_id': clock._record['boot_id']}.items()):
             raise ValueError('supervisor process differs from its campaign claim')
         execution = started['execution_id']
-        if proof != {'execution_id': execution} or terminal != {'execution_id': execution,
-                'candidate_id': 'fixture-coordinator', 'attempt': 1, 'returncode': 0,
-                'timeout': False, 'recovered': False}:
-            raise ValueError('supervisor process lacks its matching successful terminal')
+        if type(terminal) is not dict or set(terminal) != {'execution_id', 'candidate_id', 'attempt',
+                'returncode', 'timeout', 'recovered'} or proof != {'execution_id': execution} or \
+                terminal['execution_id'] != execution or terminal['candidate_id'] != 'fixture-coordinator' or \
+                type(terminal['attempt']) is not int or terminal['attempt'] != 1 or \
+                type(terminal['returncode']) is not int or type(terminal['timeout']) is not bool or \
+                terminal['recovered'] is not False:
+            raise ValueError('supervisor process lacks its matching contained terminal')
         result = _read_verified_worker_result(root, started)
-        if result['returncode'] != 0 or result['timeout'] or result['wrapper_error']:
-            raise ValueError('supervisor result is not successful')
+        if result['returncode'] != terminal['returncode'] or result['timeout'] != terminal['timeout'] or \
+                result['timeout'] and result['wrapper_error']:
+            raise ValueError('supervisor wrapper result differs from its terminal')
+        return result
+    except (KeyError, TypeError, AttributeError, OSError, json.JSONDecodeError) as error:
+        raise ValueError('invalid supervised process evidence') from error
+
+
+def audit_contained_terminal(config, *, directory, view, clock):
+    """Classify a verified terminal without claiming a score or full run."""
+    result = _contained_process(config, directory=directory, view=view, clock=clock)
+    if result['timeout']:
+        state = 'contained_timeout'
+    elif result['returncode'] != 0 or result['wrapper_error']:
+        state = 'contained_failed'
+    else:
+        state = 'contained_completed'
+    return {'schema_version': 1, 'scope': 'recorded_contained_terminal',
+            'state': state, 'returncode': result['returncode'], 'score': None,
+            'performance_claim': False}
+
+
+def audit_supervisor_result(config, *, directory, view, clock):
+    """Return only the original successful report tied to a pinned claim."""
+    result = _contained_process(config, directory=directory, view=view, clock=clock)
+    if result['returncode'] != 0 or result['timeout'] or result['wrapper_error']:
+        raise ValueError('supervisor result is not successful')
+    try:
         def unique(pairs):
             out = {}
             for key, value in pairs:
