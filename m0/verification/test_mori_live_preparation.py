@@ -27,13 +27,48 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
 
 @pytest.fixture
-def prepared_cell(tmp_path):
+def prepared_cell(tmp_path, request):
     cache = os.environ['MORI_TEST_OFFLINE_CACHE']
     repository = Path(__file__).resolve().parents[2]
     commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
     checkout = tmp_path / 'checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+    if getattr(request, 'param', None) == 'supervised_fake_live':
+        worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
+        code = worker.read_text()
+        gate = "    raise ValueError('live pilot gate is not complete')"
+        insertion = '    outcome = framework.evolve(TASK)'
+        assert code.count(gate) == code.count(insertion) == 1
+        # A separate, disposable source commit opens the gate only for this
+        # fake-transport test. Production source and the user's key are untouched.
+        fake = '''    import json as test_json, socket as test_socket, urllib.request as test_request
+    def no_network(*args, **kwargs):
+        raise AssertionError('test forbids network connections')
+    test_socket.socket.connect = no_network
+    diff = ("<<<<<<< SEARCH\\n    # Initialize arrays for 26 circles\\n    n = 26\\n=======\\n"
+            "    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\\n"
+            "    r = np.full(26, .07)\\n    return c, r, float(np.sum(r))\\n>>>>>>> REPLACE\\n")
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self):
+            return test_json.dumps({'model': config['plan']['model'],
+                'usage': {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7},
+                'choices': [{'finish_reason': 'stop', 'message': {'content': diff}}]}).encode()
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == config['base_url'] + '/chat/completions'
+            assert request.get_header('Authorization') == 'Bearer fixture-only-secret'
+            return Response()
+    test_request.build_opener = lambda *args: Opener()
+'''
+        worker.write_text(code.replace(gate, '    return None').replace(insertion, fake + insertion))
+        subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/mori_live_worker.py'], check=True)
+        subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                        '-m', 'offline supervised live test'], check=True)
+        commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     ledger = CampaignBudget.create(tmp_path / 'campaign.db')
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
                              expected_head=ledger.snapshot()['journal_head'])
@@ -57,6 +92,30 @@ def prepared_cell(tmp_path):
         'clock': str(clock._store.path), 'output': str(output),
         'base_url': ledger.manifest_binding()['provider_base_url']}
     return config, ledger, clock, runner
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['supervised_fake_live'], indirect=True)
+def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepared_cell, tmp_path, monkeypatch):
+    from zoo.circle_packing.mori_supervisor import launch_live_controller
+    config, ledger, clock, _runner = prepared_cell
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    directory = tmp_path / 'live-supervisor'
+    result = launch_live_controller(config, deadline=clock, directory=directory, api_key='fixture-only-secret')
+    assert result['returncode'] == 0 and not result['timeout'] and not result.get('wrapper_error'), result['stderr']
+    report = json.loads(result['stdout'])
+    assert report['mode'] == 'live' and report['performance_claim'] is False
+    assert report['candidate'] and report['final_state'] == 'completed' and report['replay_passed']
+    assert report['final_measurement']['validity'] == 1.0
+    snapshot = ledger.snapshot()
+    assert snapshot['settled_upper_bound_micro_cny'] > 0
+    assert snapshot['settled_upper_bound_micro_cny'] % 38 == 0
+    assert not snapshot['pending_calls']
+    assert ledger.cell_worker_claim('mori-0')['deadline_ref'] == clock._record['record_sha256']
+    for root in (directory, Path(config['output'])):
+        for path in root.rglob('*'):
+            if path.is_file() and not path.is_symlink():
+                assert b'fixture-only-secret' not in path.read_bytes(), f'fixture credential persisted in {path}'
 
 
 @pytest.mark.linux

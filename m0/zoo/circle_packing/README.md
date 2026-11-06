@@ -221,6 +221,10 @@ The same verification module also runs six Mori rounds using the real-provider
 configuration and a temporary unmarked ledger while intercepting transport and
 blocking socket connections. It tests the real configuration path, simulated
 currency accounting and recorded replay; it does not contact the provider.
+Another test exercises the public live supervisor and worker together using a
+disposable source commit with a test-only gate override, a temporary ledger,
+fake credential, and blocked network. It does not open the production gate or
+prove that every descendant is terminated.
 It also exercises the reference controller with a test-only override of the
 closed live gate, fake responses, and only local socket connections. The test
 reconstructs the anchored selection and geometry without any new model or
