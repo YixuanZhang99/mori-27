@@ -41,3 +41,48 @@ def test_draft_rejects_tampered_campaign_policy(tmp_path):
     campaign['context_tokens'] -= 1
     with pytest.raises(ValueError, match='campaign'):
         build_draft_plan(campaign, source_commit='a' * 40, dependency_lock_sha256='b' * 64)
+
+
+def test_cell_binding_requires_original_campaign_and_exact_frozen_draft(tmp_path):
+    from zoo.circle_packing.pilot_plan import build_draft_plan, validate_draft_cell
+    campaign = campaign_fixture(tmp_path)
+    plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
+                            dependency_lock_sha256='b' * 64)
+    trusted_ref = 'sha256:' + plan['draft_sha256']
+    binding = validate_draft_cell(campaign, plan, 'vendor-0', expected_plan_ref=trusted_ref)
+    assert binding == {'campaign_id': campaign.manifest_binding()['campaign_id'],
+                       'plan_ref': 'sha256:' + plan['draft_sha256'], 'cell_id': 'vendor-0',
+                       'wallclock_seconds': 2700}
+    altered = {**plan, 'limits': {**plan['limits'], 'wallclock_seconds': 3000}}
+    with pytest.raises(ValueError, match='plan'):
+        validate_draft_cell(campaign, altered, 'vendor-0', expected_plan_ref=trusted_ref)
+    for invalid in ('vendor-9', 'vendor-00'):
+        with pytest.raises(ValueError, match='cell'):
+            validate_draft_cell(campaign, plan, invalid, expected_plan_ref=trusted_ref)
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    foreign = CampaignBudget.create(tmp_path / 'foreign.db')
+    with pytest.raises(ValueError, match='plan'):
+        validate_draft_cell(foreign, plan, 'vendor-0', expected_plan_ref=trusted_ref)
+
+
+def test_cell_binding_rejects_noncanonical_boolean_seed(tmp_path):
+    from zoo.circle_packing.pilot_plan import build_draft_plan, validate_draft_cell
+    campaign = campaign_fixture(tmp_path)
+    plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
+                            dependency_lock_sha256='b' * 64)
+    trusted_ref = 'sha256:' + plan['draft_sha256']
+    plan['cells'][0]['seed'] = False
+    with pytest.raises(ValueError, match='plan'):
+        validate_draft_cell(campaign, plan, 'vendor-0', expected_plan_ref=trusted_ref)
+
+
+def test_cell_binding_rejects_different_independently_pinned_plan(tmp_path):
+    from zoo.circle_packing.pilot_plan import build_draft_plan, validate_draft_cell
+    campaign = campaign_fixture(tmp_path)
+    original = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
+                                dependency_lock_sha256='b' * 64)
+    replacement = build_draft_plan(campaign.manifest_binding(), source_commit='c' * 40,
+                                   dependency_lock_sha256='d' * 64)
+    with pytest.raises(ValueError, match='plan'):
+        validate_draft_cell(campaign, replacement, 'vendor-0',
+                            expected_plan_ref='sha256:' + original['draft_sha256'])

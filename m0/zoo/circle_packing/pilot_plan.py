@@ -39,3 +39,29 @@ def build_draft_plan(campaign, *, source_commit, dependency_lock_sha256):
                   for seed in (0, 1, 2) for arm in ('vendor', 'mori')]}
     payload['draft_sha256'] = payload_digest(payload)
     return payload
+
+
+def validate_draft_cell(ledger, plan, cell_id, *, expected_plan_ref):
+    """Compare a declared cell with an independently supplied draft identity.
+
+    This preflight does not authorize dispatch or make the draft executable.
+    """
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    if type(ledger) is not CampaignBudget or type(plan) is not dict:
+        raise ValueError('cell requires the original campaign and a frozen draft plan')
+    try:
+        expected = build_draft_plan(ledger.manifest_binding(), source_commit=plan['source_commit'],
+                                    dependency_lock_sha256=plan['dependency_lock_sha256'])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError('cell plan differs from the original campaign') from error
+    if type(expected_plan_ref) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', expected_plan_ref) or \
+            expected_plan_ref != 'sha256:' + expected['draft_sha256'] or \
+            plan != expected or payload_digest(plan) != payload_digest(expected):
+        raise ValueError('cell plan differs from the frozen draft and campaign')
+    if type(cell_id) is not str or not re.fullmatch(r'(?:vendor|mori)-(?:0|[1-9][0-9]*)', cell_id):
+        raise ValueError('cell identity is invalid')
+    arm, seed = cell_id.split('-')
+    if not any(cell == {'seed': int(seed), 'arm': arm, 'status': 'unrun'} for cell in plan['cells']):
+        raise ValueError('cell is not in the frozen draft')
+    return {'campaign_id': plan['campaign_id'], 'plan_ref': 'sha256:' + plan['draft_sha256'],
+            'cell_id': cell_id, 'wallclock_seconds': plan['limits']['wallclock_seconds']}

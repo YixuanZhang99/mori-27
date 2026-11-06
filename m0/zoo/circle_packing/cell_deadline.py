@@ -58,7 +58,7 @@ def _validate_path(store):
 
 def _parameters(store, cell_id, plan_ref, seconds):
     if not isinstance(store, ContinuationStore) or type(cell_id) is not str or \
-            not re.fullmatch(r'(?:vendor|mori)-[0-9]+', cell_id) or type(plan_ref) is not str or \
+            not re.fullmatch(r'(?:vendor|mori)-(?:0|[1-9][0-9]*)', cell_id) or type(plan_ref) is not str or \
             not re.fullmatch(r'sha256:[0-9a-f]{64}', plan_ref) or \
             type(seconds) is not int or not 1 <= seconds <= 86400:
         raise ValueError('cell deadline requires a durable store and bounded frozen identity')
