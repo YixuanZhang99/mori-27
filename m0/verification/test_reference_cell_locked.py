@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 
 import pytest
 
@@ -22,9 +23,16 @@ from zoo.circle_packing.pilot_plan import build_draft_plan
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 
+@pytest.fixture
+def short_workspace():
+    with tempfile.TemporaryDirectory(prefix='mori-worker-', dir='/tmp') as directory:
+        yield Path(directory).resolve()
+
+
 @pytest.mark.parametrize('tamper_selection', [False, True])
 def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
-                                                                                monkeypatch, tamper_selection):
+                                                                                monkeypatch, tamper_selection,
+                                                                                short_workspace):
     cache = os.environ['MORI_TEST_OFFLINE_CACHE']
     repository = Path(__file__).resolve().parents[2]
     commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
@@ -53,8 +61,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
             '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
-    workspace = tmp_path / 'worker-workspace'
-    workspace.mkdir(mode=0o700)
+    workspace = short_workspace
     from zoo.circle_packing.host_runtime import run_reference_cell_fixture
     if tamper_selection:
         from core.executor.process import ProcessJournal
