@@ -107,6 +107,15 @@ def test_fixture_marker_is_durable_from_creation(tmp_path):
     assert not ledger.snapshot()['pending_calls']
 
 
+def test_live_controller_preparation_rejects_fixture_before_work(tmp_path):
+    from zoo.circle_packing.mori_live_controller import prepare_live_controller
+    ledger = fixture_campaign(tmp_path)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='non-fixture'):
+        prepare_live_controller({**config(), 'ledger': str(ledger.path)}, api_key='fixture-only-secret')
+    assert ledger.snapshot() == before
+
+
 def test_shared_controller_rejects_mismatched_ledger_before_setup(tmp_path):
     from test_governed_cny_framework import campaign_fixture
     from zoo.circle_packing.mori_controller import build_controller

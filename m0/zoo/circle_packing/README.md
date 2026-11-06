@@ -199,6 +199,10 @@ memory, not in the frozen configuration, and does not itself start a search
 or authorize a live pilot. It verifies the original ledger, campaign and cell
 clock; fixture ledgers require loopback, while a non-fixture ledger requires
 the provider URL frozen in that campaign.
+`mori_live_controller.prepare_live_controller` additionally requires execution
+from the campaign's frozen source and Python runtime and restores the original
+clock. It prepares the controller without starting search; the caller still
+needs the completed pilot gate and whole-cell supervision before live use.
 `verification/test_mori_live_preparation.py` exercises the latter composition
 with a disposable unmarked ledger and a fake key. It forbids provider and
 sandbox execution and checks that no calls or charges occurred. This is a

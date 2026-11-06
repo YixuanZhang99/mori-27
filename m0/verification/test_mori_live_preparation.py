@@ -92,8 +92,7 @@ import core.loop
 from core.composition.recovery import ContinuationStore
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.domain import CirclePackingDomain
-from zoo.circle_packing.frozen_source import verify_frozen_source
-from zoo.circle_packing.mori_controller import build_controller
+from zoo.circle_packing.mori_live_controller import prepare_live_controller
 from zoo.circle_packing.runner import TASK
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
@@ -102,14 +101,8 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 config = json.loads(pathlib.Path(sys.argv[1]).read_text())
 ledger = CampaignBudget(config['ledger'])
 plan = config['plan']
-verify_frozen_source(ledger, plan, snapshot=pathlib.Path(config['source']).parent,
-    manifest=config['source_manifest'], expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'])
 assert sys.executable == str(pathlib.Path(config['runtime']) / 'bin' / 'python')
 assert pathlib.Path(core.loop.__file__).resolve() == pathlib.Path(config['source']) / 'core' / 'loop.py'
-clock = CellDeadline.restore(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
-    cell_id='mori-0', plan_ref=config['ref'], seconds=plan['limits']['wallclock_seconds'])
-runner = SandboxRunner.for_campaign_runtime(ledger, runtime=config['runtime'],
-    manifest=config['runtime_manifest'], base_python='/usr/bin/python3.12')
 calls = []
 def forbidden(*args, **kwargs):
     raise AssertionError('unexpected external work')
@@ -131,8 +124,8 @@ class Opener:
         calls.append(1)
         return Response()
 urllib.request.build_opener = lambda *args: Opener()
-framework, provider, profile, adapters = build_controller(
-    config, ledger=ledger, clock=clock, runner=runner, api_key='fixture-only-secret')
+framework, provider, profile, adapters = prepare_live_controller(config, api_key='fixture-only-secret')
+assert not calls and ledger.snapshot()['settled_upper_bound_micro_cny'] == 0
 outcome = framework.evolve(TASK)
 GovernedCNYProvider.perform_request = forbidden
 CirclePackingDomain.evaluate = forbidden
