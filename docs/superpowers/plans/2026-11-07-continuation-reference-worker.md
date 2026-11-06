@@ -12,6 +12,8 @@
 - Validate exact source/runtime manifest, campaign, clock and bound plan before worker claim; reverify after process completion.
 - Worker uses one original clock and claim; no provider credential enters its sandbox.
 - Preserve old pilot behavior; failed or uncertain worker remains unresolved.
-- [ ] Test real sandbox worker and reject tampered source/runtime before claim; implement scoped version handling.
-- [ ] Run original worker regressions, independent review, and loopback reference search.
-- [ ] Document evidence scope and push.
+- [x] Test real sandbox worker and reject tampered source/runtime before claim; implement scoped version handling.
+- [x] Run original worker regressions, independent review, and loopback reference search.
+- [x] Document evidence scope and push.
+
+The reference authority runs in the test process; the upstream worker uses the frozen source and runtime. Host-observed iteration traces do not certify full database transitions, independently match every charge/stage, or establish a benchmark.
