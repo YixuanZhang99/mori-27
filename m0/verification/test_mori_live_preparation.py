@@ -441,6 +441,62 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert supervised['scope'] == 'paired_supervised_anchored_final_snapshots'
         assert supervised['mori']['candidate'] == mori_report['candidate']
         assert supervised['performance_claim'] is False
+        replay_input = json.loads((Path(config['output']) / 'replay-input.json').read_text())
+        replay_payload = {'mori_config': config, 'reference_config': vendor_config,
+            'mori_directory': str(tmp_path / 'mori-supervisor'),
+            'reference_directory': str(tmp_path / 'reference-supervisor'),
+            'mori_rows': mori_rows, 'reference_rows': vendor_rows,
+            'mori_view': json.loads(mori_view._evidence), 'reference_view': json.loads(vendor_view._evidence),
+            'mori_clock': mori_clock.export_evidence(), 'reference_clock': vendor_clock.export_evidence(),
+            'mori_run': mori_run, 'reference_run': vendor_run, 'reference_bundle': reference_bundle,
+            'replay_input': replay_input, 'head': head}
+        replay_payload_path = tmp_path / 'paired-replay-input.json'
+        replay_payload_path.write_text(json.dumps(replay_payload))
+        script = '''import copy,json,os,socket,sys
+from pathlib import Path
+from core.x1.checkpoint import payload_digest
+from zoo.circle_packing.cell_deadline import RecordedCellClock
+from zoo.circle_packing.domain import CirclePackingDomain
+from zoo.circle_packing.pair_audit import audit_replayed_supervised_pair
+from zoo.mle_bench_lite.cny_budget import CampaignBudget
+from zoo.mle_bench_lite.composed_domain import SandboxRunner
+from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+def forbidden(*args, **kwargs): raise AssertionError('paired replay attempted external work')
+socket.socket.connect=forbidden
+GovernedCNYProvider.perform_request=forbidden
+CirclePackingDomain.evaluate=forbidden
+p=json.loads(Path(sys.argv[1]).read_text()); c=p['mori_config']; v=p['reference_config']
+ledger=CampaignBudget(c['ledger'])
+runner=SandboxRunner.for_campaign_runtime(ledger,runtime=c['runtime'],manifest=c['runtime_manifest'],base_python='/usr/bin/python3.12')
+mv=RecordedCurrencyView(p['mori_view'],expected_run_id=p['mori_run'],expected_head=p['head'])
+rv=RecordedCurrencyView(p['reference_view'],expected_run_id=p['reference_run'],expected_head=p['head'])
+mc=RecordedCellClock(p['mori_clock'],mv.cell_deadline_claim('mori-0'))
+rc=RecordedCellClock(p['reference_clock'],rv.cell_deadline_claim('vendor-0'))
+args=dict(mori_config=c,reference_config=v,mori_supervisor_directory=p['mori_directory'],
+ reference_supervisor_directory=p['reference_directory'],seed=0,plan=c['plan'],expected_plan_ref=c['ref'],
+ mori_rows=p['mori_rows'],mori_rows_sha256=payload_digest(p['mori_rows']),mori_view=mv,mori_clock=mc,
+ mori_run_id=p['mori_run'],reference_rows=p['reference_rows'],reference_view=rv,reference_clock=rc,
+ reference_run_id=p['reference_run'],reference_worker_directory=v['worker_directory'],reference_bundle=p['reference_bundle'])
+bad=copy.deepcopy(p['replay_input']); bad['rows'].pop()
+try:
+ audit_replayed_supervised_pair(replay_input=bad,ledger=ledger,runner=runner,replay_output=Path(sys.argv[2]+'-bad'),**args)
+except ValueError: pass
+else: raise AssertionError('altered replay accepted')
+assert not Path(sys.argv[2]+'-bad').exists()
+result=audit_replayed_supervised_pair(replay_input=p['replay_input'],ledger=ledger,runner=runner,
+ replay_output=Path(sys.argv[2]),**args)
+assert result['scope']=='paired_supervised_snapshots_with_independent_replay'
+assert result['replay']['passed'] and result['replay']['external_calls']==0
+assert result['replay']['candidate']==result['mori']['candidate']
+assert result['performance_claim'] is False and ledger.snapshot()['journal_head']==p['head']
+'''
+        env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
+               'PYTHONDONTWRITEBYTECODE': '1'}
+        independent = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
+            str(replay_payload_path), str(tmp_path / 'paired-independent-replay')], env=env, cwd=tmp_path,
+            capture_output=True, text=True, timeout=240)
+        assert independent.returncode == 0, independent.stderr
         with pytest.raises(ValueError):
             audit_pair_snapshot(seed=1, plan=config['plan'], expected_plan_ref=config['ref'],
                 mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,

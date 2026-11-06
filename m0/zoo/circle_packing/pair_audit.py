@@ -126,3 +126,42 @@ def audit_supervised_pair_snapshot(*, mori_config, reference_config, mori_superv
         return {**result, 'scope': 'paired_supervised_anchored_final_snapshots'}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid supervised pair evidence') from error
+
+
+def audit_replayed_supervised_pair(*, replay_input, ledger, runner, replay_output, mori_config,
+                                   mori_supervisor_directory, **pair_arguments):
+    """Independently replay the recorded Mori inputs alongside the paired audit.
+
+    Run this from the frozen source and runtime in a fresh process. This still
+    is not a durable authorization for later cells or a benchmark claim.
+    """
+    from core.x1.checkpoint import payload_digest
+    from zoo.circle_packing.mori_recorded import replay_mori_snapshot
+    from zoo.circle_packing.supervisor_audit import audit_supervisor_result
+    try:
+        result = audit_supervised_pair_snapshot(mori_config=mori_config,
+            mori_supervisor_directory=mori_supervisor_directory, **pair_arguments)
+        report = audit_supervisor_result(mori_config, directory=mori_supervisor_directory,
+            view=pair_arguments['mori_view'], clock=pair_arguments['mori_clock'])
+        if type(replay_input) is not dict or payload_digest(replay_input) != report['replay_input_sha256']:
+            raise ValueError('replay inputs differ from the original supervisor report')
+        rows, original = replay_input['rows'], replay_input['currency_bundle']['currency_evidence']
+        if type(rows) is not list or rows != pair_arguments['mori_rows'][:len(rows)]:
+            raise ValueError('replay transcript is not the original Mori journal prefix')
+        context = next(row['payload']['invocation']['external_context'] for row in pair_arguments['mori_rows']
+                       if row['kind'] == 'composed_provider_started')
+        common = pair_arguments['mori_view'].export_governance_evidence(
+            pair_arguments['mori_run_id'], context['physical_plan_ref'])
+        _require_currency_prefix(original, common)
+        if ledger.snapshot()['journal_head'] != result['journal_head']:
+            raise ValueError('original campaign head changed before independent replay')
+        replay = replay_mori_snapshot(mori_config, replay_input,
+            expected_evidence_sha256=report['replay_input_sha256'],
+            expected_campaign_head=original['journal_head'], ledger=ledger, runner=runner, output=replay_output)
+        if replay.get('passed') is not True or replay.get('external_calls') != 0 or \
+                replay.get('candidate') != result['mori']['candidate'] or \
+                ledger.snapshot()['journal_head'] != result['journal_head']:
+            raise ValueError('independent replay differs from the paired result or campaign head')
+        return {**result, 'scope': 'paired_supervised_snapshots_with_independent_replay', 'replay': replay}
+    except (KeyError, TypeError, AttributeError, StopIteration) as error:
+        raise ValueError('invalid paired replay evidence') from error
