@@ -72,7 +72,7 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
             raise ValueError('reference selection is not frozen')
         from zoo.circle_packing.reference_iteration_trace import (
             audit_reference_iteration_provider, audit_reference_iteration_receipts, audit_reference_iteration_stages,
-            summarize_reference_run_coverage)
+            audit_reference_accounting_coverage, summarize_reference_run_coverage)
         reference_trace = reference.get('iteration_trace')
         reference_receipts = (audit_reference_iteration_receipts(reference_trace, reference_rows,
                                planned_iterations=plan['iterations']) if reference_trace is not None else
@@ -93,6 +93,13 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                               if reference_trace is not None else
                               {'schema_version': 1, 'scope': 'reference_run_coverage_unverified',
                                'performance_claim': False, 'complete_run_certified': False})
+        accounting_coverage = (audit_reference_accounting_coverage(reference_coverage, reference_provider,
+                               reference_stages, rows=reference_rows, plan=plan) if reference_trace is not None and
+                               'controller_run' in reference_trace and 'request_bindings' in reference_trace and
+                               'stage_bindings' in reference_trace else
+                               {'schema_version': 1, 'scope': 'reference_iteration_accounting_unverified',
+                                'performance_claim': False, 'complete_run_certified': False,
+                                'iteration_accounting_complete': False})
         summaries = {'mori': {'candidate': mori['candidate'], 'sum_radii': mori['measurement']['sum_radii'],
                               'validity': mori['measurement']['validity'],
                               'settled_upper_bound_micro_cny': mori['settled_upper_bound_micro_cny']},
@@ -117,6 +124,7 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                 'reference_iteration_provider': reference_provider,
                 'reference_iteration_stages': reference_stages,
                 'reference_run_coverage': reference_coverage,
+                'reference_accounting_coverage': accounting_coverage,
                 'sum_radii_difference': summaries['mori']['sum_radii'] - summaries['reference']['sum_radii'],
                 'invoice_verified': False}
     except (KeyError, TypeError, AttributeError, IndexError) as error:

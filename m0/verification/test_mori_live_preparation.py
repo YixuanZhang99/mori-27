@@ -633,6 +633,8 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert coverage['controller_stop_reason'] == 'iteration_limit' and len(coverage['iterations']) == 6
         assert coverage['complete_run_certified'] is False
         assert any(item['submission_state'] == 'worker_error' for item in coverage['iterations'])
+        assert pair['reference_accounting_coverage']['iteration_accounting_complete'] is True
+        assert pair['reference_accounting_coverage']['complete_run_certified'] is False
         supervised = audit_supervised_pair_snapshot(mori_config=config, reference_config=vendor_config,
             mori_supervisor_directory=tmp_path / 'mori-supervisor',
             reference_supervisor_directory=tmp_path / 'reference-supervisor', seed=0,

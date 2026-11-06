@@ -443,3 +443,64 @@ def summarize_reference_run_coverage(trace, receipts, provider, stages, *, plann
                 'unattributed_stage_ids': stages.get('unattributed_stage_ids')}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid reference run coverage evidence') from error
+
+
+def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, plan):
+    """Account for planned calls and stages, including the initial seed stage.
+
+    Inputs must already be verified against the original worker and campaign.
+    Even a complete accounting result is not a full search/replay certificate.
+    """
+    if any(type(value) is not dict for value in (coverage, provider, stages, plan)) or type(rows) is not list:
+        raise ValueError('reference accounting coverage requires recorded reports')
+    try:
+        count, seed = plan['iterations'], plan['seed_sha256']
+        if type(count) is not int or not 1 <= count <= 6 or type(seed) is not str or \
+                re.fullmatch(r'[0-9a-f]{64}', seed) is None:
+            raise ValueError('reference accounting plan is invalid')
+        reasons = []
+        if coverage['controller_stop_reason'] != 'iteration_limit' or \
+                coverage['controller_reported_completed_iterations'] != count:
+            reasons.append('controller_did_not_report_all_iterations')
+        outcomes = coverage['iterations']
+        if type(outcomes) is not list or [row['iteration'] for row in outcomes] != list(range(1, count + 1)):
+            raise ValueError('reference iteration summary differs from the plan')
+        if provider.get('missing_prompt_iterations') != [] or provider.get('unattributed_provider_bindings') != []:
+            reasons.append('provider_coverage_incomplete')
+        provider_rows = provider['iterations']
+        stage_rows = stages['stages']
+        for item in outcomes:
+            number, state = item['iteration'], item['submission_state']
+            calls = [row for row in provider_rows if row['iteration'] == number]
+            physical = [row for row in stage_rows if row['iteration'] == number]
+            if state not in ('candidate', 'worker_error'):
+                reasons.append(f'iteration_{number}_outcome_unverified')
+            if len(calls) != 1 or calls[0]['state'] != 'matched':
+                reasons.append(f'iteration_{number}_provider_unverified')
+            if state == 'candidate' and (not physical or any(row['state'] != 'matched' or
+                    row.get('candidate_program_digest_matches') is not True for row in physical)):
+                reasons.append(f'iteration_{number}_stages_unverified')
+            if state != 'candidate' and physical:
+                reasons.append(f'iteration_{number}_stage_candidate_unverified')
+        main_indices = [index for index, row in enumerate(rows) if row['kind'] == 'composed_provider_started'
+                        and row['payload']['invocation']['external_context']['lane'] == 'main']
+        if not main_indices:
+            reasons.append('initial_seed_order_unverified')
+            seed_stages = []
+        else:
+            seed_stages = [row['payload'] for row in rows[:main_indices[0]] if row['kind'] == 'host_stage_started']
+            valid_seed = (len(seed_stages) in (1, 2) and seed_stages[0]['stage'] == 1 and
+                          seed_stages[0]['prior_id'] is None and all(
+                              row['program_ref'] == 'sha256:' + seed for row in seed_stages) and
+                          (len(seed_stages) == 1 or seed_stages[1]['stage'] == 2 and
+                           seed_stages[1]['prior_id'] == seed_stages[0]['request_id']))
+            if not valid_seed:
+                reasons.append('initial_seed_stages_unverified')
+        seed_ids = [row['request_id'] for row in seed_stages]
+        if len(seed_ids) != len(set(seed_ids)) or stages.get('unattributed_stage_ids') != seed_ids:
+            reasons.append('unattributed_physical_stages')
+        return {'schema_version': 1, 'scope': 'reference_iteration_accounting_coverage',
+                'performance_claim': False, 'complete_run_certified': False,
+                'iteration_accounting_complete': not reasons, 'reasons': reasons, 'seed_stage_ids': seed_ids}
+    except (KeyError, TypeError, AttributeError, IndexError) as error:
+        raise ValueError('invalid reference accounting coverage evidence') from error
