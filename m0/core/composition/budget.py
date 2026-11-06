@@ -30,10 +30,12 @@ JOURNAL_KIND = "hierarchical_budget"
 def hierarchical_options(options):
     """Pure strict preflight suitable for Registry.register(validate_options=...)."""
     allowed = {"limits", "reservation", "operation_reservations", "fidelity_rungs",
-               "rung_by", "rung_every", "convergence", "proxy_validity", "reservation_modes"}
+               "rung_by", "rung_every", "convergence", "proxy_validity", "reservation_modes", "require_initial_control"}
     if type(options) is not dict or set(options) - allowed \
             or not {"limits", "reservation", "fidelity_rungs"}.issubset(options):
         raise BudgetError("hierarchical budget requires limits, reservation and fidelity_rungs")
+    if type(options.get("require_initial_control", False)) is not bool:
+        raise BudgetError("require_initial_control must be boolean")
     limits = options["limits"]
     if type(limits) is not dict or set(limits) != {"global", "direction", "candidate"}:
         raise BudgetError("limits requires global, direction and candidate physical baskets")
@@ -117,17 +119,28 @@ class HierarchicalBudget:
         if not isinstance(stamp, AccountingStamp):
             raise BudgetError("hierarchical budget requires an AccountingStamp")
         self.options, self.stamp, self.store = json_copy(options), stamp, store
+        self._require_initial_control = self.options.get("require_initial_control", False)
         self.units = tuple(sorted(self.options["limits"]["global"]))
         self._governed = None
         if governance is not None:
             from core.composition.budget_governance import ControlProtection
             self._governed = ControlProtection(self, governance)
+        if self.options.get("require_initial_control") and (self._governed is None or
+                self._governed.config["controls"].get("after_main_cycles") != [0]):
+            raise BudgetError("initial control gate requires one control scheduled at cycle zero")
         self._schema_version = 2 if self._governed is not None else 1
         self._config_ref = _hash(self.options if governance is None else {
             "options": self.options, "governance": self._governed.config})
         self._data = _empty_state()
         self._seq, self._head = 0, None
         self._lock = threading.RLock()
+
+    def _check_config(self):
+        current = self.options if self._governed is None else {
+            "options": self.options, "governance": self._governed.config}
+        if _hash(current) != self._config_ref or self._require_initial_control is not \
+                self.options.get("require_initial_control", False):
+            raise BudgetError("frozen budget configuration changed")
 
     def _reservation(self, operation, *, state=None, candidate_id=None, direction_id=None):
         amounts = json_copy(self.options.get("operation_reservations", {}).get(
@@ -255,6 +268,9 @@ class HierarchicalBudget:
             return self._allocation(candidate, direction_id or candidate.id, depth, self._data)
 
     def _intent(self, intent_id, candidate, direction_id, operation, request, depth, *, state, lane="main", control_slot=None):
+        self._check_config()
+        if lane == "main" and self._require_initial_control and not state.get("initial_control_ready"):
+            raise BudgetError("initial control must complete before main operations")
         _text(intent_id, "intent identity")
         _text(direction_id, "direction identity")
         if not isinstance(candidate, Candidate) or type(operation) is not str or operation not in OPERATIONS:
@@ -415,8 +431,54 @@ class HierarchicalBudget:
                     for operation in self._data["operations"].values()):
                 raise BudgetError("unresolved usage or reservation overrun requires read-only settlement")
 
+    def authorize_initial_control(self, slot_id, terminal_ref, *, bridge, run, domain):
+        """Record a completed original control before allowing any main reservation."""
+        with self._lock:
+            from types import SimpleNamespace
+            from core.composition.governance_audit import audit_terminals
+            if run.store is not self.store or getattr(run.physical_identity_lookup, '__self__', None) is not self or \
+                    bridge._run is not run or run.physical_plan != self._data.get("control_plan") or \
+                    domain.manifest_binding != run.physical_plan.get("initial_context", {}).get("circle_domain_binding"):
+                raise BudgetError("initial control authority differs from frozen run")
+            runtime = SimpleNamespace(store=self.store, budget=self, _logical_run_id=run.logical_run_id,
+                                      durable_executor=False)
+            audited = audit_terminals(runtime, run.physical_plan, {slot_id: {"domain": domain}}).get(slot_id)
+            proof = bridge._load("terminal-" + slot_id)
+            currency = bridge.audit()
+            if audited is None or audited.get("status") != "evaluated" or \
+                    proof != {"slot_id": slot_id, "terminal_ref": terminal_ref, "terminal": audited} or \
+                    currency["unknown_cost_calls"] or not currency["protection_valid"]:
+                raise BudgetError("initial control lacks audited physical and currency evidence")
+            record = {"slot_id": slot_id, "terminal_ref": terminal_ref}
+            if self._data.get("initial_control_ready") == record:
+                return
+            terminals = [row["payload"] for row in self.store.read("governed_control_terminal")
+                         if row["payload"].get("slot_id") == slot_id]
+            from core.x1.checkpoint import payload_digest
+            if len(terminals) != 1 or terminals[0].get("status") != "evaluated" or \
+                    terminals[0].get("plan_ref") != self._data.get("control_plan", {}).get("plan_ref") or \
+                    terminal_ref != "sha256:" + payload_digest(terminals[0]):
+                raise BudgetError("initial control terminal is missing or differs")
+            self._commit("initial_control_ready", record)
+
     def _reduce(self, state, kind, data):
         operations = state["operations"]
+        if kind == "initial_control_ready":
+            if not self._require_initial_control or set(data) != {"slot_id", "terminal_ref"} or \
+                    state.get("initial_control_ready") or type(data["terminal_ref"]) is not str or \
+                    not re.fullmatch(r"sha256:[0-9a-f]{64}", data["terminal_ref"]):
+                raise BudgetError("invalid initial control authorization")
+            plan = state.get("control_plan", {})
+            slots = plan.get("slots", [])
+            audit = self._governed.audit(state)
+            slot = audit["slots"].get(data["slot_id"], {})
+            if len(slots) != 1 or slots[0]["slot_id"] != data["slot_id"] or \
+                    slots[0]["after_main_cycles"] != 0 or slot.get("status") != "evaluated" or \
+                    slot.get("phases") != {"operator": "settled", "evaluation": "settled"} or \
+                    not audit["protection_valid"] or audit["open_intents"]:
+                raise BudgetError("initial control physical evidence is incomplete")
+            state["initial_control_ready"] = data
+            return
         if self._governed is not None and kind == "invalidate_protection":
             if set(data) != {"intent_id", "reason"}:
                 raise BudgetError("invalid protection breach event")
@@ -674,6 +736,8 @@ class HierarchicalBudget:
                 "open_intents": sorted(identifier for identifier, operation in self._data["operations"].items()
                                        if operation["status"] in {"reserved", "started", "unresolved"}),
                 "halt_reasons": list(self._data["halt_reasons"]), "progress": self._progress()}
+            if self.options.get("require_initial_control"):
+                result["initial_control_ready"] = json_copy(self._data.get("initial_control_ready"))
             if self._governed is not None:
                 result["governance"] = self._governed.audit(self._data)
             return result
@@ -724,7 +788,19 @@ class HierarchicalBudget:
 
     def _rebuild(self):
         data, sequence, head = _empty_state(), 0, None
-        for row in self.store.read(JOURNAL_KIND):
+        self._check_config()
+        require_control = self._require_initial_control
+        terminals = {}
+        rows = self.store.read() if require_control else self.store.read(JOURNAL_KIND)
+        for row in rows:
+            if require_control and row["kind"] == "governed_control_terminal":
+                terminal = row["payload"]
+                slot_id = terminal.get("slot_id")
+                if slot_id in terminals:
+                    raise BudgetError("duplicate initial control terminal")
+                terminals[slot_id] = terminal
+            if row["kind"] != JOURNAL_KIND:
+                continue
             event = json_copy(row["payload"], label="budget journal")
             if type(event) is not dict or set(event) != {"schema_version", "seq", "previous", "config_ref", "stamp", "event", "data", "event_ref"} \
                     or type(event["schema_version"]) is not int or event["schema_version"] != self._schema_version \
@@ -733,6 +809,14 @@ class HierarchicalBudget:
                     or event["stamp"] != asdict(self.stamp) \
                     or event["event_ref"] != _hash({key: value for key, value in event.items() if key != "event_ref"}):
                 raise BudgetError("budget journal configuration, sequence or integrity mismatch")
+            if require_control and event["event"] == "initial_control_ready":
+                from core.x1.checkpoint import payload_digest
+                binding = event["data"]
+                terminal = terminals.get(binding.get("slot_id"))
+                if terminal is None or terminal.get("status") != "evaluated" or \
+                        terminal.get("plan_ref") != data.get("control_plan", {}).get("plan_ref") or \
+                        binding.get("terminal_ref") != "sha256:" + payload_digest(terminal):
+                    raise BudgetError("initial control terminal differs from durable authorization")
             self._reduce(data, event["event"], event["data"])
             sequence, head = event["seq"], event["event_ref"]
         return data, sequence, head

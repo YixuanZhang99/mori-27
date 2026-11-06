@@ -5,6 +5,8 @@ This component does not start a controller or implement full run recovery.
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import re
 from types import SimpleNamespace
 
 from core.composition.external_provider import GovernedCallContext, external_session_id
@@ -17,6 +19,18 @@ class HostDispatchRouter:
     """Route authenticated fixture requests to existing authorities."""
     def __init__(self, provider, stages):
         self.provider, self.stages = provider, stages
+        if stages is not None and stages.budget._require_initial_control and (provider is None or stages.control_authority is not provider):
+            raise ValueError('host stages require their original control authority')
+        if provider is not None and stages is not None:
+            if stages.budget is not provider.budget:
+                raise ValueError('host provider and stages must share the same budget')
+            from zoo.mle_bench_lite.composed_domain import SandboxRunner
+            main_path = stages.workspace.resolve()
+            control_path = provider.control_domain.workspace.resolve()
+            if type(stages.runner) is not SandboxRunner or stages.runner is provider.control_domain.runner or \
+                    stages.runner.manifest_binding != provider.control_domain.runner.manifest_binding or \
+                    main_path == control_path or main_path in control_path.parents or control_path in main_path.parents:
+                raise ValueError('main and control stages require independent matched sandbox environments')
 
     def __call__(self, request_id, argument):
         from zoo.circle_packing.host_transport import _validate_argument
@@ -24,8 +38,11 @@ class HostDispatchRouter:
         if type(argument) is dict and set(argument) == {'host_messages', 'host_prompt_ref'} and self.provider:
             return self.provider(request_id, argument)
         if type(argument) is dict and set(argument) == {'stage', 'program', 'program_ref', 'prior_id'} and self.stages:
-            result = self.stages.execute(request_id, argument['program'], stage=argument['stage'],
-                                         prior_id=argument['prior_id'])
+            with self.stages.budget._lock:
+                if self.provider is not None:
+                    self.provider._require_control()
+                result = self.stages.execute(request_id, argument['program'], stage=argument['stage'],
+                                             prior_id=argument['prior_id'])
             return {'state': 'ok', 'result': json.dumps(result, sort_keys=True, separators=(',', ':'), allow_nan=False),
                     'usage': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}}
         raise ValueError('host route is not available')
@@ -33,10 +50,9 @@ class HostDispatchRouter:
 
 class HostDispatchCoordinator:
     def __init__(self, budget, bridge, run, ready):
-        if run.store is not budget.store or getattr(run.physical_identity_lookup, '__self__', None) is not budget \
+        if not budget._require_initial_control or run.store is not budget.store or getattr(run.physical_identity_lookup, '__self__', None) is not budget \
                 or bridge._run is not run or ready.physical_plan_ref != run.physical_plan['plan_ref']:
             raise ValueError('host authorities must share the same frozen physical run')
-        self.physical = HostPhysicalAdmission(budget)
         self.budget, self.bridge, self.run, self.ready = budget, bridge, run, ready
         self.store = budget.store
         self.binding = run.main_provider_binding
@@ -47,10 +63,42 @@ class HostDispatchCoordinator:
         reservation = budget.options.get('operation_reservations', {}).get('operator', budget.options['reservation'])
         if reservation != {'token': self.binding['call_bound']['units']['token'], 'node': 1, 'eval_count': 0}:
             raise ValueError('host physical reservation must cover exactly one bounded provider call')
+        if run.physical_plan.get('schema_version') != 1 or len(run.physical_plan.get('slots', [])) != 1:
+            raise ValueError('host requires a complete frozen control plan')
+        budget._governed.validate_plan(run.physical_plan)
+        from zoo.circle_packing.domain import CirclePackingDomain
+        from zoo.mle_bench_lite.composed_domain import SandboxRunner
+        slot = run.physical_plan['slots'][0]
+        if type(slot['slot_id']) is not str or not re.fullmatch(r'control-[0-9]{4}', slot['slot_id']):
+            raise ValueError('host requires a canonical control slot identity')
+        frozen = run.physical_plan['initial_context'].get('circle_domain_binding')
+        self.control_domain = CirclePackingDomain(Path(run.workdir) / 'host-controls' / slot['slot_id'],
+                                                   runner=SandboxRunner())
+        if self.control_domain.manifest_binding != frozen:
+            raise ValueError('host control audit domain differs from frozen evaluation binding')
+        self.physical = HostPhysicalAdmission(budget, control_authority=self)
+
+    def _require_control(self):
+        from core.composition.governance_audit import audit_terminals
+        slot_id = self.run.physical_plan['slots'][0]['slot_id']
+        runtime = SimpleNamespace(store=self.store, budget=self.budget, _logical_run_id=self.run.logical_run_id)
+        terminals = audit_terminals(runtime, self.run.physical_plan, {slot_id: {'domain': self.control_domain}})
+        terminal = terminals.get(slot_id)
+        if terminal is None or terminal['status'] != 'evaluated':
+            raise ValueError('host main work requires a completed valid independent control')
+        if self.budget.state().get('initial_control_ready') != {'slot_id': slot_id, 'terminal_ref': 'sha256:' + payload_digest(terminal)}:
+            raise ValueError('host control lacks durable physical authorization')
+        proof = self.bridge._load('terminal-' + slot_id)
+        if proof != {'slot_id': slot_id, 'terminal_ref': 'sha256:' + payload_digest(terminal), 'terminal': terminal}:
+            raise ValueError('host control lacks its durable currency terminal')
+        currency = self.bridge.audit()
+        if currency['unknown_cost_calls'] or not currency['protection_valid']:
+            raise ValueError('host currency protection is unresolved or invalid')
 
     def audit(self):
         """Join original provider receipts to both existing authorities."""
         from core.composition.provider_evidence import audit_provider_receipts
+        self._require_control()
         physical = self.budget.audit_governance()
         currency = self.bridge.audit()
         if physical['open_intents'] or currency['unknown_cost_calls'] or not currency['protection_valid']:
@@ -72,7 +120,9 @@ class HostDispatchCoordinator:
             raise ValueError('host invocation message binding differs')
         prompt = json.dumps(argument, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
         args, kwargs = (prompt,), {}
-        receipt = self.physical.begin(request_id)
+        with self.budget._lock:
+            self._require_control()
+            receipt = self.physical.begin(request_id)
         try:
             identity = self.budget.invocation_identity(receipt.intent_id, fingerprint=receipt.fingerprint)
             authority = self.ready.authority_binding

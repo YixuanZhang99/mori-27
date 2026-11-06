@@ -3,53 +3,21 @@ import json
 
 import pytest
 
-from core.budget.types import AccountingStamp
 from core.composition.budget import HierarchicalBudget
-from core.composition.external_provider import ExternalRunContext
 from core.llm import UsageError
-from core.x1.checkpoint import payload_digest
-from core.x1.store import AppendOnlyStore
-from test_governed_cny_framework import campaign_fixture
 from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_governed_transport import host_prompt
-from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
-from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+from test_openevolve_host_control import control_authority
 
 
 @pytest.fixture
-def authority(tmp_path, local_endpoint):
-    ledger = campaign_fixture(tmp_path)
-    campaign = ledger.manifest_binding()
-    def provider():
-        return GovernedCNYProvider('deepseek-flash', local_endpoint.url, campaign_binding=campaign,
-            max_completion_tokens=4, api_key='fixture-only-secret', message_mode='openevolve_host_v1')
-    main, control = provider(), provider()
-    bound = main.governance_binding()['call_bound']['units']['token']
-    controls = {'after_main_cycles': [0], 'seed': 0,
-        'provider': {'name': 'control'}, 'domain': {'name': 'control'}, 'operator': {'name': 'draft'},
-        'request': {'fidelity': 'dev', 'split_id': 'dev'},
-        'reservations': {'operator': {'token': bound, 'node': 1, 'eval_count': 0},
-                         'evaluation': {'token': 0, 'node': 0, 'eval_count': 1}}}
-    limits = {'token': bound * 3, 'node': 8, 'eval_count': 8}
-    options = {'limits': {level: dict(limits) for level in ('global', 'direction', 'candidate')},
-        'reservation': {'token': 0, 'node': 0, 'eval_count': 1},
-        'operation_reservations': {'operator': {'token': bound, 'node': 1, 'eval_count': 0}},
-        'fidelity_rungs': [{'fidelity': 'dev', 'split_id': 'dev'}]}
-    store = AppendOnlyStore(tmp_path / 'events.jsonl')
-    budget = HierarchicalBudget(options, AccountingStamp('offline', 'fixture-v1', 'tokens-v1', 'price-v1', 'today'),
-                                store, governance={'schema_version': 1, 'controls': controls})
-    slots = [{'slot_id': 'control-0000', 'after_main_cycles': 0, 'request': controls['request'],
-              'reservations': controls['reservations']}]
-    plan = {'plan_ref': 'sha256:' + payload_digest({'slots': slots}), 'slots': slots}
-    budget.protect_controls(plan)
-    context = ExternalRunContext(logical_run_id='a' * 32, runtime_id='composed-v8-governed-external',
-        workdir=str(tmp_path), physical_plan=plan, main_provider_binding=main.governance_binding(),
-        control_provider_bindings={'control-0000': control.governance_binding()}, mode='live', recorded_bundle=None,
-        store=store, physical_identity_lookup=budget.invocation_identity,
-        provider_sessions={'main': main, 'control-0000': control})
-    bridge = CNYInvocationBridge(ledger)
-    ready = bridge.bind_run(context)
-    return ledger, budget, bridge, context, ready, main
+def authority(control_authority):
+    import asyncio
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    terminal = asyncio.run(HostSeedControl(budget, bridge, run, ready, domain).execute('control-0000'))
+    assert terminal['status'] == 'evaluated'
+    return ledger, budget, bridge, run, ready, run.provider_sessions['main']
 
 
 def test_host_dispatch_reserves_physical_and_currency_and_settles_from_original_receipt(authority, local_endpoint, monkeypatch):
@@ -190,7 +158,7 @@ def test_actual_host_routes_provider_and_cascade_through_common_budget(authority
                MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,
                OPENAI_API_KEY='fixture-only-secret')
     provider = HostDispatchCoordinator(budget, bridge, run, ready)
-    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'stage-work')
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'stage-work', control_authority=provider)
     with HostBroker(path, 'a' * 64, HostDispatchRouter(provider, stages)) as broker:
         thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(4)], daemon=True)
         thread.start()
@@ -201,7 +169,7 @@ def test_actual_host_routes_provider_and_cascade_through_common_budget(authority
     assert json.loads(completed.stdout)['stage_calls'] == 3
     assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
     totals = budget.audit_governance()['physical_totals']
-    assert totals['token'] == 7 and totals['eval_count'] == 3
+    assert totals['token'] == 7 and totals['eval_count'] == 4
     assert provider.audit()['currency']['protection_valid']
     assert stages.audit() == {'schema_version': 1, 'stage_calls': 3, 'stage_one_calls': 2, 'stage_two_calls': 1}
 
@@ -218,7 +186,7 @@ def test_crash_after_currency_admission_blocks_new_work_after_budget_restore(aut
     assert len(ledger.snapshot()['pending_calls']) == 1
     restored = HierarchicalBudget(budget.options, budget.stamp, budget.store, governance=budget._governed.config)
     restored.restore_from_journal()
-    with pytest.raises(ValueError, match='unresolved'):
+    with pytest.raises(ValueError, match='authority'):
         HostPhysicalAdmission(restored).begin('b' * 32)
 
 

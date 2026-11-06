@@ -19,6 +19,8 @@ TEST_ROOT = Path(__file__).resolve().parent
 
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {
+    "test_openevolve_host_dispatch.py": "reference host runs a real sandboxed independent control",
+    "test_openevolve_host_control.py": "protected circle control uses real sandbox evaluation",
     "test_openevolve_governed_framework.py": "real governed circle evaluation with loopback HTTP",
     "test_openevolve_reference.py": "real upstream host worker and sandboxed evaluation",
     "test_openevolve_framework_sandbox.py": "real public Framework sandboxed circle evaluation",
@@ -57,10 +59,6 @@ LINUX_MODULES = {
 LINUX_FUNCTIONS = {
     "test_openevolve_host_stage_budget.py": {
         "test_real_sandbox_stages_are_charged_to_physical_budget",
-    },
-    "test_openevolve_host_dispatch.py": {
-        "test_actual_host_worker_uses_both_real_budget_authorities",
-        "test_actual_host_routes_provider_and_cascade_through_common_budget",
     },
     "test_governed_cny_bridge.py": {
         "test_actual_host_worker_routes_to_currency_bridge_over_loopback",

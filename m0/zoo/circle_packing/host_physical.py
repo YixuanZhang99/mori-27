@@ -37,13 +37,17 @@ def _validate_stage_result(result, *, stage, program_ref):
 
 
 class HostPhysicalAdmission:
-    def __init__(self, budget):
+    def __init__(self, budget, *, control_authority=None):
         if not isinstance(budget, HierarchicalBudget) or budget._governed is None or \
                 set(budget.units) != {'token', 'node', 'eval_count'}:
             raise ValueError('host requires governed token/node/evaluation physical budget')
         if not budget.audit_governance().get('plan_ref'):
             raise ValueError('host requires protected controls before admission')
-        self.budget = budget
+        if budget._require_initial_control:
+            from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+            if type(control_authority) is not HostDispatchCoordinator or control_authority.budget is not budget:
+                raise ValueError('host physical admission requires its control authority')
+        self.budget, self.control_authority = budget, control_authority
         self._lock = budget._lock
 
     def begin(self, request_id):
@@ -51,6 +55,9 @@ class HostPhysicalAdmission:
             return self._begin(request_id)
 
     def _begin(self, request_id):
+        self.budget._check_config()
+        if self.budget._require_initial_control:
+            self.control_authority._require_control()
         if type(request_id) is not str or not re.fullmatch(r'[0-9a-f]{32}', request_id):
             raise ValueError('host request requires a canonical identity')
         if self.budget.state()['open_intents']:
@@ -95,19 +102,37 @@ class HostStageAdmission:
     The authoritative dispatcher owns this component. It is not a complete
     host runner, stage-result exporter or wall-clock controller.
     """
-    def __init__(self, budget, *, runner, workspace):
+    def __init__(self, budget, *, runner, workspace, control_authority=None):
         from pathlib import Path
         if not isinstance(budget, HierarchicalBudget) or budget._governed is None or \
                 set(budget.units) != {'token', 'node', 'eval_count'} or \
                 not budget.audit_governance().get('plan_ref'):
             raise ValueError('stage evaluation requires governed protected physical budget')
+        if budget._require_initial_control:
+            from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+            if type(control_authority) is not HostDispatchCoordinator or control_authority.budget is not budget:
+                raise ValueError('stage requires its original control authority and budget')
         self.budget, self.runner, self.workspace = budget, runner, Path(workspace)
+        self.control_authority = control_authority
         self._lock = budget._lock
+
+    def _require_control(self):
+        self.budget._check_config()
+        if self.budget._require_initial_control:
+            from zoo.mle_bench_lite.composed_domain import SandboxRunner
+            control = self.control_authority.control_domain
+            main_path, control_path = self.workspace.resolve(), control.workspace.resolve()
+            if type(self.runner) is not SandboxRunner or self.runner is control.runner or \
+                    self.runner.manifest_binding != control.runner.manifest_binding or \
+                    main_path == control_path or main_path in control_path.parents or control_path in main_path.parents:
+                raise ValueError('main stage sandbox differs from frozen independent control')
+            self.control_authority._require_control()
 
     def audit(self):
         """Join original stage records to the physical journal and geometry."""
         from core.composition.budget import JOURNAL_KIND
         with self._lock:
+            self._require_control()
             operations = self.budget._rebuild()[0]['operations']
             provider_records = invocation_records(self.budget.store)
             rows = list(self.budget.store.read())
@@ -205,6 +230,7 @@ class HostStageAdmission:
 
     def execute(self, request_id, program, *, stage, prior_id=None, timeout=60):
         with self._lock:
+            self._require_control()
             if type(request_id) is not str or not re.fullmatch(r'[0-9a-f]{32}', request_id) or \
                     type(program) is not str or not program.strip() or len(program.encode()) > 1024 * 1024 or \
                     type(stage) is not int or stage not in (1, 2) or \
