@@ -172,6 +172,11 @@ def test_real_upstream_migrant_roundtrips_without_weakening_lineage_checks():
     restored = snapshot.to_database()
     assert restored.get(migrant.id).to_dict() == migrant.to_dict()
     assert migrant.id in restored.islands[1]
+    compact = deepcopy(snapshot.payload)
+    for row in compact['programs']:
+        row.pop('language')
+        row.pop('metrics')
+    assert OpenEvolveDatabaseSnapshot(compact).to_database().get(migrant.id).code == source.code
     forged = deepcopy(snapshot.payload)
     next(row for row in forged['programs'] if row['id'] == migrant.id)['code'] = 'different code'
     with pytest.raises(ValueError, match='child generation'):

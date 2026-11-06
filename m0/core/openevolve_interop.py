@@ -224,8 +224,8 @@ def _validate_payload(payload: dict) -> None:
             migrant_copy = (data.get("metadata", {}).get("migrant") is True
                             and data.get("generation", 0) == source.get("generation", 0)
                             and data["code"] == source["code"]
-                            and data["language"] == source["language"]
-                            and data["metrics"] == source["metrics"])
+                            and data.get("language", "python") == source.get("language", "python")
+                            and data.get("metrics", {}) == source.get("metrics", {}))
             _require(data.get("generation", 0) > source.get("generation", 0) or migrant_copy,
                      "child generation must exceed parent generation")
     visited = set()
