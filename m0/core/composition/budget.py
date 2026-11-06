@@ -369,7 +369,7 @@ class HierarchicalBudget:
             self._commit("start", {"intent_id": intent_id, "fingerprint": fingerprint})
 
     def settle_operation(self, intent_id, actual_costs, *, measured_units, fingerprint,
-                         provider_evidence_ref=None):
+                         provider_evidence_ref=None, measurement_evidence_ref=None):
         costs = _basket(actual_costs, "actual costs", units=self.units)
         if type(measured_units) not in (list, tuple, set, frozenset) \
                 or any(type(unit) is not str or unit not in UNITS for unit in measured_units) \
@@ -381,8 +381,10 @@ class HierarchicalBudget:
             if self._governed is not None:
                 data["provider_evidence_ref"] = (_hash([]) if provider_evidence_ref is None
                                                  else provider_evidence_ref)
-            elif provider_evidence_ref is not None:
-                raise BudgetError("provider evidence references require governance")
+                if measurement_evidence_ref is not None:
+                    data["measurement_evidence_ref"] = measurement_evidence_ref
+            elif provider_evidence_ref is not None or measurement_evidence_ref is not None:
+                raise BudgetError("evidence references require governance")
             self._commit("settle", data)
 
     def invalidate_protection(self, intent_id, reason):
@@ -478,7 +480,8 @@ class HierarchicalBudget:
                     "settle": {"intent_id", "fingerprint", "actual_costs", "measured_units"}}
         if self._governed is not None:
             required["settle"].add("provider_evidence_ref")
-        if kind not in required or set(data) != required[kind]:
+        optional = {'measurement_evidence_ref'} if kind == 'settle' and self._governed is not None else set()
+        if kind not in required or set(data) not in (required[kind], required[kind] | optional):
             raise BudgetError("unknown or malformed physical operation event")
         operation = operations.get(data["intent_id"])
         if operation is None or operation["fingerprint"] != data["fingerprint"]:
@@ -506,6 +509,12 @@ class HierarchicalBudget:
                 if type(reference) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", reference) is None:
                     raise BudgetError("invalid governed provider evidence reference")
                 operation["provider_evidence_ref"] = reference
+                if 'measurement_evidence_ref' in data:
+                    measured_ref = data['measurement_evidence_ref']
+                    if operation['intent']['operation'] not in {'dev', 'dev_baseline', 'training', 'anchor', 'admission', 'final'} or \
+                            type(measured_ref) is not str or re.fullmatch(r'sha256:[0-9a-f]{64}', measured_ref) is None:
+                        raise BudgetError('invalid governed measurement evidence reference')
+                    operation['measurement_evidence_ref'] = measured_ref
             operation["status"], operation["actual_costs"] = "settled", costs
             operation["measured_units"] = coverage
             for unit, cost in costs.items():

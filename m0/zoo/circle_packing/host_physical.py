@@ -127,7 +127,7 @@ class HostStageAdmission:
                     starts[request_id] = (index, payload)
                 elif row['kind'] == 'host_stage_completed':
                     request_id = payload.get('request_id')
-                    if request_id in completed or set(payload) != {'request_id', 'fingerprint', 'result', 'result_ref'}:
+                    if request_id in completed or set(payload) != {'request_id', 'fingerprint', 'result', 'result_ref', 'evidence_ref'}:
                         raise ValueError('duplicate or invalid stage terminal')
                     completed[request_id] = (index, payload)
             if set(starts) != set(completed):
@@ -153,6 +153,8 @@ class HostStageAdmission:
                         operation['provider_evidence_ref'] != 'sha256:' + payload_digest([]) or \
                         provider_records.get(intent_id) or \
                         terminal['result_ref'] != 'sha256:' + payload_digest(result) or \
+                        terminal['evidence_ref'] != 'sha256:' + payload_digest({'start': start, 'result': result}) or \
+                        operation.get('measurement_evidence_ref') != terminal['evidence_ref'] or \
                         not positions.get(('start', intent_id), len(rows)) < start_index < terminal_index < \
                             positions.get(('settle', intent_id), -1):
                     raise ValueError('stage evidence differs from its physical operation')
@@ -191,11 +193,13 @@ class HostStageAdmission:
         operations = self.budget._rebuild()[0]['operations']
         op = operations.get(start['intent_id'])
         if first['result_ref'] != 'sha256:' + payload_digest(result) or first['fingerprint'] != start['fingerprint'] \
+                or first.get('evidence_ref') != 'sha256:' + payload_digest({'start': start, 'result': result}) \
                 or start['stage'] != 1 or start['program_ref'] != program_ref or result.get('program_ref') != program_ref \
                 or result.get('stage') != 1 or result.get('status') != 'ok' or \
                 type(result.get('metrics', {}).get('combined_score')) not in (int, float) or \
                 not math.isfinite(result['metrics']['combined_score']) or result['metrics']['combined_score'] < .5 or \
                 op is None or op['status'] != 'settled' or op['fingerprint'] != start['fingerprint'] or \
+                op.get('measurement_evidence_ref') != first['evidence_ref'] or \
                 op['actual_costs']['eval_count'] != 1:
             raise ValueError('stage one is not qualifying original measured evidence')
 
@@ -226,17 +230,20 @@ class HostStageAdmission:
                 raise ValueError('physical stage reservation must cover exactly one evaluation')
             self.budget.start_operation(receipt.intent_id, fingerprint=receipt.fingerprint)
             try:
-                self.budget.store.append('host_stage_started', {'request_id': request_id, 'stage': stage,
+                started = {'request_id': request_id, 'stage': stage,
                     'prior_id': prior_id, 'program_ref': program_ref, 'intent_id': receipt.intent_id,
-                    'fingerprint': receipt.fingerprint})
+                    'fingerprint': receipt.fingerprint}
+                self.budget.store.append('host_stage_started', started)
                 result = run_stage(program, stage=stage, runner=self.runner, workspace=self.workspace, timeout=timeout)
                 _validate_stage_result(result, stage=stage, program_ref=program_ref)
+                measured_ref = 'sha256:' + payload_digest({'start': started, 'result': result})
                 self.budget.store.append('host_stage_completed', {'request_id': request_id,
                     'fingerprint': receipt.fingerprint, 'result': result,
-                    'result_ref': 'sha256:' + payload_digest(result)})
+                    'result_ref': 'sha256:' + payload_digest(result), 'evidence_ref': measured_ref})
                 self.budget.settle_operation(receipt.intent_id, {'token': 0, 'node': 0, 'eval_count': 1},
                     measured_units=self.budget.units, fingerprint=receipt.fingerprint,
-                    provider_evidence_ref=evidence_reference(self.budget.store, receipt.intent_id))
+                    provider_evidence_ref=evidence_reference(self.budget.store, receipt.intent_id),
+                    measurement_evidence_ref=measured_ref)
                 return result
             except Exception:
                 try:

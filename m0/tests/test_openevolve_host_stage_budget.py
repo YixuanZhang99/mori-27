@@ -41,6 +41,9 @@ def test_stage_two_requires_qualifying_original_stage_and_charges_both(tmp_path,
     result = stage.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
     assert result['status'] == 'ok' and budget.audit_governance()['physical_totals']['eval_count'] == 2
     assert stage.audit()['stage_calls'] == 2
+    restored = HierarchicalBudget(budget.options, budget.stamp, budget.store, governance=budget._governed.config)
+    restored.restore_from_journal()
+    assert HostStageAdmission(restored, runner=object(), workspace=tmp_path / 'sandbox').audit()['stage_calls'] == 2
     with pytest.raises(ValueError):
         stage.execute('c' * 32, 'program', stage=2, prior_id='a' * 32)
 
@@ -75,6 +78,34 @@ def test_rehashed_forged_score_cannot_authorize_stage_two(tmp_path, monkeypatch)
                 result = row['payload']['result']
                 result['metrics']['combined_score'] = .8
                 row['payload']['result_ref'] = 'sha256:' + payload_digest(result)
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', forged)
+    with pytest.raises(ValueError):
+        host.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+    with pytest.raises(ValueError):
+        host.audit()
+
+
+def test_rehashed_different_valid_geometry_cannot_authorize_stage_two(tmp_path, monkeypatch):
+    import copy
+    from core.x1.checkpoint import payload_digest
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    import zoo.circle_packing.host_physical as module
+    budget = stage_budget(tmp_path)
+    monkeypatch.setattr(module, 'run_stage', lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    host = HostStageAdmission(budget, runner=object(), workspace=tmp_path / 'sandbox')
+    host.execute('a' * 32, 'program', stage=1)
+    original = budget.store.read
+    def forged(kind=None):
+        rows = copy.deepcopy(list(original(kind)))
+        starts = [row['payload'] for row in original('host_stage_started')]
+        for row in rows:
+            if row['kind'] == 'host_stage_completed':
+                payload = row['payload']
+                payload['result'] = fake_result('program', 1, score=.6)
+                payload['result_ref'] = 'sha256:' + payload_digest(payload['result'])
+                if 'evidence_ref' in payload:
+                    payload['evidence_ref'] = 'sha256:' + payload_digest({'start': starts[0], 'result': payload['result']})
         return iter(rows)
     monkeypatch.setattr(budget.store, 'read', forged)
     with pytest.raises(ValueError):

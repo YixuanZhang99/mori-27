@@ -82,3 +82,15 @@ def test_concurrent_host_admissions_leave_only_one_started(tmp_path):
         receipts = list(pool.map(attempt, ('a' * 32, 'b' * 32)))
     assert sum(value is not None for value in receipts) == 1
     assert len(physical.state()['open_intents']) == 1
+
+
+def test_measurement_reference_is_rejected_for_operator_settlement(tmp_path):
+    from core.budget.ledger import BudgetError
+    from zoo.circle_packing.host_physical import HostPhysicalAdmission
+    physical = budget(tmp_path)
+    receipt = HostPhysicalAdmission(physical).begin('a' * 32)
+    with pytest.raises(BudgetError):
+        physical.settle_operation(receipt.intent_id, {'token': 0, 'node': 1, 'eval_count': 0},
+            measured_units=physical.units, fingerprint=receipt.fingerprint,
+            measurement_evidence_ref='sha256:' + 'f' * 64)
+    assert receipt.intent_id in physical.state()['open_intents']
