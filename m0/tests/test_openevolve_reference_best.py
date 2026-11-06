@@ -149,3 +149,21 @@ def test_best_reconstruction_uses_original_stage_geometry_and_candidate_identity
     with pytest.raises(ValueError):
         audit_reference_best_from_physical(events, trace=trace, rows=forged, accounting=accounting,
                                            seed_sha256='1' * 64, selected_id='child')
+
+
+@pytest.mark.parametrize('status', ['timeout', 'failed_to_run'])
+def test_first_stage_failure_reconstructs_the_upstream_zero_score(status):
+    from zoo.circle_packing.stage import EVALUATOR_SHA256
+
+    request, ref = 'a' * 32, 'sha256:' + '1' * 64
+    rows = [{'kind': 'host_stage_started', 'payload': {'request_id': request, 'program_ref': ref,
+                                                       'stage': 1, 'prior_id': None}},
+            {'kind': 'host_stage_completed', 'payload': {'request_id': request, 'result': {
+                'stage': 1, 'program_ref': ref, 'evaluator_ref': 'sha256:' + EVALUATOR_SHA256,
+                'status': status, 'wall_seconds': 1.0}}}]
+    metrics = {'combined_score': 0.0, 'fixture_stage_failed': 1.0}
+    events = [record('seed', 'seed', ref, metrics, None, 'seed')]
+    result = audit_reference_best_from_physical(events, trace={'iterations': [], 'stage_bindings': []},
+        rows=rows, accounting={'iteration_accounting_complete': True, 'seed_stage_ids': [request]},
+        seed_sha256='1' * 64, selected_id='seed')
+    assert result['fitness'] == 0.0 and result['complete_run_certified'] is False
