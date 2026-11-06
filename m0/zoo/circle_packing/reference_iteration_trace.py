@@ -177,3 +177,60 @@ def audit_reference_iteration_receipts(trace, rows, *, planned_iterations):
                                        if number not in submitted]}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid reference iteration receipt evidence') from error
+
+
+def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iterations):
+    """Join uniquely occurring prompt digests to recorded provider receipts.
+
+    The caller must independently pin and verify both journals and the currency
+    bundle. Duplicate prompts or calls are reported as ambiguous, not assigned.
+    """
+    if type(trace) is not dict or type(rows) is not list or type(bundle) is not dict or \
+            type(planned_iterations) is not int or not 1 <= planned_iterations <= 6:
+        raise ValueError('reference provider audit requires recorded evidence')
+    try:
+        bindings = trace.get('prompt_bindings', [])
+        if type(bindings) is not list or len(bindings) > reference_iteration_attempt_limit(planned_iterations):
+            raise ValueError('reference prompt bindings are invalid')
+        for item in bindings:
+            if type(item) is not dict or set(item) != {'iteration', 'request_sha256'} or \
+                    type(item['iteration']) is not int or not 1 <= item['iteration'] <= planned_iterations or \
+                    type(item['request_sha256']) is not str or re.fullmatch(r'[0-9a-f]{64}', item['request_sha256']) is None:
+                raise ValueError('reference prompt binding is invalid')
+        starts = [row['payload'] for row in rows if row['kind'] == 'composed_provider_started'
+                  and row['payload']['invocation']['external_context']['lane'] == 'main']
+        completions = [row['payload'] for row in rows if row['kind'] == 'composed_provider_completed']
+        calls = bundle['calls']
+        if type(calls) is not list:
+            raise ValueError('reference provider calls are invalid')
+        outcomes = []
+        for item in bindings:
+            digest = item['request_sha256']
+            matching_bindings = [entry for entry in bindings if entry['request_sha256'] == digest]
+            matching_starts = [entry for entry in starts if entry['request_sha256'] == digest]
+            result = {'iteration': item['iteration'], 'request_sha256': digest}
+            if len(matching_bindings) != 1 or len(matching_starts) > 1:
+                result['state'] = 'ambiguous'
+            elif not matching_starts:
+                result['state'] = 'not_observed'
+            else:
+                start = matching_starts[0]
+                context = start['invocation']['external_context']
+                matched_completions = [entry for entry in completions if entry['binding'] == start['binding']]
+                matched_calls = [entry for entry in calls if entry['prepared']['context'] == context]
+                if context['argument_sha256'] != digest or len(matched_completions) != 1 or len(matched_calls) != 1:
+                    raise ValueError('reference provider start lacks one matching original receipt')
+                call = matched_calls[0]
+                call_id = call['prepared']['call_id']
+                usage = call['outcome']['usage']
+                if type(call_id) is not str or re.fullmatch(r'[0-9a-f]{64}', call_id) is None or \
+                        call['outcome']['call_id'] != call_id or type(usage) is not dict or \
+                        type(usage.get('total_tokens')) is not int or \
+                        matched_completions[0]['tokens'] != usage['total_tokens']:
+                    raise ValueError('reference provider receipt differs from its physical completion')
+                result.update(state='matched', call_id=call_id, total_tokens=usage['total_tokens'])
+            outcomes.append(result)
+        return {'schema_version': 1, 'scope': 'caller_pinned_reference_iteration_provider',
+                'performance_claim': False, 'iterations': outcomes}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid reference iteration provider evidence') from error
