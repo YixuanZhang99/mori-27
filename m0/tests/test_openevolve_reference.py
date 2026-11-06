@@ -138,11 +138,11 @@ def test_unrecordable_stage_failure_aborts_instead_of_reporting_success(tmp_path
         asyncio.run(Evaluator(config, reference_evaluator.__file__).evaluate_program(GRID, 'grid'))
 
 
-def test_actual_host_process_aborts_when_unresolved_marker_cannot_be_written(tmp_path):
+def test_actual_host_process_aborts_when_unresolved_marker_cannot_be_written(tmp_path, short_socket_dir):
     from core.llm import UsageError
     from test_openevolve_host_stage_budget import fake_result
     from zoo.circle_packing.host_transport import HostBroker
-    path = tmp_path / 'failing-stage.sock'
+    path = short_socket_dir / 'failing-stage.sock'
     output = tmp_path / 'host'
     def dispatch(request_id, argument):
         if argument.get('stage') == 1:
@@ -173,9 +173,9 @@ def test_fixture_refuses_unsanitized_worker_environment(tmp_path, monkeypatch):
     assert not (tmp_path / 'host').exists()
 
 
-def test_actual_host_worker_uses_fixture_broker_without_credentials(tmp_path):
+def test_actual_host_worker_uses_fixture_broker_without_credentials(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
-    path = tmp_path / 'fixture.sock'
+    path = short_socket_dir / 'fixture.sock'
     requests = []
     def dispatch(request_id, argument):
         requests.append(argument)

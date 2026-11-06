@@ -77,7 +77,7 @@ def test_host_refuses_underreserved_provider_before_dispatch(authority, local_en
     assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
 
 
-def test_broker_preserves_proven_zero_cost_refusal(authority, local_endpoint, tmp_path, monkeypatch):
+def test_broker_preserves_proven_zero_cost_refusal(authority, local_endpoint, tmp_path, monkeypatch, short_socket_dir):
     import asyncio
     import threading
     from types import SimpleNamespace
@@ -89,7 +89,7 @@ def test_broker_preserves_proven_zero_cost_refusal(authority, local_endpoint, tm
         raise ValueError('fixture refusal')
     monkeypatch.setattr(main, 'validate_dispatch', refuse)
     dispatch = HostDispatchCoordinator(budget, bridge, run, ready)
-    path = tmp_path / 'refused.sock'
+    path = short_socket_dir / 'refused.sock'
     with HostBroker(path, 'a' * 64, dispatch) as broker:
         thread = threading.Thread(target=broker.serve_one, daemon=True)
         thread.start()
@@ -118,7 +118,7 @@ def test_billed_provider_failure_settles_both_authorities(authority, local_endpo
     assert dispatch.audit()['currency']['protection_valid']
 
 
-def test_actual_host_worker_uses_both_real_budget_authorities(authority, local_endpoint, tmp_path):
+def test_actual_host_worker_uses_both_real_budget_authorities(authority, local_endpoint, tmp_path, short_socket_dir):
     import os
     import subprocess
     import sys
@@ -129,7 +129,7 @@ def test_actual_host_worker_uses_both_real_budget_authorities(authority, local_e
     diff = ('<<<<<<< SEARCH\n    n = 26\n=======\n'
             '    n = 26\n    # physical and currency fixture\n>>>>>>> REPLACE\n')
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
-    path = tmp_path / 'governed-host.sock'
+    path = short_socket_dir / 'governed-host.sock'
     env = {key: value for key, value in os.environ.items() if 'API_KEY' not in key}
     env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
                MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,
@@ -150,7 +150,7 @@ def test_actual_host_worker_uses_both_real_budget_authorities(authority, local_e
             assert b'fixture-only-secret' not in item.read_bytes()
 
 
-def test_actual_host_routes_provider_and_cascade_through_common_budget(authority, local_endpoint, tmp_path):
+def test_actual_host_routes_provider_and_cascade_through_common_budget(authority, local_endpoint, tmp_path, short_socket_dir):
     import os
     import subprocess
     import sys
@@ -164,7 +164,7 @@ def test_actual_host_routes_provider_and_cascade_through_common_budget(authority
             '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
             '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
-    path = tmp_path / 'all-operations.sock'
+    path = short_socket_dir / 'all-operations.sock'
     env = {key: value for key, value in os.environ.items() if 'API_KEY' not in key}
     env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
                MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,

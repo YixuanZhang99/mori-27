@@ -24,7 +24,8 @@ pytestmark = pytest.mark.linux
 
 
 @pytest.mark.parametrize('control_authority', ['locked'], indirect=True)
-def test_timed_isolated_host_routes_model_and_stages_through_authorities(control_authority, local_endpoint, tmp_path):
+def test_timed_isolated_host_routes_model_and_stages_through_authorities(control_authority, local_endpoint, tmp_path,
+                                                                         short_socket_dir):
     ledger, budget, bridge, run, ready, domain = control_authority
     frozen = domain._fixture_frozen
     if frozen:
@@ -65,8 +66,7 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
             '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
             '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
-    workspace = tmp_path / 'worker-workspace'
-    workspace.mkdir(mode=0o700)
+    workspace = short_socket_dir
     socket_path, token_path = workspace / 'broker.sock', workspace / 'token'
     token_path.write_text('a' * 64)
     token_path.chmod(0o600)

@@ -10,10 +10,11 @@ from test_openevolve_cell_worker import setup
 
 
 @pytest.mark.linux
-def test_reference_fixture_rejects_symlinked_capability_before_claim(tmp_path):
+def test_reference_fixture_rejects_symlinked_capability_before_claim(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path = workspace / 'broker.sock'
     original = workspace / 'token-original'
@@ -40,10 +41,11 @@ def test_capability_reader_rejects_nonprivate_file(tmp_path):
 
 
 @pytest.mark.linux
-def test_invalid_capability_is_rejected_before_worker_claim(tmp_path):
+def test_invalid_capability_is_rejected_before_worker_claim(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path, token = workspace / 'broker.sock', workspace / 'token'
     token.write_text('short-fixture')
@@ -58,10 +60,11 @@ def test_invalid_capability_is_rejected_before_worker_claim(tmp_path):
 
 
 @pytest.mark.linux
-def test_missing_named_entry_is_rejected_before_worker_claim(tmp_path):
+def test_missing_named_entry_is_rejected_before_worker_claim(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path, token = workspace / 'broker.sock', workspace / 'token'
     token.write_text('a' * 64)
@@ -76,10 +79,11 @@ def test_missing_named_entry_is_rejected_before_worker_claim(tmp_path):
 
 
 @pytest.mark.linux
-def test_nonempty_output_is_rejected_before_broker_probe(tmp_path):
+def test_nonempty_output_is_rejected_before_broker_probe(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path, token = workspace / 'broker.sock', workspace / 'token'
     token.write_text('a' * 64)
@@ -100,9 +104,9 @@ def test_nonempty_output_is_rejected_before_broker_probe(tmp_path):
 
 
 @pytest.mark.linux
-def test_broker_probe_checks_capability_without_dispatch(tmp_path):
+def test_broker_probe_checks_capability_without_dispatch(short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker, probe_broker
-    path = tmp_path / 'broker.sock'
+    path = short_socket_dir / 'broker.sock'
     calls = []
     with HostBroker(path, 'a' * 64, lambda *args: calls.append(args)) as broker:
         thread = threading.Thread(target=lambda: [broker.serve_one(), broker.serve_one()], daemon=True)
@@ -116,9 +120,9 @@ def test_broker_probe_checks_capability_without_dispatch(tmp_path):
 
 
 @pytest.mark.linux
-def test_probe_does_not_disclose_capability_to_another_process(tmp_path):
+def test_probe_does_not_disclose_capability_to_another_process(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import probe_broker
-    path, received = tmp_path / 'fake.sock', tmp_path / 'received'
+    path, received = short_socket_dir / 'fake.sock', tmp_path / 'received'
     script = """import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); print('ready',flush=True)
 c,_=s.accept(); data=c.recv(4096); open(sys.argv[2],'wb').write(data)
@@ -141,10 +145,11 @@ c.close(); s.close()
 
 
 @pytest.mark.linux
-def test_wrong_broker_capability_does_not_consume_cell_claim(tmp_path):
+def test_wrong_broker_capability_does_not_consume_cell_claim(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path, token = workspace / 'broker.sock', workspace / 'token'
     token.write_text('b' * 64)
@@ -162,10 +167,11 @@ def test_wrong_broker_capability_does_not_consume_cell_claim(tmp_path):
 
 
 @pytest.mark.linux
-def test_replaced_socket_is_rejected_before_capability_probe(tmp_path):
+def test_replaced_socket_is_rejected_before_capability_probe(tmp_path, short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path, token = workspace / 'broker.sock', workspace / 'token'
     token.write_text('a' * 64)

@@ -301,10 +301,11 @@ run_cell_worker(deadline, directory, workspace, ['/usr/bin/python3', '-c', "open
     assert deadline._lifecycle.ledger.cell_worker_claim('vendor-0') is not None
 
 
-def test_isolated_worker_reaches_local_broker_without_provider_key(tmp_path):
+def test_isolated_worker_reaches_local_broker_without_provider_key(tmp_path, short_socket_dir):
     from zoo.circle_packing.cell_worker import run_cell_worker
     from zoo.circle_packing.host_transport import HostBroker
-    deadline, workspace = setup(tmp_path, 30)
+    deadline, _ = setup(tmp_path, 30)
+    workspace = short_socket_dir
     workspace.chmod(0o700)
     socket_path, token_path = workspace / 'broker.sock', workspace / 'token'
     token = 'a' * 64  # Disposable fixture capability, not a provider credential.

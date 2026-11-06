@@ -195,7 +195,7 @@ def test_host_broker_stops_after_unknown_currency_usage(setup, tmp_path, monkeyp
 
 
 @pytest.mark.parametrize('setup', ['openevolve_host_loopback'], indirect=True)
-def test_actual_host_worker_routes_to_currency_bridge_over_loopback(setup, tmp_path, local_endpoint):
+def test_actual_host_worker_routes_to_currency_bridge_over_loopback(setup, tmp_path, local_endpoint, short_socket_dir):
     import os
     import subprocess
     import sys
@@ -222,7 +222,7 @@ def test_actual_host_worker_routes_to_currency_bridge_over_loopback(setup, tmp_p
             'state': None, 'observed_binding_sha256': context.adapter_binding_sha256})
         invoked.append(context)
         return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
-    path = tmp_path / 'real-host.sock'
+    path = short_socket_dir / 'real-host.sock'
     env = {key: value for key, value in os.environ.items() if 'API_KEY' not in key}
     env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
                MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,

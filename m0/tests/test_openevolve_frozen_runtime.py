@@ -229,7 +229,7 @@ def test_required_runtime_blocks_cell_until_environment_is_anchored(tmp_path):
     assert clock.remaining() > 0
 
 
-def test_named_reference_uses_the_bound_runtime_before_worker_start(tmp_path, monkeypatch):
+def test_named_reference_uses_the_bound_runtime_before_worker_start(tmp_path, monkeypatch, short_socket_dir):
     from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
     from zoo.circle_packing.host_transport import HostBroker
     from zoo.circle_packing.reference_worker import run_reference_fixture
@@ -240,8 +240,7 @@ def test_named_reference_uses_the_bound_runtime_before_worker_start(tmp_path, mo
         base_python='/usr/bin/python3.12', uv_cache=cache)
     deadline = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
                                   cell_id='vendor-0', plan_ref=ref, seconds=2700)
-    workspace = tmp_path / 'workspace'
-    workspace.mkdir(mode=0o700)
+    workspace = short_socket_dir
     token = workspace / 'token'
     token.write_text('a' * 64)
     token.chmod(0o600)
