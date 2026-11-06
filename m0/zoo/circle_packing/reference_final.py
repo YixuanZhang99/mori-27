@@ -84,6 +84,9 @@ def recalculate_reference_snapshot(view, clock, run_id, *, plan, expected_plan_r
                 'performance_claim': False, 'plan_ref': expected_plan_ref, 'run_id': run_id,
                 'selection_frozen': view.reference_selection(run_id) is not None,
                 'selected_program': selected, 'stage_request_id': request_ids[-1],
+                'physical_coverage': {'unattempted_first_stages': stage['unattempted_first_stages'],
+                                      'cascade_issues': stage['cascade_issues'],
+                                      'late_stage_count': stage['late_stage_count']},
                 'stage_evidence_ref': stage['evidence_ref'], **geometry,
                 'public_range_threshold': expected['public_range_sum_radii'],
                 'public_range_condition_met': geometry['metrics']['sum_radii'] >= expected['public_range_sum_radii']}

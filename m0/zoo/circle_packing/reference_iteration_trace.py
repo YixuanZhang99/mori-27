@@ -445,13 +445,13 @@ def summarize_reference_run_coverage(trace, receipts, provider, stages, *, plann
         raise ValueError('invalid reference run coverage evidence') from error
 
 
-def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, plan):
+def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, plan, physical_coverage):
     """Account for planned calls and stages, including the initial seed stage.
 
     Inputs must already be verified against the original worker and campaign.
     Even a complete accounting result is not a full search/replay certificate.
     """
-    if any(type(value) is not dict for value in (coverage, provider, stages, plan)) or type(rows) is not list:
+    if any(type(value) is not dict for value in (coverage, provider, stages, plan, physical_coverage)) or type(rows) is not list:
         raise ValueError('reference accounting coverage requires recorded reports')
     try:
         count, seed = plan['iterations'], plan['seed_sha256']
@@ -459,6 +459,19 @@ def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, pla
                 re.fullmatch(r'[0-9a-f]{64}', seed) is None:
             raise ValueError('reference accounting plan is invalid')
         reasons = []
+        unattempted = physical_coverage['unattempted_first_stages']
+        cascade_issues = physical_coverage['cascade_issues']
+        late_count = physical_coverage['late_stage_count']
+        if type(unattempted) is not list or type(cascade_issues) is not list or \
+                type(late_count) is not int or late_count < 0:
+            raise ValueError('reference physical cascade coverage is invalid')
+        if unattempted:
+            reasons.append('required_cascade_stage_unattempted')
+        if any(type(item) is not dict or item.get('reason') not in ('failed', 'late', 'failed_and_late')
+               for item in cascade_issues):
+            raise ValueError('reference physical cascade issue is invalid')
+        if late_count or any(item['reason'] in ('late', 'failed_and_late') for item in cascade_issues):
+            reasons.append('late_cascade_stage')
         if coverage['controller_stop_reason'] != 'iteration_limit' or \
                 coverage['controller_reported_completed_iterations'] != count:
             reasons.append('controller_did_not_report_all_iterations')
@@ -475,6 +488,8 @@ def audit_reference_accounting_coverage(coverage, provider, stages, *, rows, pla
             physical = [row for row in stage_rows if row['iteration'] == number]
             if state not in ('candidate', 'worker_error'):
                 reasons.append(f'iteration_{number}_outcome_unverified')
+            if state == 'worker_error':
+                reasons.append(f'iteration_{number}_error_phase_unverified')
             if len(calls) != 1 or calls[0]['state'] != 'matched':
                 reasons.append(f'iteration_{number}_provider_unverified')
             if state == 'candidate' and (not physical or any(row['state'] != 'matched' or

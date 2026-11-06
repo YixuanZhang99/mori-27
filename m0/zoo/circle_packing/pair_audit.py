@@ -94,7 +94,8 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                               {'schema_version': 1, 'scope': 'reference_run_coverage_unverified',
                                'performance_claim': False, 'complete_run_certified': False})
         accounting_coverage = (audit_reference_accounting_coverage(reference_coverage, reference_provider,
-                               reference_stages, rows=reference_rows, plan=plan) if reference_trace is not None and
+                               reference_stages, rows=reference_rows, plan=plan,
+                               physical_coverage=reference['physical_coverage']) if reference_trace is not None and
                                'controller_run' in reference_trace and 'request_bindings' in reference_trace and
                                'stage_bindings' in reference_trace else
                                {'schema_version': 1, 'scope': 'reference_iteration_accounting_unverified',
