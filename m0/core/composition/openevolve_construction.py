@@ -36,6 +36,7 @@ class OpenEvolveMaterializer(PromptMaterializer):
         manifest['configuration']['seed_program_ref'] = 'sha256:' + hashlib.sha256(
             self.seed_program.encode('utf-8')).hexdigest()
         manifest['configuration']['wire_format'] = 'search_replace_v1'
+        manifest['configuration']['diff_attempt_evidence_version'] = 1
         manifest['configuration']['require_bound_prompt'] = self.require_bound_prompt
         return manifest
 

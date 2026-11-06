@@ -347,6 +347,69 @@ class OpenEvolveCoordinator:
             if row['payload'].get('eligible_ids') != eligible:
                 raise ValueError('eligible parents differ from original frontier and budget')
 
+    def _diff_attempts(self, candidate_id):
+        """Derive block counts from original parent and provider receipts."""
+        import hashlib
+        from openevolve.utils.code_utils import apply_diff_blocks, extract_diffs
+        plans = [row for row in self._rows('openevolve_construction_plan') if row.get('candidate_id') == candidate_id]
+        if len(plans) != 1:
+            raise ValueError('diff counts require the original construction plan')
+        plan = plans[0]['plan']
+        parents = plan['recipe']['parent_artifacts']
+        if not parents:
+            return None
+        if len(parents) != 1 or type(parents[0].get('artifact')) is not str:
+            raise ValueError('diff counts require exactly one original parent')
+        parent = parents[0]['artifact']
+        starts = [row for row in self._rows('construction_started')
+                  if row['identity'].get('plan_ref') == plans[0]['plan_ref']
+                  and row['identity']['operation']['lane'] == 'main']
+        if len(starts) != 1:
+            raise ValueError('diff counts require the original construction start')
+        intent = starts[0]['identity']['operation']['intent_id']
+        calls = [row for row in self._rows('composed_provider_started')
+                 if row.get('invocation', {}).get('intent_id') == intent]
+        completions = self._rows('composed_provider_completed')
+        attempts = []
+        for ordinal, started in enumerate(calls):
+            if started['invocation'].get('ordinal') != ordinal:
+                raise ValueError('diff count provider ordinals differ')
+            matches = [row for row in completions if row.get('binding') == started.get('binding')]
+            if len(matches) != 1:
+                raise ValueError('diff counts require original provider completion')
+            completion = matches[0]
+            outcome = completion.get('outcome', 'returned')
+            raw = completion['result'] if outcome == 'returned' else None
+            block_count = matched_count = None
+            if raw is not None:
+                if type(raw) is not str:
+                    raise ValueError('original diff response must be text')
+                try:
+                    blocks = extract_diffs(raw)
+                    _, matched_count = apply_diff_blocks(parent, blocks)
+                    block_count = len(blocks)
+                except (TypeError, ValueError, RecursionError):
+                    pass  # An unparseable response has no defensible count.
+            attempts.append({'ordinal': ordinal, 'provider_binding': started['binding'], 'outcome': outcome,
+                'response_ref': ('sha256:' + hashlib.sha256(raw.encode('utf-8')).hexdigest() if raw is not None else None),
+                'block_count': block_count, 'matched_block_count': matched_count})
+        return {'candidate_id': candidate_id,
+                'parent_program_ref': 'sha256:' + hashlib.sha256(parent.encode('utf-8')).hexdigest(),
+                'attempts': attempts}
+
+    def _record_diff_attempts(self, candidate_id):
+        if not self.require_materializations:
+            return
+        expected = self._diff_attempts(candidate_id)
+        if expected is None:
+            return
+        rows = [row for row in self._rows('openevolve_diff_attempts') if row.get('candidate_id') == candidate_id]
+        if rows:
+            if rows != [expected]:
+                raise ValueError('diff attempt counts differ from original receipts')
+        else:
+            self.store.append('openevolve_diff_attempts', expected)
+
     def _audit(self):
         self._audit_budget_scopes()
         host_events = self._rows('openevolve_host_event')
@@ -367,6 +430,13 @@ class OpenEvolveCoordinator:
                     or row['candidate_id'] in prompts:
                 raise ValueError('invalid or duplicate original prompt record')
             prompts[row['candidate_id']] = row
+        diff_rows = self._rows('openevolve_diff_attempts')
+        diff_records = {}
+        for row in diff_rows:
+            candidate = row.get('candidate_id') if type(row) is dict else None
+            if not self.require_materializations or candidate in diff_records or row != self._diff_attempts(candidate):
+                raise ValueError('diff attempt counts differ from original receipts')
+            diff_records[candidate] = row
         for index, event in enumerate(host_events):
             args, candidate = event['args'], event['candidate_id']
             if event['kind'] == 'select':
@@ -382,6 +452,8 @@ class OpenEvolveCoordinator:
                 if item['status'] == 'ok' or item['parents'] != [selections[candidate][0]['source_candidate_id']]:
                     raise ValueError('abandonment differs from original failure evidence')
                 self._audit_failed_construction(candidate, item['cycle'])
+                if self.require_materializations and candidate not in diff_records:
+                    raise ValueError('failed candidate lacks original diff attempt counts')
                 continue
             if event['kind'] != 'register':
                 raise ValueError('unsupported original host event')
@@ -399,6 +471,8 @@ class OpenEvolveCoordinator:
                     or selections[candidate][0] != selection):
                 raise ValueError('host registration lacks original selected prompt')
             self._audit_materialization(candidate, item['cycle'])
+            if self.require_materializations and selection is not None and candidate not in diff_records:
+                raise ValueError('candidate lacks original diff attempt counts')
             seen.add(candidate)
         if set(scopes) != set(selections):
             raise ValueError('selection scope journal coverage differs')
@@ -441,6 +515,7 @@ class OpenEvolveCoordinator:
         if item['status'] != 'ok':
             raise ValueError('failed candidate cannot be registered as measured host program')
         self._audit_materialization(candidate_id, item['cycle'])
+        self._record_diff_attempts(candidate_id)
         selection = self.policy.pending_selection()
         expected_parents = [] if selection is None else [selection['source_candidate_id']]
         if item['parents'] != expected_parents:
@@ -510,6 +585,7 @@ class OpenEvolveCoordinator:
         if item['parents'] != [selection['source_candidate_id']]:
             raise ValueError('failed candidate ancestry differs from original selection')
         self._audit_failed_construction(candidate_id, item['cycle'])
+        self._record_diff_attempts(candidate_id)
         if type(reason) is not str or not reason.strip() or len(reason) > 1024:
             raise ValueError('abandonment reason must be bounded text')
         return self._commit('abandon', {'candidate_id': candidate_id, 'reason': reason})

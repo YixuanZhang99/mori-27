@@ -55,6 +55,35 @@ def test_public_framework_runs_seed_and_host_bound_mutations(tmp_path):
     assert all(set(req['vendor_messages']) == {'system', 'user'} for req in provider.requests)
 
 
+def test_partial_diff_match_counts_are_recorded_and_audited(tmp_path, monkeypatch):
+    import copy
+    import pytest
+    from zoo.circle_packing.profile import build_profile
+    class PartialProvider(FixtureProvider):
+        def __call__(self, prompt):
+            self.calls += 1
+            self.last_usage = {'total_tokens': 7}
+            return ('<<<<<<< SEARCH\n    n = 26\n=======\n    n = 26\n    # matched\n>>>>>>> REPLACE\n'
+                    '<<<<<<< SEARCH\n    never_present = 4\n=======\n    never_present = 5\n>>>>>>> REPLACE\n')
+    profile = build_profile(seed=0, iterations=1, call_token_bound=128, migration_interval=2)
+    fw = Framework.from_profile(profile, PartialProvider(),
+        CirclePackingDomain(tmp_path / 'domain', runner=SandboxRunner()),
+        LoopConfig(max_generations=1, total_budget=1000, reeval_floor=0, baseline_every=100), str(tmp_path / 'run'))
+    fw.evolve('Improve circle packing')
+    rows = [row['payload'] for row in fw.store.read('openevolve_diff_attempts')]
+    assert len(rows) == 1 and rows[0]['attempts'][0]['block_count'] == 2
+    assert rows[0]['attempts'][0]['matched_block_count'] == 1
+    coord, original = fw._composed.openevolve, fw._composed.openevolve._rows
+    def forged(kind):
+        result = copy.deepcopy(original(kind))
+        if kind == 'openevolve_diff_attempts':
+            result[0]['attempts'][0]['matched_block_count'] = 2
+        return result
+    monkeypatch.setattr(coord, '_rows', forged)
+    with pytest.raises(ValueError):
+        coord._audit()
+
+
 def test_public_framework_recorded_replay_uses_no_provider_or_evaluator_calls(tmp_path):
     from zoo.circle_packing.profile import build_profile
     profile = build_profile(seed=0, iterations=2, call_token_bound=128, migration_interval=2)
@@ -174,6 +203,9 @@ def test_framework_accounts_failed_patch_and_replays_without_external_calls(tmp_
     child = records[-1]['construction_result']
     assert child['cost']['tokens_in'] == 18
     assert [item['status'] for item in child['attempts']] == ['invalid_output', 'complete']
+    diff = list(fw.store.read('openevolve_diff_attempts'))[0]['payload']['attempts']
+    assert [item['block_count'] for item in diff] == [0, 1]
+    assert [item['matched_block_count'] for item in diff] == [0, 1]
     assert provider.requests[1]['repair_feedback']
     class ForbiddenProvider(FixtureProvider):
         def __call__(self, prompt):
@@ -235,6 +267,9 @@ def test_framework_retains_charged_exhausted_patch_failure(tmp_path):
     events = [row['payload'] for row in fw.store.read('openevolve_host_event')]
     assert events[-1]['kind'] == 'abandon'
     assert events[-1]['candidate_id'] == rows[-1]['proposal']['candidate']['id']
+    diff = list(fw.store.read('openevolve_diff_attempts'))[0]['payload']['attempts']
+    assert [item['block_count'] for item in diff] == [0, 0]
+    assert [item['matched_block_count'] for item in diff] == [0, 0]
 
 
 def test_framework_resumes_after_failed_patch_without_repeating_failed_calls(tmp_path):
