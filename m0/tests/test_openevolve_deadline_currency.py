@@ -220,3 +220,16 @@ def test_first_binding_rejects_existing_provider_start_without_fixture_rewrite(s
     with pytest.raises(ValueError, match='after work'):
         bridge.bind_cell_deadline(clock, plan=plan, expected_plan_ref='sha256:' + plan['draft_sha256'], cell_id='vendor-0')
     assert not calls and not ledger.snapshot()['pending_calls']
+
+
+def test_public_currency_audit_rejects_unconsumed_replay_suffix(setup, monkeypatch):
+    from core.llm import UsageError
+    from test_governed_cny_bridge import complete
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    complete(store)
+    monkeypatch.setattr(store, 'peek', lambda: {'kind': 'composed_provider_started', 'payload': {}}, raising=False)
+    with pytest.raises(UsageError, match='replay'):
+        bridge.audit()
+    prefix = bridge._audit_replay_prefix()
+    assert prefix['protection_valid'] and prefix['coverage_complete'] is False

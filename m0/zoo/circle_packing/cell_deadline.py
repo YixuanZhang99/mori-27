@@ -10,6 +10,7 @@ import threading
 import time
 
 from core.composition.recovery import ContinuationStore
+from core.llm import ProviderDeadlineSignal
 from core.x1.checkpoint import payload_digest
 from core.x1.store import AppendOnlyStore
 
@@ -17,7 +18,7 @@ _KIND = 'circle_cell_deadline_started'
 _OBSERVED = 'circle_cell_deadline_observed'
 
 
-class DeadlineExpired(TimeoutError):
+class DeadlineExpired(ProviderDeadlineSignal):
     """A frozen cell deadline has passed."""
 
 

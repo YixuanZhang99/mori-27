@@ -8,6 +8,7 @@ import json
 
 from core.composition.evaluation import encode_evidence, decode_evidence, validate_evidence
 from core.executor.types import EvalRequest, EvalStatus
+from core.llm import ProviderDeadlineSignal
 
 
 def final_metric_options(options):
@@ -55,13 +56,28 @@ async def finish(runtime):
         runtime.store.append('metric_final_frozen', frozen)
     outcome = {'candidate_id': runtime.incumbent, 'state': 'skipped', 'reason': 'no successful candidate'}
     if proposal:
-        receipt = runtime._reserve_physical(proposal.candidate, 'final', 'metric-final', request=request)
-        if receipt.granted:
-            evidence = await runtime._evaluate_physical(proposal, request, receipt)
-            outcome = {'candidate_id': runtime.incumbent,
-                'state': 'completed' if evidence.eval_result.status is EvalStatus.OK else 'evaluation_failed',
-                'evidence': encode_evidence(evidence)}
-        else:
+        try:
+            receipt = runtime._reserve_physical(proposal.candidate, 'final', 'metric-final', request=request)
+        except ProviderDeadlineSignal:
+            receipt = None
+            outcome['reason'] = 'cell deadline expired before final audit'
+        if receipt is not None and receipt.granted:
+            try:
+                evidence = await runtime._evaluate_physical(proposal, request, receipt)
+            except ProviderDeadlineSignal:
+                with runtime.budget._lock:
+                    operation = runtime.budget._rebuild()[0]['operations'].get(receipt.intent_id)
+                if operation is None or operation['fingerprint'] != receipt.fingerprint or \
+                        operation['status'] not in {'settled', 'released'}:
+                    raise
+                outcome['reason'] = ('final audit completed after cell deadline; score not used'
+                                     if operation['status'] == 'settled' else
+                                     'cell deadline expired before final audit started')
+            else:
+                outcome = {'candidate_id': runtime.incumbent,
+                    'state': 'completed' if evidence.eval_result.status is EvalStatus.OK else 'evaluation_failed',
+                    'evidence': encode_evidence(evidence)}
+        elif receipt is not None:
             outcome['reason'] = receipt.reason
     runtime.store.append('metric_final_completed', outcome)
     runtime._save()

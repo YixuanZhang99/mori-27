@@ -15,7 +15,8 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
 
 def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
-                   max_completion_tokens=16384, total_token_ceiling=None):
+                   max_completion_tokens=16384, total_token_ceiling=None,
+                   cell_deadline=None, draft_plan=None, expected_plan_ref=None):
     policy = ledger.manifest_binding()
     snapshot = ledger.snapshot()
     if snapshot.get('pending_calls') or snapshot.get('protection_breaches') or \
@@ -30,8 +31,22 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
     provider = fresh()
     bound = provider.governance_binding()['call_bound']['units']['token']
     profile = build_profile(seed=seed, iterations=iterations, call_token_bound=bound, migration_interval=2)
+    deadline_binding = None
+    if any(value is not None for value in (cell_deadline, draft_plan, expected_plan_ref)):
+        from zoo.circle_packing.cell_deadline import CellDeadline
+        from zoo.circle_packing.pilot_plan import validate_draft_cell
+        if type(cell_deadline) is not CellDeadline or draft_plan is None or expected_plan_ref is None:
+            raise ValueError('timed Mori setup requires clock and independently pinned draft')
+        cell_id = f'mori-{seed}'
+        binding = validate_draft_cell(ledger, draft_plan, cell_id, expected_plan_ref=expected_plan_ref)
+        if cell_deadline._lifecycle.ledger is not ledger or cell_deadline._record['cell_id'] != cell_id or \
+                cell_deadline._record['plan_ref'] != binding['plan_ref'] or \
+                cell_deadline._record['seconds'] != binding['wallclock_seconds']:
+            raise ValueError('Mori clock differs from original campaign and draft cell')
+        deadline_binding = (cell_deadline, draft_plan, expected_plan_ref, cell_id)
     registry = default_registry()
-    registry.install_external_bridge('cny_invocation_v1', lambda: CNYInvocationBridge(ledger))
+    registry.install_external_bridge('cny_invocation_v1', lambda: CNYInvocationBridge(
+        ledger, cell_deadline_binding=deadline_binding))
     registry.register('provider', 'circle-control', lambda _ctx, _opts: fresh(),
                       governance=fresh().governance_binding())
     registry.register('domain', 'circle-control', lambda ctx, _opts: CirclePackingDomain(

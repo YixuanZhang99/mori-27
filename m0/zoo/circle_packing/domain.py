@@ -39,6 +39,7 @@ class CirclePackingDomain:
         self._lock = threading.RLock()
         self._entries = {}
         self._audited = True
+        self._cell_deadline = None
         self._implementation = self._implementation_refs()
         self._runner_binding = json_copy(self.runner.manifest_binding)
         self._base_identity = _ref({'evaluator': EVALUATOR_SHA256, 'target': TARGET,
@@ -196,6 +197,12 @@ class CirclePackingDomain:
                 raise ValueError('circle checkpoint lacks matching original evidence')
             self._audited = True
 
+    def bind_cell_deadline(self, deadline):
+        from zoo.circle_packing.cell_deadline import CellDeadline
+        if type(deadline) is not CellDeadline or self._cell_deadline is not None or self._entries:
+            raise ValueError('circle deadline requires one fresh domain and clock')
+        self._cell_deadline = deadline
+
     def _evaluate_dev(self, proposal):
         with self._lock:
             if not self._audited:
@@ -203,8 +210,9 @@ class CirclePackingDomain:
             identity = self._identity(proposal)
             if identity['candidate_id'] in self._entries:
                 raise ValueError('candidate identity already has an original execution')
+            clock = {} if self._cell_deadline is None else {'deadline': self._cell_deadline}
             outcome = run_cascade(proposal.artifact, runner=self.runner, workspace=self.workspace,
-                                  timeout=self.stage_timeout)
+                                  timeout=self.stage_timeout, **clock)
             record = {'identity': identity, 'status': outcome['status'], 'stages': outcome['stages'],
                       'eval_count': outcome['eval_count'], 'wall_seconds': outcome['wall_seconds'],
                       'geometry': outcome.get('geometry'), 'geometry_ref': outcome.get('geometry_ref'),

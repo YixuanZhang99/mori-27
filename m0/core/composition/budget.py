@@ -20,6 +20,7 @@ from core.budget.ledger import BudgetError
 from core.budget.types import AccountingStamp, finite_number
 from core.composition.contracts import json_copy
 from core.executor.types import Candidate, EvalRequest, EvalStatus
+from core.llm import ProviderDeadlineSignal
 
 from core.composition.budget_contracts import UNITS, COUNTS, _canonical, _hash, _text, _quantity, _basket, _request
 
@@ -134,6 +135,34 @@ class HierarchicalBudget:
         self._data = _empty_state()
         self._seq, self._head = 0, None
         self._lock = threading.RLock()
+        self._admission_guard = None
+
+    def install_admission_guard(self, guard):
+        """Install a trusted run-scoped admission check without altering accounting."""
+        if not callable(guard):
+            raise BudgetError("physical admission guard must be callable")
+        with self._lock:
+            if self._admission_guard is not None:
+                raise BudgetError("physical admission guard is already installed")
+            self._admission_guard = guard
+
+    def _check_admission_guard(self, kind, data):
+        if self._admission_guard is None:
+            return
+        peek = getattr(self.store, "peek", None)
+        row = peek() if callable(peek) else None
+        if row is not None and row.get("kind") == JOURNAL_KIND and \
+                row.get("payload", {}).get("event") == kind and \
+                row["payload"].get("data") == data:
+            # _commit verifies and consumes the complete existing event.
+            return
+        self._admission_guard()
+
+    def check_work_eligibility(self):
+        """Recheck an installed run deadline before a measured result is used."""
+        with self._lock:
+            if self._admission_guard is not None:
+                self._admission_guard()
 
     def _check_config(self):
         current = self.options if self._governed is None else {
@@ -350,13 +379,15 @@ class HierarchicalBudget:
             fingerprint = _hash(intent)
             if intent_id in self._data["operations"]:
                 return ReservationReceipt(intent_id, "rejected_invalid", fingerprint, {}, "intent identity already used")
+            data = {"intent": intent, "fingerprint": fingerprint}
+            self._check_admission_guard("reserve", data)
             admission_state = copy.deepcopy(self._data) if self._governed is not None else self._data
             if self._governed is not None:
                 self._governed.convert(admission_state, intent)
             reason = self._insufficient(admission_state, intent)
             if reason:
                 return ReservationReceipt(intent_id, "rejected_budget", fingerprint, {}, reason)
-            self._commit("reserve", {"intent": intent, "fingerprint": fingerprint})
+            self._commit("reserve", data)
             return ReservationReceipt(intent_id, "granted", fingerprint, json_copy(intent["amounts"]))
 
     def invocation_identity(self, intent_id, *, fingerprint):
@@ -382,7 +413,20 @@ class HierarchicalBudget:
         """Optional durable call-start marker; started calls cannot be released."""
         with self._lock:
             self.pre_call_check()
-            self._commit("start", {"intent_id": intent_id, "fingerprint": fingerprint})
+            data = {"intent_id": intent_id, "fingerprint": fingerprint}
+            try:
+                self._check_admission_guard("start", data)
+            except ProviderDeadlineSignal:
+                # A newly reserved, never-started operation can be released;
+                # an existing replay suffix must instead remain untouched.
+                peek = getattr(self.store, "peek", None)
+                row = peek() if callable(peek) else None
+                operation = self._data["operations"].get(intent_id)
+                if row is None and operation is not None and operation["status"] == "reserved" \
+                        and operation["fingerprint"] == fingerprint:
+                    self.release_operation(intent_id, fingerprint=fingerprint)
+                raise
+            self._commit("start", data)
 
     def settle_operation(self, intent_id, actual_costs, *, measured_units, fingerprint,
                          provider_evidence_ref=None, measurement_evidence_ref=None):

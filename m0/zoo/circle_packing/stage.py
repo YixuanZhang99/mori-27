@@ -99,12 +99,30 @@ def run_stage(program, *, stage, runner, workspace, timeout=60):
         return result
 
 
-def run_cascade(program, *, runner, workspace, timeout=60):
-    """Run the pinned absolute .5 threshold, measuring each physical stage."""
-    first = run_stage(program, stage=1, runner=runner, workspace=workspace, timeout=timeout)
+def run_cascade(program, *, runner, workspace, timeout=60, deadline=None):
+    """Run the pinned threshold, accounting even a cutoff between stages."""
+    stage_timeout = timeout
+    if deadline is not None:
+        remaining = deadline.remaining()
+        if remaining <= 0:
+            from zoo.circle_packing.cell_deadline import DeadlineExpired
+            raise DeadlineExpired('cell deadline expired before evaluation')
+        stage_timeout = min(timeout, remaining)
+    first = run_stage(program, stage=1, runner=runner, workspace=workspace, timeout=stage_timeout)
     stages = [first]
     if first['status'] == 'ok' and first['metrics']['combined_score'] >= .5:
-        stages.append(run_stage(program, stage=2, runner=runner, workspace=workspace, timeout=timeout))
+        stage_timeout = timeout
+        if deadline is not None:
+            remaining = deadline.remaining()
+            if remaining <= 0:
+                from core.composition.evaluation import MeasuredEvaluationError
+                from core.executor.types import CostVec
+                elapsed = first['wall_seconds']
+                raise MeasuredEvaluationError('cell deadline expired between evaluation stages',
+                    CostVec(wall_seconds=elapsed, eval_count=1), ('token', 'node', 'eval_count', 'wallclock'),
+                    'split', elapsed)
+            stage_timeout = min(timeout, remaining)
+        stages.append(run_stage(program, stage=2, runner=runner, workspace=workspace, timeout=stage_timeout))
     last = stages[-1]
     result = {'status': last['status'], 'stages': stages, 'eval_count': len(stages),
               'wall_seconds': sum(row['wall_seconds'] for row in stages)}

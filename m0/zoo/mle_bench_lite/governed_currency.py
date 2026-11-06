@@ -42,13 +42,14 @@ def _sync_dir(path):
 class CNYInvocationBridge:
     """Fresh per-runtime adapter; the campaign itself remains independently shared."""
 
-    def __init__(self, ledger, *, usage_dir=None, spool_dir=None):
+    def __init__(self, ledger, *, usage_dir=None, spool_dir=None, cell_deadline_binding=None):
         self.ledger = ledger
         self._usage_dir = usage_dir
         self._spool_dir = spool_dir
         self._run = None
         self._cell_deadline = None
         self._deadline_bind_lock = threading.RLock()
+        self._initial_deadline_binding = cell_deadline_binding
 
     def bind_cell_deadline(self, deadline, *, plan, expected_plan_ref, cell_id):
         """Bind the draft's shared clock under the physical admission lock."""
@@ -271,6 +272,9 @@ class CNYInvocationBridge:
             bridge_plan_ref=_ref(existing), authority_binding=authority)
         self._ready = self._validate_ready(ready.to_dict())
         self._save('ready', ready.to_dict())
+        if self._initial_deadline_binding is not None:
+            deadline, plan, expected_plan_ref, cell_id = self._initial_deadline_binding
+            self.bind_cell_deadline(deadline, plan=plan, expected_plan_ref=expected_plan_ref, cell_id=cell_id)
         return ready
 
     def _validate_ready(self, value):
@@ -440,12 +444,12 @@ class CNYInvocationBridge:
     def invoke(self, context, args, kwargs):
         if self._run.mode != 'live':
             raise UsageError('recorded currency bridge never dispatches')
-        deadline = self.cell_deadline()
-        if deadline is not None:
-            deadline.check()
         key = self._validate_context(context)
         raw = self._run.provider_sessions[key]
         raw.last_usage = {'total_tokens': 0}
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         if context.argument_sha256 != payload_digest({'args': args, 'kwargs': kwargs}):
             raise ValueError('currency invocation argument identity changed')
         if type(args) is not tuple or len(args) != 1 or kwargs or type(args[0]) is not str:
@@ -545,6 +549,15 @@ class CNYInvocationBridge:
         if outcome.outcome == 'known_failed':
             raise RuntimeError('provider invocation failed (' + outcome.integrity_reason + ')')
         return outcome.result
+
+    def _recover_for_accounting(self, context, argument_sha256):
+        """Trusted runtime-only access to original usage, never candidate admission."""
+        return self._recover(context, argument_sha256, refusal_reason='deadline_refused')
+
+    def _check_cell_deadline(self):
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
 
     def recover(self, context, argument_sha256):
         outcome = self._recover(context, argument_sha256, refusal_reason='capacity_refused')
@@ -685,7 +698,15 @@ class CNYInvocationBridge:
                                        reason='terminal_' + terminal_ref[7:])
         self._save('terminal-' + slot_id, value)
 
-    def audit(self):
+    def _audit_replay_prefix(self):
+        return self.audit(_allow_replay_prefix=True)
+
+    def audit(self, *, _allow_replay_prefix=False):
+        replay_pending = callable(getattr(self._run.store, 'peek', None)) and self._run.store.peek() is not None
+        incomplete = self._run.mode != 'recorded' and (
+            getattr(self._run.store, 'restoring', False) or replay_pending)
+        if incomplete and not _allow_replay_prefix:
+            raise UsageError('currency audit cannot certify an unconsumed replay suffix')
         authority = self._ready.authority_binding
         evidence = self._authority.export_governance_evidence(authority['currency_run_id'],
                                                               self._ready.physical_plan_ref)
@@ -750,7 +771,8 @@ class CNYInvocationBridge:
             raise ValueError('currency authority has extra calls without physical preparation')
         # Full visibility is required for cross-authority coverage. Continuation
         # prefixes are audited again once the runtime finishes reconstruction.
-        if self._run.mode == 'recorded' or not getattr(self._run.store, 'restoring', False):
+        replay_pending = callable(getattr(self._run.store, 'peek', None)) and self._run.store.peek() is not None
+        if self._run.mode == 'recorded' or (not getattr(self._run.store, 'restoring', False) and not replay_pending):
             starts = {}
             pending = None
             for row in self._root_rows():
@@ -815,7 +837,8 @@ class CNYInvocationBridge:
                     (record['prepared']['argument'] if record['prepared']['schema_version'] == 2 else
                      json.loads(record['prepared']['wire_body'])['messages'][0]['content']
                      if record['prepared']['wire_body'] is not None else None) for record in records})
-        return {**construction, 'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
+        return {**construction, **({'coverage_complete': False} if incomplete else {}),
+            'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
             'authority': run_audit, 'invocations': len(records), 'main_currency_cap_micro_cny':
             self._ready.authority_binding['main_currency_cap_micro_cny'], 'invoice_verified': False,
             'protection_valid': audit['protection_valid'] and not integrity_violations,

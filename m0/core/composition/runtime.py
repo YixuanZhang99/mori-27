@@ -945,9 +945,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
     def _commit_cycle(self, cycle, proposal, evidence, decision, mutations, context, evidence_ref, evaluation_request):
         candidate_id = proposal.candidate.id
         public = public_projection(evidence)
-        self.store.append("composed_evidence", {"cycle": cycle, "proposal": _jsonable(proposal),
-                                                "evidence_ref": evidence_ref,
-                                                "evidence": encode_evidence(evidence)["evidence"]})
+        evidence_event = {"cycle": cycle, "proposal": _jsonable(proposal),
+                          "evidence_ref": evidence_ref, "evidence": encode_evidence(evidence)["evidence"]}
+        eligibility = getattr(self.budget, "check_work_eligibility", None)
+        if callable(eligibility):
+            eligibility()
+        self.store.append("composed_evidence", evidence_event)
         receipt = {"candidate_id": candidate_id, "incumbent": self.incumbent,
                    "evidence": _jsonable(evidence), "decision": asdict(decision)}
         # Full cost is durable evidence; decision plugins must not interpret it.

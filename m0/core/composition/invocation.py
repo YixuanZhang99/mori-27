@@ -158,6 +158,9 @@ class InvocationLifecycle:
                 raise ValueError("construction integrity failed after measured settlement") from failure
             if "node" in proposal.measured_cost_units and proposal.cost.node_count != 1:
                 raise ValueError("operator node measurement differs from the actual candidate attempt")
+            eligibility = getattr(self.budget, "check_work_eligibility", None)
+            if failure is None and callable(eligibility):
+                eligibility()
             return proposal, failure
 
     async def evaluation(self, receipt, provider, invoke, *, identity, domain, elapsed=None,
@@ -200,4 +203,7 @@ class InvocationLifecycle:
                              measured_elapsed, evaluation=True, supervised=supervised)
             if evidence.eval_result.cost.eval_count < 1:
                 raise ValueError("evaluation count is below the actual domain invocation")
+            eligibility = getattr(self.budget, "check_work_eligibility", None)
+            if callable(eligibility):
+                eligibility()
             return evidence
