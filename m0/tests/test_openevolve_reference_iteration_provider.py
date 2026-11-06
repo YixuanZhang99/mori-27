@@ -28,6 +28,8 @@ def test_unique_provider_request_is_linked_and_duplicate_prompt_is_ambiguous():
                        [{'iteration': 1, 'request_sha256': 'd' * 64}]}
     assert all(item['state'] == 'ambiguous' for item in
                audit_reference_iteration_provider(duplicate_round, rows, bundle, planned_iterations=2)['iterations'])
+    cancelled = {**trace, 'iterations': [{'iteration': 1, 'state': 'cancelled'}]}
+    assert audit_reference_iteration_provider(cancelled, rows, bundle, planned_iterations=2)['iterations'][0]['state'] == 'unverified_submission'
     altered = copy.deepcopy(bundle)
     altered['calls'][0]['outcome']['usage']['total_tokens'] = 8
     with pytest.raises(ValueError, match='provider'):

@@ -216,7 +216,7 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
             result = {'iteration': item['iteration'], 'request_sha256': digest}
             if len(matching_bindings) != 1 or len(same_iteration) != 1 or len(submissions) > 1 or len(matching_starts) > 1:
                 result['state'] = 'ambiguous'
-            elif not submissions:
+            elif not submissions or submissions[0]['state'] not in ('candidate', 'worker_error', 'no_candidate'):
                 result['state'] = 'unverified_submission'
             elif not matching_starts:
                 result['state'] = 'not_observed'
