@@ -446,9 +446,27 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
             raise ValueError('reference fixture selection lacks a unique eligible stage result')
         from zoo.circle_packing.reference_selection import read_reference_selection
         saved = read_reference_selection(workspace, selected)
-        deadline.check()
+        final_start = stage_starts[matches[0][0]]
+        request_ids = ([final_start['prior_id'], final_start['request_id']] if final_start['stage'] == 2
+                       else [final_start['request_id']])
+        with authority.budget._lock:
+            physical_rows = list(authority.budget.store.read())
+            rows_sha256 = payload_digest(physical_rows)
+            worker = ledger.cell_worker_claim(deadline._record['cell_id'])
+            if worker is None or worker['deadline_ref'] != deadline._record['record_sha256']:
+                raise ValueError('reference snapshot lacks its original worker claim')
+            run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+            def anchor(observation):
+                if not observation['eligible']:
+                    from zoo.circle_packing.cell_deadline import DeadlineExpired
+                    raise DeadlineExpired('reference physical snapshot is late')
+                value = observation['observation']
+                ledger.anchor_reference_physical_snapshot(run_id, deadline._record['cell_id'], rows_sha256,
+                    worker['worker_ref'], request_ids, value['sequence'], value['sha256'])
+            deadline.observe_and_anchor(anchor)
         return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
                 'selected_program': selected, 'stage_request_id': matches[0][0],
-                'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref']}
+                'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref'],
+                'physical_snapshot_ref': 'sha256:' + rows_sha256}
     finally:
         token_path.unlink(missing_ok=True)

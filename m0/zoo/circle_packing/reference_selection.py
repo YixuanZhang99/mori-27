@@ -224,3 +224,32 @@ def audit_recorded_reference_physical(view, clock, run_id, *, options, stamp, go
         return {**result, 'stage_eval_count': len(recorded), 'physical': physical}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid recorded physical transcript') from error
+
+
+def audit_anchored_reference_physical(view, clock, run_id, *, options, stamp, governance, rows, request_ids):
+    """Audit a host-attested prefix; a worker claim is not worker completion proof."""
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    if type(view) is not RecordedCurrencyView or not view._pinned_head or type(clock) is not RecordedCellClock:
+        raise ValueError('anchored reference audit requires a pinned campaign and recorded clock')
+    anchor = view.reference_physical_snapshot(run_id)
+    binding = view.run_deadline_binding(run_id)
+    if anchor is None or binding is None or anchor['cell_id'] != binding['cell_id'] or \
+            anchor['request_ids'] != request_ids or anchor['cell_id'] != clock._record['cell_id']:
+        raise ValueError('reference physical snapshot differs from its campaign binding')
+    RecordedCellClock(clock._evidence, view.cell_deadline_claim(anchor['cell_id']))
+    sequence = anchor['sequence']
+    observations = clock._evidence['observations']
+    if type(sequence) is not int or sequence < 1 or sequence > len(observations):
+        raise ValueError('reference physical snapshot observation is missing')
+    observation = observations[sequence - 1]
+    remaining = max(0, clock._record['seconds'] * 1_000_000_000 -
+                    (observation['observed_ns'] - clock._record['start_ns']))
+    proof = {'deadline_ref': clock._record['record_sha256'], 'observation': observation,
+             'eligible': remaining > 0, 'remaining_ns': remaining}
+    clock.verify_observation(proof)
+    if not proof['eligible'] or observation['sha256'] != anchor['observation_sha256']:
+        raise ValueError('reference physical snapshot is late or differs from its clock anchor')
+    return audit_recorded_reference_physical(view, clock, run_id, options=options, stamp=stamp,
+        governance=governance, rows=rows, expected_rows_ref='sha256:' + anchor['rows_sha256'],
+        request_ids=request_ids)

@@ -110,7 +110,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     from zoo.circle_packing.cell_deadline import RecordedCellClock
     from dataclasses import asdict
     from core.x1.checkpoint import payload_digest
-    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade, audit_recorded_reference_physical
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade, audit_anchored_reference_physical
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
     run_id = authority.dispatch.ready.authority_binding['currency_run_id']
     evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
@@ -128,12 +128,22 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert audited['metrics'] == result['selected_program']['metrics']
     assert audited['evidence_ref'] == result['stage_evidence_ref']
     rows = list(authority.budget.store.read())
-    physical_audit = audit_recorded_reference_physical(view, recorded_clock, run_id,
+    snapshot_anchor = view.reference_physical_snapshot(run_id)
+    assert snapshot_anchor['rows_sha256'] == payload_digest(rows)
+    assert result['physical_snapshot_ref'] == 'sha256:' + snapshot_anchor['rows_sha256']
+    physical_audit = audit_anchored_reference_physical(view, recorded_clock, run_id,
         options=authority.budget.options, stamp=asdict(authority.budget.stamp),
         governance=authority.budget._governed.config, rows=rows,
-        expected_rows_ref='sha256:' + payload_digest(rows), request_ids=ids)
+        request_ids=ids)
     assert physical_audit['evidence_ref'] == result['stage_evidence_ref']
     assert physical_audit['stage_eval_count'] == len(ids)
+    with pytest.raises(ValueError):
+        audit_anchored_reference_physical(view, recorded_clock, run_id,
+            options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+            governance=authority.budget._governed.config, rows=rows[:-1], request_ids=ids)
+    with pytest.raises(ValueError):
+        ledger.anchor_reference_physical_snapshot(run_id, 'vendor-0', snapshot_anchor['rows_sha256'],
+            snapshot_anchor['worker_ref'], ids, snapshot_anchor['sequence'], snapshot_anchor['observation_sha256'])
     assert len(local_endpoint.requests) == 1
     reference_limits = authority.budget.options['limits']['global']
     authority.close()

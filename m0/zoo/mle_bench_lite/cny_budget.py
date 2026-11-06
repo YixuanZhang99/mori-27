@@ -320,6 +320,36 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                 any(key[0] == run_id for key in governance['cycle_eligibility']):
             raise ValueError('empty terminal requires an original run without candidate cycles')
         governance['empty_terminals'][run_id] = {'cell_id': cell_id, 'transcript_sha256': digest}
+    elif kind == 'anchor_reference_physical_snapshot':
+        fields = {'kind', 'schema_version', 'run_id', 'cell_id', 'rows_sha256', 'worker_ref',
+                  'request_ids', 'sequence', 'observation_sha256'}
+        if set(event) != fields:
+            raise ValueError('reference physical snapshot has invalid fields')
+        run_id, cell_id = _sha(event['run_id']), _identifier(event['cell_id'], 'cell identity')
+        rows_sha256, worker_ref = _sha(event['rows_sha256']), _sha(event['worker_ref'])
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        requests = event['request_ids']
+        if type(requests) is not list or len(requests) not in (1, 2) or any(
+                type(item) is not str or re.fullmatch(r'[0-9a-f]{32}', item) is None for item in requests) or \
+                len(set(requests)) != len(requests):
+            raise ValueError('reference physical snapshot has invalid stage identities')
+        authority = governance['reference_authority_claims'].get(cell_id)
+        worker = governance['worker_claims'].get(cell_id)
+        clock = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        if pending is not None or authority is None or not authority['work_started'] or \
+                authority['currency_run_id'] != run_id or worker is None or worker['worker_ref'] != worker_ref or \
+                clock is None or worker['deadline_ref'] != clock['record_sha256'] or binding is None or \
+                binding['cell_id'] != cell_id or binding['deadline_ref'] != clock['record_sha256'] or \
+                clock['observation_sequence'] != sequence or clock['observation_sha256'] != digest or \
+                run_id in governance['reference_physical_snapshots'] or any(
+                    governance['stage_eligibility'].get((run_id, item), {}).get('cell_id') != cell_id
+                    for item in requests):
+            raise ValueError('reference physical snapshot lacks its original worker, stages or clock')
+        governance['reference_physical_snapshots'][run_id] = {
+            'cell_id': cell_id, 'rows_sha256': rows_sha256, 'worker_ref': worker_ref,
+            'request_ids': list(requests), 'sequence': sequence, 'observation_sha256': digest}
     elif kind == 'claim_reference_authority':
         if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'authority_ref',
                           'currency_run_id', 'initial_budget_ref'}:
@@ -490,7 +520,8 @@ def _reduce_history(policies, events, heads):
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
-                  "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {}}
+                  "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
+                  "reference_physical_snapshots": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -878,6 +909,20 @@ class CampaignBudget:
         with self._transaction() as (_db, _policy, state):
             value = state['governance']['reference_authority_claims'].get(cell_id)
             return dict(value) if value is not None else None
+
+    def anchor_reference_physical_snapshot(self, run_id, cell_id, rows_sha256, worker_ref,
+                                           request_ids, sequence, observation_sha256):
+        """Record a trusted host assertion, not proof of worker termination."""
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_reference_physical_snapshot', 'schema_version': 2,
+                'run_id': run_id, 'cell_id': cell_id, 'rows_sha256': rows_sha256, 'worker_ref': worker_ref,
+                'request_ids': request_ids, 'sequence': sequence, 'observation_sha256': observation_sha256})
+
+    def reference_physical_snapshot(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_physical_snapshots'].get(run_id)
+            return json.loads(json.dumps(value)) if value is not None else None
 
     def start_reference_authority_work(self, cell_id, authority_ref):
         _identifier(cell_id, 'cell identity')

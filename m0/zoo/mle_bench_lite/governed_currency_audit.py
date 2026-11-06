@@ -152,6 +152,11 @@ class RecordedCurrencyView:
         value = self._governance()['stage_eligibility'].get((run_id, request_id))
         return dict(value) if value is not None else None
 
+    def reference_physical_snapshot(self, run_id):
+        self.run_deadline_binding(run_id)
+        value = self._governance()['reference_physical_snapshots'].get(run_id)
+        return json.loads(json.dumps(value)) if value is not None else None
+
     def cycle_eligibility(self, run_id, cycle_key):
         _sha(cycle_key)
         self.run_deadline_binding(run_id)

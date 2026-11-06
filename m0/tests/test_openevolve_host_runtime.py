@@ -53,6 +53,43 @@ def test_reference_authorities_bind_frozen_plan_budget_clock_and_campaign(tmp_pa
     assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
 
 
+def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path, local_endpoint, monkeypatch):
+    import asyncio
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    try:
+        ledger, clock = options['ledger'], options['deadline']
+        monkeypatch.setattr('zoo.circle_packing.stage.run_stage',
+                            lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+        assert asyncio.run(authority.control.execute('control-0000'))['status'] == 'evaluated'
+        monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                            lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+        authority.stages.execute('a' * 32, 'program', stage=1)
+        worker_ref, rows_sha = 'b' * 64, 'c' * 64
+        ledger.claim_cell_worker('vendor-0', clock._record['record_sha256'], worker_ref)
+        run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+        def anchor(worker, requests):
+            def record(observation):
+                value = observation['observation']
+                ledger.anchor_reference_physical_snapshot(run_id, 'vendor-0', rows_sha, worker,
+                    requests, value['sequence'], value['sha256'])
+            clock.observe_and_anchor(record)
+        with pytest.raises(ValueError):
+            anchor('d' * 64, ['a' * 32])
+        with pytest.raises(ValueError):
+            anchor(worker_ref, ['e' * 32])
+        with pytest.raises(ValueError):
+            anchor(worker_ref, ['a' * 32, 'a' * 32])
+        anchor(worker_ref, ['a' * 32])
+        assert ledger.reference_physical_snapshot(run_id)['rows_sha256'] == rows_sha
+        with pytest.raises(ValueError):
+            anchor(worker_ref, ['a' * 32])
+    finally:
+        authority.close()
+
+
 def test_reference_authorities_reject_mismatched_cell_before_protection(tmp_path, local_endpoint):
     from zoo.circle_packing.host_runtime import build_reference_authorities
     ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
