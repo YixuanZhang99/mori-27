@@ -199,6 +199,21 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if claim is None or sequence != claim["observation_sequence"] + 1 or previous != claim["observation_sha256"]:
             raise ValueError("cell deadline observation anchor is not consecutive")
         claim.update(observation_sequence=sequence, observation_sha256=digest)
+    elif kind == "bind_run_deadline":
+        if set(event) != {"kind", "schema_version", "run_id", "cell_id", "plan_ref", "deadline_ref"}:
+            raise ValueError("run deadline binding has invalid fields")
+        run_id = _sha(event["run_id"])
+        _run(governance, run_id)
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        claim = governance["cell_claims"].get(cell_id)
+        value = {"cell_id": cell_id, "plan_ref": _plan_ref(event["plan_ref"]),
+                 "deadline_ref": _sha(event["deadline_ref"])}
+        if claim is None or claim["plan_ref"] != value["plan_ref"] or \
+                claim["record_sha256"] != value["deadline_ref"] or \
+                run_id in governance["deadline_bindings"] or \
+                any(operation.get("run_id") == run_id for operation in operations.values()):
+            raise ValueError("run deadline must bind the original cell before paid work")
+        governance["deadline_bindings"][run_id] = value
     elif kind == "protect_run":
         if set(event) != {"kind", "schema_version", "run_id", "plan_ref", "obligations"}:
             raise ValueError("currency protection event has invalid fields")
@@ -310,7 +325,7 @@ def _reduce_history(policies, events, heads):
     if limit > 200000000:
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
-    governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {}}
+    governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {}, "deadline_bindings": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -575,6 +590,27 @@ class CampaignBudget:
         _identifier(cell_id, "cell identity")
         with self._transaction() as (_db, _policy, state):
             value = state["governance"]["cell_claims"].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def bind_run_deadline(self, run_id, cell_id, plan_ref, deadline_ref):
+        _sha(run_id)
+        _identifier(cell_id, "cell identity")
+        _plan_ref(plan_ref)
+        _sha(deadline_ref)
+        value = {"cell_id": cell_id, "plan_ref": plan_ref, "deadline_ref": deadline_ref}
+        with self._transaction() as (db, _policy, state):
+            existing = state["governance"]["deadline_bindings"].get(run_id)
+            if existing is not None:
+                if existing != value:
+                    raise ValueError("run deadline binding cannot change")
+                return
+            self._append(db, state, {"kind": "bind_run_deadline", "schema_version": 2,
+                                    "run_id": run_id, **value})
+
+    def run_deadline_binding(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["deadline_bindings"].get(run_id)
             return dict(value) if value is not None else None
 
     def protect_run(self, run_id, plan_ref, obligations):

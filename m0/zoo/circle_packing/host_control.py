@@ -298,7 +298,13 @@ class HostSeedControl:
                 raise ValueError('control is already running')
             self._running = True
             try:
-                return await self._execute(slot_id)
+                deadline = self.bridge.cell_deadline()
+                if deadline is not None:
+                    deadline.check()
+                result = await self._execute(slot_id)
+                if deadline is not None:
+                    deadline.check()
+                return result
             finally:
                 self._running = False
 

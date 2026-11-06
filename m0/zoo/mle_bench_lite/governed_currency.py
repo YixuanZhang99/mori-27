@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import threading
 import uuid
 
 from core.composition.external_provider import (
@@ -46,6 +47,71 @@ class CNYInvocationBridge:
         self._usage_dir = usage_dir
         self._spool_dir = spool_dir
         self._run = None
+        self._cell_deadline = None
+        self._deadline_bind_lock = threading.RLock()
+
+    def bind_cell_deadline(self, deadline, *, plan, expected_plan_ref, cell_id):
+        """Bind the draft's shared clock under the physical admission lock."""
+        owner = getattr(getattr(self._run, 'physical_identity_lookup', None), '__self__', None)
+        lock = getattr(owner, '_lock', self._deadline_bind_lock)
+        with lock:
+            return self._bind_cell_deadline(deadline, plan=plan, expected_plan_ref=expected_plan_ref, cell_id=cell_id)
+
+    def _bind_cell_deadline(self, deadline, *, plan, expected_plan_ref, cell_id):
+        from zoo.circle_packing.cell_deadline import CellDeadline
+        from zoo.circle_packing.pilot_plan import validate_draft_cell
+        if self._run is None or self._run.mode != 'live' or self._cell_deadline is not None or \
+                type(deadline) is not CellDeadline or deadline._lifecycle.ledger is not self.ledger:
+            raise ValueError('cell deadline must share the original live currency authority')
+        binding = validate_draft_cell(self.ledger, plan, cell_id, expected_plan_ref=expected_plan_ref)
+        record = deadline._record
+        if record['cell_id'] != binding['cell_id'] or record['plan_ref'] != binding['plan_ref'] or \
+                record['seconds'] != binding['wallclock_seconds']:
+            raise ValueError('cell deadline differs from the frozen draft')
+        fixed = {'schema_version': 1, 'logical_run_id': self._run.logical_run_id,
+                 'campaign_id': binding['campaign_id'], 'cell_id': cell_id,
+                 'plan_ref': binding['plan_ref'], 'deadline_ref': record['record_sha256']}
+        existing = self._load('cell-deadline-binding')
+        run_id = self._ready.authority_binding['currency_run_id']
+        anchored = self.ledger.run_deadline_binding(run_id)
+        proof = {'cell_id': cell_id, 'plan_ref': binding['plan_ref'], 'deadline_ref': record['record_sha256']}
+        if existing is None:
+            if anchored is not None:
+                if anchored != proof:
+                    raise ValueError('cell deadline differs from the campaign binding')
+                deadline.remaining()  # Reconstruct only from the original anchored clock.
+            else:
+                rows = list(self._run.store.read())
+                if self._records() or any(row['kind'] in {'host_stage_started', 'governed_control_started',
+                        'composed_provider_started'} or row['kind'] == 'hierarchical_budget' and
+                        row['payload'].get('event') == 'reserve' for row in rows):
+                    raise ValueError('cell deadline cannot be first bound after work')
+                deadline.check()
+                self.ledger.bind_run_deadline(run_id, **proof)
+            self._save('cell-deadline-binding', fixed)
+        elif existing != fixed or anchored != proof:
+            raise ValueError('cell deadline differs from its durable binding')
+        else:
+            deadline.remaining()  # Validate original identity even after expiry.
+        self._cell_deadline = deadline
+
+    def cell_deadline(self):
+        """Fail closed when a previously bound live clock is absent or changed."""
+        if self._run is None or self._run.mode != 'live':
+            return None
+        fixed = self._load('cell-deadline-binding')
+        deadline = self._cell_deadline
+        anchored = self.ledger.run_deadline_binding(self._ready.authority_binding['currency_run_id'])
+        if fixed is None and deadline is None and anchored is None:
+            return None
+        if fixed is None or deadline is None or anchored is None or deadline._lifecycle.ledger is not self.ledger or \
+                anchored != {'cell_id': deadline._record['cell_id'], 'plan_ref': deadline._record['plan_ref'],
+                             'deadline_ref': deadline._record['record_sha256']} or fixed != {'schema_version': 1, 'logical_run_id': self._run.logical_run_id,
+                          'campaign_id': deadline._lifecycle.campaign_id,
+                          'cell_id': deadline._record['cell_id'], 'plan_ref': deadline._record['plan_ref'],
+                          'deadline_ref': deadline._record['record_sha256']}:
+            raise UsageError('durable cell deadline binding is missing or changed')
+        return deadline
 
     def _load(self, name):
         path = self._spool / (name + '.json')
@@ -121,6 +187,10 @@ class CNYInvocationBridge:
             self._authority = RecordedCurrencyView(bundle['currency_evidence'],
                 expected_run_id=authority['currency_run_id'], expected_plan_ref=self._ready.physical_plan_ref,
                 expected_policy_sha256=authority['policy_sha256'])
+            for row in bundle['currency_evidence']['events']:
+                event = json.loads(row['payload'])
+                if event.get('kind') == 'bind_run_deadline' and event.get('run_id') == authority['currency_run_id']:
+                    raise UsageError('deadline-bound replay requires recorded eligibility evidence')
             if self.audit()['unknown_cost_calls']:
                 raise UsageError('recorded currency proof contains unresolved provider usage')
             return self._ready
@@ -370,6 +440,9 @@ class CNYInvocationBridge:
     def invoke(self, context, args, kwargs):
         if self._run.mode != 'live':
             raise UsageError('recorded currency bridge never dispatches')
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         key = self._validate_context(context)
         raw = self._run.provider_sessions[key]
         raw.last_usage = {'total_tokens': 0}
@@ -440,7 +513,13 @@ class CNYInvocationBridge:
             outcome = self._outcome(prepared, None, 'not_admitted', 'capacity_refused')
             self._save(name + '.outcome', outcome.to_dict())
             raise ProviderBudgetExhausted('currency capacity refused before dispatch')
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         self._save(name + '.dispatch', {'call_id': prepared['call_id']})
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         raw.last_usage = None
         response = (raw.perform_request(body, prompt=prepared['argument']) if prepared['schema_version'] == 2
                     else raw.perform_request(body)).to_dict()
@@ -458,6 +537,9 @@ class CNYInvocationBridge:
             response['provider_state_valid'] = False
         self._save(name + '.response', response)
         outcome = self._settle_response(prepared, response)
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         if outcome.outcome == 'unknown':
             raise UsageError('provider outcome cannot establish priced currency usage')
         if outcome.outcome == 'known_failed':
@@ -465,7 +547,11 @@ class CNYInvocationBridge:
         return outcome.result
 
     def recover(self, context, argument_sha256):
-        return self._recover(context, argument_sha256, refusal_reason='capacity_refused')
+        outcome = self._recover(context, argument_sha256, refusal_reason='capacity_refused')
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
+        return outcome
 
     def _recover(self, context, argument_sha256, *, refusal_reason):
         self._validate_context(context, physical=self._run.mode == 'live', admission=False)
@@ -506,7 +592,7 @@ class CNYInvocationBridge:
             if record['response'] is not None:
                 raise ValueError('provider response has no currency reservation')
             reason = record['outcome'].get('integrity_reason') if record['outcome'] else refusal_reason
-            if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused'}:
+            if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused', 'deadline_refused'}:
                 raise ValueError('unknown pre-admission refusal proof category')
             outcome = self._outcome(prepared, None, 'not_admitted', reason)
             if record['outcome'] is not None and record['outcome'] != outcome.to_dict():
@@ -630,7 +716,7 @@ class CNYInvocationBridge:
                 if response is not None or stored is None:
                     raise ValueError('unadmitted currency call lacks known refusal proof')
                 reason = stored.get('integrity_reason')
-                if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused'}:
+                if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused', 'deadline_refused'}:
                     raise ValueError('unknown pre-admission refusal proof category')
                 expected = self._outcome(prepared, None, 'not_admitted', reason)
             else:
@@ -812,6 +898,9 @@ class CNYInvocationBridge:
                 raise ValueError('currency terminal differs from authoritative root journal')
 
     def replay_bundle(self):
+        if self._run.mode == 'live' and self.ledger.run_deadline_binding(
+                self._ready.authority_binding['currency_run_id']) is not None:
+            raise UsageError('deadline-bound replay requires recorded eligibility evidence')
         if self._run.mode == 'recorded':
             self.audit()
             return _copy(self._bundle)

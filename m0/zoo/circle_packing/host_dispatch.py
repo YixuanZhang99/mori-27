@@ -122,6 +122,9 @@ class HostDispatchCoordinator:
         args, kwargs = (prompt,), {}
         with self.budget._lock:
             self._require_control()
+            deadline = self.bridge.cell_deadline()
+            if deadline is not None:
+                deadline.check()
             receipt = self.physical.begin(request_id)
         try:
             identity = self.budget.invocation_identity(receipt.intent_id, fingerprint=receipt.fingerprint)
@@ -142,15 +145,21 @@ class HostDispatchCoordinator:
             binding = payload_digest({'request_sha256': context.argument_sha256, 'invocation': invocation})
             self.store.append('composed_provider_started', {'binding': binding,
                 'request_sha256': context.argument_sha256, 'invocation': invocation})
-            invoked, invoked_result = False, None
+            from zoo.circle_packing.cell_deadline import DeadlineExpired
+            invoked, invoked_result, deadline_expired = False, None, False
             try:
                 invoked_result = self.bridge.invoke(context, args, kwargs)
                 invoked = True
+            except DeadlineExpired:
+                deadline_expired = True
             except Exception:
                 # Only the authority's durable outcome can distinguish a known
                 # bill/refusal from an unresolved provider operation.
                 pass
-            outcome = self.bridge.recover(context, context.argument_sha256)
+            # Trusted recovery accounts the original call before its deadline
+            # is rechecked; a timed-out pre-admission refusal is not a budget refusal.
+            reason = 'deadline_refused' if deadline_expired else 'capacity_refused'
+            outcome = self.bridge._recover(context, context.argument_sha256, refusal_reason=reason)
             if invoked and (outcome.outcome != 'returned' or invoked_result != outcome.result):
                 raise UsageError('host response differs from durable currency outcome')
             if outcome.outcome == 'unknown' or outcome.usage is None:
@@ -171,7 +180,7 @@ class HostDispatchCoordinator:
                 completion['outcome'] = receipt_outcome
             self.store.append('composed_provider_completed', completion)
             self.physical.settle(receipt, tokens=outcome.usage['total_tokens'])
-            return {'state': state, 'result': outcome.result if state == 'ok' else None, 'usage': outcome.usage}
+            public_reply = {'state': state, 'result': outcome.result if state == 'ok' else None, 'usage': outcome.usage}
         except Exception:
             try:
                 if receipt.intent_id in self.budget.state()['open_intents']:
@@ -180,3 +189,7 @@ class HostDispatchCoordinator:
             except Exception:
                 pass
             raise UsageError('host dispatch is unresolved or could not be proven') from None
+        deadline = self.bridge.cell_deadline()
+        if deadline is not None:
+            deadline.check()
+        return public_reply

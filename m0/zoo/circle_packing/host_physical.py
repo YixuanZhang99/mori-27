@@ -231,6 +231,9 @@ class HostStageAdmission:
     def execute(self, request_id, program, *, stage, prior_id=None, timeout=60):
         with self._lock:
             self._require_control()
+            deadline = self.control_authority.bridge.cell_deadline() if self.control_authority is not None else None
+            if deadline is not None:
+                deadline.check()
             if type(request_id) is not str or not re.fullmatch(r'[0-9a-f]{32}', request_id) or \
                     type(program) is not str or not program.strip() or len(program.encode()) > 1024 * 1024 or \
                     type(stage) is not int or stage not in (1, 2) or \
@@ -260,6 +263,12 @@ class HostStageAdmission:
                     'prior_id': prior_id, 'program_ref': program_ref, 'intent_id': receipt.intent_id,
                     'fingerprint': receipt.fingerprint}
                 self.budget.store.append('host_stage_started', started)
+                if deadline is not None:
+                    remaining = deadline.remaining()
+                    if remaining <= 0:
+                        from zoo.circle_packing.cell_deadline import DeadlineExpired
+                        raise DeadlineExpired('cell deadline expired before stage execution')
+                    timeout = min(timeout, remaining)
                 result = run_stage(program, stage=stage, runner=self.runner, workspace=self.workspace, timeout=timeout)
                 _validate_stage_result(result, stage=stage, program_ref=program_ref)
                 measured_ref = 'sha256:' + payload_digest({'start': started, 'result': result})
@@ -270,6 +279,8 @@ class HostStageAdmission:
                     measured_units=self.budget.units, fingerprint=receipt.fingerprint,
                     provider_evidence_ref=evidence_reference(self.budget.store, receipt.intent_id),
                     measurement_evidence_ref=measured_ref)
+                if deadline is not None:
+                    deadline.check()
                 return result
             except Exception:
                 try:

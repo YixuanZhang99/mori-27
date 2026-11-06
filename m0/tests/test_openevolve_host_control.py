@@ -613,3 +613,31 @@ def test_measured_control_failure_recovers_invalidation(control_authority, monke
     assert audit['slots']['control-0000']['status'] == 'failed'
     assert not audit['protection_valid'] and audit['physical_totals']['eval_count'] == 1
     assert budget.state()['initial_control_ready'] is None
+
+
+def test_deadline_binding_serializes_with_control_reservation(control_authority, tmp_path, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from core.executor.types import Candidate
+    from test_openevolve_deadline_currency import _bound_clock
+    ledger, budget, bridge, run, ready, domain = control_authority
+    entered, release, attempted = threading.Event(), threading.Event(), threading.Event()
+    original = bridge._records
+    def delayed_records():
+        entered.set()
+        assert release.wait(5)
+        return original()
+    monkeypatch.setattr(bridge, '_records', delayed_records)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        binding = pool.submit(_bound_clock, ledger, bridge, tmp_path, monkeypatch)
+        assert entered.wait(5)
+        def reserve():
+            attempted.set()
+            return budget.reserve_control_operation('control-0000', 'operator', Candidate('control'))
+        reservation = pool.submit(reserve)
+        assert attempted.wait(5)
+        assert not release.wait(.1)
+        assert not reservation.done()
+        release.set()
+        binding.result(timeout=10)
+        assert reservation.result(timeout=10).granted
