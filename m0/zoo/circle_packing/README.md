@@ -213,6 +213,12 @@ gate only with a disposable campaign, fake key and blocked external network.
 existing one-claim process journal and original deadline. The gate remains
 closed in both supervisor and worker, so this wiring does not enable a paid
 run or certify termination of every descendant.
+The live supervisor now requires a writable delegated cgroup v2 and places its
+trusted controller in a fresh child group before executing it. On return it
+kills remaining members and requires the kernel to report the group empty.
+This does not yet verify supervisor-crash recovery or protect against a process
+that can itself write the delegated cgroup; candidate sandboxing and the
+closed pilot gate remain necessary.
 `verification/test_mori_live_preparation.py` exercises the latter composition
 with a disposable unmarked ledger and a fake key. It forbids provider and
 sandbox execution and checks that no calls or charges occurred. This is a

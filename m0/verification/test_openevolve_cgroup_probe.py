@@ -56,3 +56,29 @@ def test_delegated_cgroup_kills_detached_descendant_and_becomes_empty():
             while 'populated 0' not in (group / 'cgroup.events').read_text() and time.monotonic() < deadline:
                 time.sleep(.02)
             group.rmdir()
+
+
+@pytest.mark.linux
+def test_cell_containment_stops_detached_child_after_controller_exits():
+    from zoo.circle_packing.cell_containment import contained_command, delegated_cell_group
+    membership = Path('/proc/self/cgroup').read_text().strip().splitlines()
+    v2 = [row[3:] for row in membership if row.startswith('0::/')]
+    if len(v2) != 1 or not os.access(Path('/sys/fs/cgroup') / v2[0].lstrip('/'), os.W_OK):
+        pytest.skip('run inside a writable delegated cgroup-v2 scope')
+    script = ("import os,time; p=os.fork(); "
+              "(os.setsid(), print('ready',flush=True), time.sleep(60), os._exit(0)) "
+              "if p==0 else time.sleep(.5)")
+    with delegated_cell_group() as group:
+        child = subprocess.Popen(contained_command(group, [sys.executable, '-c', script]),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={'PATH': '/usr/bin:/bin'})
+        try:
+            assert select.select([child.stdout], [], [], 10)[0] and child.stdout.readline().strip() == 'ready'
+            assert child.wait(timeout=10) == 0
+            assert 'populated 1' in (group / 'cgroup.events').read_text().splitlines()
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+            child.stdout.close()
+            child.stderr.close()
+    assert not group.exists()

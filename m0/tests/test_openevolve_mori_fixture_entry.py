@@ -159,6 +159,7 @@ def test_live_supervisor_closed_gate_does_not_claim_or_create_files(tmp_path):
 
 @pytest.mark.linux
 def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypatch):
+    from contextlib import nullcontext
     from core.composition.recovery import ContinuationStore
     from core.executor.process import ProcessJournal
     from test_governed_cny_framework import campaign_fixture
@@ -176,6 +177,8 @@ def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypat
            'source': str(source), 'runtime': str(runtime), 'output': str(tmp_path / 'output'),
            'campaign_id': policy['campaign_id'], 'base_url': policy['provider_base_url'], 'ref': ref}
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.cell_containment.delegated_cell_group',
+                        lambda: nullcontext(tmp_path / 'test-cgroup'))
     monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
                         lambda *a, **k: {'campaign_id': policy['campaign_id'], 'wallclock_seconds': 30})
     monkeypatch.setattr('zoo.circle_packing.frozen_source.verify_frozen_source', lambda *a, **k: None)

@@ -43,6 +43,7 @@ def prepared_cell(tmp_path, request):
         # A separate, disposable source commit opens the gate only for this
         # fake-transport test. Production source and the user's key are untouched.
         fake = '''    import json as test_json, socket as test_socket, urllib.request as test_request
+    assert '/mori-cell-' in open('/proc/self/cgroup').read(), 'worker was not contained before search'
     def no_network(*args, **kwargs):
         raise AssertionError('test forbids network connections')
     test_socket.socket.connect = no_network

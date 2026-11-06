@@ -44,11 +44,14 @@ def launch_live_controller(config, *, deadline, directory, api_key):
     ledger = CampaignBudget(config['ledger'])
     if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
         raise ValueError('live controller requires its original non-fixture provider')
-    return _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
-                              entry='zoo.circle_packing.mori_live_worker', api_key=api_key)
+    from zoo.circle_packing.cell_containment import delegated_cell_group
+    with delegated_cell_group() as group:
+        return _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
+                                  entry='zoo.circle_packing.mori_live_worker', api_key=api_key,
+                                  containment_group=group)
 
 
-def _launch_controller(config, *, ledger, deadline, directory, entry, api_key):
+def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, containment_group=None):
     if type(deadline) is not CellDeadline or deadline._lifecycle.ledger.path.resolve() != ledger.path.resolve():
         raise ValueError('controller requires the original campaign cell deadline')
     record = deadline._record
@@ -84,9 +87,12 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key):
     fd = os.open(setup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w', encoding='utf-8') as stream:
         json.dump(config, stream, sort_keys=True, allow_nan=False)
-    worker_ref = payload_digest({'schema_version': 1, 'cell_id': record['cell_id'],
+    worker_binding = {'schema_version': 1, 'cell_id': record['cell_id'],
         'deadline_ref': record['record_sha256'], 'config_sha256': payload_digest(config),
-        'directory': str(root), 'entry': entry})
+        'directory': str(root), 'entry': entry}
+    if containment_group is not None:
+        worker_binding['containment_group'] = str(containment_group)
+    worker_ref = payload_digest(worker_binding)
     ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], worker_ref)
     remaining = deadline.remaining()
     if remaining <= 0:
@@ -95,8 +101,12 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key):
     env = {'PATH': child_path, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
     if api_key is not None:
         env['DEEPSEEK_API_KEY'] = api_key
+    command = [str(runtime / 'bin' / 'python'), '-m', entry, str(setup)]
+    if containment_group is not None:
+        from zoo.circle_packing.cell_containment import contained_command
+        command = contained_command(containment_group, command)
     process, execution = journal.launch(
-        [str(runtime / 'bin' / 'python'), '-m', entry, str(setup)], root, env,
+        command, root, env,
         remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}, die_with_parent=True,
         absolute_deadline={'boot_id': record['boot_id'],
             'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})
