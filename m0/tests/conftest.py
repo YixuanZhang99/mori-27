@@ -53,6 +53,10 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_openevolve_runner.py": {
+        "test_default_cli_runs_without_credentials_or_external_network",
+        "test_fixture_terminal_recovery_replays_without_new_calls",
+    },
     "test_funsearch_sandbox_framework.py": {
         "test_funsearch_uses_sandboxed_worktree_and_replays_without_workers",
     },
