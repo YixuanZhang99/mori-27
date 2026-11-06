@@ -366,15 +366,24 @@ class ContinuationStore(AppendOnlyStore):
             for row in self.rows[self.cursor:]:
                 if self.external(row["kind"]) or self._diagnostic(row):
                     continue
-                if row["kind"] in {"composed_provider_started", "composed_provider_completed"}:
+                if row["kind"] in {"composed_provider_started", "composed_provider_completed",
+                                    "composed_provider_deadline_expired"}:
                     continue
                 if row["kind"] == "construction_outcome":
                     terminal = row["payload"]
                 break
         if terminal is not None:
-            while self.peek() is not None and self.peek()["kind"] == "composed_provider_started":
-                self._adopt_nested_provider(provider)
+            deadline_expired = False
+            try:
+                while self.peek() is not None and self.peek()["kind"] == "composed_provider_started":
+                    self._adopt_nested_provider(provider)
+            except ProviderDeadlineExpired:
+                deadline_expired = True
             result = decode(terminal)
+            if deadline_expired:
+                from core.composition.contracts import OperatorBudgetExhausted
+                if not isinstance(result, OperatorBudgetExhausted):
+                    raise ValueError('recorded deadline differs from construction outcome')
             self.append("construction_outcome", terminal)
             provider.last_usage = {"total_tokens": 0}
         else:

@@ -49,6 +49,50 @@ def test_observation_returns_campaign_anchored_eligibility(tmp_path):
     assert late['observation']['sha256'] == claim['observation_sha256']
 
 
+def test_recorded_clock_verifies_anchored_history_without_live_clock(tmp_path):
+    import copy
+    from zoo.circle_packing.cell_deadline import CellDeadline, RecordedCellClock
+    path = tmp_path / 'cell.jsonl'
+    plan = 'sha256:' + 'a' * 64
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', side_effect=[100, 101, 5_000_000_100]):
+        clock = CellDeadline.start(ContinuationStore(path), lifecycle=_lifecycle(path),
+                                   cell_id='mori-0', plan_ref=plan, seconds=5)
+        inside, late = clock.observe(), clock.observe()
+        recorded = clock.export_evidence()
+        claim = clock._lifecycle.ledger.cell_deadline_claim('mori-0')
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', side_effect=AssertionError('no live clock')):
+        verifier = RecordedCellClock(recorded, claim)
+        verifier.verify_observation(inside)
+        verifier.verify_observation(late)
+        forged = copy.deepcopy(inside)
+        forged['eligible'] = False
+        with pytest.raises(ValueError, match='eligibility'):
+            verifier.verify_observation(forged)
+        truncated = copy.deepcopy(recorded)
+        truncated['observations'].pop()
+        with pytest.raises(ValueError, match='anchor'):
+            RecordedCellClock(truncated, claim)
+
+
+def test_clock_rejects_boolean_alias_of_observed_integer(tmp_path):
+    import copy
+    from zoo.circle_packing.cell_deadline import CellDeadline, RecordedCellClock
+    path = tmp_path / 'cell.jsonl'
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', side_effect=[0, 1]):
+        clock = CellDeadline.start(ContinuationStore(path), lifecycle=_lifecycle(path),
+                                   cell_id='mori-0', plan_ref='sha256:' + 'a' * 64, seconds=5)
+        original = clock.observe()
+        snapshot = clock.export_evidence()
+        claim = clock._lifecycle.ledger.cell_deadline_claim('mori-0')
+        forged = copy.deepcopy(original)
+        forged['observation']['observed_ns'] = True
+        for verifier in (clock, RecordedCellClock(snapshot, claim)):
+            with pytest.raises(ValueError, match='eligibility'):
+                verifier.verify_observation(forged)
+
+
 def test_deadline_rejects_restart_after_reboot_or_clock_regression(tmp_path):
     from zoo.circle_packing.cell_deadline import CellDeadline
     path = tmp_path / 'cell.jsonl'

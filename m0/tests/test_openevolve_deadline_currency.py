@@ -24,6 +24,49 @@ def test_cell_clock_events_do_not_change_governed_call_or_recovery(setup, tmp_pa
         assert ledger.snapshot()['pending_calls'] == []
 
 
+def test_recorded_currency_view_exposes_original_cell_claim(setup, tmp_path, monkeypatch):
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    clock = bridge.cell_deadline()
+    observation = clock.observe()
+    timing = clock.export_evidence()
+    currency = ledger.export_governance_evidence(context.currency_run_id, run.physical_plan['plan_ref'])
+    view = RecordedCurrencyView(currency, expected_run_id=context.currency_run_id,
+                                expected_plan_ref=run.physical_plan['plan_ref'])
+    claim = view.cell_deadline_claim('vendor-0')
+    RecordedCellClock(timing, claim).verify_observation(observation)
+    assert claim == ledger.cell_deadline_claim('vendor-0')
+
+
+def test_recorded_currency_view_exposes_only_anchored_response_eligibility(setup, tmp_path, monkeypatch):
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    prepared = bridge._load(bridge._name(context) + '.prepared')
+    currency = ledger.export_governance_evidence(context.currency_run_id, run.physical_plan['plan_ref'])
+    view = RecordedCurrencyView(currency, expected_run_id=context.currency_run_id,
+                                expected_plan_ref=run.physical_plan['plan_ref'])
+    assert view.run_deadline_binding(context.currency_run_id) == ledger.run_deadline_binding(context.currency_run_id)
+    assert view.response_eligibility(prepared['call_id']) == ledger.response_eligibility(prepared['call_id'])
+
+
+def test_recorded_recover_cannot_return_late_response(setup, monkeypatch):
+    from types import SimpleNamespace
+    from zoo.circle_packing.cell_deadline import DeadlineExpired
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    outcome = SimpleNamespace(response_sha256='a' * 64, call_id='call')
+    monkeypatch.setattr(bridge, '_run', SimpleNamespace(mode='recorded'))
+    monkeypatch.setattr(bridge, '_recorded_deadline', object())
+    monkeypatch.setattr(bridge, '_recover', lambda *args, **kwargs: outcome)
+    monkeypatch.setattr(bridge, '_validate_response_eligibility', lambda *args: False)
+    with pytest.raises(DeadlineExpired):
+        bridge.recover(context, context.argument_sha256)
+    assert bridge._recover_for_accounting(context, context.argument_sha256) is outcome
+
+
 def _bound_clock(ledger, bridge, tmp_path, monkeypatch):
     from zoo.circle_packing.pilot_plan import build_draft_plan
     plan = build_draft_plan(ledger.manifest_binding(), source_commit='a' * 40,
@@ -287,6 +330,22 @@ def test_timed_run_cannot_export_unqualified_recorded_replay(setup, tmp_path, mo
     complete(store)
     with pytest.raises(UsageError, match='deadline'):
         bridge.replay_bundle()
+
+
+def test_recorded_final_deadline_skip_requires_preceding_expiry_evidence(setup, monkeypatch):
+    from core.llm import UsageError
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    rows = [{'kind': 'governed_work_eligibility', 'payload': {'phase': 'evaluation',
+             'observation': {'eligible': True}}},
+            {'kind': 'governed_work_eligibility', 'payload': {'phase': 'cycle_commit',
+             'observation': {'eligible': True}}},
+            {'kind': 'metric_final_completed', 'payload': {'reason': 'cell deadline expired before final audit'}},
+            {'kind': 'governed_work_eligibility', 'payload': {'phase': 'evaluation',
+             'observation': {'eligible': False}}}]
+    monkeypatch.setattr(bridge, '_root_rows', lambda: rows)
+    monkeypatch.setattr(bridge, '_records', lambda: [])
+    with pytest.raises(UsageError, match='expired observation'):
+        bridge._require_complete_timed_transcript()
 
 
 def test_evaluation_eligibility_audit_requires_original_completion(setup, tmp_path, monkeypatch):

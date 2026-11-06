@@ -54,6 +54,20 @@ async def finish(runtime):
         return
     if not previous:
         runtime.store.append('metric_final_frozen', frozen)
+    external = getattr(getattr(runtime, 'governed', None), 'external', None)
+    replaying_timed = getattr(getattr(external, '_run', None), 'mode', None) == 'recorded' and \
+        getattr(external, '_recorded_deadline', None) is not None
+    next_row = runtime.store.peek() if callable(getattr(runtime.store, 'peek', None)) else None
+    if replaying_timed and next_row is not None and next_row['kind'] == 'metric_final_completed':
+        recorded = next_row['payload']
+        reason = recorded.get('reason')
+        if recorded != {'candidate_id': runtime.incumbent, 'state': 'skipped', 'reason': reason} or \
+                (reason != 'cell deadline expired before final audit' and
+                 not (reason == 'no successful candidate' and proposal is None)):
+            raise ValueError('recorded final skip differs from deadline outcome')
+        runtime.store.append('metric_final_completed', recorded)
+        runtime._save()
+        return
     outcome = {'candidate_id': runtime.incumbent, 'state': 'skipped', 'reason': 'no successful candidate'}
     if proposal:
         try:

@@ -104,18 +104,19 @@ class GovernedInvocation:
             if callable(cell_clock) and callable(check_clock):
                 deadline = cell_clock()
                 if deadline is not None:
-                    runtime.budget.install_admission_guard(check_clock)
                     record_evaluation = getattr(self.external, 'record_evaluation_eligibility', None)
                     if callable(record_evaluation):
                         runtime.budget.install_evaluation_eligibility_recorder(record_evaluation)
                     record_cycle = getattr(self.external, 'record_cycle_eligibility', None)
                     if callable(record_cycle):
                         runtime.budget.install_cycle_eligibility_recorder(record_cycle)
-                    for domain in [runtime.parts['domain'], *(session['domain'] for session in self.sessions.values())]:
-                        bind_deadline = getattr(domain, 'bind_cell_deadline', None)
-                        if not callable(bind_deadline):
-                            raise ValueError('timed governance requires a deadline-aware domain')
-                        bind_deadline(deadline)
+                    if context.mode == 'live':
+                        runtime.budget.install_admission_guard(check_clock)
+                        for domain in [runtime.parts['domain'], *(session['domain'] for session in self.sessions.values())]:
+                            bind_deadline = getattr(domain, 'bind_cell_deadline', None)
+                            if not callable(bind_deadline):
+                                raise ValueError('timed governance requires a deadline-aware domain')
+                            bind_deadline(deadline)
 
     def _external_context(self, receipt, binding, lane, slot_id, ordinal, args, kwargs):
         from core.composition.external_provider import GovernedCallContext, external_session_id

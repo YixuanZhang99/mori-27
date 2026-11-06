@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
@@ -229,6 +230,13 @@ class CellDeadline:
             anchor(observation)
             return observation
 
+    def export_evidence(self):
+        """Export the original clock chain after checking its campaign anchor."""
+        with self._lock, _exclusive(self._store):
+            observations, _, _ = self._checked_history()
+            return json.loads(json.dumps({'schema_version': 1, 'record': self._record,
+                                          'observations': observations}, allow_nan=False))
+
     def verify_observation(self, proof):
         """Check an operation's observation against the original anchored clock chain."""
         with self._lock, _exclusive(self._store):
@@ -238,7 +246,9 @@ class CellDeadline:
                 raise ValueError('invalid deadline eligibility evidence')
             value = proof['observation']
             seq = value.get('sequence')
-            if type(seq) is not int or seq < 1 or seq > len(observations) or observations[seq - 1] != value:
+            if type(seq) is not int or type(value.get('observed_ns')) is not int or \
+                    set(value) != {'sequence', 'previous', 'observed_ns', 'sha256'} or seq < 1 or seq > len(observations) or \
+                    payload_digest(observations[seq - 1]) != payload_digest(value):
                 raise ValueError('deadline eligibility observation is not anchored')
             remaining = max(0, self._record['seconds'] * 1_000_000_000 -
                             (value['observed_ns'] - self._record['start_ns']))
@@ -253,3 +263,55 @@ class CellDeadline:
     def check(self):
         if self.remaining() <= 0:
             raise DeadlineExpired('cell deadline expired')
+
+
+class RecordedCellClock:
+    """Validate detached clock history against a separately verified campaign claim."""
+    def __init__(self, evidence, claim):
+        if type(evidence) is not dict or set(evidence) != {'schema_version', 'record', 'observations'} or \
+                type(evidence['schema_version']) is not int or evidence['schema_version'] != 1 or \
+                type(evidence['record']) is not dict or type(evidence['observations']) is not list:
+            raise ValueError('invalid recorded cell clock evidence')
+        record = evidence['record']
+        if set(record) != {'schema_version', 'cell_id', 'plan_ref', 'seconds', 'boot_id', 'start_ns', 'record_sha256'} or \
+                type(record['schema_version']) is not int or record['schema_version'] != 1 or \
+                type(record['cell_id']) is not str or not re.fullmatch(r'(?:vendor|mori)-(?:0|[1-9][0-9]*)', record['cell_id']) or \
+                type(record['plan_ref']) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', record['plan_ref']) or \
+                type(record['seconds']) is not int or not 1 <= record['seconds'] <= 86400 or \
+                type(record['boot_id']) is not str or not record['boot_id'] or \
+                type(record['start_ns']) is not int or record['start_ns'] < 0 or \
+                record['record_sha256'] != payload_digest({key: value for key, value in record.items() if key != 'record_sha256'}):
+            raise ValueError('recorded cell clock identity differs')
+        previous, last = record['record_sha256'], record['start_ns']
+        for index, observation in enumerate(evidence['observations'], 1):
+            if type(observation) is not dict or set(observation) != {'sequence', 'previous', 'observed_ns', 'sha256'} or \
+                    type(observation['sequence']) is not int or observation['sequence'] != index or \
+                    observation['previous'] != previous or type(observation['observed_ns']) is not int or \
+                    observation['observed_ns'] < last or observation['sha256'] != payload_digest(
+                        {key: value for key, value in observation.items() if key != 'sha256'}):
+                raise ValueError('recorded cell clock observation differs')
+            previous, last = observation['sha256'], observation['observed_ns']
+        if type(claim) is not dict or set(claim) != {'plan_ref', 'record_sha256', 'observation_sequence', 'observation_sha256'} or \
+                claim['plan_ref'] != record['plan_ref'] or claim['record_sha256'] != record['record_sha256'] or \
+                type(claim['observation_sequence']) is not int or \
+                (claim['observation_sequence'], claim['observation_sha256']) != (len(evidence['observations']), previous):
+            raise ValueError('recorded cell clock differs from campaign anchor')
+        self._evidence = json.loads(json.dumps(evidence, allow_nan=False))
+        self._record = self._evidence['record']
+
+    def verify_observation(self, proof):
+        if type(proof) is not dict or set(proof) != {'deadline_ref', 'observation', 'eligible', 'remaining_ns'} or \
+                proof['deadline_ref'] != self._record['record_sha256'] or type(proof['observation']) is not dict:
+            raise ValueError('invalid recorded deadline eligibility evidence')
+        observation = proof['observation']
+        sequence = observation.get('sequence')
+        rows = self._evidence['observations']
+        if type(sequence) is not int or type(observation.get('observed_ns')) is not int or \
+                set(observation) != {'sequence', 'previous', 'observed_ns', 'sha256'} or sequence < 1 or sequence > len(rows) or \
+                payload_digest(rows[sequence - 1]) != payload_digest(observation):
+            raise ValueError('recorded deadline eligibility observation is not anchored')
+        remaining = max(0, self._record['seconds'] * 1_000_000_000 -
+                        (observation['observed_ns'] - self._record['start_ns']))
+        if type(proof['remaining_ns']) is not int or proof['remaining_ns'] != remaining or \
+                type(proof['eligible']) is not bool or proof['eligible'] != (remaining > 0):
+            raise ValueError('recorded deadline eligibility differs from observation')

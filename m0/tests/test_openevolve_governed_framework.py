@@ -14,7 +14,7 @@ from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 
 @pytest.mark.linux
-def test_mori_control_and_main_use_same_locked_runtime(tmp_path, local_endpoint):
+def test_mori_control_and_main_use_same_locked_runtime(tmp_path, local_endpoint, monkeypatch):
     from test_openevolve_source_preflight import draft
     from zoo.circle_packing.frozen_source import freeze_source_plan
     from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
@@ -64,10 +64,25 @@ def test_mori_control_and_main_use_same_locked_runtime(tmp_path, local_endpoint)
         _, _, replay_provider = governed_setup(tmp_path / 'run', **options)
         return replay_provider, CirclePackingDomain(tmp_path / 'replay-domain', runner=runner.independent_runner())
     if cache:
-        # Timed replay deliberately fails closed until eligibility evidence exists.
-        with pytest.raises(RuntimeError, match='replay execution failed') as error:
+        from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+        def forbidden(*args, **kwargs):
+            raise AssertionError('recorded replay performed live work')
+        monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+        monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
+        assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
+        import copy
+        bridge = fw._composed.governed.external
+        original_bundle = bridge.replay_bundle()
+        changed = copy.deepcopy(original_bundle)
+        changed['timing']['clock']['observations'][0]['observed_ns'] += 1
+        monkeypatch.setattr(bridge, 'replay_bundle', lambda: changed)
+        with pytest.raises(RuntimeError, match='replay execution failed'):
             fw.replay(adapter_factory=adapters)
-        assert 'deadline-bound replay requires recorded eligibility evidence' in str(error.value.__cause__)
+        changed = copy.deepcopy(original_bundle)
+        changed['timing']['responses'][0]['observation']['eligible'] = False
+        monkeypatch.setattr(bridge, 'replay_bundle', lambda: changed)
+        with pytest.raises(RuntimeError, match='replay execution failed'):
+            fw.replay(adapter_factory=adapters)
     else:
         assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
     assert len(local_endpoint.requests) == 1
@@ -240,6 +255,18 @@ def test_mori_late_provider_is_billed_and_stops_before_candidate(tmp_path, local
     assert len(control) == 1 and control[0]['observation']['eligible'] is True
     selections = [row['payload'] for row in timing if row['payload']['phase'] == 'cycle_commit']
     assert len(selections) == 1 and selections[0]['observation']['eligible'] is True
+    def adapters(path, store):
+        _, _, replay_provider = governed_setup(tmp_path / 'run', ledger=campaign,
+            api_key='fixture-only-secret', seed=0, iterations=1, base_url=local_endpoint.url,
+            max_completion_tokens=4, total_token_ceiling=4 * (1048576 + 4),
+            cell_deadline=deadline, draft_plan=plan, expected_plan_ref='sha256:' + plan['draft_sha256'])
+        return replay_provider, CirclePackingDomain(tmp_path / 'replay-domain', runner=SandboxRunner())
+    def forbidden(*args, **kwargs):
+        raise AssertionError('recorded replay performed live work')
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
+    assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
+    assert len(local_endpoint.requests) == 1
     import copy
     original_read = fw._composed.store.read
     def changed_cycle(kind=None):
