@@ -94,4 +94,8 @@ async def finish(runtime):
         elif receipt is not None:
             outcome['reason'] = receipt.reason
     runtime.store.append('metric_final_completed', outcome)
+    if proposal is None and runtime._halted_reason is not None and runtime.next_cycle == 0 and \
+            getattr(getattr(runtime, '_stop_disposition', None), 'value', None) == 'ordinary' and external is not None and \
+            callable(getattr(external, 'record_empty_terminal', None)):
+        external.record_empty_terminal()
     runtime._save()

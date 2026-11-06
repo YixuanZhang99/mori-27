@@ -148,3 +148,8 @@ class RecordedCurrencyView:
         self.run_deadline_binding(run_id)
         value = self._governance()['cycle_eligibility'].get((run_id, cycle_key))
         return dict(value) if value is not None else None
+
+    def empty_terminal(self, run_id):
+        self.run_deadline_binding(run_id)
+        value = self._governance()['empty_terminals'].get(run_id)
+        return dict(value) if value is not None else None

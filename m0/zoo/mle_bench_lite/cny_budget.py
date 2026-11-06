@@ -305,10 +305,21 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         key = (run_id, cycle_key)
         if claim is None or binding is None or binding['cell_id'] != cell_id or \
                 claim['observation_sequence'] != sequence or claim['observation_sha256'] != digest or \
-                key in governance['cycle_eligibility']:
+                key in governance['cycle_eligibility'] or run_id in governance['empty_terminals']:
             raise ValueError('cycle eligibility must bind the original run and clock')
         governance['cycle_eligibility'][key] = {'cell_id': cell_id, 'sequence': sequence,
             'observation_sha256': digest, 'proof_sha256': proof}
+    elif kind == 'anchor_empty_terminal':
+        if set(event) != {'kind', 'schema_version', 'run_id', 'cell_id', 'transcript_sha256'}:
+            raise ValueError('empty terminal anchor has invalid fields')
+        run_id = _sha(event['run_id'])
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        digest = _sha(event['transcript_sha256'])
+        binding = governance['deadline_bindings'].get(run_id)
+        if binding is None or binding['cell_id'] != cell_id or run_id in governance['empty_terminals'] or \
+                any(key[0] == run_id for key in governance['cycle_eligibility']):
+            raise ValueError('empty terminal requires an original run without candidate cycles')
+        governance['empty_terminals'][run_id] = {'cell_id': cell_id, 'transcript_sha256': digest}
     elif kind == "claim_cell_worker":
         if set(event) != {"kind", "schema_version", "cell_id", "deadline_ref", "worker_ref"}:
             raise ValueError("cell worker claim has invalid fields")
@@ -449,7 +460,7 @@ def _reduce_history(policies, events, heads):
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
-                  "cycle_eligibility": {}}
+                  "cycle_eligibility": {}, "empty_terminals": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -802,6 +813,17 @@ class CampaignBudget:
         _sha(cycle_key)
         with self._transaction() as (_db, _policy, state):
             value = state['governance']['cycle_eligibility'].get((run_id, cycle_key))
+            return dict(value) if value is not None else None
+
+    def anchor_empty_terminal(self, run_id, cell_id, transcript_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_empty_terminal', 'schema_version': 2,
+                'run_id': run_id, 'cell_id': cell_id, 'transcript_sha256': transcript_sha256})
+
+    def empty_terminal(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['empty_terminals'].get(run_id)
             return dict(value) if value is not None else None
 
     def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):

@@ -829,11 +829,46 @@ class CNYInvocationBridge:
         if len(physical) != 1 or physical[0][0] <= frozen[0][0]:
             raise ValueError('final eligibility lacks matching original final evaluation')
 
+    def _empty_terminal_prefix(self):
+        rows = self._root_rows()
+        terminals = [index for index, row in enumerate(rows) if row['kind'] == 'metric_final_completed']
+        if len(terminals) != 1:
+            raise UsageError('empty run lacks a unique final report')
+        prefix = rows[:terminals[0] + 1]
+        freezes = [row['payload'] for row in prefix if row['kind'] == 'metric_final_frozen']
+        stops = [row['payload'] for row in prefix if row['kind'] == 'governed_main_stopped']
+        controls = [row['payload'] for row in prefix if row['kind'] == 'governed_control_terminal']
+        if len(freezes) != 1 or freezes[0].get('candidate_id') is not None or freezes[0].get('binding') is not None or \
+                prefix[-1]['payload'] != {'candidate_id': None, 'state': 'skipped', 'reason': 'no successful candidate'} or \
+                len(stops) != 1 or stops[0].get('main_cycles') != 0 or stops[0].get('disposition') != 'ordinary' or \
+                not controls or any(row['kind'] in {'composed_evidence', 'composed_decision'} for row in prefix):
+            raise UsageError('empty run lacks its original stopped, controlled final transcript')
+        return prefix
+
+    def record_empty_terminal(self):
+        deadline = self.cell_deadline()
+        if deadline is None or self._run.mode != 'live':
+            return
+        prefix = self._empty_terminal_prefix()
+        self._audit_evaluation_eligibility(deadline)
+        self._audit_cycle_eligibility(deadline)
+        self._audit_final_eligibility()
+        self.ledger.anchor_empty_terminal(self._ready.authority_binding['currency_run_id'],
+                                          deadline._record['cell_id'], payload_digest(prefix))
+
     def _require_complete_timed_transcript(self):
         rows = self._root_rows()
         phases = {row['payload'].get('phase') for row in rows if row['kind'] == 'governed_work_eligibility'}
         terminals = [(index, row['payload']) for index, row in enumerate(rows)
                      if row['kind'] == 'metric_final_completed']
+        if 'cycle_commit' not in phases and len(terminals) == 1 and \
+                terminals[0][1].get('reason') == 'no successful candidate':
+            prefix = self._empty_terminal_prefix()
+            anchor = self._authority.empty_terminal(self._ready.authority_binding['currency_run_id'])
+            deadline = self.cell_deadline()
+            if anchor != {'cell_id': deadline._record['cell_id'], 'transcript_sha256': payload_digest(prefix)}:
+                raise UsageError('empty run lacks its original terminal anchor')
+            return
         if not {'evaluation', 'cycle_commit'}.issubset(phases) or len(terminals) != 1:
             raise UsageError('deadline-bound replay requires complete recorded eligibility evidence')
         if terminals[0][1].get('reason') == 'cell deadline expired before final audit':

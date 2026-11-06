@@ -14,6 +14,112 @@ from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 
 @pytest.mark.linux
+def test_timed_zero_candidate_normal_completion_finishes_but_replay_is_refused(tmp_path, local_endpoint, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.governed import governed_setup
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+
+    campaign = campaign_fixture(tmp_path)
+    plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
+                            dependency_lock_sha256='b' * 64)
+    ref = 'sha256:' + plan['draft_sha256']
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(campaign),
+                               cell_id='mori-0', plan_ref=ref, seconds=2700)
+    options = dict(ledger=campaign, api_key='fixture-only-secret', seed=0, iterations=1,
+                   base_url=local_endpoint.url, max_completion_tokens=4,
+                   cell_deadline=clock, draft_plan=plan, expected_plan_ref=ref)
+    profile, registry, provider = governed_setup(tmp_path / 'run', **options)
+    cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
+                     reeval_floor=0, baseline_every=100)
+    fw = Framework.from_profile(profile, provider, CirclePackingDomain(tmp_path / 'domain', runner=SandboxRunner()),
+                                cfg, str(tmp_path / 'run' / 'framework'), component_registry=registry)
+
+    async def empty_cycle(task, cycle):
+        # Exercise normal loop completion without fabricating any proposal or evaluation.
+        fw._composed.next_cycle = cycle + 1
+        fw._composed._save()
+        return True
+
+    monkeypatch.setattr(fw._composed, '_cycle', empty_cycle)
+    result = fw.evolve('fixture task')
+    assert result['reporting']['final_audit']['reason'] == 'no successful candidate'
+    assert not local_endpoint.requests
+    bridge = fw._composed.governed.external
+    assert campaign.empty_terminal(bridge._ready.authority_binding['currency_run_id']) is None
+    with pytest.raises(UsageError, match='empty run lacks'):
+        bridge.replay_bundle()
+
+
+@pytest.mark.linux
+def test_timed_zero_candidate_run_replays_without_external_work(tmp_path, local_endpoint, monkeypatch):
+    from core.composition.budget import ConvergenceSignal, HierarchicalBudget
+    from core.composition.recovery import ContinuationStore
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.governed import governed_setup
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+
+    campaign = campaign_fixture(tmp_path)
+    plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
+                            dependency_lock_sha256='b' * 64)
+    ref = 'sha256:' + plan['draft_sha256']
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(campaign),
+                               cell_id='mori-0', plan_ref=ref, seconds=2700)
+    options = dict(ledger=campaign, api_key='fixture-only-secret', seed=0, iterations=1,
+                   base_url=local_endpoint.url, max_completion_tokens=4,
+                   cell_deadline=clock, draft_plan=plan, expected_plan_ref=ref)
+    profile, registry, provider = governed_setup(tmp_path / 'run', **options)
+    monkeypatch.setattr(HierarchicalBudget, 'converged',
+                        lambda self, frontier=None: ConvergenceSignal('global_budget_exhausted', 'fixture'))
+    cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
+                     reeval_floor=0, baseline_every=100)
+    domain = CirclePackingDomain(tmp_path / 'run' / 'domain', runner=SandboxRunner())
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(tmp_path / 'run' / 'framework'),
+                                component_registry=registry)
+    result = fw.evolve('fixture task')
+    assert not fw._composed.proposals
+    assert result['reporting']['final_audit']['reason'] == 'no successful candidate'
+    assert not local_endpoint.requests
+
+    def adapters(path, store):
+        _, _, replay_provider = governed_setup(tmp_path / 'run', **options)
+        return replay_provider, CirclePackingDomain(tmp_path / 'replay-domain', runner=SandboxRunner())
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('recorded replay performed external work')
+
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
+    assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
+    assert not local_endpoint.requests
+    bridge = fw._composed.governed.external
+    run_id = bridge._ready.authority_binding['currency_run_id']
+    claim = campaign.cell_deadline_claim('mori-0')
+    with pytest.raises(ValueError, match='original run and clock'):
+        campaign.anchor_cycle_eligibility(run_id, 'a' * 64, 'mori-0', claim['observation_sequence'],
+                                          claim['observation_sha256'], 'b' * 64)
+    rows = bridge._root_rows()
+    import copy
+    # A missing ordinary stop is damaged evidence, not another valid stop.
+    with monkeypatch.context() as patch:
+        patch.setattr(bridge, '_root_rows', lambda: [row for row in rows if row['kind'] != 'governed_main_stopped'])
+        with pytest.raises(UsageError, match='stopped, controlled final transcript'):
+            bridge.record_empty_terminal()
+    for kind in ('governed_main_stopped', 'metric_final_frozen', 'metric_final_completed'):
+        altered = copy.deepcopy(rows)
+        altered = [row for row in altered if row['kind'] != kind]
+        with monkeypatch.context() as patch:
+            patch.setattr(bridge, '_root_rows', lambda: altered)
+            with pytest.raises((RuntimeError, ValueError)):
+                fw.replay(adapter_factory=adapters)
+    with monkeypatch.context() as patch:
+        patch.setattr(campaign, 'empty_terminal', lambda run_id: None)
+        with pytest.raises(RuntimeError, match='replay execution failed'):
+            fw.replay(adapter_factory=adapters)
+
+
+@pytest.mark.linux
 def test_mori_control_and_main_use_same_locked_runtime(tmp_path, local_endpoint, monkeypatch):
     from test_openevolve_source_preflight import draft
     from zoo.circle_packing.frozen_source import freeze_source_plan
