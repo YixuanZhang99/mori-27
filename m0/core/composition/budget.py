@@ -136,6 +136,7 @@ class HierarchicalBudget:
         self._seq, self._head = 0, None
         self._lock = threading.RLock()
         self._admission_guard = None
+        self._evaluation_eligibility_recorder = None
 
     def install_admission_guard(self, guard):
         """Install a trusted run-scoped admission check without altering accounting."""
@@ -162,6 +163,21 @@ class HierarchicalBudget:
         """Recheck an installed run deadline before a measured result is used."""
         with self._lock:
             if self._admission_guard is not None:
+                self._admission_guard()
+
+    def install_evaluation_eligibility_recorder(self, recorder):
+        if not callable(recorder):
+            raise BudgetError('evaluation eligibility recorder must be callable')
+        with self._lock:
+            if self._evaluation_eligibility_recorder is not None:
+                raise BudgetError('evaluation eligibility recorder is already installed')
+            self._evaluation_eligibility_recorder = recorder
+
+    def check_evaluation_eligibility(self, receipt, identity, evidence):
+        with self._lock:
+            if self._evaluation_eligibility_recorder is not None:
+                self._evaluation_eligibility_recorder(receipt, identity, evidence)
+            elif self._admission_guard is not None:
                 self._admission_guard()
 
     def _check_config(self):

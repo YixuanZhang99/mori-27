@@ -570,6 +570,97 @@ class CNYInvocationBridge:
         if deadline is not None:
             deadline.check()
 
+    def record_evaluation_eligibility(self, receipt, identity, evidence):
+        """Bind a settled native evaluation to the original cell observation."""
+        from core.composition.evaluation import encode_evidence
+        from zoo.circle_packing.cell_deadline import DeadlineExpired
+        deadline = self.cell_deadline()
+        if deadline is None or self._run.mode != 'live':
+            raise ValueError('evaluation eligibility requires its live cell deadline')
+        if type(identity) is not dict or identity.get('intent_id') != receipt.intent_id or \
+                identity.get('fingerprint') != receipt.fingerprint:
+            raise ValueError('evaluation eligibility differs from physical receipt')
+        fixed = {'phase': 'evaluation', 'intent_id': receipt.intent_id, 'fingerprint': receipt.fingerprint,
+                 'lane': identity['lane'], 'slot_id': identity['control_slot'],
+                 'evidence_sha256': payload_digest(encode_evidence(evidence))}
+        run_id = self._ready.authority_binding['currency_run_id']
+        row = self._run.store.peek() if callable(getattr(self._run.store, 'peek', None)) else None
+        if row is not None:
+            if row['kind'] != 'governed_work_eligibility' or any(
+                    row['payload'].get(key) != value for key, value in fixed.items()):
+                raise ValueError('evaluation eligibility differs from the recorded continuation')
+            proof = row['payload']
+            self._verify_evaluation_eligibility(proof, deadline)
+            self._run.store.append('governed_work_eligibility', proof)
+        else:
+            def anchor(observation):
+                proof = {**fixed, 'observation': observation}
+                self._run.store.append('governed_work_eligibility', proof)
+                self.ledger.anchor_evaluation_eligibility(run_id, payload_digest(receipt.intent_id), deadline._record['cell_id'],
+                    observation['observation']['sequence'], observation['observation']['sha256'], payload_digest(proof))
+            observation = deadline.observe_and_anchor(anchor)
+            proof = {**fixed, 'observation': observation}
+        if not proof['observation']['eligible']:
+            raise DeadlineExpired('cell deadline expired after evaluation accounting')
+        deadline.check()
+
+    def _verify_evaluation_eligibility(self, proof, deadline):
+        fields = {'phase', 'intent_id', 'fingerprint', 'lane', 'slot_id', 'evidence_sha256', 'observation'}
+        if type(proof) is not dict or set(proof) != fields or proof['phase'] != 'evaluation':
+            raise ValueError('invalid evaluation eligibility evidence')
+        deadline.verify_observation(proof['observation'])
+        observation = proof['observation']['observation']
+        run_id = self._ready.authority_binding['currency_run_id']
+        anchor = self.ledger.evaluation_eligibility(run_id, payload_digest(proof['intent_id']))
+        if anchor is None or anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != observation['sequence'] or anchor['observation_sha256'] != observation['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('evaluation eligibility differs from campaign anchor')
+
+    def _audit_evaluation_eligibility(self, deadline):
+        rows = self._root_rows()
+        completed, settled, proofs = {}, {}, {}
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] == 'governed_evaluation_completed':
+                intent = value.get('identity', {}).get('intent_id')
+                if intent in completed:
+                    raise ValueError('duplicate evaluation eligibility completion')
+                completed[intent] = (index, value)
+            elif row['kind'] == 'hierarchical_budget' and value.get('event') == 'settle':
+                data = value['data']
+                settled[data['intent_id']] = (index, data)
+            elif row['kind'] == 'governed_work_eligibility':
+                intent = value.get('intent_id')
+                if intent in proofs:
+                    raise ValueError('duplicate evaluation eligibility evidence')
+                self._verify_evaluation_eligibility(value, deadline)
+                proofs[intent] = (index, value)
+        for intent, (index, proof) in proofs.items():
+            completion = completed.get(intent)
+            settlement = settled.get(intent)
+            if completion is None or settlement is None or not completion[0] < settlement[0] < index:
+                raise ValueError('evaluation eligibility lacks prior measured settlement')
+            identity = completion[1]['identity']
+            if identity['fingerprint'] != proof['fingerprint'] or settlement[1]['fingerprint'] != proof['fingerprint'] or \
+                    identity['lane'] != proof['lane'] or identity['control_slot'] != proof['slot_id'] or \
+                    payload_digest(completion[1]['evidence']) != proof['evidence_sha256']:
+                raise ValueError('evaluation eligibility differs from original measured evidence')
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] == 'composed_physical_evidence':
+                intent = value.get('intent_id')
+                if intent not in completed or intent not in proofs or proofs[intent][0] >= index or \
+                        not proofs[intent][1]['observation']['eligible']:
+                    raise ValueError('physical evaluation lacks prior eligibility evidence')
+            elif row['kind'] == 'governed_control_terminal' and value.get('status') == 'evaluated':
+                matching = [intent for intent, (_, completion) in completed.items()
+                            if completion['identity']['lane'] == 'control' and
+                            completion['identity']['control_slot'] == value.get('slot_id')]
+                if len(matching) != 1 or matching[0] not in proofs or proofs[matching[0]][0] >= index or \
+                        not proofs[matching[0]][1]['observation']['eligible']:
+                    raise ValueError('control terminal lacks prior evaluation eligibility evidence')
+
     def recover(self, context, argument_sha256):
         outcome = self._recover(context, argument_sha256, refusal_reason='capacity_refused')
         deadline = self.cell_deadline()
@@ -736,6 +827,10 @@ class CNYInvocationBridge:
             getattr(self._run.store, 'restoring', False) or replay_pending)
         if incomplete and not _allow_replay_prefix:
             raise UsageError('currency audit cannot certify an unconsumed replay suffix')
+        if self._run.mode == 'live':
+            deadline = self.cell_deadline()
+            if deadline is not None:
+                self._audit_evaluation_eligibility(deadline)
         authority = self._ready.authority_binding
         evidence = self._authority.export_governance_evidence(authority['currency_run_id'],
                                                               self._ready.physical_plan_ref)

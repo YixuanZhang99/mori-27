@@ -203,7 +203,11 @@ class InvocationLifecycle:
                              measured_elapsed, evaluation=True, supervised=supervised)
             if evidence.eval_result.cost.eval_count < 1:
                 raise ValueError("evaluation count is below the actual domain invocation")
-            eligibility = getattr(self.budget, "check_work_eligibility", None)
+            eligibility = getattr(self.budget, "check_evaluation_eligibility", None)
             if callable(eligibility):
-                eligibility()
+                eligibility(receipt, identity, evidence)
+            else:
+                eligibility = getattr(self.budget, "check_work_eligibility", None)
+                if callable(eligibility):
+                    eligibility()
             return evidence

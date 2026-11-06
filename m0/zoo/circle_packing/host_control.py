@@ -98,6 +98,14 @@ class HostSeedControl:
         control_domain = CirclePackingDomain(control_path, runner=domain.runner.independent_runner())
         if control_domain.runner is domain.runner or control_domain.manifest_binding != frozen:
             raise ValueError('control evaluator differs from frozen main environment')
+        deadline = bridge.cell_deadline()
+        if deadline is not None:
+            control_domain.bind_cell_deadline(deadline)
+            recorder = budget._evaluation_eligibility_recorder
+            if recorder is None:
+                budget.install_evaluation_eligibility_recorder(bridge.record_evaluation_eligibility)
+            elif getattr(recorder, '__self__', None) is not bridge:
+                raise ValueError('control evaluation recorder differs from the campaign bridge')
         self.budget, self.bridge, self.run, self.ready, self.domain = budget, bridge, run, ready, control_domain
         self._running = False
         self.store, self.plan = budget.store, run.physical_plan

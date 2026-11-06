@@ -105,6 +105,9 @@ class GovernedInvocation:
                 deadline = cell_clock()
                 if deadline is not None:
                     runtime.budget.install_admission_guard(check_clock)
+                    record_evaluation = getattr(self.external, 'record_evaluation_eligibility', None)
+                    if callable(record_evaluation):
+                        runtime.budget.install_evaluation_eligibility_recorder(record_evaluation)
                     for domain in [runtime.parts['domain'], *(session['domain'] for session in self.sessions.values())]:
                         bind_deadline = getattr(domain, 'bind_cell_deadline', None)
                         if not callable(bind_deadline):

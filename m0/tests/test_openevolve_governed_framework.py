@@ -113,6 +113,35 @@ def test_governed_circle_run_binds_roles_control_cost_and_replay(tmp_path, local
             assert b'fixture-only-secret' not in path.read_bytes()
 
 
+def test_evaluation_anchor_failure_keeps_measured_control_and_blocks_use(tmp_path, local_endpoint, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.governed import governed_setup
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    campaign = campaign_fixture(tmp_path)
+    plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40, dependency_lock_sha256='b' * 64)
+    ref = 'sha256:' + plan['draft_sha256']
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(campaign),
+                               cell_id='mori-0', plan_ref=ref, seconds=2700)
+    profile, registry, provider = governed_setup(tmp_path / 'run', ledger=campaign,
+        api_key='fixture-only-secret', seed=0, iterations=1, base_url=local_endpoint.url,
+        max_completion_tokens=4, cell_deadline=clock, draft_plan=plan, expected_plan_ref=ref)
+    domain = CirclePackingDomain(tmp_path / 'run' / 'domain', runner=SandboxRunner())
+    cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
+                     reeval_floor=0, baseline_every=100)
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(tmp_path / 'run' / 'framework'),
+                                component_registry=registry)
+    def crash(*args, **kwargs):
+        raise RuntimeError('fixture evaluation anchor failure')
+    monkeypatch.setattr(campaign, 'anchor_evaluation_eligibility', crash)
+    with pytest.raises(RuntimeError, match='anchor failure'):
+        fw.evolve('Improve the arrangement of 26 circles in a square')
+    assert not local_endpoint.requests and not campaign.snapshot()['pending_calls']
+    assert fw._composed.budget.audit_governance()['physical_totals']['eval_count'] >= 1
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
+
+
 def test_governed_circle_unknown_usage_keeps_reservation(tmp_path, local_endpoint):
     from zoo.circle_packing.governed import governed_setup
     campaign = campaign_fixture(tmp_path)
@@ -205,6 +234,32 @@ def test_mori_late_provider_is_billed_and_stops_before_candidate(tmp_path, local
     assert len(fw._composed.proposals) == 1
     assert fw._composed.governed.external.audit()['protection_valid']
     assert len(list(fw._composed.store.read('composed_provider_deadline_expired'))) == 1
+    timing = list(fw._composed.store.read('governed_work_eligibility'))
+    control = [row['payload'] for row in timing if row['payload']['phase'] == 'evaluation'
+               and row['payload']['lane'] == 'control']
+    assert len(control) == 1 and control[0]['observation']['eligible'] is True
+    import copy
+    original_read = fw._composed.store.read
+    def altered(kind=None):
+        rows = copy.deepcopy(list(original_read(kind)))
+        for row in rows:
+            if row['kind'] == 'governed_work_eligibility':
+                row['payload']['observation']['eligible'] = False
+        return iter(rows)
+    monkeypatch.setattr(fw._composed.store, 'read', altered)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
+    def missing(kind=None):
+        return iter(row for row in original_read(kind) if row['kind'] != 'governed_work_eligibility')
+    monkeypatch.setattr(fw._composed.store, 'read', missing)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
+    def missing_both(kind=None):
+        return iter(row for row in original_read(kind) if row['kind'] not in {
+            'governed_work_eligibility', 'governed_evaluation_completed'})
+    monkeypatch.setattr(fw._composed.store, 'read', missing_both)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
 
 
 def test_mori_deadline_before_provider_is_proven_free_and_stops(tmp_path, local_endpoint, monkeypatch):

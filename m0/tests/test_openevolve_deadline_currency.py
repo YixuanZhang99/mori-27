@@ -289,6 +289,15 @@ def test_timed_run_cannot_export_unqualified_recorded_replay(setup, tmp_path, mo
         bridge.replay_bundle()
 
 
+def test_evaluation_eligibility_audit_requires_original_completion(setup, tmp_path, monkeypatch):
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    monkeypatch.setattr(bridge, '_root_rows', lambda: [{'kind': 'composed_physical_evidence',
+        'payload': {'intent_id': 'missing-evaluation'}}])
+    with pytest.raises(ValueError, match='eligibility'):
+        bridge._audit_evaluation_eligibility(bridge.cell_deadline())
+
+
 def test_recorded_bridge_rejects_unqualified_timed_run_bundle(setup, tmp_path, monkeypatch):
     from core.composition.external_provider import ExternalRunContext
     from core.llm import UsageError
