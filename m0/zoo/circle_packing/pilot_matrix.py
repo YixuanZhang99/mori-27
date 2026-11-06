@@ -76,6 +76,36 @@ def snapshot_matrix(ledger, plan, *, expected_plan_ref, expected_head):
             'performance_claim': False, 'plan_ref': ref, 'journal_head': inventory['journal_head'], 'cells': cells}
 
 
+def snapshot_continuation_matrix(ledger, plan, *, expected_plan_ref, expected_head):
+    """Read one version's claims at a pinned head; scores remain unverified."""
+    if type(ledger) is not CampaignBudget or type(plan) is not dict:
+        raise ValueError('continuation matrix requires the campaign and bound plan')
+    inventory = ledger.circle_claim_inventory(expected_head=expected_head)
+    try:
+        experiment_id = plan['experiment_id']
+        binding = inventory['continuations'][experiment_id]
+        ref = 'sha256:' + binding['draft_sha256']
+        if expected_plan_ref != ref or payload_digest(plan) != payload_digest(binding['draft']):
+            raise ValueError('continuation matrix differs from its bound plan')
+        cells = []
+        for item in binding['draft']['cells']:
+            name = item['cell_id']
+            claim = inventory['claims'].get(name)
+            if claim is not None and claim['plan_ref'] != ref:
+                raise ValueError('continuation claim differs from its plan')
+            cells.append({'cell_id': name, 'seed': item['seed'], 'arm': item['arm'],
+                          'state': 'not_claimed' if claim is None else 'claimed_outcome_unverified',
+                          'score': None})
+    except (KeyError, TypeError) as error:
+        raise ValueError('continuation matrix has no matching bound plan') from error
+    return {'schema_version': 1, 'scope': 'continuation_claim_inventory_at_pinned_head',
+            'performance_claim': False, 'experiment_id': experiment_id, 'plan_ref': ref,
+            'tree_ref': binding['tree_ref'], 'runtime_ref': binding['runtime_ref'],
+            'source_commit': binding['draft']['source_commit'], 'method_changes': binding['draft']['method_changes'],
+            'artifact_verification_recorded': binding['artifact_verification_recorded'],
+            'journal_head': inventory['journal_head'], 'cells': cells}
+
+
 def report_matrix(ledger, plan, *, expected_plan_ref, expected_head, cell_evidence=None, pair_evidence=None):
     """Reduce original cell evidence, replaying supplied pairs in frozen source.
 

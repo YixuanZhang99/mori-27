@@ -1055,7 +1055,10 @@ class CampaignBudget:
             if head != expected_head:
                 raise ValueError('campaign head changed before the matrix snapshot')
             continuations = {name: {'draft_sha256': value['draft']['draft_sha256'],
-                                    'cell_ids': [item['cell_id'] for item in value['draft']['cells']]}
+                                    'cell_ids': [item['cell_id'] for item in value['draft']['cells']],
+                                    'draft': value['draft'], 'tree_ref': value['tree_ref'],
+                                    'runtime_ref': value['runtime_ref'],
+                                    'artifact_verification_recorded': 'artifact_verification_sha256' in value}
                              for name, value in state['governance']['circle_continuations'].items()}
             return {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
                     'pilot': json.loads(_json(state['governance']['circle_pilot'])),
