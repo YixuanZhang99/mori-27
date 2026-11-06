@@ -595,6 +595,11 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert trace['scope'] == 'reference_submitted_future_outcomes' and len(trace['iterations']) == 6
         assert len({item['iteration'] for item in trace['iterations']}) == 6
         assert all(item['state'] not in ('unresolved', 'not_submitted') for item in trace['iterations'])
+        prompt_bindings = trace['prompt_bindings']
+        provider_requests = {row['payload']['request_sha256'] for row in vendor_rows
+                             if row['kind'] == 'composed_provider_started'}
+        assert len(prompt_bindings) == 6
+        assert all(item['request_sha256'] in provider_requests for item in prompt_bindings)
         receipts = {item['stage_request_id'] for item in trace['iterations'] if 'stage_request_id' in item}
         stage_ids = {row['payload']['request_id'] for row in vendor_rows if row['kind'] == 'host_stage_started'}
         assert receipts and receipts <= stage_ids

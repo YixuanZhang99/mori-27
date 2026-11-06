@@ -5,6 +5,9 @@ coverage. Raw prompts, responses, candidate code, and error text are excluded.
 """
 from contextlib import contextmanager
 import hashlib
+import json
+import os
+from pathlib import Path
 import re
 
 
@@ -19,6 +22,38 @@ def reference_iteration_attempt_limit(planned_iterations):
         raise ValueError('reference iteration limit differs from the frozen pilot')
     islands = host_database_options(2)['num_islands']
     return planned_iterations * (1 + islands)
+
+
+def install_prompt_observer(sampler_class, root):
+    """Record an iteration/request digest without changing prompt messages."""
+    from core.x1.checkpoint import payload_digest
+    from core.x1.store import AppendOnlyStore
+    original = sampler_class.build_prompt
+    def build(sampler, *args, **kwargs):
+        result = original(sampler, *args, **kwargs)
+        iteration = kwargs.get('evolution_round')
+        if type(iteration) is int and type(result) is dict and \
+                type(result.get('system')) is str and type(result.get('user')) is str:
+            messages = {'system': result['system'], 'user': result['user']}
+            argument = {'host_messages': messages, 'host_prompt_ref': 'sha256:' + payload_digest(messages)}
+            prompt = json.dumps(argument, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+            AppendOnlyStore(Path(root) / 'iteration-prompts.jsonl').append('reference_iteration_prompt',
+                {'iteration': iteration, 'request_sha256': payload_digest({'args': (prompt,), 'kwargs': {}})})
+        return result
+    sampler_class.build_prompt = build
+
+
+_original_worker_initializer = None
+
+
+def _traced_worker_initializer(*args):
+    from openevolve import process_parallel
+    original = _original_worker_initializer or process_parallel._worker_init
+    if original is _traced_worker_initializer:
+        raise RuntimeError('reference worker initializer recursion')
+    original(*args)
+    from openevolve.prompt.sampler import PromptSampler
+    install_prompt_observer(PromptSampler, os.environ['MORI_CIRCLE_REFERENCE_ROOT'])
 
 
 class _Capture:
@@ -71,10 +106,15 @@ class _Capture:
 
 
 @contextmanager
-def capture_reference_iterations(controller_class):
+def capture_reference_iterations(controller_class, *, parallel_module=None):
     """Wrap submissions temporarily, returning the exact unmodified futures."""
     capture = _Capture()
     original = controller_class._submit_iteration
+    global _original_worker_initializer
+    previous_initializer = parallel_module._worker_init if parallel_module is not None else None
+    if parallel_module is not None:
+        _original_worker_initializer = previous_initializer
+        parallel_module._worker_init = _traced_worker_initializer
     def submit(controller, iteration, island_id=None):
         future = original(controller, iteration, island_id)
         capture._submitted.append((iteration, island_id, future))
@@ -84,6 +124,9 @@ def capture_reference_iterations(controller_class):
         yield capture
     finally:
         controller_class._submit_iteration = original
+        if parallel_module is not None:
+            parallel_module._worker_init = previous_initializer
+            _original_worker_initializer = None
 
 
 def audit_reference_iteration_receipts(trace, rows, *, planned_iterations):

@@ -2,7 +2,7 @@
 from concurrent.futures import Future
 from types import SimpleNamespace
 
-from zoo.circle_packing.reference_iteration_trace import capture_reference_iterations
+from zoo.circle_packing.reference_iteration_trace import capture_reference_iterations, install_prompt_observer
 
 
 def test_capture_preserves_futures_and_reports_failed_and_unresolved_iterations():
@@ -29,3 +29,21 @@ def test_capture_preserves_futures_and_reports_failed_and_unresolved_iterations(
     assert trace['iterations'][0]['stage_request_id'] == 'a' * 32
     assert 'sensitive response' not in repr(trace) and 'sensitive error' not in repr(trace)
     assert 'candidate code' not in repr(trace)
+
+
+def test_prompt_observer_preserves_messages_and_records_only_request_digest(tmp_path):
+    from core.composition.recovery import ContinuationStore
+    from core.x1.checkpoint import payload_digest
+    import json
+    class Sampler:
+        def build_prompt(self, *, evolution_round):
+            return {'system': 'private system', 'user': 'private user'}
+    install_prompt_observer(Sampler, tmp_path)
+    result = Sampler().build_prompt(evolution_round=3)
+    assert result == {'system': 'private system', 'user': 'private user'}
+    rows = list(ContinuationStore(tmp_path / 'iteration-prompts.jsonl').read())
+    argument = {'host_messages': result, 'host_prompt_ref': 'sha256:' + payload_digest(result)}
+    prompt = json.dumps(argument, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    assert rows == [{'kind': 'reference_iteration_prompt', 'payload': {'iteration': 3,
+                      'request_sha256': payload_digest({'args': (prompt,), 'kwargs': {}})}}]
+    assert 'private system' not in (tmp_path / 'iteration-prompts.jsonl').read_text()
