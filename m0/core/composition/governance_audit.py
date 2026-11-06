@@ -66,7 +66,7 @@ def audit_terminals(runtime, plan, sessions):
         'plan_ref': plan['plan_ref'], 'slot_id': slot_id}) for slot_id in slots}
     rows = list(runtime.store.read())
     reserves, settles, outcomes, physical, failures, measurements = {}, {}, {}, {}, {}, {}
-    starts, terminals = {}, {}
+    starts, terminals, completions = {}, {}, {}
     committed, stopped = 0, None
     started_order = []
 
@@ -117,6 +117,8 @@ def audit_terminals(runtime, plan, sessions):
         elif kind == 'governed_operator_outcome':
             _shape(data, _OPERATOR, 'operator outcome')
             put(outcomes, data['intent_id'], index, data, 'operator outcome')
+        elif kind == 'governed_evaluation_completed' and runtime.budget._require_initial_control:
+            put(completions, data.get('identity', {}).get('intent_id'), index, data, 'control evaluation completion')
         elif kind == 'composed_physical_evidence':
             _shape(data, {'intent_id', 'request', 'evidence'}, 'physical evidence')
             put(physical, data['intent_id'], index, data, 'physical evidence')
@@ -249,6 +251,14 @@ def audit_terminals(runtime, plan, sessions):
                 validate_evidence(evidence, expected_binding=expected)
                 derived = 'evaluated' if evidence.eval_result.status is EvalStatus.OK else 'failed'
                 _require(terminal['status'] == derived, 'terminal status contradicts actual evaluation evidence')
+                if runtime.budget._require_initial_control:
+                    _require(evaluation_id in completions, 'control terminal lacks sealed original completion')
+                    completion_index, completion = completions[evaluation_id]
+                    _require(completion_index < settles[evaluation_id][0] and
+                             settles[evaluation_id][1].get('measurement_evidence_ref') ==
+                             'sha256:' + payload_digest(completion) and completion.get('evidence') == terminal['evidence'] and
+                             completion.get('elapsed') == measurements[evaluation_id][1].get('elapsed'),
+                             'control completion differs from sealed physical settlement')
                 eval_settled = settlement(evaluation_id, evaluation_reserve, asdict(evidence.eval_result.cost),
                     list(evidence.eval_result.contract.measured_cost_units), evaluation=True,
                     before_terminal=terminal_index)

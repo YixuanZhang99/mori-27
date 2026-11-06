@@ -435,3 +435,181 @@ def test_mismatched_evaluation_binding_invalidates_settled_control(control_autho
     assert not audit['protection_valid'] and audit['physical_totals']['eval_count'] == 1
     assert not list(budget.store.read('governed_control_terminal'))
     assert budget.state()['initial_control_ready'] is None
+
+
+@pytest.mark.parametrize('crash_kind', ['composed_physical_evidence', 'governed_control_terminal'])
+def test_control_recovers_settled_evaluation_without_repeating(control_authority, monkeypatch, crash_kind):
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, main_domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, main_domain)
+    append = budget.store.append
+    def crash(kind, payload):
+        if kind == crash_kind:
+            raise SystemExit('fixture crash after evaluation settlement')
+        return append(kind, payload)
+    monkeypatch.setattr(budget.store, 'append', crash)
+    with pytest.raises(SystemExit):
+        asyncio.run(control.execute('control-0000'))
+    assert budget.audit_governance()['physical_totals']['eval_count'] == 1
+    restored_store = ContinuationStore(budget.store.path)
+    restored = HierarchicalBudget(budget.options, budget.stamp, restored_store, governance=budget._governed.config)
+    restored.restore_from_journal()
+    restored_run = ExternalRunContext(**run.to_dict(), store=restored_store,
+        physical_identity_lookup=restored.invocation_identity, provider_sessions=dict(run.provider_sessions))
+    restored_bridge = CNYInvocationBridge(ledger)
+    restored_ready = restored_bridge.bind_run(restored_run)
+    async def forbidden(*args, **kwargs):
+        raise AssertionError('settled control evaluation must not run twice')
+    monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
+    fresh_main = CirclePackingDomain(main_domain.workspace, runner=SandboxRunner())
+    result = asyncio.run(HostSeedControl(restored, restored_bridge, restored_run, restored_ready, fresh_main)
+                         .execute('control-0000'))
+    assert result['status'] == 'evaluated'
+    assert restored.audit_governance()['physical_totals']['eval_count'] == 1
+
+
+def test_control_recovery_rejects_changed_original_evaluation(control_authority, monkeypatch):
+    import copy
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    append = budget.store.append
+    def crash(kind, payload):
+        if kind == 'composed_physical_evidence':
+            raise SystemExit('fixture crash after evaluation settlement')
+        return append(kind, payload)
+    monkeypatch.setattr(budget.store, 'append', crash)
+    with pytest.raises(SystemExit):
+        asyncio.run(control.execute('control-0000'))
+    monkeypatch.setattr(budget.store, 'append', append)
+    original = budget.store.read
+    def forged(kind=None):
+        rows = copy.deepcopy(list(original(kind)))
+        for row in rows:
+            if row['kind'] == 'governed_evaluation_completed':
+                row['payload']['identity']['binding']['artifact_sha256'] = '0' * 64
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', forged)
+    with pytest.raises(ValueError):
+        asyncio.run(control.execute('control-0000'))
+    assert not list(budget.store.read('governed_control_terminal'))
+
+
+def test_control_recovery_rejects_forged_score(control_authority, monkeypatch):
+    import copy
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    append = budget.store.append
+    def crash(kind, payload):
+        if kind == 'composed_physical_evidence':
+            raise SystemExit('fixture crash after evaluation settlement')
+        return append(kind, payload)
+    monkeypatch.setattr(budget.store, 'append', crash)
+    with pytest.raises(SystemExit):
+        asyncio.run(control.execute('control-0000'))
+    monkeypatch.setattr(budget.store, 'append', append)
+    original = budget.store.read
+    def forged(kind=None):
+        rows = copy.deepcopy(list(original(kind)))
+        for row in rows:
+            if row['kind'] == 'governed_evaluation_completed':
+                row['payload']['evidence']['evidence']['eval_result']['metrics']['dev/score'] = .999
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', forged)
+    with pytest.raises(ValueError):
+        asyncio.run(control.execute('control-0000'))
+    assert not list(budget.store.read('governed_control_terminal'))
+
+
+def test_control_recovery_rejects_consistent_but_unsealed_geometry(control_authority, monkeypatch):
+    import copy
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    append = budget.store.append
+    def crash(kind, payload):
+        if kind == 'composed_physical_evidence':
+            raise SystemExit('fixture crash after evaluation settlement')
+        return append(kind, payload)
+    monkeypatch.setattr(budget.store, 'append', crash)
+    with pytest.raises(SystemExit):
+        asyncio.run(control.execute('control-0000'))
+    monkeypatch.setattr(budget.store, 'append', append)
+    original = budget.store.read
+    def forged(kind=None):
+        rows = copy.deepcopy(list(original(kind)))
+        for row in rows:
+            if row['kind'] == 'governed_evaluation_completed':
+                payload = row['payload']
+                result = payload['evidence']['evidence']['eval_result']
+                data = result['contract']['private']['data']
+                record = data['record']
+                sample = fake_result('irrelevant', 1, score=.4)
+                for key in ('geometry', 'geometry_ref', 'metrics'):
+                    record['stages'][0][key] = copy.deepcopy(sample[key])
+                    record[key] = copy.deepcopy(sample[key])
+                data['geometry_ref'] = record['geometry_ref']
+                result['metrics']['dev/score'] = record['metrics']['combined_score']
+                payload['domain_state']['entries'][record['identity']['candidate_id']] = copy.deepcopy(record)
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', forged)
+    with pytest.raises(ValueError):
+        asyncio.run(control.execute('control-0000'))
+    assert not list(budget.store.read('governed_control_terminal'))
+
+
+@pytest.mark.parametrize('kind', ['governed_evaluation_completed', 'composed_operation_measurement'])
+def test_control_recovery_rejects_changed_elapsed(control_authority, monkeypatch, kind):
+    import copy
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    append = budget.store.append
+    def crash(event, payload):
+        if event == 'composed_physical_evidence':
+            raise SystemExit('fixture crash after evaluation settlement')
+        return append(event, payload)
+    monkeypatch.setattr(budget.store, 'append', crash)
+    with pytest.raises(SystemExit):
+        asyncio.run(control.execute('control-0000'))
+    monkeypatch.setattr(budget.store, 'append', append)
+    original = budget.store.read
+    def forged(filter_kind=None):
+        rows = copy.deepcopy(list(original(filter_kind)))
+        for row in rows:
+            if row['kind'] == kind and row['payload'].get('identity', {}).get('intent_id', '').endswith(':evaluation'):
+                row['payload']['elapsed'] = 999.0
+        return iter(rows)
+    monkeypatch.setattr(budget.store, 'read', forged)
+    with pytest.raises(ValueError):
+        asyncio.run(control.execute('control-0000'))
+    assert not list(budget.store.read('governed_control_terminal'))
+
+
+@pytest.mark.parametrize('crash_point', ['cancel', 'invalidate'])
+def test_measured_control_failure_recovers_invalidation(control_authority, monkeypatch, crash_point):
+    from core.composition.evaluation import MeasuredEvaluationError
+    from core.executor.types import CostVec
+    from core.llm import UsageError
+    from zoo.circle_packing.host_control import HostSeedControl
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    async def bad(*args, **kwargs):
+        raise MeasuredEvaluationError('bad', CostVec(eval_count=1), ('token', 'node', 'eval_count'), 'split', 0)
+    monkeypatch.setattr(control.domain, 'evaluate', bad)
+    method = 'cancel_control_slot' if crash_point == 'cancel' else 'invalidate_protection'
+    original = getattr(budget, method)
+    def crash(*args, **kwargs):
+        raise SystemExit('fixture crash before failed control invalidation')
+    monkeypatch.setattr(budget, method, crash)
+    with pytest.raises(SystemExit):
+        asyncio.run(control.execute('control-0000'))
+    monkeypatch.setattr(budget, method, original)
+    with pytest.raises(UsageError):
+        asyncio.run(control.execute('control-0000'))
+    audit = budget.audit_governance()
+    assert audit['slots']['control-0000']['status'] == 'failed'
+    assert not audit['protection_valid'] and audit['physical_totals']['eval_count'] == 1
+    assert budget.state()['initial_control_ready'] is None

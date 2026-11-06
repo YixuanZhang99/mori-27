@@ -10,7 +10,8 @@ from types import SimpleNamespace
 
 from core.composition.contracts import OperatorRequest, Proposal
 from core.composition.defaults import InProcessExecutor
-from core.composition.evaluation import MeasuredEvaluationError, binding_for, encode_evidence, validate_evidence
+from core.composition.evaluation import (MeasuredEvaluationError, binding_for, decode_evaluation_outcome,
+                                         encode_evidence, validate_evidence)
 from core.composition.governance_audit import audit_terminals
 from core.composition.hierarchical_runtime import HierarchicalRuntime
 from core.composition.invocation import InvocationLifecycle
@@ -101,11 +102,22 @@ class HostSeedControl:
         self.provider = MeteredProvider(_NoProvider())
         self.guard = _ControlGuard(budget)
         self.runtime = SimpleNamespace(budget=budget, store=self.store, _logical_run_id=run.logical_run_id,
-            continuation_enabled=True, governed=self.guard, durable_executor=False)
+            continuation_enabled=True, governed=self.guard, durable_executor=False,
+            evaluation_evidence_seal=self._evaluation_seal)
         self.sessions = {slot['slot_id']: {'domain': control_domain} for slot in self.plan['slots']}
         self.invocations = InvocationLifecycle(budget, self.store,
             lambda *args, **kwargs: HierarchicalRuntime._settle_physical(self.runtime, *args, **kwargs),
             governance=self.guard)
+
+    def _evaluation_seal(self, intent_id):
+        rows = [row['payload'] for row in self.store.read('governed_evaluation_completed')
+                if row['payload'].get('identity', {}).get('intent_id') == intent_id]
+        if not rows and any(row['payload'].get('intent_id') == intent_id
+                            for row in self.store.read('governed_evaluation_failure')):
+            return None
+        if len(rows) != 1:
+            raise ValueError('control evaluation completion must be unique before settlement')
+        return 'sha256:' + payload_digest(rows[0])
 
     def _audited(self):
         return audit_terminals(self.runtime, self.plan, self.sessions)
@@ -124,7 +136,7 @@ class HostSeedControl:
                 operation['actual_costs'] != {'token': 0, 'node': 1, 'eval_count': 0} or \
                 operation['provider_evidence_ref'] != 'sha256:' + payload_digest([]) or \
                 invocation_records(self.store).get(intent_id) or \
-                self.budget.audit_governance()['slots'][slot_id]['phases']['evaluation'] != 'protected':
+                self.budget.audit_governance()['slots'][slot_id]['phases']['evaluation'] not in {'protected', 'settled'}:
             raise ValueError('control operator is not safely recoverable')
         proposal = Proposal(candidate, seed, CostVec(node_count=1), ('token', 'node', 'eval_count'))
         expected_proposal = asdict(proposal)
@@ -168,6 +180,118 @@ class HostSeedControl:
             raise ValueError('control operator differs from original measured seed')
         return proposal
 
+    def _adopt_evaluation(self, slot_id, candidate, proposal, request, expected):
+        """Adopt only the original fully settled evaluation; never repeat work."""
+        intent_id = f'control:{slot_id}:evaluation'
+        operation = self.budget._rebuild()[0]['operations'].get(intent_id)
+        if operation is None:
+            return None
+        if operation['status'] != 'settled' or operation['intent']['candidate'] != asdict(candidate) or \
+                operation['intent']['lane'] != 'control' or operation['intent']['control_slot'] != slot_id or \
+                operation['intent']['request'] != asdict(request) or \
+                operation['provider_evidence_ref'] != 'sha256:' + payload_digest([]) or \
+                invocation_records(self.store).get(intent_id):
+            raise ValueError('control evaluation is not safely recoverable')
+        identity = {'intent_id': intent_id, 'fingerprint': operation['fingerprint'], 'binding': asdict(expected),
+                    'lane': 'control', 'control_slot': slot_id}
+        selected = {}
+        for index, row in enumerate(self.store.read()):
+            kind, data = row['kind'], row['payload']
+            key = None
+            if kind in {'governed_evaluation_started', 'governed_evaluation_completed'} and \
+                    data.get('identity', {}).get('intent_id') == intent_id:
+                key = 'evaluation_start' if kind.endswith('started') else 'evaluation_end'
+            elif kind == 'composed_operation_measurement' and data.get('identity', {}).get('intent_id') == intent_id:
+                key = 'measurement'
+            elif kind == 'composed_physical_evidence' and data.get('intent_id') == intent_id:
+                key = 'physical'
+            elif kind == 'hierarchical_budget' and data.get('event') in {'reserve', 'start', 'settle'}:
+                event = data['event']
+                identifier = data['data']['intent']['intent_id'] if event == 'reserve' else data['data']['intent_id']
+                if identifier == intent_id:
+                    key = event
+            if key is not None:
+                if key in selected:
+                    raise ValueError('duplicate control evaluation recovery evidence')
+                selected[key] = (index, data)
+        required = {'reserve', 'start', 'evaluation_start', 'evaluation_end', 'measurement', 'settle'}
+        if not required.issubset(selected) or set(selected) - required - {'physical'} or \
+                not all(selected[a][0] < selected[b][0] for a, b in zip(
+                    ('reserve', 'start', 'evaluation_start', 'evaluation_end', 'measurement'),
+                    ('start', 'evaluation_start', 'evaluation_end', 'measurement', 'settle'))) or \
+                selected['evaluation_start'][1] != {'identity': identity}:
+            raise ValueError('control evaluation recovery evidence order differs')
+        completed = selected['evaluation_end'][1]
+        elapsed = completed.get('elapsed')
+        if set(completed) != {'identity', 'evidence', 'elapsed', 'domain_state'} or completed['identity'] != identity or \
+                type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
+            raise ValueError('control evaluation completion differs')
+        evidence = decode_evaluation_outcome(completed['evidence'], elapsed)
+        if isinstance(evidence, MeasuredEvaluationError):
+            raise ValueError('rejected control evaluation cannot be recovered as success')
+        validate_evidence(evidence, expected_binding=expected)
+        encoded = encode_evidence(evidence)
+        self.domain.restore_state(completed['domain_state'])
+        self.domain.restore_evidence([{'payload': {'proposal': asdict(proposal), 'evidence': encoded['evidence']}}])
+        cost = evidence.eval_result.cost
+        coverage = list(evidence.eval_result.contract.measured_cost_units)
+        measured = {'intent_id': intent_id, 'fingerprint': operation['fingerprint'], 'cost': asdict(cost),
+                    'coverage': coverage, 'evaluation': True, 'operator': False}
+        amounts = {'token': cost.tokens_in + cost.tokens_out, 'node': 0, 'eval_count': max(1, cost.eval_count)}
+        if selected['measurement'][1].get('identity') != measured or \
+                selected['measurement'][1].get('elapsed') != elapsed or \
+                operation.get('measurement_evidence_ref') != 'sha256:' + payload_digest(completed) or \
+                operation['actual_costs'] != amounts:
+            raise ValueError('settled control differs from original evaluation')
+        physical = {'intent_id': intent_id, 'request': asdict(request), 'evidence': encoded}
+        if 'physical' in selected:
+            if selected['physical'][0] <= selected['settle'][0] or selected['physical'][1] != physical:
+                raise ValueError('physical evidence differs from original evaluation')
+        else:
+            self.store.append('composed_physical_evidence', physical)
+        return evidence
+
+    def _recover_failed_evaluation(self, slot_id):
+        """Complete invalidation of an already measured failure after a crash."""
+        intent_id = f'control:{slot_id}:evaluation'
+        rows = list(self.store.read())
+        failures = [(i, row['payload']) for i, row in enumerate(rows)
+                    if row['kind'] == 'governed_evaluation_failure' and row['payload'].get('intent_id') == intent_id]
+        if not failures:
+            return
+        if len(failures) != 1:
+            raise ValueError('duplicate measured control failure')
+        operation = self.budget._rebuild()[0]['operations'].get(intent_id)
+        index, failure = failures[0]
+        settlements = [(i, row['payload']['data']) for i, row in enumerate(rows)
+                       if row['kind'] == 'hierarchical_budget' and row['payload'].get('event') == 'settle'
+                       and row['payload']['data'].get('intent_id') == intent_id]
+        measurements = [(i, row['payload']) for i, row in enumerate(rows)
+                        if row['kind'] == 'composed_operation_measurement'
+                        and row['payload'].get('identity', {}).get('intent_id') == intent_id]
+        if operation is None or operation['status'] != 'settled' or len(settlements) != 1 or len(measurements) != 1 or \
+                not index < measurements[0][0] < settlements[0][0] or \
+                failure.get('fingerprint') != operation['fingerprint'] or \
+                failure.get('reason') != 'MeasuredEvaluationError':
+            raise ValueError('measured control failure lacks original settlement')
+        cost = failure.get('cost', {})
+        expected = {'token': cost.get('tokens_in', 0) + cost.get('tokens_out', 0), 'node': 0,
+                    'eval_count': max(1, cost.get('eval_count', 0))}
+        measured = {'intent_id': intent_id, 'fingerprint': operation['fingerprint'], 'cost': cost,
+                    'coverage': failure.get('measured_cost_units'), 'evaluation': True, 'operator': False}
+        if measurements[0][1].get('identity') != measured or operation['actual_costs'] != expected:
+            raise ValueError('measured control failure differs from settlement')
+        audit = self.budget.audit_governance()
+        if audit['slots'][slot_id]['reason'] is None:
+            self.budget.cancel_control_slot(slot_id, reason='evaluation_failed')
+        elif audit['slots'][slot_id]['reason'] != 'evaluation_failed':
+            raise ValueError('control failure cancellation reason differs')
+        audit = self.budget.audit_governance()
+        reason = 'control_evaluation_integrity_failed'
+        if reason not in audit['protection_breaches'].get(intent_id, []):
+            self.budget.invalidate_protection(intent_id, reason)
+        raise UsageError('measured control evaluation failed; original cost retained')
+
     async def execute(self, slot_id):
         with self.budget._lock:
             if self._running:
@@ -194,6 +318,7 @@ class HostSeedControl:
         if any(operation['intent']['lane'] == 'main' for operation in operations.values()):
             raise ValueError('control must run before all main operations')
         slot = slots[0]
+        self._recover_failed_evaluation(slot_id)
         currency = self.bridge.audit()
         if currency['unknown_cost_calls'] or not currency['protection_valid']:
             raise UsageError('currency protection is not valid for the control')
@@ -214,31 +339,35 @@ class HostSeedControl:
             if failure is not None:
                 raise UsageError('deterministic seed control failed')
         evaluation_request = EvalRequest(**slot['request'])
-        receipt = self.budget.reserve_control_operation(slot_id, 'evaluation', candidate, request=evaluation_request)
-        if not receipt.granted:
-            raise UsageError('protected control evaluation reservation was refused')
         expected = binding_for(proposal, evaluation_request, evaluator_version=self.domain.evaluator_version,
                                evaluation_context=self.domain.evaluation_context_for(evaluation_request))
-        identity = {'intent_id': receipt.intent_id, 'fingerprint': receipt.fingerprint, 'binding': asdict(expected),
-                    'lane': 'control', 'control_slot': slot_id}
-        async def invoke():
-            return await InProcessExecutor().execute(proposal, evaluation_request, self.domain)
-        try:
-            evidence = await self.invocations.evaluation(receipt, self.provider, invoke, identity=identity,
-                domain=self.domain, lane='control', slot_id=slot_id)
-        except MeasuredEvaluationError:
-            self.budget.cancel_control_slot(slot_id, reason='evaluation_failed')
-            self.budget.invalidate_protection(receipt.intent_id, 'control_evaluation_integrity_failed')
-            raise
-        try:
-            validate_evidence(evidence, expected_binding=expected)
+        evidence = self._adopt_evaluation(slot_id, candidate, proposal, evaluation_request, expected)
+        if evidence is None:
+            receipt = self.budget.reserve_control_operation(slot_id, 'evaluation', candidate, request=evaluation_request)
+            if not receipt.granted:
+                raise UsageError('protected control evaluation reservation was refused')
+            identity = {'intent_id': receipt.intent_id, 'fingerprint': receipt.fingerprint, 'binding': asdict(expected),
+                        'lane': 'control', 'control_slot': slot_id}
+            async def invoke():
+                return await InProcessExecutor().execute(proposal, evaluation_request, self.domain)
+            try:
+                evidence = await self.invocations.evaluation(receipt, self.provider, invoke, identity=identity,
+                    domain=self.domain, lane='control', slot_id=slot_id)
+            except MeasuredEvaluationError:
+                self.budget.cancel_control_slot(slot_id, reason='evaluation_failed')
+                self.budget.invalidate_protection(receipt.intent_id, 'control_evaluation_integrity_failed')
+                raise
+            try:
+                validate_evidence(evidence, expected_binding=expected)
+                encoded = encode_evidence(evidence)
+            except (ValueError, TypeError):
+                self.budget.cancel_control_slot(slot_id, reason='evaluation_failed')
+                self.budget.invalidate_protection(receipt.intent_id, 'control_evaluation_integrity_failed')
+                raise
+            self.store.append('composed_physical_evidence', {'intent_id': receipt.intent_id,
+                'request': asdict(evaluation_request), 'evidence': encoded})
+        else:
             encoded = encode_evidence(evidence)
-        except (ValueError, TypeError):
-            self.budget.cancel_control_slot(slot_id, reason='evaluation_failed')
-            self.budget.invalidate_protection(receipt.intent_id, 'control_evaluation_integrity_failed')
-            raise
-        self.store.append('composed_physical_evidence', {'intent_id': receipt.intent_id,
-            'request': asdict(evaluation_request), 'evidence': encoded})
         status = 'evaluated' if evidence.eval_result.status is EvalStatus.OK else 'failed'
         if status == 'failed':
             self.budget.cancel_control_slot(slot_id, reason='evaluation_failed')
