@@ -520,6 +520,9 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
         stage_starts = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_started'}
         stage_ends = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_completed'}
         eligibility = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_eligibility'}
+        receipt = report.get('selection_stage_request_id')
+        if type(receipt) is not str or not re.fullmatch(r'[0-9a-f]{32}', receipt):
+            raise ValueError('reference fixture selection lacks its stage receipt')
         matches = []
         for request_id, start in stage_starts.items():
             if start['stage'] != 1 or start['program_ref'] != selected['program_ref']:
@@ -536,7 +539,9 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
                     continue
                 final_id = second[0]
             final = stage_ends[final_id]
-            if final['result']['status'] == 'ok' and final['result']['metrics'] == selected['metrics'] and \
+            if final_id == receipt and final['result']['status'] == 'ok' and \
+                    json.dumps(final['result']['metrics'], sort_keys=True, allow_nan=False) == \
+                    json.dumps(selected['metrics'], sort_keys=True, allow_nan=False) and \
                     authority.stages._verify_stage_eligibility(eligibility[final_id], stage_starts[final_id],
                                                               final, deadline):
                 matches.append((final_id, final['evidence_ref']))

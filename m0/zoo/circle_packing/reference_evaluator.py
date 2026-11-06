@@ -27,6 +27,10 @@ def _stage(program_path, number):
         AppendOnlyStore(root / 'fixture-stages.jsonl').append('stage', result)
         if result['status'] != 'ok':
             return {'combined_score': 0.0, 'fixture_stage_failed': 1.0}
+        if os.environ.get('MORI_CIRCLE_STAGE_BROKER') == '1':
+            from openevolve.evaluation_result import EvaluationResult
+            return EvaluationResult(metrics=result['metrics'],
+                                    artifacts={'mori_stage_request_id': request_id})
         return result['metrics']
     except Exception:
         # The pinned upstream evaluator otherwise retains the first-stage

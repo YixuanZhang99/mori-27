@@ -70,3 +70,26 @@ def test_reference_cell_rejects_worker_and_physical_stage_disagreement(monkeypat
     with pytest.raises(ValueError, match='worker.*stage'):
         module.audit_anchored_reference_cell(None, None, 'run', worker_proof={}, stdout='', stderr='',
             selected=selected, options={}, stamp={}, governance={}, rows=[], request_ids=['a' * 32])
+
+
+def test_worker_receipt_must_match_anchored_final_stage(monkeypatch):
+    from zoo.circle_packing import reference_selection as module
+    anchor = {'worker_ref': 'a' * 64, 'cell_id': 'vendor-0', 'request_ids': ['1' * 32, '2' * 32]}
+    monkeypatch.setattr(module, '_validated_reference_snapshot', lambda *args: anchor)
+    started = {'execution_id': 'a' * 32, 'cell_id': 'vendor-0', 'worker_ref': 'a' * 64,
+               'candidate_id': 'cell-worker', 'attempt': 1}
+    terminal = {'execution_id': 'a' * 32, 'candidate_id': 'cell-worker', 'attempt': 1,
+                'returncode': 0, 'timeout': False, 'recovered': False}
+    selected = {'id': 'p', 'program_ref': 'sha256:' + 'a' * 64, 'metrics': {}}
+    report = {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
+              'controller': 'pinned_openevolve', 'selected_program': selected,
+              'selection_stage_request_id': '3' * 32}
+    stdout = json.dumps(report)
+    proof = {'schema_version': 1, 'started': started, 'terminal': terminal,
+             'result': {'returncode': 0, 'timeout': False, 'wrapper_error': None,
+                        'stdout_sha256': hashlib.sha256(stdout.encode()).hexdigest(),
+                        'stderr_sha256': hashlib.sha256(b'').hexdigest()}}
+    from core.x1.checkpoint import payload_digest
+    anchor['worker_proof_sha256'] = payload_digest(proof)
+    with pytest.raises(ValueError, match='stage'):
+        module.audit_anchored_reference_worker(None, None, 'run', proof, stdout=stdout, stderr='', selected=selected)

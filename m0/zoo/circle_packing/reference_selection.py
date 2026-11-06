@@ -348,6 +348,9 @@ def audit_anchored_reference_worker(view, clock, run_id, worker_proof, *, stdout
                 json.dumps(report.get('selected_program'), sort_keys=True, allow_nan=False) != \
                 json.dumps(selected, sort_keys=True, allow_nan=False):
             raise ValueError('anchored worker report differs from the selected program')
+        if 'selection_stage_request_id' in report and (not anchor['request_ids'] or
+                report['selection_stage_request_id'] != anchor['request_ids'][-1]):
+            raise ValueError('anchored worker stage receipt differs from physical stage')
     except (TypeError, UnicodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError('anchored worker report is invalid') from error
     return {'worker_ref': anchor['worker_ref'], 'execution_id': started['execution_id']}

@@ -115,10 +115,21 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_s
     selected = {'id': result.best_program.id,
                 'program_ref': 'sha256:' + hashlib.sha256(result.best_code.encode('utf-8')).hexdigest(),
                 'metrics': result.metrics}
-    return {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
-            'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
-            'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker,
-            'selected_program': selected}
+    report = {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
+              'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
+              'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker,
+              'selected_program': selected}
+    if fixture_stage_broker:
+        import re
+        try:
+            artifacts = json.loads(result.best_program.artifacts_json)
+            receipt = artifacts['mori_stage_request_id']
+        except (TypeError, ValueError, KeyError) as error:
+            raise RuntimeError('selected host program lacks its evaluation receipt') from error
+        if type(receipt) is not str or not re.fullmatch(r'[0-9a-f]{32}', receipt):
+            raise RuntimeError('selected host program has an invalid evaluation receipt')
+        report['selection_stage_request_id'] = receipt
+    return report
 
 
 def main():

@@ -101,3 +101,10 @@ capability; the fixture checks socket identity and the peer process before
 sending it. A standalone probe does not authenticate an arbitrary service in
 the same process. The worker can read the capability, which is not a provider
 API key.
+
+The offline reference evaluator records its physical stage receipt as an
+OpenEvolve artifact, so the selected program can be associated with one
+actual evaluation even when identical code is evaluated repeatedly. The pinned
+host can expose this artifact in later prompts; this is an adapted fixture,
+not an unchanged upstream performance comparison. The receipt is a host-worker
+assertion joined to physical records, not an independent final-winner proof.

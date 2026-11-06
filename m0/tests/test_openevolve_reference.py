@@ -202,3 +202,27 @@ def test_actual_host_worker_uses_fixture_broker_without_credentials(tmp_path, sh
         if item.is_file():
             data = item.read_bytes()
             assert b'fixture-api-secret-not-for-network' not in data and b'a' * 64 not in data
+
+
+def test_reference_cascade_attaches_final_physical_receipt_to_host_program(tmp_path, monkeypatch):
+    import asyncio
+    from core.openevolve_interop import ProgramDatabase  # initializes pinned host imports
+    from openevolve.config import EvaluatorConfig
+    from openevolve.evaluator import Evaluator
+    from zoo.circle_packing import reference_evaluator
+    from zoo.circle_packing.host_transport import HostEvaluationClient
+    from test_circle_packing_sandbox import GRID
+    from test_openevolve_host_stage_budget import fake_result
+    monkeypatch.setenv('MORI_CIRCLE_REFERENCE_ROOT', str(tmp_path))
+    monkeypatch.setenv('MORI_CIRCLE_STAGE_BROKER', '1')
+    monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(tmp_path / 'unused.sock'))
+    monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+    def evaluate(self, program, *, stage, prior_id=None):
+        assert prior_id == (None if stage == 1 else '1' * 32)
+        return str(stage) * 32, fake_result(program, stage, score=.6)
+    monkeypatch.setattr(HostEvaluationClient, 'evaluate', evaluate)
+    evaluator = Evaluator(EvaluatorConfig(cascade_evaluation=True, cascade_thresholds=[.5, .75],
+                          parallel_evaluations=1, max_retries=0, timeout=120), reference_evaluator.__file__)
+    metrics = asyncio.run(evaluator.evaluate_program(GRID, 'grid'))
+    assert metrics['combined_score'] >= .5
+    assert evaluator.get_pending_artifacts('grid')['mori_stage_request_id'] == '2' * 32
