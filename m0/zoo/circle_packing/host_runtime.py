@@ -236,12 +236,18 @@ def build_reference_provider(ledger, plan, *, api_key, base_url, operator_cap, f
         raise ValueError('reference provider requires a campaign, plan and bounded call limit')
     policy = ledger.manifest_binding()
     try:
-        expected = build_draft_plan(policy, source_commit=plan['source_commit'],
-                                    dependency_lock_sha256=plan['dependency_lock_sha256'])
+        if type(plan.get('schema_version')) is int and plan['schema_version'] == 3:
+            if not fixture:
+                raise ValueError('continuation provider requires a fixture campaign')
+            cell = f"{plan['experiment_id']}--vendor-0"
+            validate_draft_cell(ledger, plan, cell, expected_plan_ref='sha256:' + plan['draft_sha256'])
+        else:
+            expected = build_draft_plan(policy, source_commit=plan['source_commit'],
+                                        dependency_lock_sha256=plan['dependency_lock_sha256'])
+            if plan != expected or payload_digest(plan) != payload_digest(expected):
+                raise ValueError('reference provider plan differs from its campaign')
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError('reference provider plan differs from its campaign') from error
-    if plan != expected or payload_digest(plan) != payload_digest(expected):
-        raise ValueError('reference provider plan differs from its campaign')
     if fixture:
         try:
             url = urllib.parse.urlsplit(base_url)
@@ -273,7 +279,9 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
     if mode == 'live_preparation' and ledger.is_fixture_campaign():
         raise ValueError('live preparation requires a non-fixture campaign')
     cell = deadline._record['cell_id']
-    if not re.fullmatch(r'vendor-[012]', cell):
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    experiment_id, arm, seed = parse_cell_identity(cell)
+    if arm != 'vendor' or seed not in (0, 1, 2) or (experiment_id is not None and mode != 'fixture'):
         raise ValueError('reference requires a declared vendor cell')
     if mode == 'live_preparation' and cell != 'vendor-0':
         raise ValueError('live pilot gate allows only the first paired cells')
@@ -289,13 +297,25 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
     if mode == 'live_preparation':
         from zoo.circle_packing.supervisor_attestation import require_supervised_process
         require_supervised_process(ledger, deadline)
-    if pilot is None or not pilot.get('require_runtime') or runtime is None or \
-            type(runner) is not SandboxRunner or runner._campaign_runtime is None or \
-            runner._campaign_runtime[0] is not ledger or \
-            runner.manifest_binding.get('runtime_ref') != runtime['runtime_ref']:
-        raise ValueError('reference requires the original frozen campaign runtime')
-    verify_frozen_source(ledger, plan, snapshot=snapshot, manifest=source_manifest,
-                         expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
+    if experiment_id is not None:
+        continuation = ledger.circle_continuation_binding(experiment_id)
+        if type(runner) is not SandboxRunner or runner._campaign_runtime is None or \
+                runner._campaign_runtime[0] is not ledger or runner._continuation_runtime is None or \
+                payload_digest(runner._continuation_runtime[0]) != payload_digest(plan) or \
+                Path(snapshot).resolve(strict=True) != (Path(runner._continuation_runtime[1]) / 'source').resolve(strict=True) or \
+                continuation is None or 'sha256:' + payload_digest(source_manifest) != continuation['tree_ref'] or \
+                runner.manifest_binding.get('runtime_ref') != continuation['runtime_ref']:
+            raise ValueError('reference requires its bound continuation source and runtime')
+        tree_ref, runtime = continuation['tree_ref'], continuation
+    else:
+        if pilot is None or not pilot.get('require_runtime') or runtime is None or \
+                type(runner) is not SandboxRunner or runner._campaign_runtime is None or \
+                runner._campaign_runtime[0] is not ledger or runner._continuation_runtime is not None or \
+                runner.manifest_binding.get('runtime_ref') != runtime['runtime_ref']:
+            raise ValueError('reference requires the original frozen campaign runtime')
+        verify_frozen_source(ledger, plan, snapshot=snapshot, manifest=source_manifest,
+                             expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
+        tree_ref = pilot['tree_ref']
     build_reference_provider(ledger, plan, api_key=api_key, base_url=base_url,
                              operator_cap=1, fixture=mode == 'fixture')
     deadline.check()
@@ -307,7 +327,7 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
         raise ValueError('reference output must be separate from the campaign')
     authority_ref = payload_digest({'schema_version': 1, 'cell_id': cell,
         'deadline_ref': deadline._record['record_sha256'], 'plan_ref': expected_plan_ref,
-        'campaign_id': expected_campaign_id, 'source_tree_ref': pilot['tree_ref'],
+        'campaign_id': expected_campaign_id, 'source_tree_ref': tree_ref,
         'runtime_ref': runtime['runtime_ref'], 'output': str(root), 'base_url': base_url.rstrip('/')})
     currency_run_id = usage_run_id(root / 'provider_usage')
     expected_claim = {'deadline_ref': deadline._record['record_sha256'], 'authority_ref': authority_ref,
@@ -354,14 +374,21 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
         raise
 
 
-def reference_budget_config(plan, campaign, *, seed):
+def reference_budget_config(plan, campaign, *, seed, ledger=None):
     """Derive the reference physical budget without credentials or a live authority."""
     from zoo.circle_packing.pilot_plan import build_draft_plan
     if type(plan) is not dict or type(seed) is not int or seed not in (0, 1, 2):
         raise ValueError('reference budget requires its frozen plan and seed')
     try:
-        expected = build_draft_plan(campaign, source_commit=plan['source_commit'],
-                                    dependency_lock_sha256=plan['dependency_lock_sha256'])
+        if type(plan.get('schema_version')) is int and plan['schema_version'] == 3:
+            if type(ledger) is not CampaignBudget or ledger.manifest_binding() != campaign:
+                raise ValueError('continuation budget requires its original fixture campaign')
+            validate_draft_cell(ledger, plan, f"{plan['experiment_id']}--vendor-{seed}",
+                                expected_plan_ref='sha256:' + plan['draft_sha256'])
+            expected = plan
+        else:
+            expected = build_draft_plan(campaign, source_commit=plan['source_commit'],
+                                        dependency_lock_sha256=plan['dependency_lock_sha256'])
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError('reference budget differs from its frozen campaign') from error
     if payload_digest(plan) != payload_digest(expected):
@@ -393,7 +420,9 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
                                         operator_cap=operator_cap, fixture=mode == 'fixture')
 
     main, control_provider = provider(1), provider(2)
-    options, stamp_values, governance = reference_budget_config(plan, policy, seed=int(cell.split('-')[1]))
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    _experiment_id, _arm, seed = parse_cell_identity(cell)
+    options, stamp_values, governance = reference_budget_config(plan, policy, seed=seed, ledger=ledger)
     if main.governance_binding()['call_bound']['units']['token'] != policy['context_tokens'] + plan['max_completion_tokens']:
         raise ValueError('reference provider capacity differs from its frozen plan')
     journal_path = root / 'events.jsonl'

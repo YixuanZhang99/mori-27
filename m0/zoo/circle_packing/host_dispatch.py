@@ -79,7 +79,7 @@ class HostDispatchCoordinator:
                 runner._campaign_runtime is not None and runner._campaign_runtime[0] is not bridge.ledger):
             raise ValueError('host runner must belong to the campaign')
         from zoo.circle_packing.host_control import _require_campaign_runtime
-        _require_campaign_runtime(bridge.ledger, runner)
+        _require_campaign_runtime(bridge.ledger, runner, bridge=bridge)
         slot = run.physical_plan['slots'][0]
         if type(slot['slot_id']) is not str or not re.fullmatch(r'control-[0-9]{4}', slot['slot_id']):
             raise ValueError('host requires a canonical control slot identity')
@@ -95,7 +95,7 @@ class HostDispatchCoordinator:
             self._owner_check()
         from core.composition.governance_audit import audit_terminals
         from zoo.circle_packing.host_control import _require_campaign_runtime
-        _require_campaign_runtime(self.bridge.ledger, self.control_domain.runner)
+        _require_campaign_runtime(self.bridge.ledger, self.control_domain.runner, bridge=self.bridge)
         slot_id = self.run.physical_plan['slots'][0]['slot_id']
         runtime = SimpleNamespace(store=self.store, budget=self.budget, _logical_run_id=self.run.logical_run_id)
         terminals = audit_terminals(runtime, self.run.physical_plan, {slot_id: {'domain': self.control_domain}})

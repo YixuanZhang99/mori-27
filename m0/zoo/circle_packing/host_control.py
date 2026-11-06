@@ -26,7 +26,21 @@ from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 
-def _require_campaign_runtime(ledger, runner):
+def _require_campaign_runtime(ledger, runner, *, bridge=None):
+    if type(runner) is SandboxRunner and runner._continuation_runtime is not None:
+        from zoo.circle_packing.pilot_plan import validate_draft_cell
+        if not ledger.is_fixture_campaign() or runner._campaign_runtime is None or \
+                runner._campaign_runtime[0] is not ledger or bridge is None or bridge.ledger is not ledger:
+            raise ValueError('host continuation requires its fixture authority')
+        clock = bridge.cell_deadline()
+        draft = runner._continuation_runtime[0]
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        if clock is None or clock._lifecycle.ledger is not ledger or \
+                parse_cell_identity(clock._record['cell_id'])[1] != 'vendor':
+            raise ValueError('host continuation requires its original vendor clock')
+        validate_draft_cell(ledger, draft, clock._record['cell_id'], expected_plan_ref=clock._record['plan_ref'])
+        runner._verify_campaign_runtime()
+        return
     pilot = ledger.circle_pilot_binding()
     frozen = ledger.circle_runtime_binding()
     if pilot is not None and pilot.get('require_runtime') and frozen is None:
@@ -87,7 +101,7 @@ class HostSeedControl:
             raise ValueError('main domain must start without prior candidate state')
         if domain.runner._campaign_runtime is not None and domain.runner._campaign_runtime[0] is not bridge.ledger:
             raise ValueError('control runtime must belong to the campaign')
-        _require_campaign_runtime(bridge.ledger, domain.runner)
+        _require_campaign_runtime(bridge.ledger, domain.runner, bridge=bridge)
         if len(run.physical_plan.get('slots', [])) != 1 or \
                 run.physical_plan['slots'][0]['operator']['name'] != 'draft' or \
                 not re.fullmatch(r'control-[0-9]{4}', run.physical_plan['slots'][0]['slot_id']):
@@ -327,7 +341,7 @@ class HostSeedControl:
         with self.budget._lock:
             if self._owner_check is not None:
                 self._owner_check()
-            _require_campaign_runtime(self.bridge.ledger, self.domain.runner)
+            _require_campaign_runtime(self.bridge.ledger, self.domain.runner, bridge=self.bridge)
             if self._running:
                 raise ValueError('control is already running')
             self._running = True
