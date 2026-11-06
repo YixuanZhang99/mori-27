@@ -1,5 +1,8 @@
 """Reference control reuses existing protected-control lifecycle and evidence."""
 import asyncio
+import os
+from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -20,6 +23,28 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 @pytest.fixture
 def control_authority(tmp_path, local_endpoint, request):
     ledger = campaign_fixture(tmp_path)
+    runner = SandboxRunner()
+    cache = os.environ.get('MORI_TEST_OFFLINE_CACHE') if getattr(request, 'param', None) == 'locked' else None
+    if cache:
+        from test_openevolve_source_preflight import draft
+        from zoo.circle_packing.frozen_source import freeze_source_plan
+        from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
+        repository = Path(__file__).resolve().parents[2]
+        commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+        checkout = tmp_path / 'checkout'
+        subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
+        subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+        plan, ref = draft(ledger, checkout, commit)
+        campaign_id = ledger.manifest_binding()['campaign_id']
+        source = tmp_path / 'source'
+        exported = freeze_source_plan(ledger, plan, checkout=checkout, destination=source,
+                                      expected_plan_ref=ref, expected_campaign_id=campaign_id, require_runtime=True)
+        runtime = tmp_path / 'runtime'
+        frozen = prepare_frozen_runtime(ledger, plan, snapshot=source, source_manifest=exported['manifest'],
+            expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+            base_python='/usr/bin/python3.12', uv_cache=cache)
+        runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
+                                                    base_python='/usr/bin/python3.12')
     campaign = ledger.manifest_binding()
     def fresh(operator_cap):
         return GovernedCNYProvider('deepseek-flash', local_endpoint.url, campaign_binding=campaign,
@@ -42,7 +67,7 @@ def control_authority(tmp_path, local_endpoint, request):
     store = ContinuationStore(tmp_path / 'events.jsonl')
     budget = HierarchicalBudget(options, AccountingStamp('offline', 'fixture-v1', 'tokens-v1', 'price-v1', 'today'),
                                 store, governance=config)
-    main_domain = CirclePackingDomain(tmp_path / 'main-domain', runner=SandboxRunner())
+    main_domain = CirclePackingDomain(tmp_path / 'main-domain', runner=runner)
     plan = ControlPlan.freeze(config, task_desc='Improve circle packing',
                               initial_context={'circle_domain_binding': main_domain.manifest_binding},
                               max_generations=6, units=budget.units).to_dict()
@@ -76,6 +101,35 @@ def test_seed_control_uses_existing_lifecycle_and_replays_without_calls(control_
     monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
     assert asyncio.run(control.execute('control-0000')) == terminal
     assert ledger.snapshot() == before and not local_endpoint.requests
+
+
+def test_dispatch_coordinator_accepts_independent_matching_runner(control_authority):
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    ledger, budget, bridge, run, ready, domain = control_authority
+    authority = HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
+    assert authority.control_domain.runner is not domain.runner
+    assert authority.control_domain.runner.manifest_binding == domain.runner.manifest_binding
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('control_authority', ['locked'], indirect=True)
+def test_seed_control_and_dispatch_share_the_campaign_runtime(control_authority):
+    from core.composition.openevolve_registration import _SEED
+    from zoo.circle_packing.host_control import HostSeedControl
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    ledger, budget, bridge, run, ready, domain = control_authority
+    control = HostSeedControl(budget, bridge, run, ready, domain)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready, runner=domain.runner)
+    assert control.domain.runner.manifest_binding == authority.control_domain.runner.manifest_binding
+    if os.environ.get('MORI_TEST_OFFLINE_CACHE'):
+        assert domain.runner.manifest_binding['runtime_ref'] == ledger.circle_runtime_binding()['runtime_ref']
+    assert asyncio.run(control.execute('control-0000'))['status'] == 'evaluated'
+    authority._require_control()
+    stages = HostStageAdmission(budget, runner=domain.runner.independent_runner(),
+                                workspace=domain.workspace.parent / 'host-stages', control_authority=authority)
+    assert stages.execute('a' * 32, _SEED.read_text(), stage=1)['status'] == 'ok'
+    assert stages.audit()['stage_calls'] == 1
 
 
 def test_control_rejects_nonfresh_domain_before_any_work(control_authority, local_endpoint):

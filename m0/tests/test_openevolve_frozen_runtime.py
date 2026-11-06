@@ -94,6 +94,35 @@ def test_locked_runtime_is_created_and_bound_before_any_cell(tmp_path):
                               base_python='/usr/bin/python3.12')
 
 
+def test_stage_runner_executes_and_verifies_campaign_runtime(tmp_path):
+    from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    runtime = tmp_path / 'runtime'
+    frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+        base_python='/usr/bin/python3.12', uv_cache=cache)
+    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
+                                                 base_python='/usr/bin/python3.12')
+    independent = runner.independent_runner()
+    assert independent is not runner and independent.manifest_binding == runner.manifest_binding
+    assert runner.manifest_binding['runtime_ref'] == frozen['runtime_ref']
+    with pytest.raises(ValueError, match='visible'):
+        runner.validate_paths(runtime / 'protected')
+    with pytest.raises(ValueError, match='visible'):
+        runner.validate_paths(tmp_path)
+    workspace = tmp_path / 'evaluation'
+    workspace.mkdir()
+    (workspace / 'data').mkdir()
+    (workspace / 'program.py').write_text('import sys; print(sys.prefix)')
+    outcome = runner.execute(workspace, timeout=15)
+    assert outcome['returncode'] == 0
+    assert (workspace / 'stdout.log').read_text().strip() == str(runtime)
+    (runtime / 'pyvenv.cfg').write_text('tampered')
+    with pytest.raises(ValueError, match='runtime'):
+        independent.execute(workspace, timeout=15)
+
+
 def test_runtime_creation_rejects_started_cell_and_existing_destination(tmp_path):
     from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
     ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path)

@@ -49,7 +49,7 @@ class HostDispatchRouter:
 
 
 class HostDispatchCoordinator:
-    def __init__(self, budget, bridge, run, ready):
+    def __init__(self, budget, bridge, run, ready, *, runner=None):
         if not budget._require_initial_control or run.store is not budget.store or getattr(run.physical_identity_lookup, '__self__', None) is not budget \
                 or bridge._run is not run or ready.physical_plan_ref != run.physical_plan['plan_ref']:
             raise ValueError('host authorities must share the same frozen physical run')
@@ -68,12 +68,15 @@ class HostDispatchCoordinator:
         budget._governed.validate_plan(run.physical_plan)
         from zoo.circle_packing.domain import CirclePackingDomain
         from zoo.mle_bench_lite.composed_domain import SandboxRunner
+        if runner is not None and (type(runner) is not SandboxRunner or
+                runner._campaign_runtime is not None and runner._campaign_runtime[0] is not bridge.ledger):
+            raise ValueError('host runner must belong to the campaign')
         slot = run.physical_plan['slots'][0]
         if type(slot['slot_id']) is not str or not re.fullmatch(r'control-[0-9]{4}', slot['slot_id']):
             raise ValueError('host requires a canonical control slot identity')
         frozen = run.physical_plan['initial_context'].get('circle_domain_binding')
         self.control_domain = CirclePackingDomain(Path(run.workdir) / 'host-controls' / slot['slot_id'],
-                                                   runner=SandboxRunner())
+                                                   runner=SandboxRunner() if runner is None else runner.independent_runner())
         if self.control_domain.manifest_binding != frozen:
             raise ValueError('host control audit domain differs from frozen evaluation binding')
         self.physical = HostPhysicalAdmission(budget, control_authority=self)

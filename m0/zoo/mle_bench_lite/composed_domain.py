@@ -30,13 +30,46 @@ class SandboxRunner:
         self.sandbox = BubblewrapSandbox()
         self.interpreter = sys.executable
         self.runtime_root = _PROCESS_RUNTIME_ROOT
+        self._campaign_runtime = None
 
-    @staticmethod
-    def validate_paths(*paths):
+    @classmethod
+    def for_campaign_runtime(cls, ledger, *, runtime, manifest, base_python):
+        from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+        runtime = Path(runtime).resolve(strict=True)
+        verified = verify_frozen_runtime(ledger, runtime=runtime, manifest=manifest, base_python=base_python)
+        runner = cls()
+        runner.runtime_root = runtime
+        runner.interpreter = str(runtime / 'bin' / 'python')
+        runner._campaign_runtime = (ledger, copy.deepcopy(manifest), str(base_python), verified['runtime_ref'])
+        return runner
+
+    def independent_runner(self):
+        if self._campaign_runtime is None:
+            return type(self)()
+        ledger, manifest, base_python, _ = self._campaign_runtime
+        return type(self).for_campaign_runtime(ledger, runtime=self.runtime_root, manifest=manifest,
+                                                base_python=base_python)
+
+    def _verify_campaign_runtime(self):
+        if self._campaign_runtime is None:
+            return
+        from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+        ledger, manifest, base_python, reference = self._campaign_runtime
+        result = verify_frozen_runtime(ledger, runtime=self.runtime_root, manifest=manifest, base_python=base_python)
+        if result['runtime_ref'] != reference or self.interpreter != str(self.runtime_root / 'bin' / 'python'):
+            raise ValueError('campaign runtime identity changed')
+
+    def validate_paths(self_or_path=None, *paths):
         # bwrap needs the system interpreter/libraries, so those trees are
-        # readable. Dataset, cache and private-source roots must not be there.
+        # readable. Support both the legacy class call and instance calls;
+        # an instance must include its actual mounted runtime, not the host's.
+        if isinstance(self_or_path, SandboxRunner):
+            runtime = self_or_path.runtime_root
+        else:
+            runtime = _PROCESS_RUNTIME_ROOT
+            paths = (self_or_path, *paths)
         visible = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
-        visible.append(_PROCESS_RUNTIME_ROOT)
+        visible.append(runtime)
         for value in paths:
             if value is None:
                 continue
@@ -46,6 +79,7 @@ class SandboxRunner:
 
     @property
     def manifest_binding(self):
+        self._verify_campaign_runtime()
         binding = {"kind": "bubblewrap-seccomp-csv-v1", "python": self.interpreter,
                 "python_sha256": hashlib.sha256(Path(self.interpreter).read_bytes()).hexdigest(),
                 "threads": {name: 2 for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")},
@@ -53,10 +87,13 @@ class SandboxRunner:
         if not any(self.runtime_root == Path(name).resolve() or Path(name).resolve() in self.runtime_root.parents
                    for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")):
             binding['runtime_root'] = str(self.runtime_root)
+        if self._campaign_runtime is not None:
+            binding['runtime_ref'] = self._campaign_runtime[3]
         return binding
 
     def execute(self, workspace, timeout):
         self.validate_paths(workspace)
+        self._verify_campaign_runtime()
         system_roots = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
         runtime_mount = () if any(self.runtime_root == root or root in self.runtime_root.parents
                                   for root in system_roots) else (self.runtime_root,)
@@ -86,6 +123,7 @@ class SandboxRunner:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+        self._verify_campaign_runtime()
         return {"returncode": returncode, "timed_out": timed_out,
                 "wall_seconds": time.monotonic() - started}
 

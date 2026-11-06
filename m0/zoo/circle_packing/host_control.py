@@ -69,6 +69,8 @@ class HostSeedControl:
             raise ValueError('control requires the original physical run and a fresh circle domain')
         if domain.checkpoint_state()['entries']:
             raise ValueError('main domain must start without prior candidate state')
+        if domain.runner._campaign_runtime is not None and domain.runner._campaign_runtime[0] is not bridge.ledger:
+            raise ValueError('control runtime must belong to the campaign')
         if len(run.physical_plan.get('slots', [])) != 1 or \
                 run.physical_plan['slots'][0]['operator']['name'] != 'draft' or \
                 not re.fullmatch(r'control-[0-9]{4}', run.physical_plan['slots'][0]['slot_id']):
@@ -93,7 +95,7 @@ class HostSeedControl:
         main_path = domain.workspace.resolve()
         if control_path == main_path or control_path in main_path.parents or main_path in control_path.parents:
             raise ValueError('main and control workspaces must be independent')
-        control_domain = CirclePackingDomain(control_path, runner=SandboxRunner())
+        control_domain = CirclePackingDomain(control_path, runner=domain.runner.independent_runner())
         if control_domain.runner is domain.runner or control_domain.manifest_binding != frozen:
             raise ValueError('control evaluator differs from frozen main environment')
         self.budget, self.bridge, self.run, self.ready, self.domain = budget, bridge, run, ready, control_domain
