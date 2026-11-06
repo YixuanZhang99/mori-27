@@ -334,7 +334,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
     from zoo.circle_packing.mori_final import audit_anchored_mori_geometry
     from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
     from zoo.circle_packing.pilot_matrix import snapshot_matrix
-    from zoo.circle_packing.pair_audit import audit_pair_snapshot
+    from zoo.circle_packing.pair_audit import audit_pair_snapshot, audit_supervised_pair_snapshot
     from zoo.circle_packing.supervisor_audit import audit_supervisor_result
     from zoo.circle_packing.reference_recovery import recover_reference_snapshot
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
@@ -430,6 +430,17 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert [row['state'] for row in pair['cells']].count('not_claimed') == 4
         assert pair['mori']['sum_radii'] == mori_report['final_measurement']['sum_radii']
         assert pair['reference']['sum_radii'] == vendor_report['selected_program']['metrics']['sum_radii']
+        supervised = audit_supervised_pair_snapshot(mori_config=config, reference_config=vendor_config,
+            mori_supervisor_directory=tmp_path / 'mori-supervisor',
+            reference_supervisor_directory=tmp_path / 'reference-supervisor', seed=0,
+            plan=config['plan'], expected_plan_ref=config['ref'], mori_rows=mori_rows,
+            mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view, mori_clock=recorded_mori,
+            mori_run_id=mori_run, reference_rows=vendor_rows, reference_view=vendor_view,
+            reference_clock=recorded_vendor, reference_run_id=vendor_run,
+            reference_worker_directory=vendor_config['worker_directory'], reference_bundle=reference_bundle)
+        assert supervised['scope'] == 'paired_supervised_anchored_final_snapshots'
+        assert supervised['mori']['candidate'] == mori_report['candidate']
+        assert supervised['performance_claim'] is False
         with pytest.raises(ValueError):
             audit_pair_snapshot(seed=1, plan=config['plan'], expected_plan_ref=config['ref'],
                 mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,

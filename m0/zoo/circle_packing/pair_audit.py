@@ -70,7 +70,7 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
             options=options, stamp=stamp, governance=governance, rows=reference_rows)
         if not reference['selection_frozen']:
             raise ValueError('reference selection is not frozen')
-        summaries = {'mori': {'sum_radii': mori['measurement']['sum_radii'],
+        summaries = {'mori': {'candidate': mori['candidate'], 'sum_radii': mori['measurement']['sum_radii'],
                               'validity': mori['measurement']['validity'],
                               'settled_upper_bound_micro_cny': mori['settled_upper_bound_micro_cny']},
                      'reference': {'sum_radii': reference['metrics']['sum_radii'],
@@ -93,3 +93,36 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                 'invoice_verified': False}
     except (KeyError, TypeError, AttributeError, IndexError) as error:
         raise ValueError('invalid recorded pair evidence') from error
+
+
+def audit_supervised_pair_snapshot(*, mori_config, reference_config, mori_supervisor_directory,
+                                   reference_supervisor_directory, **pair_arguments):
+    """Join successful supervisor reports to independently recalculated snapshots.
+
+    This checks recorded supervisor assertions and final snapshots only. It is
+    not a full-run certificate and does not authorize subsequent seed cells.
+    """
+    from core.x1.checkpoint import payload_digest
+    from zoo.circle_packing.supervisor_audit import audit_supervisor_result
+    try:
+        for config in (mori_config, reference_config):
+            if config['plan'] != pair_arguments['plan'] or config['ref'] != pair_arguments['expected_plan_ref'] or \
+                    config['seed'] != pair_arguments['seed']:
+                raise ValueError('supervisor configuration differs from the audited pair')
+        mori_report = audit_supervisor_result(mori_config, directory=mori_supervisor_directory,
+            view=pair_arguments['mori_view'], clock=pair_arguments['mori_clock'])
+        reference_report = audit_supervisor_result(reference_config, directory=reference_supervisor_directory,
+            view=pair_arguments['reference_view'], clock=pair_arguments['reference_clock'])
+        result = audit_pair_snapshot(**pair_arguments)
+        if mori_report.get('mode') != 'live' or mori_report.get('final_state') != 'completed' or \
+                mori_report.get('candidate') != result['mori']['candidate'] or \
+                mori_report['final_measurement']['sum_radii'] != result['mori']['sum_radii'] or \
+                mori_report['final_measurement']['validity'] != result['mori']['validity'] or \
+                reference_report.get('mode') != 'live' or reference_report.get('state') != 'completed' or \
+                reference_report.get('currency_bundle_sha256') != payload_digest(pair_arguments['reference_bundle']) or \
+                reference_report['selected_program']['metrics']['sum_radii'] != result['reference']['sum_radii'] or \
+                reference_report['selected_program']['metrics']['validity'] != result['reference']['validity']:
+            raise ValueError('supervisor reports differ from the independently audited snapshots')
+        return {**result, 'scope': 'paired_supervised_anchored_final_snapshots'}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid supervised pair evidence') from error
