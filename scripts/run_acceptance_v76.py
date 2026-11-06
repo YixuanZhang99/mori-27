@@ -29,13 +29,11 @@ def _passing_v76_checks(checks):
 runner._passing_checks = _passing_v76_checks
 
 
-def prepare_git_copy(source, destination):
+def prepare_git_copy(source, destination, commit):
     """Clone committed objects only; do not copy untracked local files."""
     env = {'PATH': os.defpath, 'GIT_CONFIG_NOSYSTEM': '1',
            'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_TERMINAL_PROMPT': '0',
            'GIT_LFS_SKIP_SMUDGE': '1'}
-    commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', '--verify', 'HEAD'],
-                                     env=env, stderr=subprocess.DEVNULL, text=True).strip()
     subprocess.run(['git', '-c', 'core.hooksPath=/dev/null', 'clone', '--quiet', '--no-local',
                     '--no-checkout', '--depth=1', str(source), str(destination)],
                    check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -65,8 +63,14 @@ def main(argv=None):
                 'unchanged': unchanged, 'source_manifest_sha256': previous.digest(before),
                 'file_count': len(before),
                 'scope': 'm0 payload and active acceptance control files; current version output history excluded'}}
-    return runner.main(argv, source_snapshot=previous.snapshot, finalize_summary=finalize,
-                       prepare_copy=prepare_git_copy)
+    def execution_snapshot(root):
+        actual = subprocess.check_output(['git', '-C', str(root), 'rev-parse', '--verify', 'HEAD'],
+                                         stderr=subprocess.DEVNULL, text=True).strip()
+        if actual != commit:
+            raise ValueError('Execution checkout commit differs from acceptance source')
+        return previous.snapshot(root)
+    return runner.main(argv, source_snapshot=execution_snapshot, finalize_summary=finalize,
+                       prepare_copy=lambda source, destination: prepare_git_copy(source, destination, commit))
 
 
 if __name__ == '__main__':

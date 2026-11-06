@@ -43,6 +43,8 @@ with Path('verifier/runs/v76.jsonl').open('a') as f:
             body = body.replace('__MISSING__', str(mutation == 'missing_check'))
             if mutation == 'execution':
                 body += "Path('core/fixture.py').write_text('VALUE = 2\\n')\n"
+            if mutation == 'git_head':
+                body += "import subprocess\ntree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()\nother = subprocess.check_output(['git', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test', 'commit-tree', tree, '-m', 'same tree'], text=True).strip()\nsubprocess.run(['git', 'checkout', '--quiet', '--detach', other], check=True)\n"
             if mutation == 'source':
                 body += f"Path({str(root / 'm0/core/fixture.py')!r}).write_text('VALUE = 2\\n')\n"
             if mutation == 'ci_control':
@@ -86,6 +88,11 @@ with Path('verifier/runs/v76.jsonl').open('a') as f:
         code, report = self.run_fixture('git_context')
         self.assertEqual(code, 0)
         self.assertTrue(report['passed'])
+
+    def test_changed_execution_commit_cannot_publish_success(self):
+        code, report = self.run_fixture('git_head')
+        self.assertEqual(code, 1)
+        self.assertFalse(report['passed'])
 
     def test_dirty_source_cannot_claim_same_commit_acceptance(self):
         code, report = self.run_fixture(dirty=True)
