@@ -428,6 +428,8 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
     def start_work():
         if mode != 'fixture':
             _require_reference_live_gate()
+            from zoo.circle_packing.supervisor_attestation import require_supervised_process
+            require_supervised_process(ledger, deadline)
         ledger.start_reference_authority_work(cell, authority_ref)
     lease.bind_start(start_work)
     run = ExternalRunContext(logical_run_id=authority_ref[:32], runtime_id=EXTERNAL_RUNTIME,

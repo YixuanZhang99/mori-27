@@ -185,6 +185,29 @@ def test_live_reference_rejects_unsupervised_process_before_claim(tmp_path, loca
     assert ledger.snapshot() == before and not local_endpoint.requests
 
 
+def test_reference_rechecks_supervision_before_starting_new_work(tmp_path, local_endpoint, monkeypatch):
+    import asyncio
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
+    ledger = options['ledger']
+    options['base_url'] = ledger.manifest_binding()['provider_base_url']
+    alive = [True]
+    def attest(*_):
+        if not alive[0]:
+            raise ValueError('supervisor is no longer alive')
+    monkeypatch.setattr('zoo.circle_packing.supervisor_attestation.require_supervised_process', attest)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    authority = build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    try:
+        alive[0] = False
+        with pytest.raises(ValueError, match='supervisor'):
+            asyncio.run(authority.control.execute('control-0000'))
+        assert ledger.reference_authority_claim('vendor-0')['work_started'] is False
+        assert not local_endpoint.requests
+    finally:
+        authority.close()
+
+
 def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path, local_endpoint, monkeypatch):
     import asyncio
     from test_openevolve_host_stage_budget import fake_result
