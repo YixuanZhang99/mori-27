@@ -630,6 +630,27 @@ def test_frozen_reference_selection_forbids_later_stage_and_provider_work(tmp_pa
         with pytest.raises(ValueError, match='sealed'):
             ledger.admit_call(run_id, 'main', None,
                 {'call_id': 'after-selection', 'request_sha256': '1' * 64, 'phase': 'operator', 'ordinal': 0}, bound)
+        def extra_stage(observation):
+            value = observation['observation']
+            ledger.anchor_stage_eligibility(run_id, '9' * 32, 'vendor-0', value['sequence'],
+                                            value['sha256'], '8' * 64)
+        with pytest.raises(ValueError, match='sealed'):
+            clock.observe_and_anchor(extra_stage)
         assert not local_endpoint.requests
     finally:
         authority.close()
+
+
+def test_reference_owner_stays_sealed_if_anchor_fails(tmp_path):
+    from zoo.circle_packing.host_runtime import _AuthorityLease
+    owner = _AuthorityLease(tmp_path)
+    owner.bind_start(lambda: None)
+    def failed_anchor():
+        raise OSError('anchor failed')
+    with owner.session():
+        with pytest.raises(OSError, match='anchor failed'):
+            owner.seal(failed_anchor)
+        with pytest.raises(RuntimeError, match='sealed'):
+            with owner.operation():
+                pass
+    owner.close()

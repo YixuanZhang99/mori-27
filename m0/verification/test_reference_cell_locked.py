@@ -31,7 +31,7 @@ def short_workspace():
         yield Path(directory).resolve()
 
 
-@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race', 'race_dir', 'six_iterations'])
+@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race', 'race_dir', 'six_iterations', 'seal_race'])
 def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
                                                                                 monkeypatch, tamper_selection,
                                                                                 short_workspace):
@@ -156,6 +156,13 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
         authority.close()
         return
+    if tamper_selection == 'seal_race':
+        original_seal = authority._lease.seal
+        def insert_completed_stage_before_seal(callback):
+            program = (workspace / 'host-run' / 'host' / 'best' / 'best_program.py').read_text()
+            authority.stages.execute('e' * 32, program, stage=1)
+            return original_seal(callback)
+        monkeypatch.setattr(authority._lease, 'seal', insert_completed_stage_before_seal)
     result = run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
         source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
         expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
@@ -169,7 +176,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert authority.dispatch.audit()['currency']['protection_valid']
     assert authority.stages.audit()['stage_calls'] >= 3
     if iterations == 1:
-        assert authority.stages.audit()['stage_calls'] == 3
+        assert authority.stages.audit()['stage_calls'] == (4 if tamper_selection == 'seal_race' else 3)
     assert authority.budget.audit_governance()['physical_totals']['token'] == 7 * iterations
     from zoo.circle_packing.cell_deadline import RecordedCellClock
     from dataclasses import asdict

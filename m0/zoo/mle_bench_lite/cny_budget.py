@@ -179,6 +179,10 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         return pending, spent
     if not governance["enabled"]:
         raise ValueError("currency governance events precede explicit migration")
+    if kind in {'anchor_response_eligibility', 'anchor_stage_eligibility',
+                'anchor_evaluation_eligibility', 'anchor_cycle_eligibility'} and \
+            event.get('run_id') in governance['reference_selections']:
+        raise ValueError('reference selection is sealed against new work evidence')
     if kind == "freeze_circle_pilot":
         fields = {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}
         if set(event) not in (fields, fields | {"require_runtime"}) or \

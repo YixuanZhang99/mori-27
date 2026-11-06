@@ -184,7 +184,7 @@ class _AuthorityLease:
             if self._sealed or self._active != 1:
                 raise RuntimeError('reference authority has active or sealed work')
             self._sealed = True
-        callback()
+        return callback()
 
     def close(self):
         with self._mutex:
@@ -529,73 +529,73 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
                 set(selected) != {'id', 'program_ref', 'metrics'} or type(selected['id']) is not str or \
                 not selected['id'] or type(selected['metrics']) is not dict:
             raise ValueError('reference fixture has no valid selected program report')
-        rows = list(authority.budget.store.read())
-        stage_starts = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_started'}
-        stage_ends = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_completed'}
-        eligibility = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_eligibility'}
-        receipt = report.get('selection_stage_request_id')
-        if type(receipt) is not str or not re.fullmatch(r'[0-9a-f]{32}', receipt):
-            raise ValueError('reference fixture selection lacks its stage receipt')
-        matches = []
-        for request_id, start in stage_starts.items():
-            if start['stage'] != 1 or start['program_ref'] != selected['program_ref']:
-                continue
-            first = stage_ends[request_id]
-            if first['result']['status'] != 'ok' or not authority.stages._verify_stage_eligibility(
-                    eligibility[request_id], start, first, deadline):
-                continue
-            final_id = request_id
-            if first['result']['metrics']['combined_score'] >= .5:
-                second = [key for key, value in stage_starts.items()
-                          if value['stage'] == 2 and value['prior_id'] == request_id]
-                if len(second) != 1:
+        def finalize_selection():
+            rows = list(authority.budget.store.read())
+            stage_starts = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_started'}
+            stage_ends = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_completed'}
+            eligibility = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_eligibility'}
+            receipt = report.get('selection_stage_request_id')
+            if type(receipt) is not str or not re.fullmatch(r'[0-9a-f]{32}', receipt):
+                raise ValueError('reference fixture selection lacks its stage receipt')
+            matches = []
+            for request_id, start in stage_starts.items():
+                if start['stage'] != 1 or start['program_ref'] != selected['program_ref']:
                     continue
-                final_id = second[0]
-            final = stage_ends[final_id]
-            if final_id == receipt and final['result']['status'] == 'ok' and \
-                    json.dumps(final['result']['metrics'], sort_keys=True, allow_nan=False) == \
-                    json.dumps(selected['metrics'], sort_keys=True, allow_nan=False) and \
-                    authority.stages._verify_stage_eligibility(eligibility[final_id], stage_starts[final_id],
-                                                              final, deadline):
-                matches.append((final_id, final['evidence_ref']))
-        if len(matches) != 1:
-            raise ValueError('reference fixture selection lacks a unique eligible stage result')
-        from zoo.circle_packing.reference_selection import read_reference_selection
-        saved = read_reference_selection(workspace, selected)
-        final_start = stage_starts[matches[0][0]]
-        request_ids = ([final_start['prior_id'], final_start['request_id']] if final_start['stage'] == 2
-                       else [final_start['request_id']])
-        with authority.budget._lock:
-            physical_rows = list(authority.budget.store.read())
-            rows_sha256 = payload_digest(physical_rows)
-            worker = ledger.cell_worker_claim(deadline._record['cell_id'])
-            if worker != claim:
-                raise ValueError('reference snapshot lacks its original worker claim')
-            run_id = authority.dispatch.ready.authority_binding['currency_run_id']
-            def anchor(observation):
-                if not observation['eligible']:
-                    from zoo.circle_packing.cell_deadline import DeadlineExpired
-                    raise DeadlineExpired('reference physical snapshot is late')
-                value = observation['observation']
-                ledger.anchor_reference_physical_snapshot(run_id, deadline._record['cell_id'], rows_sha256,
-                    worker['worker_ref'], request_ids, value['sequence'], value['sha256'],
-                    worker_proof_sha256=payload_digest(worker_proof))
-            deadline.observe_and_anchor(anchor)
-        # Stop future host operations before anchoring the exact selection.
-        # If the anchor fails, the owner stays sealed and the cell is unresolved.
-        def freeze_selection():
-            def anchor_selection(observation):
-                if not observation['eligible']:
-                    from zoo.circle_packing.cell_deadline import DeadlineExpired
-                    raise DeadlineExpired('reference selection freeze is late')
-                value = observation['observation']
-                ledger.freeze_reference_selection(run_id, deadline._record['cell_id'], payload_digest(selected),
-                                                   value['sequence'], value['sha256'])
-            deadline.observe_and_anchor(anchor_selection)
-        authority._lease.seal(freeze_selection)
-        return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
-                'selected_program': selected, 'stage_request_id': matches[0][0],
-                'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref'],
-                'physical_snapshot_ref': 'sha256:' + rows_sha256, 'worker_proof': worker_proof}
+                first = stage_ends[request_id]
+                if first['result']['status'] != 'ok' or not authority.stages._verify_stage_eligibility(
+                        eligibility[request_id], start, first, deadline):
+                    continue
+                final_id = request_id
+                if first['result']['metrics']['combined_score'] >= .5:
+                    second = [key for key, value in stage_starts.items()
+                              if value['stage'] == 2 and value['prior_id'] == request_id]
+                    if len(second) != 1:
+                        continue
+                    final_id = second[0]
+                final = stage_ends[final_id]
+                if final_id == receipt and final['result']['status'] == 'ok' and \
+                        json.dumps(final['result']['metrics'], sort_keys=True, allow_nan=False) == \
+                        json.dumps(selected['metrics'], sort_keys=True, allow_nan=False) and \
+                        authority.stages._verify_stage_eligibility(eligibility[final_id], stage_starts[final_id],
+                                                                  final, deadline):
+                    matches.append((final_id, final['evidence_ref']))
+            if len(matches) != 1:
+                raise ValueError('reference fixture selection lacks a unique eligible stage result')
+            from zoo.circle_packing.reference_selection import read_reference_selection
+            saved = read_reference_selection(workspace, selected)
+            final_start = stage_starts[matches[0][0]]
+            request_ids = ([final_start['prior_id'], final_start['request_id']] if final_start['stage'] == 2
+                           else [final_start['request_id']])
+            with authority.budget._lock:
+                physical_rows = list(authority.budget.store.read())
+                rows_sha256 = payload_digest(physical_rows)
+                worker = ledger.cell_worker_claim(deadline._record['cell_id'])
+                if worker != claim:
+                    raise ValueError('reference snapshot lacks its original worker claim')
+                run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+                def anchor(observation):
+                    if not observation['eligible']:
+                        from zoo.circle_packing.cell_deadline import DeadlineExpired
+                        raise DeadlineExpired('reference physical snapshot is late')
+                    value = observation['observation']
+                    ledger.anchor_reference_physical_snapshot(run_id, deadline._record['cell_id'], rows_sha256,
+                        worker['worker_ref'], request_ids, value['sequence'], value['sha256'],
+                        worker_proof_sha256=payload_digest(worker_proof))
+                deadline.observe_and_anchor(anchor)
+            def freeze_selection():
+                def anchor_selection(observation):
+                    if not observation['eligible']:
+                        from zoo.circle_packing.cell_deadline import DeadlineExpired
+                        raise DeadlineExpired('reference selection freeze is late')
+                    value = observation['observation']
+                    ledger.freeze_reference_selection(run_id, deadline._record['cell_id'], payload_digest(selected),
+                                                       value['sequence'], value['sha256'])
+                deadline.observe_and_anchor(anchor_selection)
+            freeze_selection()
+            return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
+                    'selected_program': selected, 'stage_request_id': matches[0][0],
+                    'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref'],
+                    'physical_snapshot_ref': 'sha256:' + rows_sha256, 'worker_proof': worker_proof}
+        return authority._lease.seal(finalize_selection)
     finally:
         token_path.unlink(missing_ok=True)
