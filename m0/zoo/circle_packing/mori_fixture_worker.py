@@ -31,17 +31,50 @@ def validate_config(value):
     return value
 
 
-def run(config):
-    config = validate_config(config)
+def prepare_fixture_authorities(config, *, ledger):
+    """Restore the existing fixture clock and its bound source/runtime."""
     from core.composition.recovery import ContinuationStore
     from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
-    from zoo.circle_packing.domain import CirclePackingDomain
     from zoo.circle_packing.frozen_source import verify_frozen_source
+    from zoo.circle_packing.pilot_plan import validate_draft_cell
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    config = validate_config(config)
+    if type(ledger) is not CampaignBudget or not ledger.is_fixture_campaign() or \
+            Path(config['ledger']).resolve(strict=True) != ledger.path.resolve(strict=True) or \
+            config['campaign_id'] != ledger.manifest_binding()['campaign_id']:
+        raise ValueError('fixture authorities require the original fixture campaign')
+    plan, ref, seed = config['plan'], config['ref'], config['seed']
+    source, runtime = Path(config['source']), Path(config['runtime'])
+    clock_path = Path(config['clock'])
+    if clock_path.is_symlink() or not clock_path.is_file():
+        raise ValueError('fixture requires its original cell clock')
+    if type(plan) is dict and type(plan.get('schema_version')) is int and plan['schema_version'] == 3:
+        cell_id = f"{plan.get('experiment_id')}--mori-{seed}"
+        validate_draft_cell(ledger, plan, cell_id, expected_plan_ref=ref)
+        runner = SandboxRunner.for_fixture_continuation(ledger, draft=plan,
+            source_directory=source.parent.parent, runtime_directory=runtime.parent,
+            base_python='/usr/bin/python3.12')
+        if source != source.parent.parent / 'source/m0' or runner.runtime_root != runtime:
+            raise ValueError('fixture source or runtime differs from its bound bundle')
+    else:
+        cell_id = f'mori-{seed}'
+        verify_frozen_source(ledger, plan, snapshot=source.parent, manifest=config['source_manifest'],
+                             expected_plan_ref=ref, expected_campaign_id=config['campaign_id'])
+        runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'],
+                                                    base_python='/usr/bin/python3.12')
+    clock = CellDeadline.restore(ContinuationStore(clock_path), lifecycle=CellLifecycle(ledger),
+        cell_id=cell_id, plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    return clock, runner
+
+
+def run(config):
+    config = validate_config(config)
+    from zoo.circle_packing.domain import CirclePackingDomain
     from zoo.circle_packing.mori_controller import build_controller
     from zoo.circle_packing.reproducibility import require_hash_seed_zero
     from zoo.circle_packing.runner import TASK
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
-    from zoo.mle_bench_lite.composed_domain import SandboxRunner
     from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
     ledger = CampaignBudget(config['ledger'])
@@ -52,16 +85,8 @@ def run(config):
     if source.resolve(strict=True) != Path(__file__).resolve().parents[2] or \
             str(runtime / 'bin' / 'python') != sys.executable:
         raise ValueError('fixture controller must use the original frozen source and runtime')
-    clock_path = Path(config['clock'])
-    if clock_path.is_symlink() or not clock_path.is_file():
-        raise ValueError('fixture requires its original cell clock')
-    plan, ref, seed = config['plan'], config['ref'], config['seed']
-    verify_frozen_source(ledger, plan, snapshot=source.parent, manifest=config['source_manifest'],
-                         expected_plan_ref=ref, expected_campaign_id=config['campaign_id'])
-    clock = CellDeadline.restore(ContinuationStore(clock_path), lifecycle=CellLifecycle(ledger),
-        cell_id=f'mori-{seed}', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
-    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'],
-                                                base_python='/usr/bin/python3.12')
+    plan = config['plan']
+    clock, runner = prepare_fixture_authorities(config, ledger=ledger)
     framework, provider, profile, adapters = build_controller(
         config, ledger=ledger, clock=clock, runner=runner, api_key='fixture-only-secret')
     outcome = framework.evolve(TASK)
