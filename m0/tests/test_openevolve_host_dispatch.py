@@ -384,6 +384,72 @@ def test_detached_reference_stage_audit_rejects_late_measured_result(timed_autho
         audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof)
 
 
+def test_detached_reference_cascade_requires_matching_qualified_predecessor(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.7))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    stages.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    def bundle(request_id):
+        return {kind: next(row['payload'] for row in budget.store.read('host_stage_' + kind)
+                           if row['payload']['request_id'] == request_id)
+                for kind in ('started', 'completed', 'eligibility')}
+    first, second = bundle('a' * 32), bundle('b' * 32)
+    result = audit_recorded_reference_cascade(view, clock, run_id, [first, second])
+    assert result['stage_count'] == 2
+    assert result['evidence_ref'] == second['completed']['evidence_ref']
+    assert result['metrics'] == second['completed']['result']['metrics']
+    with pytest.raises(ValueError):
+        audit_recorded_reference_cascade(view, clock, run_id, [first])
+    with pytest.raises(ValueError):
+        audit_recorded_reference_cascade(view, clock, run_id, [second, first])
+    changed = dict(second, started=dict(second['started'], prior_id='c' * 32))
+    with pytest.raises(ValueError):
+        audit_recorded_reference_cascade(view, clock, run_id, [first, changed])
+
+
+def test_detached_reference_cascade_accepts_one_below_threshold_stage(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    row = {kind: list(budget.store.read('host_stage_' + kind))[0]['payload']
+           for kind in ('started', 'completed', 'eligibility')}
+    result = audit_recorded_reference_cascade(view, clock, run_id, [row])
+    assert result['stage_count'] == 1
+    assert result['metrics']['combined_score'] < .5
+    with pytest.raises(ValueError):
+        audit_recorded_reference_cascade(view, clock, run_id, [row, row])
+
+
 def test_host_stage_audit_rejects_changed_eligibility(timed_authority, tmp_path, monkeypatch):
     import copy
     from test_openevolve_host_stage_budget import fake_result

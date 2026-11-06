@@ -130,3 +130,23 @@ def audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof):
     return {'program_ref': start['program_ref'], 'stage': start['stage'],
             'evidence_ref': terminal['evidence_ref'], 'geometry_ref': result['geometry_ref'],
             'metrics': dict(result['metrics'])}
+
+
+def audit_recorded_reference_cascade(view, clock, run_id, stages):
+    """Check stage linkage and qualification, without auditing physical settlement."""
+    if type(stages) is not list or len(stages) not in (1, 2) or any(
+            type(row) is not dict or set(row) != {'started', 'completed', 'eligibility'} for row in stages):
+        raise ValueError('reference cascade requires one or two recorded stages')
+    verified = [audit_recorded_reference_stage(view, clock, run_id, row['started'], row['completed'],
+                                               row['eligibility']) for row in stages]
+    first = stages[0]
+    if verified[0]['stage'] != 1 or (verified[0]['metrics']['combined_score'] >= .5) != (len(stages) == 2):
+        raise ValueError('reference cascade differs from the first-stage threshold')
+    if len(stages) == 2:
+        second = stages[1]
+        if verified[1]['stage'] != 2 or verified[1]['program_ref'] != verified[0]['program_ref'] or \
+                second['started']['prior_id'] != first['started']['request_id'] or \
+                second['eligibility']['observation']['observation']['sequence'] <= \
+                first['eligibility']['observation']['observation']['sequence']:
+            raise ValueError('reference cascade predecessor or clock order differs')
+    return {**verified[-1], 'stage_count': len(stages)}
