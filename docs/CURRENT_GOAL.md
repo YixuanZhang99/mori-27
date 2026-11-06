@@ -63,4 +63,4 @@ Linux 进程隔离回归使用现有 ProcessJournal 和 Bubblewrap 实际启动�
 
 正在开发单 worker 的离线监督原语：原 campaign 记录不可重复的 worker 声明，隔离执行器按同一单元时钟停止 worker，启动记录失败或监督器死亡时清理进程，迟到结果保持未决。该原语尚未连接两臂、可信源码环境、broker 和完整恢复审计，不能用于真实付费试跑。新 worker 声明也是 campaign v2 新事件，旧版读取器不能读取包含该事件的账本；尚未写入真实 campaign。
 
-当前截止监控依赖 Linux 调度和 wrapper 中的线程：如果整个 wrapper 被暂停，线程也不能及时终止工作。它不是独立的硬实时监督器，不能据此宣称已经满足试跑的整单元硬截止要求。
+新增 Linux 独立 watchdog 进程，使用 pidfd 和原单元截止时间监控隔离 worker；离线进程测试覆盖 wrapper 暂停、较短相对超时以及 watchdog 意外退出。该机制依赖 Linux 调度与 pidfd，尚未覆盖 broker、控制评测及两臂的整个生命周期，也未完成监督进程重启、丢失和审计的验收，不能据此宣称试跑的整单元硬截止已完成。

@@ -59,6 +59,35 @@ while True:
         os.execvpe(command[0],command,os.environ)
 '''
 
+_GUARD = '''import ctypes,os,select,signal,sys,time
+pid=int(sys.argv[1]); parent=int(sys.argv[2]); boot=sys.argv[3]; end=int(sys.argv[4]); ready=int(sys.argv[5])
+relative_end=None if sys.argv[6]=='none' else float(sys.argv[6])
+if ctypes.CDLL(None,use_errno=True).prctl(1,9,0,0,0)!=0 or os.getppid()!=parent:
+    sys.exit(3)
+try:
+    target=os.pidfd_open(pid,0)
+    os.write(ready,b'R'); os.close(ready)
+    while True:
+        readable,_,_=select.select([target],[],[],0)
+        if readable:
+            sys.exit(0)
+        if open('/proc/sys/kernel/random/boot_id', encoding='ascii').read().strip()!=boot:
+            raise ValueError('boot changed')
+        remaining=(end-time.clock_gettime_ns(time.CLOCK_BOOTTIME))/1_000_000_000
+        if relative_end is not None:
+            remaining=min(remaining,relative_end-time.monotonic())
+        if remaining<=0:
+            os.killpg(pid,signal.SIGKILL)
+            sys.exit(2)
+        select.select([target],[],[],min(remaining,.1))
+except Exception:
+    try:
+        os.killpg(pid,signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    sys.exit(3)
+'''
+
 
 def _atomic_json(path: Path, payload: dict) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -157,7 +186,7 @@ def _wait_target(target, spec):
             continue
 
 
-def _absolute_watch(target, spec, stop, outcome, ready):
+def _absolute_watch(target, spec, stop, outcome, ready, guard):
     """Watch before identity I/O; leave the child unreaped until the caller joins."""
     try:
         relative = spec.get('time_limit')
@@ -166,6 +195,16 @@ def _absolute_watch(target, spec, stop, outcome, ready):
         while not stop.is_set():
             # WNOWAIT keeps the PID allocated, preventing reuse before killpg.
             if os.waitid(os.P_PID, target.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None:
+                return
+            if guard.poll() is not None:
+                if guard.returncode == 2:
+                    outcome['timeout'] = True
+                else:
+                    outcome['error'] = RuntimeError('independent deadline guard exited early')
+                try:
+                    os.killpg(target.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
                 return
             expired = not _check_absolute_deadline(spec)
             remaining = (spec['absolute_deadline']['deadline_ns'] -
@@ -225,13 +264,33 @@ def main() -> int:
             ready = threading.Event()
             outcome = {'timeout': False, 'error': None}
             watcher = None
+            guard = None
             if spec.get('absolute_deadline') is not None:
-                watcher = threading.Thread(target=_absolute_watch, args=(target, spec, stop, outcome, ready))
                 try:
+                    guard_read, guard_write = os.pipe()
+                    try:
+                        try:
+                            relative = spec.get('time_limit')
+                            relative_end = 'none' if relative is None else repr(time.monotonic() + relative)
+                            guard = subprocess.Popen([sys.executable, '-I', '-S', '-c', _GUARD,
+                                str(target.pid), str(os.getpid()), deadline['boot_id'],
+                                str(deadline['deadline_ns']), str(guard_write), relative_end], pass_fds=(guard_write,),
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+                        finally:
+                            os.close(guard_write)
+                        if os.read(guard_read, 1) != b'R':
+                            raise RuntimeError('independent deadline guard failed to start')
+                    finally:
+                        os.close(guard_read)
+                    watcher = threading.Thread(target=_absolute_watch, args=(target, spec, stop, outcome, ready, guard))
                     watcher.start()
                     ready.wait()
                 except BaseException:
                     os.close(gate_write)
+                    if guard is not None:
+                        guard.kill()
+                        guard.wait()
                     try:
                         os.killpg(target.pid, signal.SIGKILL)
                     except ProcessLookupError:
@@ -257,6 +316,9 @@ def main() -> int:
                 if watcher is not None:
                     stop.set()
                     watcher.join()
+                    if guard is not None:
+                        guard.kill()
+                        guard.wait()
                     try:
                         os.killpg(target.pid, signal.SIGKILL)
                     except ProcessLookupError:
@@ -269,10 +331,13 @@ def main() -> int:
                     returncode = _wait_target(target, spec)
                 else:
                     watcher.join()
+                    guard_status = guard.wait()
                     if outcome['error'] is not None:
                         raise outcome['error']
+                    if guard_status not in (0, 2):
+                        raise RuntimeError('independent deadline guard failed')
                     returncode = target.wait()
-                    timed_out = outcome['timeout']
+                    timed_out = outcome['timeout'] or guard_status == 2
             except subprocess.TimeoutExpired:
                 timed_out = True
                 try:

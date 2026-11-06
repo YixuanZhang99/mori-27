@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import subprocess
@@ -51,6 +52,13 @@ class ProcessJournal:
                 type(absolute_deadline["boot_id"]) is not str or not absolute_deadline["boot_id"] or
                 type(absolute_deadline["deadline_ns"]) is not int or absolute_deadline["deadline_ns"] < 0):
             raise ValueError("invalid absolute process deadline")
+        if absolute_deadline is not None and time_limit is not None:
+            try:
+                valid_timeout = type(time_limit) in (int, float) and math.isfinite(time_limit) and time_limit >= 0
+            except OverflowError:
+                valid_timeout = False
+            if not valid_timeout:
+                raise ValueError("invalid relative process timeout")
         if seccomp_policy is not None:
             validate_seccomp_policy(seccomp_policy)
             if seccomp_delivery is None:
