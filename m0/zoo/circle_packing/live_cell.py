@@ -42,8 +42,9 @@ def start_live_cell(arm, config, *, directory, api_key, _resume_unstarted=False)
     require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
     if _resume_unstarted:
         original = ledger.cell_deadline_claim(cell)
-        if original is None or original['plan_ref'] != config['ref']:
-            raise ValueError('resume requires the original claimed cell and plan')
+        if (original is None and not Path(config['clock']).is_file()) or \
+                (original is not None and original['plan_ref'] != config['ref']):
+            raise ValueError('resume requires the original cell clock and plan')
         if ledger.cell_worker_claim(cell) is not None or (arm == 'vendor' and (
                 ledger.reference_host_claim(cell) is not None or ledger.reference_authority_claim(cell) is not None)):
             raise ValueError('resume refuses a cell with an already claimed worker or host')
@@ -56,9 +57,11 @@ def start_live_cell(arm, config, *, directory, api_key, _resume_unstarted=False)
     entry = ('zoo.circle_packing.mori_live_worker' if arm == 'mori'
              else 'zoo.circle_packing.reference_live_worker')
     with delegated_cell_group() as group:
+        kwargs = {'cell_id': cell, 'plan_ref': config['ref'], 'seconds': binding['wallclock_seconds']}
+        if _resume_unstarted:
+            kwargs['reconcile_unstarted'] = True
         create = CellDeadline.restore if _resume_unstarted else CellDeadline.start
-        clock = create(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
-                       cell_id=cell, plan_ref=config['ref'], seconds=binding['wallclock_seconds'])
+        clock = create(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger), **kwargs)
         return _launch_controller(config, ledger=ledger, deadline=clock, directory=directory,
                                   entry=entry, api_key=api_key, containment_group=group)
 

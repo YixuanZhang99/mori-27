@@ -97,6 +97,12 @@ def _sync_directory(path):
         os.close(fd)
 
 
+def _require_unstarted(ledger, cell_id):
+    if ledger.cell_worker_claim(cell_id) is not None or (cell_id.startswith('vendor-') and (
+            ledger.reference_host_claim(cell_id) is not None or ledger.reference_authority_claim(cell_id) is not None)):
+        raise ValueError('clock reconciliation requires an unstarted cell')
+
+
 class CellLifecycle:
     """First-start claims in the original campaign's transactional journal."""
     def __init__(self, ledger):
@@ -144,21 +150,23 @@ class CellDeadline:
                 raise ValueError('cell deadline already exists')
             if rows:
                 raise ValueError('cell deadline cannot start after prior journal work')
+            if lifecycle.ledger.cell_deadline_claim(cell_id) is not None:
+                raise ValueError('cell deadline claim already exists')
             boot, start_ns = _boot_identity(), _clock_ns()
             if type(boot) is not str or not boot or type(start_ns) is not int or start_ns < 0:
                 raise ValueError('cell clock identity is invalid')
             record = {'schema_version': 1, 'cell_id': cell_id, 'plan_ref': plan_ref,
                       'seconds': seconds, 'boot_id': boot, 'start_ns': start_ns}
             record['record_sha256'] = payload_digest(record)
-            lifecycle.create(record)
             ContinuationStore(store.path).append(_KIND, record)
             _sync_directory(store.path.parent)
+            lifecycle.create(record)
             if _records(store) != [record]:
                 raise ValueError('cell deadline was not durably recorded')
             return cls(store, record, lifecycle=lifecycle)
 
     @classmethod
-    def restore(cls, store, *, lifecycle, cell_id, plan_ref, seconds):
+    def restore(cls, store, *, lifecycle, cell_id, plan_ref, seconds, reconcile_unstarted=False):
         _parameters(store, cell_id, plan_ref, seconds)
         if type(lifecycle) is not CellLifecycle or lifecycle.ledger.path.resolve() == store.path.resolve():
             raise ValueError('cell lifecycle must be independent from the cell journal directory')
@@ -170,11 +178,23 @@ class CellDeadline:
             _validate_record(store, record)
             if (record['cell_id'], record['plan_ref'], record['seconds']) != (cell_id, plan_ref, seconds):
                 raise ValueError('cell deadline differs from frozen identity')
+            if type(reconcile_unstarted) is not bool:
+                raise ValueError('clock reconciliation flag must be boolean')
+            if reconcile_unstarted:
+                _require_unstarted(lifecycle.ledger, cell_id)
+                if _boot_identity() != record['boot_id'] or _clock_ns() < record['start_ns']:
+                    raise ValueError('original cell clock identity or monotonic time changed')
+                if lifecycle.ledger.cell_deadline_claim(cell_id) is None:
+                    if _rows(store) != [{'kind': _KIND, 'payload': record}]:
+                        raise ValueError('unclaimed clock must contain only its original start')
+                    lifecycle.create(record)
             instance = cls(store, record, lifecycle=lifecycle)
+            if reconcile_unstarted:
+                instance._checked_history(reconcile_unstarted=True)
             instance._remaining()
             return instance
 
-    def _checked_history(self):
+    def _checked_history(self, *, reconcile_unstarted=False):
         claim = self._lifecycle.verify(self._record)
         rows = _rows(self._store)
         if any(row['kind'] not in {_KIND, _OBSERVED} for row in rows):
@@ -195,7 +215,12 @@ class CellDeadline:
                 raise ValueError('cell deadline observation differs from its journal')
             previous, last = observation['sha256'], observation['observed_ns']
         if (claim['observation_sequence'], claim['observation_sha256']) != (len(observations), previous):
-            raise ValueError('cell deadline observation head differs from campaign authority')
+            if not reconcile_unstarted or not observations or claim['observation_sequence'] != len(observations) - 1 or \
+                    claim['observation_sha256'] != observations[-1]['previous'] or _clock_ns() < last:
+                raise ValueError('cell deadline observation head differs from campaign authority')
+            _require_unstarted(self._lifecycle.ledger, self._record['cell_id'])
+            self._lifecycle.ledger.anchor_unstarted_cell_observation(self._record['cell_id'],
+                observations[-1]['sequence'], observations[-1]['previous'], observations[-1]['sha256'])
         return observations, previous, last
 
     def _observe(self):

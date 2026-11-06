@@ -250,7 +250,7 @@ def test_lifecycle_claim_prevents_reset_after_clock_journal_loss(tmp_path):
             CellDeadline.restore(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
 
 
-def test_claim_survives_crash_before_first_deadline_write(tmp_path, monkeypatch):
+def test_crash_before_first_deadline_write_does_not_claim_cell(tmp_path, monkeypatch):
     from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
     path = tmp_path / 'cell.jsonl'
     lifecycle = _lifecycle(path)
@@ -266,10 +266,86 @@ def test_claim_survives_crash_before_first_deadline_write(tmp_path, monkeypatch)
             patch('zoo.circle_packing.cell_deadline._clock_ns', return_value=100):
         with pytest.raises(SystemExit):
             CellDeadline.start(store, lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
-        with pytest.raises(ValueError, match='claim'):
-            CellDeadline.start(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
+        assert lifecycle.ledger.cell_deadline_claim('mori-0') is None
         with pytest.raises(ValueError, match='missing'):
             CellDeadline.restore(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
+
+
+def test_recover_unclaimed_durable_start_without_reset(tmp_path, monkeypatch):
+    from zoo.circle_packing.cell_deadline import CellDeadline
+    path = tmp_path / 'cell.jsonl'
+    lifecycle = _lifecycle(path)
+    plan = 'sha256:' + 'd' * 64
+    original_create = lifecycle.create
+    monkeypatch.setattr(lifecycle, 'create', lambda _: (_ for _ in ()).throw(SystemExit('before claim')))
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', side_effect=[100, 2_000_000_100, 2_000_000_100]):
+        with pytest.raises(SystemExit):
+            CellDeadline.start(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
+        assert lifecycle.ledger.cell_deadline_claim('mori-0') is None
+        monkeypatch.setattr(lifecycle, 'create', original_create)
+        restored = CellDeadline.restore(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0',
+                                        plan_ref=plan, seconds=5, reconcile_unstarted=True)
+        assert restored._record['start_ns'] == 100
+        assert lifecycle.ledger.cell_deadline_claim('mori-0')['record_sha256'] == restored._record['record_sha256']
+
+
+def test_recover_unanchored_original_clock_observation(tmp_path, monkeypatch):
+    from zoo.circle_packing.cell_deadline import CellDeadline
+    path = tmp_path / 'cell.jsonl'
+    lifecycle = _lifecycle(path)
+    plan = 'sha256:' + 'e' * 64
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', side_effect=[100, 200, 300, 300, 300]):
+        clock = CellDeadline.start(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
+        original_anchor = lifecycle.ledger.anchor_cell_deadline_observation
+        monkeypatch.setattr(lifecycle.ledger, 'anchor_cell_deadline_observation',
+                            lambda *a, **k: (_ for _ in ()).throw(SystemExit('before anchor')))
+        with pytest.raises(SystemExit):
+            clock.remaining()
+        monkeypatch.setattr(lifecycle.ledger, 'anchor_cell_deadline_observation', original_anchor)
+        restored = CellDeadline.restore(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0',
+                                        plan_ref=plan, seconds=5, reconcile_unstarted=True)
+        claim = lifecycle.ledger.cell_deadline_claim('mori-0')
+        assert restored._record['start_ns'] == 100 and claim['observation_sequence'] == 2
+
+
+def test_unclaimed_clock_with_extra_records_is_not_claimed(tmp_path, monkeypatch):
+    from zoo.circle_packing.cell_deadline import CellDeadline
+    path = tmp_path / 'cell.jsonl'
+    lifecycle = _lifecycle(path)
+    plan = 'sha256:' + 'd' * 64
+    original_create = lifecycle.create
+    monkeypatch.setattr(lifecycle, 'create', lambda _: (_ for _ in ()).throw(SystemExit('before claim')))
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', return_value=100):
+        with pytest.raises(SystemExit):
+            CellDeadline.start(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
+        ContinuationStore(path).append('unexpected', {})
+        monkeypatch.setattr(lifecycle, 'create', original_create)
+        with pytest.raises(ValueError, match='only its original start'):
+            CellDeadline.restore(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0',
+                                 plan_ref=plan, seconds=5, reconcile_unstarted=True)
+        assert lifecycle.ledger.cell_deadline_claim('mori-0') is None
+
+
+def test_reconciliation_refuses_a_claimed_worker(tmp_path, monkeypatch):
+    from zoo.circle_packing.cell_deadline import CellDeadline
+    path = tmp_path / 'cell.jsonl'
+    lifecycle = _lifecycle(path)
+    plan = 'sha256:' + 'f' * 64
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', side_effect=[100, 200]):
+        clock = CellDeadline.start(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0', plan_ref=plan, seconds=5)
+        monkeypatch.setattr(lifecycle.ledger, 'anchor_cell_deadline_observation',
+                            lambda *a, **k: (_ for _ in ()).throw(SystemExit('before anchor')))
+        with pytest.raises(SystemExit):
+            clock.remaining()
+        lifecycle.ledger.claim_cell_worker('mori-0', clock._record['record_sha256'], 'a' * 64)
+        with pytest.raises(ValueError, match='unstarted'):
+            CellDeadline.restore(ContinuationStore(path), lifecycle=lifecycle, cell_id='mori-0',
+                                 plan_ref=plan, seconds=5, reconcile_unstarted=True)
+        assert lifecycle.ledger.cell_deadline_claim('mori-0')['observation_sequence'] == 0
 
 
 def test_changed_campaign_cannot_restore_or_continue(tmp_path):

@@ -956,6 +956,21 @@ class CampaignBudget:
                 "cell_id": cell_id, "sequence": sequence, "previous": previous,
                 "observation_sha256": observation_sha256})
 
+    def anchor_unstarted_cell_observation(self, cell_id, sequence, previous, observation_sha256):
+        """Reconcile one existing observation only while no host or worker is claimed."""
+        _identifier(cell_id, 'cell identity')
+        _integer(sequence, 'cell observation sequence', 1)
+        _sha(previous)
+        _sha(observation_sha256)
+        with self._transaction() as (db, _policy, state):
+            governance = state['governance']
+            if cell_id in governance['worker_claims'] or cell_id in governance['reference_host_claims'] or \
+                    cell_id in governance['reference_authority_claims']:
+                raise ValueError('clock reconciliation requires an unstarted cell')
+            self._append(db, state, {'kind': 'observe_cell_deadline', 'schema_version': 2,
+                'cell_id': cell_id, 'sequence': sequence, 'previous': previous,
+                'observation_sha256': observation_sha256})
+
     def cell_deadline_claim(self, cell_id):
         _identifier(cell_id, "cell identity")
         with self._transaction() as (_db, _policy, state):
