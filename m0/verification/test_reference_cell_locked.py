@@ -164,6 +164,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert result['selected_program']['metrics']['validity'] == 1.0
     assert result['saved_program_ref'] == result['selected_program']['program_ref']
     assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
+    assert all(b'mori_stage_request_id' not in request for request in local_endpoint.requests)
     assert authority.dispatch.audit()['currency']['protection_valid']
     assert authority.stages.audit()['stage_calls'] >= 3
     if iterations == 1:

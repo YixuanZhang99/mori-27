@@ -52,6 +52,20 @@ def fixture_broker_client(model):
     return HostBridgeClient(model)
 
 
+@contextlib.contextmanager
+def _hide_stage_receipts_from_prompts():
+    """Keep the internal receipt in the database, outside upstream prompts."""
+    original = _ProgramDatabase.get_artifacts
+    def public_artifacts(database, program_id):
+        return {key: value for key, value in original(database, program_id).items()
+                if key != 'mori_stage_request_id'}
+    _ProgramDatabase.get_artifacts = public_artifacts
+    try:
+        yield
+    finally:
+        _ProgramDatabase.get_artifacts = original
+
+
 def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_stage_broker=False):
     if type(seed) is not int or seed < 0 or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('fixture requires nonnegative seed and one to six iterations')
@@ -100,7 +114,7 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_s
     for name, value in host_database_options(2).items():
         setattr(config.database, name, value)
     evaluator = Path(__file__).with_name('reference_evaluator.py')
-    with contextlib.redirect_stdout(sys.stderr):
+    with contextlib.redirect_stdout(sys.stderr), _hide_stage_receipts_from_prompts():
         result = run_evolution(seed_code, evaluator, config=config, iterations=iterations,
                                output_dir=str(root / 'host'), cleanup=False)
     calls = None if fixture_broker else len(list(AppendOnlyStore(root / 'fixture-provider.jsonl').read('provider')))

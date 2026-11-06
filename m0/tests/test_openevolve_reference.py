@@ -226,3 +226,19 @@ def test_reference_cascade_attaches_final_physical_receipt_to_host_program(tmp_p
     metrics = asyncio.run(evaluator.evaluate_program(GRID, 'grid'))
     assert metrics['combined_score'] >= .5
     assert evaluator.get_pending_artifacts('grid')['mori_stage_request_id'] == '2' * 32
+
+
+def test_internal_stage_receipt_is_hidden_from_host_prompts(monkeypatch):
+    from core.openevolve_interop import ProgramDatabase
+    from zoo.circle_packing.host_reference import _hide_stage_receipts_from_prompts
+    original_artifacts = {'mori_stage_request_id': 'a' * 32, 'diagnostic': 'public detail'}
+    def original(self, program_id):
+        return original_artifacts
+    monkeypatch.setattr(ProgramDatabase, 'get_artifacts', original)
+    database = object.__new__(ProgramDatabase)
+    with pytest.raises(RuntimeError):
+        with _hide_stage_receipts_from_prompts():
+            assert database.get_artifacts('program') == {'diagnostic': 'public detail'}
+            assert original_artifacts['mori_stage_request_id'] == 'a' * 32
+            raise RuntimeError('ensure restoration')
+    assert ProgramDatabase.get_artifacts is original
