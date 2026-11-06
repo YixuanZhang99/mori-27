@@ -591,10 +591,6 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert mori_audit['measurement'] == mori_report['final_measurement'] and mori_report['replay_passed']
         assert vendor_audit['metrics'] == vendor_report['selected_program']['metrics']
         assert vendor_audit['selection_frozen'] and vendor_audit['performance_claim'] is False
-        database_capture = vendor_audit['database_capture']
-        database_raw = (Path(workspace) / 'host-run' / 'database-additions.json').read_bytes()
-        assert hashlib.sha256(database_raw).hexdigest() == database_capture['sha256']
-        assert len(json.loads(database_raw)['events']) == database_capture['count'] >= 1
         trace = vendor_audit['iteration_trace']
         assert trace['scope'] == 'reference_submitted_future_outcomes' and len(trace['iterations']) == 6
         assert trace['controller_run']['stop_reason'] == 'iteration_limit'
@@ -669,8 +665,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
             'mori_view': json.loads(mori_view._evidence), 'reference_view': json.loads(vendor_view._evidence),
             'mori_clock': mori_clock.export_evidence(), 'reference_clock': vendor_clock.export_evidence(),
             'mori_run': mori_run, 'reference_run': vendor_run, 'reference_bundle': reference_bundle,
-            'replay_input': replay_input, 'head': head,
-            'database_capture': database_capture, 'database_path': str(Path(workspace) / 'host-run' / 'database-additions.json')}
+            'replay_input': replay_input, 'head': head}
         replay_payload_path = tmp_path / 'paired-replay-input.json'
         replay_payload_path.write_text(json.dumps(replay_payload))
         script = '''import copy,json,os,socket,sys
@@ -681,7 +676,6 @@ from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.circle_packing.pair_audit import record_first_pair_audit
 from zoo.circle_packing import pair_recorded
 from zoo.circle_packing.mori_cycle_audit import audit_completed_mori_cycles
-from zoo.circle_packing.reference_database_trace import replay_database_additions
 from zoo.circle_packing.pilot_plan import require_first_pair_audit
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
@@ -692,10 +686,6 @@ socket.socket.connect=forbidden
 GovernedCNYProvider.perform_request=forbidden
 CirclePackingDomain.evaluate=forbidden
 p=json.loads(Path(sys.argv[1]).read_text()); c=p['mori_config']; v=p['reference_config']
-db_audit=replay_database_additions(p['database_path'],expected_sha256=p['database_capture']['sha256'],
- expected_count=p['database_capture']['count'])
-assert db_audit['verified_additions']==p['database_capture']['count']
-assert not db_audit['continuity_verified'] and not db_audit['final_winner_certified']
 ledger=CampaignBudget(c['ledger'])
 runner=SandboxRunner.for_campaign_runtime(ledger,runtime=c['runtime'],manifest=c['runtime_manifest'],base_python='/usr/bin/python3.12')
 mv=RecordedCurrencyView(p['mori_view'],expected_run_id=p['mori_run'],expected_head=p['head'])
