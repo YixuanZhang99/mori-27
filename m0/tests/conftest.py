@@ -55,6 +55,9 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_openevolve_host_dispatch.py": {
+        "test_actual_host_worker_uses_both_real_budget_authorities",
+    },
     "test_governed_cny_bridge.py": {
         "test_actual_host_worker_routes_to_currency_bridge_over_loopback",
     },

@@ -43,9 +43,11 @@ reference recovery is enabled by this fixture.
 
 `HostPhysicalAdmission` exercises the existing hierarchical budget and its
 journal: it blocks a second call while a prior physical operation is open and
-only settles against an original completed provider receipt. It is a component,
-not a live dispatcher; integrating and independently joining the physical
-and currency authorities is still required.
+only settles against an original completed provider receipt. The experimental
+`HostDispatchCoordinator` joins it to the CNY bridge and checks both authorities;
+loopback tests include a spawned upstream worker and crash after admission.
+It is not a complete live reference runner: evaluator and wall-clock ceilings,
+control execution, full run recovery and end-to-end result export are pending.
 
 `governed_setup` is an internal composition factory for the existing CNY
 bridge and a fresh circle control. Its loopback tests cover role-bound requests,
