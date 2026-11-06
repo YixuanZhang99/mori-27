@@ -947,12 +947,16 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         public = public_projection(evidence)
         evidence_event = {"cycle": cycle, "proposal": _jsonable(proposal),
                           "evidence_ref": evidence_ref, "evidence": encode_evidence(evidence)["evidence"]}
-        eligibility = getattr(self.budget, "check_work_eligibility", None)
-        if callable(eligibility):
-            eligibility()
-        self.store.append("composed_evidence", evidence_event)
         receipt = {"candidate_id": candidate_id, "incumbent": self.incumbent,
                    "evidence": _jsonable(evidence), "decision": asdict(decision)}
+        eligibility = getattr(self.budget, "check_cycle_eligibility", None)
+        if callable(eligibility):
+            eligibility(evidence_event, receipt)
+        else:
+            eligibility = getattr(self.budget, "check_work_eligibility", None)
+            if callable(eligibility):
+                eligibility()
+        self.store.append("composed_evidence", evidence_event)
         # Full cost is durable evidence; decision plugins must not interpret it.
         event_id = "sha256:" + payload_digest(receipt)
         self.store.append("composed_decision", {**receipt, "event_id": event_id,

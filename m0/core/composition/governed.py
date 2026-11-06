@@ -108,6 +108,9 @@ class GovernedInvocation:
                     record_evaluation = getattr(self.external, 'record_evaluation_eligibility', None)
                     if callable(record_evaluation):
                         runtime.budget.install_evaluation_eligibility_recorder(record_evaluation)
+                    record_cycle = getattr(self.external, 'record_cycle_eligibility', None)
+                    if callable(record_cycle):
+                        runtime.budget.install_cycle_eligibility_recorder(record_cycle)
                     for domain in [runtime.parts['domain'], *(session['domain'] for session in self.sessions.values())]:
                         bind_deadline = getattr(domain, 'bind_cell_deadline', None)
                         if not callable(bind_deadline):

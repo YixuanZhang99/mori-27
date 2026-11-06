@@ -238,8 +238,39 @@ def test_mori_late_provider_is_billed_and_stops_before_candidate(tmp_path, local
     control = [row['payload'] for row in timing if row['payload']['phase'] == 'evaluation'
                and row['payload']['lane'] == 'control']
     assert len(control) == 1 and control[0]['observation']['eligible'] is True
+    selections = [row['payload'] for row in timing if row['payload']['phase'] == 'cycle_commit']
+    assert len(selections) == 1 and selections[0]['observation']['eligible'] is True
     import copy
     original_read = fw._composed.store.read
+    def changed_cycle(kind=None):
+        rows = copy.deepcopy(list(original_read(kind)))
+        for row in rows:
+            if row['kind'] == 'governed_work_eligibility' and row['payload']['phase'] == 'cycle_commit':
+                row['payload']['decision_sha256'] = '0' * 64
+        return iter(rows)
+    monkeypatch.setattr(fw._composed.store, 'read', changed_cycle)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
+    def missing_cycle(kind=None):
+        return iter(row for row in original_read(kind) if not (row['kind'] == 'governed_work_eligibility'
+                    and row['payload']['phase'] == 'cycle_commit'))
+    monkeypatch.setattr(fw._composed.store, 'read', missing_cycle)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
+    def duplicated_decision(kind=None):
+        rows = list(original_read(kind))
+        if kind is None:
+            index = next(i for i, row in enumerate(rows) if row['kind'] == 'composed_decision')
+            rows.insert(index + 1, copy.deepcopy(rows[index]))
+        return iter(rows)
+    monkeypatch.setattr(fw._composed.store, 'read', duplicated_decision)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
+    def missing_decision(kind=None):
+        return iter(row for row in original_read(kind) if row['kind'] != 'composed_decision')
+    monkeypatch.setattr(fw._composed.store, 'read', missing_decision)
+    with pytest.raises(ValueError, match='eligibility'):
+        fw._composed.governed.external.audit()
     def altered(kind=None):
         rows = copy.deepcopy(list(original_read(kind)))
         for row in rows:

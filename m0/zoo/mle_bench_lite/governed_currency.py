@@ -617,6 +617,53 @@ class CNYInvocationBridge:
                 anchor['proof_sha256'] != payload_digest(proof):
             raise ValueError('evaluation eligibility differs from campaign anchor')
 
+    def record_cycle_eligibility(self, evidence_event, decision_receipt):
+        """Bind a candidate's measured evidence and proposed decision to the cell clock."""
+        from zoo.circle_packing.cell_deadline import DeadlineExpired
+        deadline = self.cell_deadline()
+        if deadline is None or self._run.mode != 'live':
+            raise ValueError('cycle eligibility requires its live cell deadline')
+        fixed = {'phase': 'cycle_commit', 'cycle': evidence_event['cycle'],
+                 'candidate_id': decision_receipt['candidate_id'],
+                 'evidence_sha256': payload_digest(evidence_event),
+                 'decision_sha256': payload_digest(decision_receipt)}
+        run_id = self._ready.authority_binding['currency_run_id']
+        row = self._run.store.peek() if callable(getattr(self._run.store, 'peek', None)) else None
+        if row is not None:
+            if row['kind'] != 'governed_work_eligibility' or any(
+                    row['payload'].get(key) != value for key, value in fixed.items()):
+                raise ValueError('cycle eligibility differs from the recorded continuation')
+            proof = row['payload']
+            self._verify_cycle_eligibility(proof, deadline)
+            self._run.store.append('governed_work_eligibility', proof)
+        else:
+            def anchor(observation):
+                proof = {**fixed, 'observation': observation}
+                self._run.store.append('governed_work_eligibility', proof)
+                key = payload_digest({'cycle': fixed['cycle'], 'candidate_id': fixed['candidate_id']})
+                self.ledger.anchor_cycle_eligibility(run_id, key, deadline._record['cell_id'],
+                    observation['observation']['sequence'], observation['observation']['sha256'], payload_digest(proof))
+            observation = deadline.observe_and_anchor(anchor)
+            proof = {**fixed, 'observation': observation}
+        if not proof['observation']['eligible']:
+            raise DeadlineExpired('cell deadline expired before candidate use')
+        deadline.check()
+
+    def _verify_cycle_eligibility(self, proof, deadline):
+        fields = {'phase', 'cycle', 'candidate_id', 'evidence_sha256', 'decision_sha256', 'observation'}
+        if type(proof) is not dict or set(proof) != fields or proof['phase'] != 'cycle_commit' or \
+                type(proof['cycle']) is not int or type(proof['candidate_id']) is not str:
+            raise ValueError('invalid cycle eligibility evidence')
+        deadline.verify_observation(proof['observation'])
+        observation = proof['observation']['observation']
+        run_id = self._ready.authority_binding['currency_run_id']
+        key = payload_digest({'cycle': proof['cycle'], 'candidate_id': proof['candidate_id']})
+        anchor = self.ledger.cycle_eligibility(run_id, key)
+        if anchor is None or anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != observation['sequence'] or anchor['observation_sha256'] != observation['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('cycle eligibility differs from campaign anchor')
+
     def _audit_evaluation_eligibility(self, deadline):
         rows = self._root_rows()
         completed, settled, proofs = {}, {}, {}
@@ -630,7 +677,7 @@ class CNYInvocationBridge:
             elif row['kind'] == 'hierarchical_budget' and value.get('event') == 'settle':
                 data = value['data']
                 settled[data['intent_id']] = (index, data)
-            elif row['kind'] == 'governed_work_eligibility':
+            elif row['kind'] == 'governed_work_eligibility' and value.get('phase') == 'evaluation':
                 intent = value.get('intent_id')
                 if intent in proofs:
                     raise ValueError('duplicate evaluation eligibility evidence')
@@ -660,6 +707,47 @@ class CNYInvocationBridge:
                 if len(matching) != 1 or matching[0] not in proofs or proofs[matching[0]][0] >= index or \
                         not proofs[matching[0]][1]['observation']['eligible']:
                     raise ValueError('control terminal lacks prior evaluation eligibility evidence')
+
+    def _audit_cycle_eligibility(self, deadline):
+        rows = self._root_rows()
+        proofs = {}
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] != 'governed_work_eligibility' or value.get('phase') != 'cycle_commit':
+                continue
+            self._verify_cycle_eligibility(value, deadline)
+            key = (value['cycle'], value['candidate_id'])
+            if key in proofs:
+                raise ValueError('duplicate cycle eligibility evidence')
+            proofs[key] = (index, value)
+        by_candidate, decisions, pending = {}, set(), set()
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] == 'composed_evidence':
+                candidate = value['proposal']['candidate']['id']
+                key = (value['cycle'], candidate)
+                proof = proofs.get(key)
+                if proof is None or proof[0] >= index or not proof[1]['observation']['eligible'] or \
+                        proof[1]['evidence_sha256'] != payload_digest(value):
+                    raise ValueError('candidate lacks matching prior cycle eligibility evidence')
+                physical = [item for item in rows[:proof[0]] if item['kind'] == 'composed_physical_evidence'
+                            and item['payload'].get('evidence', {}).get('evidence') == value['evidence']]
+                if not physical:
+                    raise ValueError('cycle eligibility lacks original physical evaluation')
+                if candidate in by_candidate:
+                    raise ValueError('duplicate candidate cycle eligibility evidence')
+                by_candidate[candidate] = proof
+                pending.add(candidate)
+            elif row['kind'] == 'composed_decision':
+                candidate = value.get('candidate_id')
+                proof = by_candidate.get(candidate)
+                receipt = {key: item for key, item in value.items() if key not in {'event_id', 'receipt_id'}}
+                if proof is None or candidate in decisions or proof[1]['decision_sha256'] != payload_digest(receipt):
+                    raise ValueError('decision differs from cycle eligibility evidence')
+                decisions.add(candidate)
+                pending.remove(candidate)
+            elif row['kind'] in {'composed_checkpoint', 'governed_main_stopped'} and pending:
+                raise ValueError('committed cycle lacks a decision after eligibility evidence')
 
     def recover(self, context, argument_sha256):
         outcome = self._recover(context, argument_sha256, refusal_reason='capacity_refused')
@@ -831,6 +919,7 @@ class CNYInvocationBridge:
             deadline = self.cell_deadline()
             if deadline is not None:
                 self._audit_evaluation_eligibility(deadline)
+                self._audit_cycle_eligibility(deadline)
         authority = self._ready.authority_binding
         evidence = self._authority.export_governance_evidence(authority['currency_run_id'],
                                                               self._ready.physical_plan_ref)
