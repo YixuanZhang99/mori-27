@@ -28,9 +28,11 @@ class GovernedCNYProvider:
 
     def __init__(self, model, base_url, *, campaign_binding, max_completion_tokens=4096,
                  timeout=120.0, api_key=None, token_admission='model_capacity_v1',
-                 phase_call_limits=None, reasoning_effort='high'):
-        if type(reasoning_effort) is not str or reasoning_effort not in {'low', 'high', 'max'}:
-            raise ValueError('reasoning effort must be low, high or max')
+                 phase_call_limits=None, reasoning_effort='high', message_mode='single_user_v1'):
+        if message_mode not in {'single_user_v1', 'openevolve_v1', 'openevolve_host_v1'}:
+            raise ValueError('unsupported provider message mode')
+        if type(reasoning_effort) is not str or reasoning_effort not in {'none', 'low', 'high', 'max'}:
+            raise ValueError('reasoning effort must be none, low, high or max')
         if type(model) is not str or not model.strip():
             raise ValueError('an explicit model is required')
         if type(base_url) is not str:
@@ -68,12 +70,14 @@ class GovernedCNYProvider:
         self._manifest = {'schema_version': 1, 'requested_model': model,
             'base_url': base_url.rstrip('/'), 'max_completion_tokens': max_completion_tokens,
             'timeout': float(timeout), 'request_format': 'deepseek', 'retry_policy': 'never',
-            'response_model_required': True, 'thinking': {'type': 'enabled'},
+            'response_model_required': True, 'thinking': {'type': 'disabled' if reasoning_effort == 'none' else 'enabled'},
             'reasoning_effort': reasoning_effort, 'temperature_applied': False, 'seed_applied': False,
             'immutable_snapshot_verified': False, 'campaign': campaign,
             'token_admission': admission_policy(token_admission, campaign),
             'phase_call_limits': limits}
         self.last_usage = {'total_tokens': 0}
+        if message_mode != 'single_user_v1':
+            self._manifest['message_mode'] = message_mode
         self._unresolved = False
         self._integrity_failure = False
 
@@ -81,16 +85,23 @@ class GovernedCNYProvider:
         return copy.deepcopy(self._manifest)
 
     def protocol_binding(self):
-        return {'requested_model': self._manifest['requested_model'],
+        binding = {'requested_model': self._manifest['requested_model'],
             'request_format': 'deepseek', 'base_url': self._manifest['base_url'],
             'reasoning_effort': self._manifest['reasoning_effort'],
             'max_completion_tokens': self._manifest['max_completion_tokens'],
             'input_capacity': self._manifest['campaign']['context_tokens'],
             'token_admission': copy.deepcopy(self._manifest['token_admission'])}
+        if 'message_mode' in self._manifest:
+            binding['message_mode'] = self._manifest['message_mode']
+        return binding
 
     def governance_binding(self):
-        wire = json.loads(self.prepare_request('binding'))
+        binding = self.protocol_binding()
+        binding.pop('message_mode', None)
+        wire = json.loads(build_request('binding', binding))
         wire.pop('messages')
+        if 'message_mode' in self._manifest:
+            wire['message_mode'] = self._manifest['message_mode']
         # Transport parameters and policy identity also freeze the adapter;
         # neither a temperature nor an unused remote seed is asserted applied.
         wire.update(base_url=self._manifest['base_url'], timeout=self._manifest['timeout'],
@@ -108,7 +119,7 @@ class GovernedCNYProvider:
     def prepare_request(self, prompt):
         return build_request(prompt, self.protocol_binding())
 
-    def validate_dispatch(self, body):
+    def validate_dispatch(self, body, *, prompt=None):
         """Pure pre-dispatch checks; bridge may call this before reserving CNY."""
         if self._unresolved:
             raise UsageError('provider has unresolved earlier operation')
@@ -118,18 +129,21 @@ class GovernedCNYProvider:
             raise ValueError('provider key is required before dispatch')
         try:
             data = json.loads(body) if type(body) is bytes else None
-            prompt = data['messages'][0]['content']
+            if self._manifest.get('message_mode', 'single_user_v1') == 'single_user_v1':
+                prompt = data['messages'][0]['content']
+            elif type(prompt) is not str:
+                raise ValueError('original provider argument is required')
             expected = self.prepare_request(prompt)
         except (ValueError, KeyError, IndexError, TypeError, UnicodeError):
             raise ValueError('wire request differs from frozen provider protocol') from None
         if body != expected:
             raise ValueError('wire request differs from frozen provider protocol')
 
-    def perform_request(self, body):
+    def perform_request(self, body, *, prompt=None):
         """Make one HTTP attempt; durable admission/recovery belongs to bridge."""
         if not self._unresolved and not self._integrity_failure:
             self.last_usage = {'total_tokens': 0}
-        self.validate_dispatch(body)
+        self.validate_dispatch(body, prompt=prompt)
         request = urllib.request.Request(self._manifest['base_url'] + '/chat/completions',
             data=body, method='POST', headers={
                 'Authorization': 'Bearer ' + self._api_key, 'Content-Type': 'application/json'})

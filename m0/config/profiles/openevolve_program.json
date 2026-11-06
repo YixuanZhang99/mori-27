@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "name": "openevolve-circle-v1",
+  "mode": "benchmark",
+  "provider": {
+    "name": "provided"
+  },
+  "domain": {
+    "name": "native"
+  },
+  "policy": {
+    "name": "openevolve",
+    "options": {
+      "seed": 0,
+      "migration_interval": 50
+    }
+  },
+  "operators": [
+    {
+      "name": "draft"
+    },
+    {
+      "name": "openevolve"
+    }
+  ],
+  "frontier": {
+    "name": "tree",
+    "options": {
+      "retain_rejected": true
+    }
+  },
+  "memory": {
+    "name": "scoped"
+  },
+  "executor": {
+    "name": "inprocess"
+  },
+  "admission": {
+    "name": "metric_final",
+    "options": {
+      "final_request": {
+        "fidelity": "final_audit",
+        "split_id": "final_audit"
+      }
+    }
+  },
+  "budget": {
+    "name": "hierarchical",
+    "options": {
+      "limits": {
+        "global": {
+          "token": 14909440,
+          "node": 7,
+          "eval_count": 15
+        },
+        "direction": {
+          "token": 14909440,
+          "node": 7,
+          "eval_count": 15
+        },
+        "candidate": {
+          "token": 14909440,
+          "node": 7,
+          "eval_count": 15
+        }
+      },
+      "reservation": {
+        "token": 0,
+        "node": 0,
+        "eval_count": 2
+      },
+      "operation_reservations": {
+        "planning": {
+          "token": 0,
+          "node": 0,
+          "eval_count": 0
+        },
+        "operator": {
+          "token": 2129920,
+          "node": 1,
+          "eval_count": 0
+        },
+        "final": {
+          "token": 0,
+          "node": 0,
+          "eval_count": 1
+        }
+      },
+      "fidelity_rungs": [
+        {
+          "fidelity": "dev",
+          "split_id": "dev"
+        }
+      ]
+    }
+  },
+  "skills": [],
+  "execution": {
+    "schema_version": 1,
+    "spec": {
+      "role": "general",
+      "hypothesis_frozen": true,
+      "context_projection": []
+    },
+    "constructor": {
+      "name": "openevolve_diff",
+      "options": {}
+    }
+  }
+}

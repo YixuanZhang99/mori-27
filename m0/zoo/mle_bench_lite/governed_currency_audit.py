@@ -86,6 +86,7 @@ class RecordedCurrencyView:
         self._evidence = _json(evidence)
         self._policy = _json(policy)
         self._audit = _json(audit)
+        self._pinned_head = expected_head is not None
 
     def manifest_binding(self):
         policy = json.loads(self._policy)
@@ -108,3 +109,93 @@ class RecordedCurrencyView:
     def export_governance_evidence(self, run_id, plan_ref):
         self.audit_run(run_id, plan_ref)
         return json.loads(self._evidence)
+
+    def _governance(self):
+        evidence = json.loads(self._evidence)
+        events = [(row['seq'], row['payload'], row['sha256']) for row in evidence['events']]
+        _, state = _reduce_history([(evidence['policy_json'],)], events,
+            [(evidence['journal_head']['seq'], evidence['journal_head']['sha256'])])
+        return state['governance']
+
+    def cell_deadline_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['cell_claims'].get(cell_id)
+        return dict(claim) if claim is not None else None
+
+    def cell_worker_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['worker_claims'].get(cell_id)
+        return dict(claim) if claim is not None else None
+
+    def reference_host_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['reference_host_claims'].get(cell_id)
+        return dict(claim) if claim is not None else None
+
+    def reference_authority_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['reference_authority_claims'].get(cell_id)
+        if claim is not None and claim['currency_run_id'] != json.loads(self._audit)['run_id']:
+            raise ValueError('recorded reference authority belongs to another run')
+        return dict(claim) if claim is not None else None
+
+    def reference_selection(self, run_id):
+        _sha(run_id)
+        if run_id != json.loads(self._audit)['run_id']:
+            raise ValueError('recorded selection belongs to another run')
+        value = self._governance()['reference_selections'].get(run_id)
+        return dict(value) if value is not None else None
+
+    def run_deadline_binding(self, run_id):
+        _sha(run_id)
+        if run_id != json.loads(self._audit)['run_id']:
+            raise ValueError('recorded currency view belongs to another run')
+        binding = self._governance()['deadline_bindings'].get(run_id)
+        return dict(binding) if binding is not None else None
+
+    def response_eligibility(self, call_id):
+        from .cny_budget import _identifier
+        _identifier(call_id, 'call identity')
+        value = self._governance()['response_eligibility'].get(call_id)
+        if value is not None and value['run_id'] != json.loads(self._audit)['run_id']:
+            raise ValueError('recorded eligibility belongs to another run')
+        return dict(value) if value is not None else None
+
+    def evaluation_eligibility(self, run_id, intent_id):
+        _sha(intent_id)
+        self.run_deadline_binding(run_id)
+        value = self._governance()['evaluation_eligibility'].get((run_id, intent_id))
+        return dict(value) if value is not None else None
+
+    def stage_eligibility(self, run_id, request_id):
+        """Read a reference-stage anchor from this verified campaign prefix."""
+        from .cny_budget import _identifier
+        _identifier(request_id, 'stage request identity')
+        self.run_deadline_binding(run_id)
+        value = self._governance()['stage_eligibility'].get((run_id, request_id))
+        return dict(value) if value is not None else None
+
+    def stage_eligibility_ids(self, run_id):
+        """List every reference-stage anchor at this verified campaign head."""
+        self.run_deadline_binding(run_id)
+        return sorted(request_id for owner, request_id in self._governance()['stage_eligibility'] if owner == run_id)
+
+    def reference_physical_snapshot(self, run_id):
+        self.run_deadline_binding(run_id)
+        value = self._governance()['reference_physical_snapshots'].get(run_id)
+        return json.loads(json.dumps(value)) if value is not None else None
+
+    def cycle_eligibility(self, run_id, cycle_key):
+        _sha(cycle_key)
+        self.run_deadline_binding(run_id)
+        value = self._governance()['cycle_eligibility'].get((run_id, cycle_key))
+        return dict(value) if value is not None else None
+
+    def empty_terminal(self, run_id):
+        self.run_deadline_binding(run_id)
+        value = self._governance()['empty_terminals'].get(run_id)
+        return dict(value) if value is not None else None

@@ -11,6 +11,7 @@ from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
 from zoo.mle_bench_lite.provider_protocol import parse_response
+from test_governed_cny_provider import local_endpoint, reply
 
 
 class Store:
@@ -22,16 +23,33 @@ class Store:
 
 
 @pytest.fixture
-def setup(tmp_path):
+def setup(tmp_path, request):
+    mode = getattr(request, 'param', 'single_user_v1')
+    no_thinking = mode == 'no_thinking'
+    if no_thinking:
+        mode = 'single_user_v1'
+    loopback = mode == 'openevolve_host_loopback'
+    endpoint = request.getfixturevalue('local_endpoint') if loopback else None
+    if loopback:
+        mode = 'openevolve_host_v1'
+    if mode == 'openevolve_v1':
+        from test_openevolve_governed_transport import prompt
+        argument = prompt()
+    elif mode == 'openevolve_host_v1':
+        from test_openevolve_governed_transport import host_prompt
+        argument = host_prompt()
+    else:
+        argument = 'prompt'
     ledger = CampaignBudget.create(tmp_path / 'campaign.db')
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
         expected_head=ledger.snapshot()['journal_head'])
-    providers = {key: GovernedCNYProvider('deepseek-flash', 'http://127.0.0.1:1',
-        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture')
+    providers = {key: GovernedCNYProvider('deepseek-flash', endpoint.url if loopback else 'http://127.0.0.1:1',
+        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture-only-secret', message_mode=mode,
+        reasoning_effort='none' if no_thinking else 'high')
         for key in ('main', 'control-0000')}
     calls = []
-    for key, provider in providers.items():
-        def transport(body, provider=provider, key=key):
+    for key, provider in (() if loopback else providers.items()):
+        def transport(body, provider=provider, key=key, **_kwargs):
             assert ledger.snapshot()['pending_calls']
             calls.append((key, body))
             return parse_response(json.dumps({'model': 'deepseek-flash',
@@ -57,7 +75,7 @@ def setup(tmp_path):
         provider_sessions=providers)
     bridge = CNYInvocationBridge(ledger)
     ready = bridge.bind_run(run)
-    args_sha = payload_digest({'args': ('prompt',), 'kwargs': {}})
+    args_sha = payload_digest({'args': (argument,), 'kwargs': {}})
     authority = ready.authority_binding
     context = GovernedCallContext(schema_version=1, runtime_id=run.runtime_id,
         logical_run_id=run.logical_run_id, currency_run_id=authority['currency_run_id'],
@@ -88,6 +106,167 @@ def test_bridge_admits_before_transport_and_replays_without_ledger(setup, monkey
     bundle = bridge.replay_bundle()
     expected = bridge.audit()
     ledger.path.unlink()
+    recorded = CNYInvocationBridge(None)
+    recorded.bind_run(ExternalRunContext(**{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': bundle},
+        store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
+    assert recorded.audit() == expected
+    assert recorded.recover(context, context.argument_sha256).result == 'answer'
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('setup', ['openevolve_v1'], indirect=True)
+def test_two_role_unknown_usage_keeps_campaign_reservation(setup):
+    from test_openevolve_governed_transport import prompt
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    def missing_usage(body, **kwargs):
+        return parse_response(json.dumps({'model': 'deepseek-flash',
+            'choices': [{'finish_reason': 'stop', 'message': {'content': 'answer'}}]}).encode(),
+            providers['control-0000'].protocol_binding())
+    providers['control-0000'].perform_request = missing_usage
+    with pytest.raises(UsageError):
+        bridge.invoke(context, (prompt(),), {})
+    assert ledger.snapshot()['pending_calls']
+    assert bridge.recover(context, context.argument_sha256).outcome == 'unknown'
+    assert ledger.snapshot()['pending_calls']
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
+def test_host_role_bridge_preserves_exact_messages_and_audits_record(setup):
+    from test_openevolve_governed_transport import host_prompt
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, (host_prompt(),), {}) == 'answer'
+    assert json.loads(calls[0][1])['messages'] == [
+        {'role': 'system', 'content': 'host system'}, {'role': 'user', 'content': 'host user'}]
+    complete(store)
+    assert bridge.audit()['protection_valid']
+    assert bridge.replay_bundle()['calls'][0]['prepared']['argument'] == host_prompt()
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
+def test_host_socket_calls_existing_currency_bridge_after_physical_admission(setup, tmp_path, monkeypatch, short_socket_dir):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from zoo.circle_packing.host_transport import HostBroker, HostBridgeClient
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    def dispatch(request_id, argument):
+        result = bridge.invoke(context, (json.dumps(argument),), {})
+        return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
+    path = short_socket_dir / 'host.sock'
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        worker = threading.Thread(target=broker.serve_one, daemon=True)
+        worker.start()
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        client = HostBridgeClient(SimpleNamespace(name='fixture'))
+        assert asyncio.run(client.generate_with_context('host system',
+            [{'role': 'user', 'content': 'host user'}])) == 'answer'
+        worker.join(timeout=5)
+    complete(store)
+    assert bridge.audit()['protection_valid'] and len(calls) == 1
+    assert not ledger.snapshot()['pending_calls']
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
+def test_host_broker_stops_after_unknown_currency_usage(setup, tmp_path, monkeypatch, short_socket_dir):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from zoo.circle_packing.host_transport import HostBroker, HostBridgeClient
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    def missing_usage(body, **kwargs):
+        calls.append(body)
+        return parse_response(json.dumps({'model': 'deepseek-flash',
+            'choices': [{'finish_reason': 'stop', 'message': {'content': 'answer'}}]}).encode(),
+            providers['control-0000'].protocol_binding())
+    providers['control-0000'].perform_request = missing_usage
+    def dispatch(request_id, argument):
+        result = bridge.invoke(context, (json.dumps(argument),), {})
+        return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
+    path = short_socket_dir / 'unknown.sock'
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(2)], daemon=True)
+        thread.start()
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
+        monkeypatch.setenv('MORI_CIRCLE_BROKER_TOKEN', 'a' * 64)
+        for _ in range(2):
+            client = HostBridgeClient(SimpleNamespace(name='fixture'))
+            with pytest.raises(UsageError):
+                asyncio.run(client.generate_with_context('host system',
+                    [{'role': 'user', 'content': 'host user'}]))
+        thread.join(timeout=5)
+    assert len(calls) == 1 and len(ledger.snapshot()['pending_calls']) == 1
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_loopback'], indirect=True)
+def test_actual_host_worker_routes_to_currency_bridge_over_loopback(setup, tmp_path, local_endpoint, short_socket_dir):
+    import os
+    import subprocess
+    import sys
+    import threading
+    from core.composition.external_provider import GovernedCallContext
+    from zoo.circle_packing.host_transport import HostBroker
+    ledger, bridge, run, initial, providers, calls, store, physical = setup
+    diff = ('<<<<<<< SEARCH\n    n = 26\n=======\n'
+            '    n = 26\n    # bridged host fixture\n>>>>>>> REPLACE\n')
+    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
+    invoked = []
+    def dispatch(request_id, argument):
+        raw = json.dumps(argument)
+        argument_sha = payload_digest({'args': (raw,), 'kwargs': {}})
+        context = GovernedCallContext(**{**initial.to_dict(), 'argument_sha256': argument_sha})
+        inv = {'schema_version': 2, 'external_context': context.to_dict(), 'intent_id': context.intent_id,
+            'fingerprint': context.physical_fingerprint, 'lane': context.lane, 'slot_id': context.slot_id,
+            'run_id': context.logical_run_id, 'adapter_binding_sha256': context.adapter_binding_sha256, 'ordinal': 0}
+        binding = payload_digest({'request_sha256': argument_sha, 'invocation': inv})
+        store.rows.clear()
+        store.append('composed_provider_started', {'binding': binding, 'request_sha256': argument_sha, 'invocation': inv})
+        result = bridge.invoke(context, (raw,), {})
+        store.append('composed_provider_completed', {'binding': binding, 'result': result, 'tokens': 7,
+            'state': None, 'observed_binding_sha256': context.adapter_binding_sha256})
+        invoked.append(context)
+        return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
+    path = short_socket_dir / 'real-host.sock'
+    env = {key: value for key, value in os.environ.items() if 'API_KEY' not in key}
+    env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
+               MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,
+               OPENAI_API_KEY='fixture-only-secret')
+    with HostBroker(path, 'a' * 64, dispatch) as broker:
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        result = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.host_reference',
+            '--output', str(tmp_path / 'host-run'), '--iterations', '1', '--fixture-broker'],
+            env=env, capture_output=True, text=True, timeout=120, check=True)
+        thread.join(timeout=5)
+    assert json.loads(result.stdout)['stage_calls'] == 2
+    assert len(invoked) == len(local_endpoint.requests) == 1
+    assert bridge.audit()['protection_valid'] and not ledger.snapshot()['pending_calls']
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 38
+    wire = json.loads(local_endpoint.requests[0])
+    assert [message['role'] for message in wire['messages']] == ['system', 'user']
+    for item in (tmp_path / 'host-run').rglob('*'):
+        if item.is_file():
+            assert b'fixture-only-secret' not in item.read_bytes()
+
+
+@pytest.mark.parametrize('setup', ['openevolve_v1'], indirect=True)
+def test_two_role_bridge_binds_original_argument_and_replays_without_dispatch(setup):
+    from test_openevolve_governed_transport import prompt
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, (prompt(),), {}) == 'answer'
+    assert [item['role'] for item in json.loads(calls[0][1])['messages']] == ['system', 'user']
+    complete(store)
+    bundle = bridge.replay_bundle()
+    prepared = bundle['calls'][0]['prepared']
+    assert prepared['schema_version'] == 2 and prepared['argument'] == prompt()
+    import copy
+    damaged = copy.deepcopy(bundle)
+    damaged['calls'][0]['prepared']['argument'] += ' '
+    with pytest.raises(ValueError):
+        CNYInvocationBridge(None).bind_run(ExternalRunContext(
+            **{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': damaged},
+            store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
+    expected = bridge.audit()
     recorded = CNYInvocationBridge(None)
     recorded.bind_run(ExternalRunContext(**{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': bundle},
         store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
@@ -371,3 +550,18 @@ def test_new_main_intent_zero_proof_distinguishes_complete_old_call_from_orphan(
         assert outcome.usage == {'total_tokens': 0}
     assert len(calls) == 1
     assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 36
+
+
+@pytest.mark.parametrize('setup', ['no_thinking'], indirect=True)
+def test_non_thinking_call_replays_from_frozen_journal_without_redispatch(setup):
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    assert json.loads(calls[0][1])['thinking'] == {'type': 'disabled'}
+    complete(store)
+    bundle = bridge.replay_bundle()
+    recorded = CNYInvocationBridge(None)
+    recorded.bind_run(ExternalRunContext(**{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': bundle},
+        store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
+    assert recorded.audit() == bridge.audit()
+    assert recorded.recover(context, context.argument_sha256).result == 'answer'
+    assert len(calls) == 1 and not ledger.snapshot()['pending_calls']

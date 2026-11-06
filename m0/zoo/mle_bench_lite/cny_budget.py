@@ -145,6 +145,67 @@ def _outstanding(governance):
                if obligation["status"] == "pending")
 
 
+def _circle_audit_identity(proof):
+    if proof is None:
+        return None
+    keys = ('schema_version', 'plan_ref', 'mori_run_id', 'reference_run_id', 'mori_rows_sha256',
+            'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256')
+    return {**{key: proof[key] for key in keys}, 'proof_sha256': _hash(proof)}
+
+
+def _circle_continuation_projection(policy, governance, *, head, pending, spent, reserved):
+    protected = _outstanding(governance)
+    value = {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
+             'governance_enabled': governance['enabled'], 'pilot': governance['circle_pilot'],
+             'runtime': governance['circle_runtime'],
+             'first_pair_audit': _circle_audit_identity(governance['first_pair_audit']),
+             'claims': governance['cell_claims'], 'currency': {
+                 'settled_upper_bound_micro_cny': spent, 'reserved_micro_cny': reserved,
+                 'protected_micro_cny': protected,
+                 'remaining_micro_cny': policy['limit_micro_cny'] - spent - reserved - protected,
+                 'pending_calls': [pending] if pending else [],
+                 'protection_breaches': governance['breaches'], 'invoice_verified': False}}
+    return json.loads(_json(value))
+
+
+def _original_circle_claims(governance):
+    """Separate verified continuation claims from the original pilot claims."""
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    original = set()
+    for cell_id, claim in governance['cell_claims'].items():
+        experiment_id, _arm, seed = parse_cell_identity(cell_id)
+        if experiment_id is None:
+            original.add(cell_id)
+            continue
+        binding = governance['circle_continuations'].get(experiment_id)
+        if binding is None or seed != 0 or claim['plan_ref'] != 'sha256:' + binding['draft']['draft_sha256'] or \
+                not any(item['cell_id'] == cell_id for item in binding['draft']['cells']):
+            raise ValueError('unrecognized continuation claim in original pilot history')
+    return original
+
+
+def _validate_continuation_cell(governance, cell_id, plan_ref, seconds, *, pending):
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    experiment_id, _arm, seed = parse_cell_identity(cell_id)
+    continuation = governance['circle_continuations'].get(experiment_id)
+    if experiment_id is None or not governance['fixture_campaign'] or continuation is None or \
+            'artifact_verification_sha256' not in continuation or seed != 0 or \
+            pending is not None or governance['breaches']:
+        raise ValueError('versioned cells require a bound, resolved fixture first pair')
+    draft = continuation['draft']
+    if plan_ref != 'sha256:' + draft['draft_sha256'] or not any(
+            item.get('cell_id') == cell_id for item in draft['cells']) or \
+            type(seconds) is not int or seconds != draft['limits']['wallclock_seconds']:
+        raise ValueError('versioned cell differs from its frozen draft')
+
+
+def _continuation_artifact_receipt(event):
+    """Bind the trusted fixture verifier's assertion to its exact identities."""
+    return _hash({'draft_sha256': event['draft']['draft_sha256'], 'tree_ref': event['tree_ref'],
+                  'runtime_ref': event['runtime_ref'], 'python_sha256': event['python_sha256'],
+                  'runtime_manifest_sha256': event['runtime_manifest_sha256']})
+
+
 def _run(governance, run_id, plan_ref=None):
     _sha(run_id)
     if not governance["enabled"]:
@@ -177,9 +238,389 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
             raise ValueError("currency governance migration anchor is invalid or has unresolved calls")
         governance["enabled"] = True
         return pending, spent
+    if kind == 'mark_fixture_campaign':
+        if set(event) != {'kind', 'schema_version'} or seq != 0 or previous != ZERO_HASH:
+            raise ValueError('fixture marker must be the first campaign event')
+        governance['fixture_campaign'] = True
+        return pending, spent
     if not governance["enabled"]:
         raise ValueError("currency governance events precede explicit migration")
-    if kind == "protect_run":
+    if kind in {'anchor_response_eligibility', 'anchor_stage_eligibility',
+                'anchor_evaluation_eligibility', 'anchor_cycle_eligibility'} and \
+            event.get('run_id') in governance['reference_selections']:
+        raise ValueError('reference selection is sealed against new work evidence')
+    if kind == "freeze_circle_pilot":
+        fields = {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}
+        optional = {"require_runtime", "require_single_run"}
+        if not fields <= set(event) or set(event) - fields - optional or \
+                any(event[name] is not True for name in optional if name in event):
+            raise ValueError("circle pilot binding has invalid fields")
+        seconds = _integer(event["wallclock_seconds"], "cell duration", 1)
+        if seconds > 86400:
+            raise ValueError("cell duration exceeds the supported limit")
+        value = {"plan_ref": _plan_ref(event["plan_ref"]), "tree_ref": _plan_ref(event["tree_ref"]),
+                 "wallclock_seconds": seconds}
+        if "require_runtime" in event:
+            value['require_runtime'] = True
+        if "require_single_run" in event:
+            value['require_single_run'] = True
+        if governance["circle_pilot"] is not None or governance["cell_claims"] or pending is not None:
+            raise ValueError("circle pilot must freeze once before any cell or unresolved call")
+        governance["circle_pilot"] = value
+    elif kind == "freeze_circle_runtime":
+        if set(event) != {"kind", "schema_version", "plan_ref", "tree_ref", "runtime_ref", "python_sha256"}:
+            raise ValueError("circle runtime binding has invalid fields")
+        value = {"plan_ref": _plan_ref(event["plan_ref"]), "tree_ref": _plan_ref(event["tree_ref"]),
+                 "runtime_ref": _plan_ref(event["runtime_ref"]), "python_sha256": _sha(event["python_sha256"])}
+        pilot = governance["circle_pilot"]
+        if pilot is None or pilot["plan_ref"] != value["plan_ref"] or pilot["tree_ref"] != value["tree_ref"] or \
+                governance["circle_runtime"] is not None or governance["cell_claims"] or pending is not None:
+            raise ValueError("circle runtime must freeze once before any cell or unresolved call")
+        governance["circle_runtime"] = value
+    elif kind == 'bind_circle_continuation':
+        fields = {'kind', 'schema_version', 'previous_head', 'draft', 'tree_ref', 'runtime_ref',
+                  'python_sha256', 'runtime_manifest_sha256'}
+        if set(event) not in (fields, fields | {'artifact_verification_sha256'}) or \
+                not governance['fixture_campaign'] or pending is not None or \
+                _outstanding(governance) or governance['breaches'] or \
+                _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
+            raise ValueError('continuation binding requires a quiescent fixture campaign at its exact head')
+        _plan_ref(event['tree_ref'])
+        _plan_ref(event['runtime_ref'])
+        _sha(event['python_sha256'])
+        _sha(event['runtime_manifest_sha256'])
+        draft = event['draft']
+        if type(draft) is not dict:
+            raise ValueError('continuation binding requires a versioned draft')
+        from zoo.circle_packing.continuation_draft import build_continuation_draft
+        try:
+            inventory = _circle_continuation_projection(policy, governance, head=event['previous_head'],
+                                                        pending=None, spent=spent, reserved=0)
+            expected = build_continuation_draft(inventory, experiment_id=draft['experiment_id'],
+                source_commit=draft['source_commit'], dependency_lock_sha256=draft['dependency_lock_sha256'],
+                method_changes=draft['method_changes'])
+            if draft != expected or draft['experiment_id'] in governance['circle_continuations']:
+                raise ValueError('continuation draft differs or experiment identity already exists')
+            if 'artifact_verification_sha256' in event and \
+                    _sha(event['artifact_verification_sha256']) != _continuation_artifact_receipt(event):
+                raise ValueError('continuation artifact verification identity differs')
+        except (KeyError, TypeError) as error:
+            raise ValueError('continuation binding has an invalid draft') from error
+        binding = {
+            'previous_head': event['previous_head'], 'draft': draft, 'tree_ref': event['tree_ref'],
+            'runtime_ref': event['runtime_ref'], 'python_sha256': event['python_sha256'],
+            'runtime_manifest_sha256': event['runtime_manifest_sha256']}
+        if 'artifact_verification_sha256' in event:
+            binding['artifact_verification_sha256'] = event['artifact_verification_sha256']
+        governance['circle_continuations'][draft['experiment_id']] = json.loads(_json(binding))
+    elif kind == 'record_first_pair_audit':
+        if set(event) != {'kind', 'schema_version', 'previous_head', 'proof'} or \
+                _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
+            raise ValueError('first pair audit requires its exact original head')
+        proof = event['proof']
+        fields = {'schema_version', 'plan_ref', 'mori_run_id', 'reference_run_id', 'mori_rows_sha256',
+                  'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256', 'result'}
+        if type(proof) is not dict or set(proof) != fields or type(proof['schema_version']) is not int or \
+                proof['schema_version'] != 1:
+            raise ValueError('first pair audit proof has invalid fields')
+        plan_ref = _plan_ref(proof['plan_ref'])
+        mori_run, vendor_run = _sha(proof['mori_run_id']), _sha(proof['reference_run_id'])
+        for key in ('mori_rows_sha256', 'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256'):
+            _sha(proof[key])
+        pilot = governance['circle_pilot']
+        prior = governance['first_pair_audit']
+        identity_fields = ('plan_ref', 'mori_run_id', 'reference_run_id', 'mori_rows_sha256',
+                           'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256')
+        if prior is not None and any(prior[key] != proof[key] for key in identity_fields):
+            raise ValueError('superseding first pair audit changes original evidence identity')
+        if pilot is None or pilot['plan_ref'] != plan_ref or \
+                _original_circle_claims(governance) != {'mori-0', 'vendor-0'} or pending is not None or \
+                _outstanding(governance) or governance['breaches']:
+            raise ValueError('first pair audit requires a quiescent original pilot')
+        for run_id, cell in ((mori_run, 'mori-0'), (vendor_run, 'vendor-0')):
+            binding = governance['deadline_bindings'].get(run_id)
+            claim = governance['cell_claims'][cell]
+            if binding != {'cell_id': cell, 'plan_ref': plan_ref, 'deadline_ref': claim['record_sha256']}:
+                raise ValueError('first pair audit differs from its original cell runs')
+        authority = governance['reference_authority_claims'].get('vendor-0')
+        selection = governance['reference_selections'].get(vendor_run)
+        if 'mori-0' not in governance['worker_claims'] or 'vendor-0' not in governance['reference_host_claims'] or \
+                'vendor-0' not in governance['worker_claims'] or authority is None or \
+                authority['currency_run_id'] != vendor_run or not authority['work_started'] or \
+                selection is None or not any(key[0] == mori_run for key in governance['evaluation_eligibility']):
+            raise ValueError('first pair audit lacks original worker or selection anchors')
+        result = proof['result']
+        if type(result) is not dict or result.get('scope') != 'paired_supervised_snapshots_with_independent_replay' or \
+                result.get('performance_claim') is not False or result.get('seed') != 0 or \
+                result.get('plan_ref') != plan_ref or result.get('journal_head') != event['previous_head'] or \
+                type(result.get('replay')) is not dict or result['replay'].get('passed') is not True or \
+                type(result['replay'].get('external_calls')) is not int or result['replay']['external_calls'] != 0 or \
+                type(result.get('mori')) is not dict or type(result.get('reference')) is not dict or \
+                result['replay'].get('candidate') != result['mori'].get('candidate'):
+            raise ValueError('first pair audit has an invalid recorded result')
+        for run_id, arm in ((mori_run, 'mori'), (vendor_run, 'reference')):
+            total = sum(value['upper_bound_micro_cny'] for value in operations.values()
+                        if value.get('run_id') == run_id and 'usage' in value)
+            if type(result[arm].get('settled_upper_bound_micro_cny')) is not int or \
+                    result[arm]['settled_upper_bound_micro_cny'] != total:
+                raise ValueError('first pair audit cost differs from original ledger receipts')
+        governance['first_pair_audit'] = json.loads(_json(proof))
+    elif kind == "claim_cell_deadline":
+        fields = {"kind", "schema_version", "cell_id", "plan_ref", "record_sha256"}
+        pilot = governance["circle_pilot"]
+        if set(event) != (fields | {"seconds"} if pilot is not None else fields):
+            raise ValueError("cell deadline claim has invalid fields")
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        plan_ref = _plan_ref(event["plan_ref"])
+        digest = _sha(event["record_sha256"])
+        if pilot is not None:
+            from zoo.circle_packing.cell_identity import parse_cell_identity
+            experiment_id, _arm, seed = parse_cell_identity(cell_id)
+            if experiment_id is None:
+                if pilot.get('require_runtime') and governance['circle_runtime'] is None:
+                    raise ValueError("cell requires the frozen runtime")
+                if pilot["plan_ref"] != plan_ref:
+                    raise ValueError("cell deadline differs from the frozen pilot plan")
+                if seed not in (0, 1, 2):
+                    raise ValueError("cell identity is outside the frozen pilot")
+                seconds = pilot['wallclock_seconds']
+            else:
+                _validate_continuation_cell(governance, cell_id, plan_ref, event['seconds'], pending=pending)
+                seconds = event['seconds']
+            if type(event["seconds"]) is not int or event["seconds"] != seconds:
+                raise ValueError("cell duration differs from the frozen pilot")
+        if cell_id in governance["cell_claims"]:
+            raise ValueError("cell deadline claim already exists")
+        governance["cell_claims"][cell_id] = {"plan_ref": plan_ref, "record_sha256": digest,
+                                               "observation_sequence": 0, "observation_sha256": digest}
+    elif kind == "observe_cell_deadline":
+        if set(event) != {"kind", "schema_version", "cell_id", "sequence", "previous", "observation_sha256"}:
+            raise ValueError("cell deadline observation anchor has invalid fields")
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        claim = governance["cell_claims"].get(cell_id)
+        sequence = _integer(event["sequence"], "cell observation sequence", 1)
+        previous, digest = _sha(event["previous"]), _sha(event["observation_sha256"])
+        if claim is None or sequence != claim["observation_sequence"] + 1 or previous != claim["observation_sha256"]:
+            raise ValueError("cell deadline observation anchor is not consecutive")
+        claim.update(observation_sequence=sequence, observation_sha256=digest)
+    elif kind == "anchor_response_eligibility":
+        if set(event) != {"kind", "schema_version", "run_id", "call_id", "cell_id",
+                          "sequence", "observation_sha256", "proof_sha256"}:
+            raise ValueError("response eligibility anchor has invalid fields")
+        run_id = _sha(event['run_id'])
+        call_id = _identifier(event['call_id'], 'call identity')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        proof = _sha(event['proof_sha256'])
+        claim = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        operation = operations.get(call_id)
+        if claim is None or binding is None or binding['cell_id'] != cell_id or operation is None or \
+                operation.get('run_id') != run_id or claim['observation_sequence'] != sequence or \
+                claim['observation_sha256'] != digest or call_id in governance['response_eligibility']:
+            raise ValueError('response eligibility must bind the current original call and clock')
+        governance['response_eligibility'][call_id] = {'run_id': run_id, 'cell_id': cell_id,
+            'sequence': sequence, 'observation_sha256': digest, 'proof_sha256': proof}
+    elif kind == "anchor_stage_eligibility":
+        if set(event) != {'kind', 'schema_version', 'run_id', 'request_id', 'cell_id', 'sequence',
+                          'observation_sha256', 'proof_sha256'}:
+            raise ValueError('stage eligibility anchor has invalid fields')
+        run_id = _sha(event['run_id'])
+        request_id = _identifier(event['request_id'], 'stage request identity')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        proof = _sha(event['proof_sha256'])
+        claim = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        key = (run_id, request_id)
+        if claim is None or binding is None or binding['cell_id'] != cell_id or \
+                claim['observation_sequence'] != sequence or claim['observation_sha256'] != digest or \
+                key in governance['stage_eligibility']:
+            raise ValueError('stage eligibility must bind the original run and clock')
+        governance['stage_eligibility'][key] = {'cell_id': cell_id, 'sequence': sequence,
+            'observation_sha256': digest, 'proof_sha256': proof}
+    elif kind == "anchor_evaluation_eligibility":
+        if set(event) != {'kind', 'schema_version', 'run_id', 'intent_id', 'cell_id', 'sequence',
+                          'observation_sha256', 'proof_sha256'}:
+            raise ValueError('evaluation eligibility anchor has invalid fields')
+        run_id = _sha(event['run_id'])
+        intent_id = _sha(event['intent_id'])
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        proof = _sha(event['proof_sha256'])
+        claim = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        key = (run_id, intent_id)
+        if claim is None or binding is None or binding['cell_id'] != cell_id or \
+                claim['observation_sequence'] != sequence or claim['observation_sha256'] != digest or \
+                key in governance['evaluation_eligibility']:
+            raise ValueError('evaluation eligibility must bind the original run and clock')
+        governance['evaluation_eligibility'][key] = {'cell_id': cell_id, 'sequence': sequence,
+            'observation_sha256': digest, 'proof_sha256': proof}
+    elif kind == "anchor_cycle_eligibility":
+        if set(event) != {'kind', 'schema_version', 'run_id', 'cycle_key', 'cell_id', 'sequence',
+                          'observation_sha256', 'proof_sha256'}:
+            raise ValueError('cycle eligibility anchor has invalid fields')
+        run_id, cycle_key = _sha(event['run_id']), _sha(event['cycle_key'])
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest, proof = _sha(event['observation_sha256']), _sha(event['proof_sha256'])
+        claim = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        key = (run_id, cycle_key)
+        if claim is None or binding is None or binding['cell_id'] != cell_id or \
+                claim['observation_sequence'] != sequence or claim['observation_sha256'] != digest or \
+                key in governance['cycle_eligibility'] or run_id in governance['empty_terminals']:
+            raise ValueError('cycle eligibility must bind the original run and clock')
+        governance['cycle_eligibility'][key] = {'cell_id': cell_id, 'sequence': sequence,
+            'observation_sha256': digest, 'proof_sha256': proof}
+    elif kind == 'anchor_empty_terminal':
+        if set(event) != {'kind', 'schema_version', 'run_id', 'cell_id', 'transcript_sha256'}:
+            raise ValueError('empty terminal anchor has invalid fields')
+        run_id = _sha(event['run_id'])
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        digest = _sha(event['transcript_sha256'])
+        binding = governance['deadline_bindings'].get(run_id)
+        if binding is None or binding['cell_id'] != cell_id or run_id in governance['empty_terminals'] or \
+                any(key[0] == run_id for key in governance['cycle_eligibility']):
+            raise ValueError('empty terminal requires an original run without candidate cycles')
+        governance['empty_terminals'][run_id] = {'cell_id': cell_id, 'transcript_sha256': digest}
+    elif kind == 'anchor_reference_physical_snapshot':
+        fields = {'kind', 'schema_version', 'run_id', 'cell_id', 'rows_sha256', 'worker_ref',
+                  'request_ids', 'sequence', 'observation_sha256'}
+        if set(event) not in (fields, fields | {'worker_proof_sha256'}):
+            raise ValueError('reference physical snapshot has invalid fields')
+        run_id, cell_id = _sha(event['run_id']), _identifier(event['cell_id'], 'cell identity')
+        rows_sha256, worker_ref = _sha(event['rows_sha256']), _sha(event['worker_ref'])
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        requests = event['request_ids']
+        if type(requests) is not list or len(requests) not in (1, 2) or any(
+                type(item) is not str or re.fullmatch(r'[0-9a-f]{32}', item) is None for item in requests) or \
+                len(set(requests)) != len(requests):
+            raise ValueError('reference physical snapshot has invalid stage identities')
+        authority = governance['reference_authority_claims'].get(cell_id)
+        worker = governance['worker_claims'].get(cell_id)
+        clock = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        if pending is not None or authority is None or not authority['work_started'] or \
+                authority['currency_run_id'] != run_id or worker is None or worker['worker_ref'] != worker_ref or \
+                clock is None or worker['deadline_ref'] != clock['record_sha256'] or binding is None or \
+                binding['cell_id'] != cell_id or binding['deadline_ref'] != clock['record_sha256'] or \
+                clock['observation_sequence'] != sequence or clock['observation_sha256'] != digest or \
+                run_id in governance['reference_physical_snapshots'] or any(
+                    governance['stage_eligibility'].get((run_id, item), {}).get('cell_id') != cell_id
+                    for item in requests):
+            raise ValueError('reference physical snapshot lacks its original worker, stages or clock')
+        snapshot = {
+            'cell_id': cell_id, 'rows_sha256': rows_sha256, 'worker_ref': worker_ref,
+            'request_ids': list(requests), 'sequence': sequence, 'observation_sha256': digest}
+        if 'worker_proof_sha256' in event:
+            snapshot['worker_proof_sha256'] = _sha(event['worker_proof_sha256'])
+        governance['reference_physical_snapshots'][run_id] = snapshot
+    elif kind == 'freeze_reference_selection':
+        if set(event) != {'kind', 'schema_version', 'run_id', 'cell_id', 'selection_sha256',
+                          'sequence', 'observation_sha256'}:
+            raise ValueError('reference selection freeze has invalid fields')
+        run_id, cell_id = _sha(event['run_id']), _identifier(event['cell_id'], 'cell identity')
+        selection = _sha(event['selection_sha256'])
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        observation = _sha(event['observation_sha256'])
+        snapshot = governance['reference_physical_snapshots'].get(run_id)
+        authority = governance['reference_authority_claims'].get(cell_id)
+        clock = governance['cell_claims'].get(cell_id)
+        if pending is not None or snapshot is None or snapshot['cell_id'] != cell_id or \
+                'worker_proof_sha256' not in snapshot or authority is None or \
+                authority['currency_run_id'] != run_id or not authority['work_started'] or \
+                clock is None or clock['observation_sequence'] != sequence or \
+                clock['observation_sha256'] != observation or sequence <= snapshot['sequence'] or \
+                run_id in governance['reference_selections']:
+            raise ValueError('reference selection lacks an unsealed anchored worker snapshot')
+        governance['reference_selections'][run_id] = {'cell_id': cell_id, 'selection_sha256': selection,
+            'rows_sha256': snapshot['rows_sha256'], 'sequence': sequence, 'observation_sha256': observation}
+    elif kind == 'claim_reference_host':
+        if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'host_ref'}:
+            raise ValueError('reference host claim has invalid fields')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        deadline_ref, host_ref = _sha(event['deadline_ref']), _sha(event['host_ref'])
+        clock = governance['cell_claims'].get(cell_id)
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        _experiment_id, arm, seed = parse_cell_identity(cell_id)
+        if arm != 'vendor' or seed not in (0, 1, 2) or clock is None or \
+                clock['record_sha256'] != deadline_ref or cell_id in governance['reference_host_claims'] or \
+                cell_id in governance['reference_authority_claims'] or cell_id in governance['worker_claims']:
+            raise ValueError('reference host requires an unclaimed original vendor cell')
+        governance['reference_host_claims'][cell_id] = {'deadline_ref': deadline_ref, 'host_ref': host_ref}
+    elif kind == 'claim_reference_authority':
+        if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'authority_ref',
+                          'currency_run_id', 'initial_budget_ref'}:
+            raise ValueError('reference authority claim has invalid fields')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        _experiment_id, arm, seed = parse_cell_identity(cell_id)
+        if arm != 'vendor' or seed not in (0, 1, 2):
+            raise ValueError('reference authority requires a vendor cell')
+        deadline_ref, authority_ref = _sha(event['deadline_ref']), _sha(event['authority_ref'])
+        currency_run_id = _sha(event['currency_run_id'])
+        initial_budget_ref = _plan_ref(event['initial_budget_ref'])
+        clock = governance['cell_claims'].get(cell_id)
+        if clock is None or clock['record_sha256'] != deadline_ref or \
+                cell_id in governance['reference_authority_claims'] or any(
+                    value['cell_id'] == cell_id for value in governance['deadline_bindings'].values()):
+            raise ValueError('reference cell already has an authority or lacks its original deadline')
+        governance['reference_authority_claims'][cell_id] = {
+            'deadline_ref': deadline_ref, 'authority_ref': authority_ref, 'currency_run_id': currency_run_id,
+            'initial_budget_ref': initial_budget_ref, 'work_started': False}
+    elif kind == 'start_reference_authority_work':
+        if set(event) != {'kind', 'schema_version', 'cell_id', 'authority_ref'}:
+            raise ValueError('reference work start has invalid fields')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        authority_ref = _sha(event['authority_ref'])
+        claim = governance['reference_authority_claims'].get(cell_id)
+        if claim is None or claim['authority_ref'] != authority_ref or claim['work_started']:
+            raise ValueError('reference work start differs from its original authority')
+        claim['work_started'] = True
+    elif kind == "claim_cell_worker":
+        if set(event) != {"kind", "schema_version", "cell_id", "deadline_ref", "worker_ref"}:
+            raise ValueError("cell worker claim has invalid fields")
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        deadline_ref, worker_ref = _sha(event["deadline_ref"]), _sha(event["worker_ref"])
+        clock = governance["cell_claims"].get(cell_id)
+        if clock is None or clock["record_sha256"] != deadline_ref:
+            raise ValueError("cell worker requires the original deadline")
+        if cell_id in governance["worker_claims"]:
+            raise ValueError("cell worker was already claimed")
+        governance["worker_claims"][cell_id] = {"deadline_ref": deadline_ref, "worker_ref": worker_ref}
+    elif kind == "bind_run_deadline":
+        if set(event) != {"kind", "schema_version", "run_id", "cell_id", "plan_ref", "deadline_ref"}:
+            raise ValueError("run deadline binding has invalid fields")
+        run_id = _sha(event["run_id"])
+        _run(governance, run_id)
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        claim = governance["cell_claims"].get(cell_id)
+        value = {"cell_id": cell_id, "plan_ref": _plan_ref(event["plan_ref"]),
+                 "deadline_ref": _sha(event["deadline_ref"])}
+        reference = governance['reference_authority_claims'].get(cell_id)
+        if reference is not None and reference['currency_run_id'] != run_id:
+            raise ValueError('reference cell is bound to another currency authority')
+        pilot = governance['circle_pilot']
+        if pilot is not None and pilot.get('require_single_run'):
+            from zoo.circle_packing.cell_identity import parse_cell_identity
+            _experiment_id, arm, _seed = parse_cell_identity(cell_id)
+            if arm == 'mori' and cell_id not in governance['worker_claims']:
+                raise ValueError('single-run Mori cell requires its original worker claim')
+            if any(existing['cell_id'] == cell_id for existing in governance['deadline_bindings'].values()):
+                raise ValueError('cell is already bound to another run')
+        if claim is None or claim["plan_ref"] != value["plan_ref"] or \
+                claim["record_sha256"] != value["deadline_ref"] or \
+                run_id in governance["deadline_bindings"] or \
+                any(operation.get("run_id") == run_id for operation in operations.values()):
+            raise ValueError("run deadline must bind the original cell before paid work")
+        governance["deadline_bindings"][run_id] = value
+    elif kind == "protect_run":
         if set(event) != {"kind", "schema_version", "run_id", "plan_ref", "obligations"}:
             raise ValueError("currency protection event has invalid fields")
         run_id, plan_ref = _sha(event["run_id"]), _plan_ref(event["plan_ref"])
@@ -198,6 +639,8 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if set(event) != required:
             raise ValueError("governed currency reservation shape is invalid")
         call_id = _identifier(event["call_id"], "call identity")
+        if event['run_id'] in governance['reference_selections']:
+            raise ValueError('reference selection is sealed against new calls')
         run = _run(governance, event["run_id"], event["plan_ref"])
         _sha(event["request_sha256"])
         _integer(event["ordinal"], "provider ordinal")
@@ -290,7 +733,13 @@ def _reduce_history(policies, events, heads):
     if limit > 200000000:
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
-    governance = {"enabled": False, "runs": {}, "breaches": []}
+    governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
+                  "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
+                  "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
+                  "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
+                  "reference_host_claims": {},
+                  "reference_physical_snapshots": {}, "reference_selections": {}, "fixture_campaign": False,
+                  "first_pair_audit": None, "circle_continuations": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -311,6 +760,8 @@ def _reduce_history(policies, events, heads):
                 raise ValueError("campaign reservation shape is invalid")
             if event["run_id"] is not None:
                 _sha(event["run_id"])
+                if event['run_id'] in governance['reference_selections']:
+                    raise ValueError('reference selection is sealed against new calls')
             allowance = _integer(event["output_allowance"], "output allowance", 1)
             reserve = policy["context_tokens"] * 2 + allowance * 8
             if (allowance > policy["max_output_tokens"] or event["reserved_micro_cny"] != reserve
@@ -388,6 +839,15 @@ class CampaignBudget:
 
     @classmethod
     def create(cls, path, *, limit_micro_cny=200000000):
+        return cls._create(path, limit_micro_cny=limit_micro_cny, fixture=False)
+
+    @classmethod
+    def create_fixture(cls, path, *, limit_micro_cny=200000000):
+        """Create a new, permanently marked test ledger; never convert an existing one."""
+        return cls._create(path, limit_micro_cny=limit_micro_cny, fixture=True)
+
+    @classmethod
+    def _create(cls, path, *, limit_micro_cny, fixture):
         _integer(limit_micro_cny, "campaign limit", 1)
         if limit_micro_cny > 200000000:
             raise ValueError("campaign limit exceeds the supported CNY 200 authorization")
@@ -403,6 +863,9 @@ class CampaignBudget:
             db.execute("CREATE TABLE head (seq INTEGER NOT NULL, hash TEXT NOT NULL)")
             db.execute("INSERT INTO policy VALUES (?)", (_json(policy),))
             db.execute("INSERT INTO head VALUES (0, ?)", (ZERO_HASH,))
+            if fixture:
+                _, state = cls._read(db)
+                cls._append(db, state, {'kind': 'mark_fixture_campaign', 'schema_version': 2})
         directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(directory_fd)
@@ -530,7 +993,343 @@ class CampaignBudget:
             return _call_bound(policy, {"schema_version": 1, "output_allowance": output_allowance,
                 "reserved_micro_cny": policy["context_tokens"] * 2 + output_allowance * 8})
 
-    def protect_run(self, run_id, plan_ref, obligations):
+    def claim_cell_deadline(self, cell_id, plan_ref, record_sha256, *, seconds=None):
+        """Permanently bind one cell clock to this existing campaign journal."""
+        _identifier(cell_id, "cell identity")
+        _plan_ref(plan_ref)
+        _sha(record_sha256)
+        with self._transaction() as (db, _policy, state):
+            if not state["governance"]["enabled"]:
+                raise ValueError("cell deadline claim requires currency governance")
+            event = {"kind": "claim_cell_deadline", "schema_version": 2,
+                     "cell_id": cell_id, "plan_ref": plan_ref, "record_sha256": record_sha256}
+            if state["governance"]["circle_pilot"] is not None:
+                event["seconds"] = seconds
+            self._append(db, state, event)
+
+    def is_fixture_campaign(self):
+        with self._transaction() as (_db, _policy, state):
+            return state['governance']['fixture_campaign']
+
+    def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds, *, require_runtime=False,
+                            require_single_run=False):
+        """Anchor one draft and source tree before any cell starts."""
+        _plan_ref(plan_ref)
+        _plan_ref(tree_ref)
+        _integer(wallclock_seconds, "cell duration", 1)
+        if type(require_runtime) is not bool or type(require_single_run) is not bool:
+            raise ValueError('pilot requirements must be boolean')
+        with self._transaction() as (db, _policy, state):
+            event = {"kind": "freeze_circle_pilot", "schema_version": 2,
+                     "plan_ref": plan_ref, "tree_ref": tree_ref, "wallclock_seconds": wallclock_seconds}
+            if require_runtime:
+                event['require_runtime'] = True
+            if require_single_run:
+                event['require_single_run'] = True
+            self._append(db, state, event)
+
+    def circle_pilot_binding(self):
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["circle_pilot"]
+            return dict(value) if value is not None else None
+
+    def _record_first_pair_audit(self, proof, *, expected_head):
+        """Atomically anchor a trusted offline audit; this does not enable live work."""
+        _head_anchor(expected_head)
+        with self._transaction() as (db, _policy, state):
+            if expected_head != {'seq': state['seq'], 'sha256': state['hash']}:
+                raise ValueError('campaign head changed before first pair audit was recorded')
+            self._append(db, state, {'kind': 'record_first_pair_audit', 'schema_version': 2,
+                'previous_head': dict(expected_head), 'proof': proof})
+
+    def first_pair_audit(self):
+        """Read the latest trusted audit; previous audit events remain in the journal."""
+        with self._transaction() as (_db, _policy, state):
+            return json.loads(_json(state['governance']['first_pair_audit']))
+
+    def circle_claim_inventory(self, *, expected_head):
+        """Read pilot and cell claims together at a caller-pinned journal head."""
+        _head_anchor(expected_head)
+        with self._transaction() as (_db, policy, state):
+            head = {'seq': state['seq'], 'sha256': state['hash']}
+            if head != expected_head:
+                raise ValueError('campaign head changed before the matrix snapshot')
+            continuations = {name: {'draft_sha256': value['draft']['draft_sha256'],
+                                    'cell_ids': [item['cell_id'] for item in value['draft']['cells']],
+                                    'draft': value['draft'], 'tree_ref': value['tree_ref'],
+                                    'runtime_ref': value['runtime_ref'],
+                                    'artifact_verification_recorded': 'artifact_verification_sha256' in value}
+                             for name, value in state['governance']['circle_continuations'].items()}
+            return {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
+                    'pilot': json.loads(_json(state['governance']['circle_pilot'])),
+                    'claims': json.loads(_json(state['governance']['cell_claims'])),
+                    'continuations': json.loads(_json(continuations))}
+
+    def circle_continuation_inventory(self, *, expected_head):
+        """Read original experiment and global funds together; grants no authority."""
+        _head_anchor(expected_head)
+        with self._transaction() as (_db, policy, state):
+            head = {'seq': state['seq'], 'sha256': state['hash']}
+            if head != expected_head:
+                raise ValueError('campaign head changed before continuation inventory')
+            return _circle_continuation_projection(policy, state['governance'], head=head,
+                pending=state['pending'], spent=state['spent'], reserved=state['reserved'])
+
+    def circle_continuation_binding(self, experiment_id):
+        """Read a recorded fixture continuation without granting new work."""
+        _identifier(experiment_id, 'experiment identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['circle_continuations'].get(experiment_id)
+            return json.loads(_json(value))
+
+    def fixture_continuation_at_head(self, experiment_id, *, expected_head):
+        """Read one fixture binding atomically at an independently pinned head."""
+        _identifier(experiment_id, 'experiment identity')
+        _head_anchor(expected_head)
+        with self._transaction() as (_db, _policy, state):
+            if expected_head != {'seq': state['seq'], 'sha256': state['hash']} or \
+                    not state['governance']['fixture_campaign']:
+                raise ValueError('fixture continuation requires its exact campaign head')
+            value = state['governance']['circle_continuations'].get(experiment_id)
+            return json.loads(_json(value))
+
+    def preflight_continuation_cell(self, cell_id, plan_ref, seconds):
+        """Reject an ineligible fixture cell before its clock file is created."""
+        _identifier(cell_id, 'cell identity')
+        _plan_ref(plan_ref)
+        with self._transaction() as (_db, _policy, state):
+            _validate_continuation_cell(state['governance'], cell_id, plan_ref, seconds, pending=state['pending'])
+            if cell_id in state['governance']['cell_claims']:
+                raise ValueError('cell deadline claim already exists')
+
+    def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
+        _plan_ref(plan_ref)
+        _plan_ref(tree_ref)
+        _plan_ref(runtime_ref)
+        _sha(python_sha256)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "freeze_circle_runtime", "schema_version": 2,
+                                    "plan_ref": plan_ref, "tree_ref": tree_ref,
+                                    "runtime_ref": runtime_ref, "python_sha256": python_sha256})
+
+    def circle_runtime_binding(self):
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["circle_runtime"]
+            return dict(value) if value is not None else None
+
+    def anchor_cell_deadline_observation(self, cell_id, sequence, previous, observation_sha256):
+        _identifier(cell_id, "cell identity")
+        _integer(sequence, "cell observation sequence", 1)
+        _sha(previous)
+        _sha(observation_sha256)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "observe_cell_deadline", "schema_version": 2,
+                "cell_id": cell_id, "sequence": sequence, "previous": previous,
+                "observation_sha256": observation_sha256})
+
+    def anchor_unstarted_cell_observation(self, cell_id, sequence, previous, observation_sha256):
+        """Reconcile one existing observation only while no host or worker is claimed."""
+        _identifier(cell_id, 'cell identity')
+        _integer(sequence, 'cell observation sequence', 1)
+        _sha(previous)
+        _sha(observation_sha256)
+        with self._transaction() as (db, _policy, state):
+            governance = state['governance']
+            if cell_id in governance['worker_claims'] or cell_id in governance['reference_host_claims'] or \
+                    cell_id in governance['reference_authority_claims']:
+                raise ValueError('clock reconciliation requires an unstarted cell')
+            self._append(db, state, {'kind': 'observe_cell_deadline', 'schema_version': 2,
+                'cell_id': cell_id, 'sequence': sequence, 'previous': previous,
+                'observation_sha256': observation_sha256})
+
+    def cell_deadline_claim(self, cell_id):
+        _identifier(cell_id, "cell identity")
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["cell_claims"].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def anchor_response_eligibility(self, run_id, call_id, cell_id, sequence, observation_sha256, proof_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_response_eligibility', 'schema_version': 2,
+                'run_id': run_id, 'call_id': call_id, 'cell_id': cell_id, 'sequence': sequence,
+                'observation_sha256': observation_sha256, 'proof_sha256': proof_sha256})
+
+    def response_eligibility(self, call_id):
+        _identifier(call_id, 'call identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['response_eligibility'].get(call_id)
+            return dict(value) if value is not None else None
+
+    def anchor_stage_eligibility(self, run_id, request_id, cell_id, sequence, observation_sha256, proof_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_stage_eligibility', 'schema_version': 2,
+                'run_id': run_id, 'request_id': request_id, 'cell_id': cell_id, 'sequence': sequence,
+                'observation_sha256': observation_sha256, 'proof_sha256': proof_sha256})
+
+    def stage_eligibility(self, run_id, request_id):
+        _sha(run_id)
+        _identifier(request_id, 'stage request identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['stage_eligibility'].get((run_id, request_id))
+            return dict(value) if value is not None else None
+
+    def anchor_evaluation_eligibility(self, run_id, intent_id, cell_id, sequence, observation_sha256, proof_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_evaluation_eligibility', 'schema_version': 2,
+                'run_id': run_id, 'intent_id': intent_id, 'cell_id': cell_id, 'sequence': sequence,
+                'observation_sha256': observation_sha256, 'proof_sha256': proof_sha256})
+
+    def evaluation_eligibility(self, run_id, intent_id):
+        _sha(run_id)
+        _sha(intent_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['evaluation_eligibility'].get((run_id, intent_id))
+            return dict(value) if value is not None else None
+
+    def anchor_cycle_eligibility(self, run_id, cycle_key, cell_id, sequence, observation_sha256, proof_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_cycle_eligibility', 'schema_version': 2,
+                'run_id': run_id, 'cycle_key': cycle_key, 'cell_id': cell_id, 'sequence': sequence,
+                'observation_sha256': observation_sha256, 'proof_sha256': proof_sha256})
+
+    def cycle_eligibility(self, run_id, cycle_key):
+        _sha(run_id)
+        _sha(cycle_key)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['cycle_eligibility'].get((run_id, cycle_key))
+            return dict(value) if value is not None else None
+
+    def anchor_empty_terminal(self, run_id, cell_id, transcript_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_empty_terminal', 'schema_version': 2,
+                'run_id': run_id, 'cell_id': cell_id, 'transcript_sha256': transcript_sha256})
+
+    def empty_terminal(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['empty_terminals'].get(run_id)
+            return dict(value) if value is not None else None
+
+    def claim_reference_authority(self, cell_id, deadline_ref, authority_ref, currency_run_id, initial_budget_ref):
+        _identifier(cell_id, 'cell identity')
+        _sha(deadline_ref)
+        _sha(authority_ref)
+        _sha(currency_run_id)
+        _plan_ref(initial_budget_ref)
+        value = {'deadline_ref': deadline_ref, 'authority_ref': authority_ref, 'currency_run_id': currency_run_id,
+                 'initial_budget_ref': initial_budget_ref}
+        with self._transaction() as (db, _policy, state):
+            existing = state['governance']['reference_authority_claims'].get(cell_id)
+            if existing is not None:
+                if any(existing.get(key) != item for key, item in value.items()):
+                    raise ValueError('reference cell already has a different authority')
+                return
+            self._append(db, state, {'kind': 'claim_reference_authority', 'schema_version': 2,
+                                    'cell_id': cell_id, **value})
+
+    def reference_authority_claim(self, cell_id):
+        _identifier(cell_id, 'cell identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_authority_claims'].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def anchor_reference_physical_snapshot(self, run_id, cell_id, rows_sha256, worker_ref,
+                                           request_ids, sequence, observation_sha256, *, worker_proof_sha256=None):
+        """Record a trusted host assertion, not proof of worker termination."""
+        with self._transaction() as (db, _policy, state):
+            event = {'kind': 'anchor_reference_physical_snapshot', 'schema_version': 2,
+                'run_id': run_id, 'cell_id': cell_id, 'rows_sha256': rows_sha256, 'worker_ref': worker_ref,
+                'request_ids': request_ids, 'sequence': sequence, 'observation_sha256': observation_sha256}
+            if worker_proof_sha256 is not None:
+                event['worker_proof_sha256'] = worker_proof_sha256
+            self._append(db, state, event)
+
+    def reference_physical_snapshot(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_physical_snapshots'].get(run_id)
+            return json.loads(json.dumps(value)) if value is not None else None
+
+    def freeze_reference_selection(self, run_id, cell_id, selection_sha256, sequence, observation_sha256):
+        """Freeze the host's selection after its anchored snapshot exists."""
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'freeze_reference_selection', 'schema_version': 2,
+                'run_id': run_id, 'cell_id': cell_id, 'selection_sha256': selection_sha256,
+                'sequence': sequence, 'observation_sha256': observation_sha256})
+
+    def reference_selection(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_selections'].get(run_id)
+            return dict(value) if value is not None else None
+
+    def start_reference_authority_work(self, cell_id, authority_ref):
+        _identifier(cell_id, 'cell identity')
+        _sha(authority_ref)
+        with self._transaction() as (db, _policy, state):
+            claim = state['governance']['reference_authority_claims'].get(cell_id)
+            if claim is not None and claim['currency_run_id'] in state['governance']['reference_selections']:
+                raise ValueError('reference selection is sealed against new work')
+            if claim is None or claim['authority_ref'] != authority_ref:
+                raise ValueError('reference work lacks its original authority')
+            if claim['work_started']:
+                return
+            self._append(db, state, {'kind': 'start_reference_authority_work', 'schema_version': 2,
+                                    'cell_id': cell_id, 'authority_ref': authority_ref})
+
+    def claim_reference_host(self, cell_id, deadline_ref, host_ref):
+        """Consume the trusted reference host start without consuming its worker claim."""
+        _identifier(cell_id, 'cell identity')
+        _sha(deadline_ref)
+        _sha(host_ref)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'claim_reference_host', 'schema_version': 2,
+                                    'cell_id': cell_id, 'deadline_ref': deadline_ref, 'host_ref': host_ref})
+
+    def reference_host_claim(self, cell_id):
+        _identifier(cell_id, 'cell identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_host_claims'].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):
+        """Consume the one worker start for a cell in the original ledger."""
+        _identifier(cell_id, "cell identity")
+        _sha(deadline_ref)
+        _sha(worker_ref)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "claim_cell_worker", "schema_version": 2,
+                                    "cell_id": cell_id, "deadline_ref": deadline_ref,
+                                    "worker_ref": worker_ref})
+
+    def cell_worker_claim(self, cell_id):
+        _identifier(cell_id, "cell identity")
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["worker_claims"].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def bind_run_deadline(self, run_id, cell_id, plan_ref, deadline_ref):
+        _sha(run_id)
+        _identifier(cell_id, "cell identity")
+        _plan_ref(plan_ref)
+        _sha(deadline_ref)
+        value = {"cell_id": cell_id, "plan_ref": plan_ref, "deadline_ref": deadline_ref}
+        with self._transaction() as (db, _policy, state):
+            existing = state["governance"]["deadline_bindings"].get(run_id)
+            if existing is not None:
+                if existing != value:
+                    raise ValueError("run deadline binding cannot change")
+                return
+            self._append(db, state, {"kind": "bind_run_deadline", "schema_version": 2,
+                                    "run_id": run_id, **value})
+
+    def run_deadline_binding(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["deadline_bindings"].get(run_id)
+            return dict(value) if value is not None else None
+
+    def protect_run(self, run_id, plan_ref, obligations, *, deadline_binding=None):
         _sha(run_id)
         _plan_ref(plan_ref)
         with self._transaction() as (db, policy, state):
@@ -541,10 +1340,22 @@ class CampaignBudget:
             previous = governance["runs"].get(run_id)
             if previous is not None:
                 if previous["plan_ref"] == plan_ref and previous["frozen"] == frozen:
-                    return
-                raise ValueError("protected currency run cannot change its frozen plan or obligations")
-            self._append(db, state, {"kind": "protect_run", "schema_version": 2,
-                "run_id": run_id, "plan_ref": plan_ref, "obligations": frozen})
+                    pass
+                else:
+                    raise ValueError("protected currency run cannot change its frozen plan or obligations")
+            else:
+                self._append(db, state, {"kind": "protect_run", "schema_version": 2,
+                    "run_id": run_id, "plan_ref": plan_ref, "obligations": frozen})
+                _, state = self._read(db)
+            if deadline_binding is not None:
+                if type(deadline_binding) is not dict or set(deadline_binding) != {'cell_id', 'plan_ref', 'deadline_ref'}:
+                    raise ValueError('invalid atomic deadline binding')
+                existing = state['governance']['deadline_bindings'].get(run_id)
+                if existing is not None and existing != deadline_binding:
+                    raise ValueError('run deadline binding cannot change')
+                if existing is None:
+                    self._append(db, state, {'kind': 'bind_run_deadline', 'schema_version': 2,
+                                             'run_id': run_id, **deadline_binding})
 
     def admit_call(self, run_id, lane, slot_id, call_binding, bound):
         """Commit a real reservation and consume its control obligation atomically.

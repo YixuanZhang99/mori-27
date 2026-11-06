@@ -6,11 +6,20 @@ not a complete resource-limit policy or a boundary against a hostile kernel.
 """
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 from core.executor.seccomp import (SECCOMP_FD_PLACEHOLDER, build_seccomp_policy)
 from core.executor.workspace import safe_relative
+
+
+def sandbox_child_path():
+    """Keep the host-selected bwrap available in a sanitized child environment."""
+    executable = shutil.which('bwrap')
+    if not executable or not Path(executable).is_file():
+        raise RuntimeError('BubblewrapSandbox requires an installed bwrap executable')
+    return str(Path(executable).absolute().parent) + os.pathsep + os.defpath
 
 
 class BubblewrapSandbox:
@@ -38,7 +47,7 @@ class BubblewrapSandbox:
                 command.extend(["--dir", str(directory)])
 
     def wrap(self, args: list[str], cwd: Path, protected_paths=(),
-             data_dir: str = "", env: dict | None = None) -> list[str]:
+             data_dir: str = "", env: dict | None = None, readonly_paths=()) -> list[str]:
         root = cwd.resolve()
         if not args or not root.is_dir():
             raise ValueError("sandbox requires a command and existing workspace")
@@ -76,5 +85,11 @@ class BubblewrapSandbox:
                 raise ValueError("sandbox data_dir must be an existing directory")
             self._directories(command, data)
             command.extend(["--ro-bind", str(data), str(data)])
+        for value in readonly_paths:
+            readonly = Path(value).resolve(strict=True)
+            if not readonly.is_dir() or readonly == root or root in readonly.parents or readonly in root.parents:
+                raise ValueError("read-only runtime must be a separate directory")
+            self._directories(command, readonly)
+            command.extend(["--ro-bind", str(readonly), str(readonly)])
         command.extend(["--chdir", str(root), "--", *args])
         return command

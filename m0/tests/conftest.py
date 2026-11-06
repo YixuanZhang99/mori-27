@@ -12,13 +12,29 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+import tempfile
 
 import pytest
 
 TEST_ROOT = Path(__file__).resolve().parent
 
+
+@pytest.fixture
+def short_socket_dir():
+    """AF_UNIX paths must fit macOS's short sun_path limit."""
+    with tempfile.TemporaryDirectory(prefix='mori-sock-', dir='/tmp') as directory:
+        yield Path(directory).resolve()
+
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {
+    "test_openevolve_host_dispatch.py": "reference host runs a real sandboxed independent control",
+    "test_openevolve_host_control.py": "protected circle control uses real sandbox evaluation",
+    "test_openevolve_governed_framework.py": "real governed circle evaluation with loopback HTTP",
+    "test_openevolve_reference.py": "real upstream host worker and sandboxed evaluation",
+    "test_openevolve_framework_sandbox.py": "real public Framework sandboxed circle evaluation",
+    "test_openevolve_coordinator_sandbox.py": "real sandboxed evidence for OpenEvolve coordination",
+    "test_openevolve_prompt_sandbox.py": "real sandboxed evidence for OpenEvolve prompt binding",
+    "test_circle_packing_sandbox.py": "real Bubblewrap circle evaluator execution",
     "test_composed_worktree_durable_flush.py": "fault injection reads Linux /proc descriptor paths",
     "test_funsearch_priority_sandbox.py": "real Bubblewrap and x86_64 priority seccomp execution",
     "test_funsearch_or3_domain.py": "domain identity freezes an x86_64 seccomp policy even for validation tests",
@@ -49,6 +65,16 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_openevolve_host_stage_budget.py": {
+        "test_real_sandbox_stages_are_charged_to_physical_budget",
+    },
+    "test_governed_cny_bridge.py": {
+        "test_actual_host_worker_routes_to_currency_bridge_over_loopback",
+    },
+    "test_openevolve_runner.py": {
+        "test_default_cli_runs_without_credentials_or_external_network",
+        "test_fixture_terminal_recovery_replays_without_new_calls",
+    },
     "test_funsearch_sandbox_framework.py": {
         "test_funsearch_uses_sandboxed_worktree_and_replays_without_workers",
     },

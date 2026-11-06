@@ -92,3 +92,5 @@
 - v74 — Configured M7 construction, immutable Git artifacts, isolated controls, protected external currency, installed examples and actual process-crash recovery; retains all v73 checks.
 
 - v75 — Preserve v74 checks and historical sources; extend the full regression time limit to 900 seconds.
+
+- v76 — Preserve v75 checks and historical sources; extend the full regression time limit to 1500 seconds for hosted Linux runners.

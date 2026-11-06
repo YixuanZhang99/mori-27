@@ -18,13 +18,52 @@ def build_request(prompt: str, binding: dict) -> bytes:
     if type(model) is not str or not model.strip() or type(allowance) is not int or allowance <= 0:
         raise ValueError('provider request requires model and positive output allowance')
     kind = binding.get('request_format', 'openai')
-    payload = {'model': model, 'messages': [{'role': 'user', 'content': prompt}]}
+    mode = binding.get('message_mode', 'single_user_v1')
+    if mode == 'single_user_v1':
+        messages = [{'role': 'user', 'content': prompt}]
+    elif mode == 'openevolve_v1':
+        from core.x1.checkpoint import payload_digest
+        try:
+            request = json.loads(prompt)
+            vendor = request['vendor_messages']
+            instruction = request['response_instruction']
+            feedback = request['repair_feedback']
+            if type(vendor) is not dict or set(vendor) != {'system', 'user'} or \
+                    any(type(vendor[k]) is not str or not vendor[k].strip() for k in vendor) or \
+                    request['vendor_prompt_ref'] != 'sha256:' + payload_digest(vendor) or \
+                    type(instruction) is not str or not instruction.strip() or \
+                    type(feedback) is not list or any(type(v) is not str for v in feedback):
+                raise ValueError('invalid bound OpenEvolve messages')
+        except (TypeError, KeyError, json.JSONDecodeError) as error:
+            raise ValueError('invalid bound OpenEvolve messages') from error
+        suffix = '\n\n' + instruction
+        if feedback:
+            suffix += '\nRepair feedback:\n' + '\n'.join(feedback)
+        messages = [{'role': 'system', 'content': vendor['system']},
+                    {'role': 'user', 'content': vendor['user'] + suffix}]
+    elif mode == 'openevolve_host_v1':
+        from core.x1.checkpoint import payload_digest
+        try:
+            request = json.loads(prompt)
+            vendor = request['host_messages']
+            if type(request) is not dict or set(request) != {'host_messages', 'host_prompt_ref'} or \
+                    type(vendor) is not dict or set(vendor) != {'system', 'user'} or \
+                    any(type(vendor[key]) is not str or not vendor[key].strip() for key in vendor) or \
+                    request['host_prompt_ref'] != 'sha256:' + payload_digest(vendor):
+                raise ValueError('invalid bound host messages')
+        except (TypeError, KeyError, json.JSONDecodeError) as error:
+            raise ValueError('invalid bound host messages') from error
+        messages = [{'role': 'system', 'content': vendor['system']},
+                    {'role': 'user', 'content': vendor['user']}]
+    else:
+        raise ValueError('unsupported provider message mode')
+    payload = {'model': model, 'messages': messages}
     if kind == 'deepseek':
         effort = binding.get('reasoning_effort', 'high')
-        if type(effort) is not str or effort not in {'low', 'high', 'max'}:
-            raise ValueError('reasoning effort must be low, high or max')
+        if type(effort) is not str or effort not in {'none', 'low', 'high', 'max'}:
+            raise ValueError('reasoning effort must be none, low, high or max')
         payload.update(max_tokens=allowance, stream=False,
-                       thinking={'type': 'enabled'}, reasoning_effort=effort)
+                       thinking={'type': 'disabled' if effort == 'none' else 'enabled'}, reasoning_effort=effort)
     elif kind == 'openai':
         temperature = binding.get('temperature', 0.0)
         if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 2:

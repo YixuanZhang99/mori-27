@@ -99,6 +99,24 @@ class GovernedInvocation:
                 provider_sessions={"main": runtime.parts["provider"].raw_provider,
                     **{key: value["provider"].raw_provider for key, value in self.sessions.items()}})
             self.external_plan = self.external.bind_run(context)
+            cell_clock = getattr(self.external, 'cell_deadline', None)
+            check_clock = getattr(self.external, '_check_cell_deadline', None)
+            if callable(cell_clock) and callable(check_clock):
+                deadline = cell_clock()
+                if deadline is not None:
+                    record_evaluation = getattr(self.external, 'record_evaluation_eligibility', None)
+                    if callable(record_evaluation):
+                        runtime.budget.install_evaluation_eligibility_recorder(record_evaluation)
+                    record_cycle = getattr(self.external, 'record_cycle_eligibility', None)
+                    if callable(record_cycle):
+                        runtime.budget.install_cycle_eligibility_recorder(record_cycle)
+                    if context.mode == 'live':
+                        runtime.budget.install_admission_guard(check_clock)
+                        for domain in [runtime.parts['domain'], *(session['domain'] for session in self.sessions.values())]:
+                            bind_deadline = getattr(domain, 'bind_cell_deadline', None)
+                            if not callable(bind_deadline):
+                                raise ValueError('timed governance requires a deadline-aware domain')
+                            bind_deadline(deadline)
 
     def _external_context(self, receipt, binding, lane, slot_id, ordinal, args, kwargs):
         from core.composition.external_provider import GovernedCallContext, external_session_id
@@ -169,6 +187,11 @@ class GovernedInvocation:
                 receipt, binding, lane, slot_id, ordinal, args, kwargs)
             provider.external_invoke = self.external.invoke
             provider.external_recover = self.external.recover
+            accounting = getattr(self.external, '_recover_for_accounting', None)
+            deadline = getattr(self.external, '_check_cell_deadline', None)
+            if callable(accounting) and callable(deadline):
+                provider.external_accounting_recover = accounting
+                provider.external_deadline_check = deadline
         try:
             yield
         finally:
@@ -178,13 +201,22 @@ class GovernedInvocation:
             provider.__dict__.pop("governance_measurement", None)
             provider.__dict__.pop("invocation_binding", None)
             provider.__dict__.pop("invocation_ordinal", None)
-            for name in ("external_context_factory", "external_invoke", "external_recover"):
+            for name in ("external_context_factory", "external_invoke", "external_recover",
+                         "external_accounting_recover", "external_deadline_check"):
                 provider.__dict__.pop(name, None)
 
     def check_integrity(self, receipt):
         reason = self._violations.pop(receipt.intent_id, None)
-        if self.external is not None and not self.external.audit()["protection_valid"]:
-            reason = reason or "external_currency_protection_breached"
+        if self.external is not None:
+            store = self.runtime.store
+            pending = callable(getattr(store, "peek", None)) and store.peek() is not None
+            prefix_audit = getattr(self.external, "_audit_replay_prefix", None)
+            if (getattr(store, "restoring", False) or pending) and callable(prefix_audit):
+                audit = prefix_audit()
+            else:
+                audit = self.external.audit()
+            if not audit["protection_valid"]:
+                reason = reason or "external_currency_protection_breached"
         if reason is not None:
             self.runtime.budget.invalidate_protection(receipt.intent_id, reason)
             self.runtime.store.append("governed_integrity_failure", {

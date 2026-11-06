@@ -114,7 +114,7 @@ def _signal_interrupt(signum: int, _frame) -> None:
     raise InterruptedError(f"Acceptance interrupted by signal {signum}")
 
 
-def main(argv: list[str] | None = None, *, source_snapshot=None, finalize_summary=None) -> int:
+def main(argv: list[str] | None = None, *, source_snapshot=None, finalize_summary=None, prepare_copy=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/linux-acceptance")
     parser.add_argument("--timeout", type=float, default=1800,
@@ -151,8 +151,11 @@ def main(argv: list[str] | None = None, *, source_snapshot=None, finalize_summar
                            PYTEST_ADDOPTS="--strict-markers --fail-on-skip")
         scratch = tempfile.TemporaryDirectory(prefix="mori27-acceptance-")
         copy = Path(scratch.name) / "m0"
-        shutil.copytree(ROOT / "m0", copy, ignore=shutil.ignore_patterns(
-            ".venv", "__pycache__", ".pytest_cache", "*.egg-info", "build", "dist"))
+        if prepare_copy is None:
+            shutil.copytree(ROOT / "m0", copy, ignore=shutil.ignore_patterns(
+                ".venv", "__pycache__", ".pytest_cache", "*.egg-info", "build", "dist"))
+        else:
+            prepare_copy(ROOT, copy.parent)
         # v73 inspects the active repository workflow rather than m0's archived
         # nested workflow. Keep that source context beside the isolated copy.
         for name in CONTROL_FILES:

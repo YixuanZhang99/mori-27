@@ -402,6 +402,25 @@ class PromptMaterializer:
                         "version": "1" if self.validator is None else self.validator_version,
                         "deterministic": deterministic}}}
 
+    def build_request(self, plan_value, *, hypothesis, attempt, feedback):
+        request = {"schema_version": 1, "plan_ref": _ref(plan_value), "role": plan_value["role"],
+            "recipe": plan_value["recipe"], "context": plan_value["projection"], "hypothesis": hypothesis,
+            "hypothesis_frozen": plan_value["spec"]["hypothesis_frozen"], "attempt": attempt,
+            "repair_feedback": feedback,
+            "output_contract": {"artifact": "nonempty text", "hypothesis":
+                "Copy the input hypothesis exactly, without any changes."
+                if plan_value["spec"]["hypothesis_frozen"] else "nonempty text"}}
+        if self.explicit_json_output:
+            request['response_instruction'] = (
+                'Return exactly one JSON object with keys artifact and hypothesis. '
+                'artifact is a JSON string containing the complete program, with newlines and quotes escaped. '
+                'hypothesis must follow output_contract. Do not return bare code or Markdown fences. '
+                'Task, recipe and feedback describe the artifact, not this response format.')
+        return request
+
+    def decode_output(self, raw, plan_value):
+        return _output(raw)
+
     async def construct(self, plan, provider):
         if not isinstance(plan, ConstructionPlan) or not callable(provider):
             raise ValueError("materializer requires a construction plan and provider")
@@ -419,19 +438,8 @@ class PromptMaterializer:
                                 measured_cost_units=coverage)
 
         for index in range(self.max_attempts):
-            request = {"schema_version": 1, "plan_ref": plan.ref, "role": value["role"],
-                "recipe": value["recipe"], "context": value["projection"], "hypothesis": hypothesis,
-                "hypothesis_frozen": value["spec"]["hypothesis_frozen"], "attempt": index + 1,
-                "repair_feedback": feedback,
-                "output_contract": {"artifact": "nonempty text", "hypothesis":
-                    "Copy the input hypothesis exactly, without any changes."
-                    if value["spec"]["hypothesis_frozen"] else "nonempty text"}}
-            if self.explicit_json_output:
-                request['response_instruction'] = (
-                    'Return exactly one JSON object with keys artifact and hypothesis. '
-                    'artifact is a JSON string containing the complete program, with newlines and quotes escaped. '
-                    'hypothesis must follow output_contract. Do not return bare code or Markdown fences. '
-                    'Task, recipe and feedback describe the artifact, not this response format.')
+            request = self.build_request(value, hypothesis=hypothesis, attempt=index + 1,
+                                         feedback=feedback)
             reset_usage(provider)
             try:
                 raw = provider(_json(request))
@@ -443,7 +451,7 @@ class PromptMaterializer:
                 raise failed(f"{type(error).__name__}: {error}", kind) from error
             used += take_usage(provider)
             try:
-                output = _output(raw)
+                output = _output(_json(self.decode_output(raw, value)))
             except (TypeError, ValueError, RecursionError) as error:
                 feedback = [str(error)]
                 attempts.append({"attempt": index + 1, "status": "invalid_output",

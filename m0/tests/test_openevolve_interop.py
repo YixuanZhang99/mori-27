@@ -157,6 +157,58 @@ def test_duplicate_missing_parent_generation_and_unknown_program_fields_fail_clo
         OpenEvolveDatabaseSnapshot(unknown)
 
 
+def test_real_upstream_migrant_roundtrips_without_weakening_lineage_checks():
+    database = ProgramDatabase(config())
+    source = Program('source', 'value = 17', generation=2,
+                     metrics={'score': 0.8, 'combined_score': 0.8, 'novelty': 0.3})
+    database.add(source, target_island=0)
+    database._migrate_one(source.id, 1)
+    migrants = [program for program in database.programs.values()
+                if program.metadata.get('migrant') is True]
+    assert len(migrants) == 1
+    migrant = migrants[0]
+    assert migrant.parent_id == source.id and migrant.generation == source.generation
+    snapshot = OpenEvolveDatabaseSnapshot.from_database(database)
+    restored = snapshot.to_database()
+    assert restored.get(migrant.id).to_dict() == migrant.to_dict()
+    assert migrant.id in restored.islands[1]
+    compact = deepcopy(snapshot.payload)
+    for row in compact['programs']:
+        row.pop('language')
+        row.pop('metrics')
+    assert OpenEvolveDatabaseSnapshot(compact).to_database().get(migrant.id).code == source.code
+    forged = deepcopy(snapshot.payload)
+    next(row for row in forged['programs'] if row['id'] == migrant.id)['code'] = 'different code'
+    with pytest.raises(ValueError, match='child generation'):
+        OpenEvolveDatabaseSnapshot(forged)
+    forged_metrics = deepcopy(snapshot.payload)
+    next(row for row in forged_metrics['programs'] if row['id'] == migrant.id)['metrics']['score'] = 99
+    with pytest.raises(ValueError, match='child generation'):
+        OpenEvolveDatabaseSnapshot(forged_metrics)
+    cycle = deepcopy(snapshot.payload)
+    root = next(row for row in cycle['programs'] if row['id'] == source.id)
+    root['parent_id'] = migrant.id
+    root['metadata']['migrant'] = True
+    with pytest.raises(ValueError):
+        OpenEvolveDatabaseSnapshot(cycle)
+
+
+def test_three_same_generation_migrants_cannot_form_parent_cycle():
+    database = ProgramDatabase(config(num_islands=3))
+    source = Program('source', 'x = 1', generation=1, metrics={'score': 1.0, 'novelty': 0.2})
+    database.add(source, target_island=0)
+    database._migrate_one(source.id, 1)
+    database._migrate_one(source.id, 2)
+    payload = OpenEvolveDatabaseSnapshot.from_database(database).payload
+    rows = payload['programs']
+    assert len(rows) == 3
+    for index, row in enumerate(rows):
+        row['metadata']['migrant'] = True
+        row['parent_id'] = rows[(index + 1) % len(rows)]['id']
+    with pytest.raises(ValueError, match='parent cycle'):
+        OpenEvolveDatabaseSnapshot(payload)
+
+
 def _state_case(name, mutate):
     payload = OpenEvolveDatabaseSnapshot.from_database(native_database()).payload
     mutate(payload["state"])

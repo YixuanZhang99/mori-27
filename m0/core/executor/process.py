@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import subprocess
@@ -36,7 +37,28 @@ class ProcessJournal:
                time_limit: int | None, metadata: dict,
                resource_limits: dict | None = None,
                seccomp_policy: dict | None = None,
-               seccomp_delivery: str | None = None) -> tuple[subprocess.Popen, dict]:
+               seccomp_delivery: str | None = None,
+               die_with_parent: bool = False,
+               absolute_deadline: dict | None = None) -> tuple[subprocess.Popen, dict]:
+        """Start a wrapper; parent-death signaling applies to that wrapper only.
+
+        Callers needing descendant containment must supply a separate target
+        policy, such as the cell worker's Bubblewrap PID namespace.
+        """
+        if type(die_with_parent) is not bool or die_with_parent and sys.platform != "linux":
+            raise ValueError("parent-death supervision requires Linux")
+        if absolute_deadline is not None and (sys.platform != "linux" or type(absolute_deadline) is not dict or
+                set(absolute_deadline) != {"boot_id", "deadline_ns"} or
+                type(absolute_deadline["boot_id"]) is not str or not absolute_deadline["boot_id"] or
+                type(absolute_deadline["deadline_ns"]) is not int or absolute_deadline["deadline_ns"] < 0):
+            raise ValueError("invalid absolute process deadline")
+        if absolute_deadline is not None and time_limit is not None:
+            try:
+                valid_timeout = type(time_limit) in (int, float) and math.isfinite(time_limit) and time_limit >= 0
+            except OverflowError:
+                valid_timeout = False
+            if not valid_timeout:
+                raise ValueError("invalid relative process timeout")
         if seccomp_policy is not None:
             validate_seccomp_policy(seccomp_policy)
             if seccomp_delivery is None:
@@ -47,11 +69,16 @@ class ProcessJournal:
         directory.mkdir()
         paths = {name + "_path": str(directory / f"{name}.json")
                  for name in ("spec", "result", "target")}
+        if metadata.get('containment_required') is True:
+            if 'MORI_SUPERVISOR_TARGET' in env:
+                raise ValueError('supervisor target environment is reserved')
+            env = {**env, 'MORI_SUPERVISOR_TARGET': paths['target_path']}
         stdout_path, stderr_path = directory / "stdout.txt", directory / "stderr.txt"
         spec = {"args": args, "cwd": str(cwd), "time_limit": time_limit,
                 "resource_limits": resource_limits or {},
                 "seccomp_policy": seccomp_policy,
                 "seccomp_delivery": seccomp_delivery,
+                "absolute_deadline": absolute_deadline,
                 "stdout_path": str(stdout_path), "stderr_path": str(stderr_path),
                 "result_path": paths["result_path"], "target_path": paths["target_path"]}
         Path(paths["spec_path"]).write_text(json.dumps(spec, ensure_ascii=False),
@@ -62,7 +89,15 @@ class ProcessJournal:
         bootstrap = ("import runpy,sys; script=sys.argv[1]; "
                      "sys.argv=[script]+sys.argv[2:]; "
                      "runpy.run_path(script, run_name='__main__')")
-        proc = subprocess.Popen([sys.executable, "-c", bootstrap,
+        prefix = []
+        if die_with_parent:
+            bootstrap = ("import ctypes,os,sys; expected=int(sys.argv.pop(1)); "
+                         "lib=ctypes.CDLL(None,use_errno=True); "
+                         "result=lib.prctl(1,9,0,0,0); "
+                         "result == 0 or (_ for _ in ()).throw(OSError(ctypes.get_errno(), 'prctl')); "
+                         "os.getppid() == expected or os._exit(125); " + bootstrap)
+            prefix = [str(os.getpid())]
+        proc = subprocess.Popen([sys.executable, "-B", "-c", bootstrap, *prefix,
                                  str(wrapper), paths["spec_path"]],
                                 cwd=cwd, env=env, start_new_session=True)
         record = {**metadata, "execution_id": execution_id,
@@ -71,11 +106,17 @@ class ProcessJournal:
                   "wrapper_pid": proc.pid, "wrapper_start_ticks": start_ticks(proc.pid),
                   **paths, "stdout_path": str(stdout_path),
                   "stderr_path": str(stderr_path)}
-        if record["wrapper_start_ticks"] is None:
-            proc.kill()
+        try:
+            if record["wrapper_start_ticks"] is None:
+                raise RuntimeError("process recovery requires a stable OS start identity")
+            self.store.append("executor_process_started", record)
+        except BaseException:
+            if proc.poll() is None:
+                self.terminate_target(record)
+                proc.kill()
             proc.wait()
-            raise RuntimeError("process recovery requires a stable OS start identity")
-        self.store.append("executor_process_started", record)
+            self.terminate_target(record)
+            raise
         return proc, record
 
     def completed_result(self, record: dict) -> dict:
@@ -102,8 +143,15 @@ class ProcessJournal:
             "recovered": recovered})
         return completed
 
-    def wait(self, proc: subprocess.Popen, record: dict) -> dict:
+    def wait(self, proc: subprocess.Popen, record: dict, *, before_record=None) -> dict:
         proc.wait()
+        if record.get('containment_required') is True:
+            if not callable(before_record):
+                raise RuntimeError('required process containment is unresolved')
+            before_record()
+            self.store.append('executor_containment_verified', {'execution_id': record['execution_id']})
+        elif before_record is not None:
+            raise ValueError('unexpected process containment callback')
         return self._completed(record, recovered=False)
 
     def fail(self, record: dict, detail: str) -> None:
@@ -178,6 +226,11 @@ class ProcessJournal:
             # Already-completed historical executions remain readable under the
             # policy they actually used; never rewrite their record as current.
             return {"status": "finished", **self.completed_result(record)}
+        if record.get('containment_required') is True:
+            proofs = [row['payload'] for row in self.store.read('executor_containment_verified')
+                      if row['payload'].get('execution_id') == record['execution_id']]
+            if proofs != [{'execution_id': record['execution_id']}]:
+                raise RuntimeError('required process containment is unresolved')
         try:
             self._validate_recovery_policy(record)
         except (OSError, ValueError, RuntimeError, UnicodeError) as error:

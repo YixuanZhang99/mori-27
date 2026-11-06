@@ -21,35 +21,110 @@ from core.executor.types import CostVec, EvalResult, EvalStatus
 from zoo.mle_bench_lite.agent_common import _extract_solution_code
 from zoo.mle_bench_lite.public_train import PROTOCOL, SPLITS, digest, file_digest
 
+_PROCESS_RUNTIME_ROOT = Path(sys.prefix).resolve()
+
 
 class SandboxRunner:
     """Production runner: no host credentials, network, original data or grader."""
     def __init__(self):
         self.sandbox = BubblewrapSandbox()
         self.interpreter = sys.executable
+        self.runtime_root = _PROCESS_RUNTIME_ROOT
+        self._campaign_runtime = None
+        self._continuation_runtime = None
 
-    @staticmethod
-    def validate_paths(*paths):
+    @classmethod
+    def for_campaign_runtime(cls, ledger, *, runtime, manifest, base_python):
+        from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+        runtime = Path(runtime).resolve(strict=True)
+        verified = verify_frozen_runtime(ledger, runtime=runtime, manifest=manifest, base_python=base_python)
+        runner = cls()
+        runner.runtime_root = runtime
+        runner.interpreter = str(runtime / 'bin' / 'python')
+        runner._campaign_runtime = (ledger, copy.deepcopy(manifest), str(base_python), verified['runtime_ref'])
+        return runner
+
+    @classmethod
+    def for_fixture_continuation(cls, ledger, *, draft, source_directory, runtime_directory, base_python):
+        from zoo.circle_packing.continuation_binding import verify_bound_fixture_continuation
+        result = verify_bound_fixture_continuation(ledger, draft, source_directory=source_directory,
+            runtime_directory=runtime_directory, base_python=base_python,
+            expected_head=ledger.snapshot()['journal_head'])
+        runner = cls()
+        runner.runtime_root = Path(result['runtime'])
+        runner.interpreter = str(runner.runtime_root / 'bin' / 'python')
+        runner._campaign_runtime = (ledger, None, str(base_python), result['runtime_ref'])
+        runner._continuation_runtime = (copy.deepcopy(draft), str(source_directory), str(runtime_directory))
+        return runner
+
+    def independent_runner(self):
+        if self._campaign_runtime is None:
+            return type(self)()
+        ledger, manifest, base_python, _ = self._campaign_runtime
+        if self._continuation_runtime is not None:
+            draft, source, runtime = self._continuation_runtime
+            return type(self).for_fixture_continuation(ledger, draft=draft, source_directory=source,
+                runtime_directory=runtime, base_python=base_python)
+        return type(self).for_campaign_runtime(ledger, runtime=self.runtime_root, manifest=manifest,
+                                                base_python=base_python)
+
+    def _verify_campaign_runtime(self):
+        if self._campaign_runtime is None:
+            return
+        ledger, manifest, base_python, reference = self._campaign_runtime
+        if self._continuation_runtime is not None:
+            from zoo.circle_packing.continuation_binding import verify_bound_fixture_continuation
+            draft, source, runtime = self._continuation_runtime
+            result = verify_bound_fixture_continuation(ledger, draft, source_directory=source,
+                runtime_directory=runtime, base_python=base_python, expected_head=ledger.snapshot()['journal_head'])
+            if result['runtime'] != str(self.runtime_root):
+                raise ValueError('continuation runtime identity changed')
+        else:
+            from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+            result = verify_frozen_runtime(ledger, runtime=self.runtime_root, manifest=manifest, base_python=base_python)
+        if result['runtime_ref'] != reference or self.interpreter != str(self.runtime_root / 'bin' / 'python'):
+            raise ValueError('campaign runtime identity changed')
+
+    def validate_paths(self_or_path=None, *paths):
         # bwrap needs the system interpreter/libraries, so those trees are
-        # readable. Dataset, cache and private-source roots must not be there.
+        # readable. Support both the legacy class call and instance calls;
+        # an instance must include its actual mounted runtime, not the host's.
+        if isinstance(self_or_path, SandboxRunner):
+            runtime = self_or_path.runtime_root
+        else:
+            runtime = _PROCESS_RUNTIME_ROOT
+            paths = (self_or_path, *paths)
         visible = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
+        visible.append(runtime)
         for value in paths:
             if value is None:
                 continue
             path = Path(value).resolve()
-            if any(path == root or root in path.parents for root in visible):
+            if any(path == root or root in path.parents or path in root.parents for root in visible):
                 raise ValueError("benchmark data/artifacts must be outside sandbox-visible system trees")
 
     @property
     def manifest_binding(self):
-        return {"kind": "bubblewrap-seccomp-csv-v1", "python": self.interpreter,
+        self._verify_campaign_runtime()
+        binding = {"kind": "bubblewrap-seccomp-csv-v1", "python": self.interpreter,
                 "python_sha256": hashlib.sha256(Path(self.interpreter).read_bytes()).hexdigest(),
                 "threads": {name: 2 for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")},
                 "seccomp": self.sandbox.seccomp_spec()}
+        if not any(self.runtime_root == Path(name).resolve() or Path(name).resolve() in self.runtime_root.parents
+                   for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")):
+            binding['runtime_root'] = str(self.runtime_root)
+        if self._campaign_runtime is not None:
+            binding['runtime_ref'] = self._campaign_runtime[3]
+        return binding
 
     def execute(self, workspace, timeout):
+        self.validate_paths(workspace)
+        self._verify_campaign_runtime()
+        system_roots = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
+        runtime_mount = () if any(self.runtime_root == root or root in self.runtime_root.parents
+                                  for root in system_roots) else (self.runtime_root,)
         command = self.sandbox.wrap([self.interpreter, "program.py"], cwd=workspace,
-                                   protected_paths=("program.py", "data"))
+                                   protected_paths=("program.py", "data"), readonly_paths=runtime_mount)
         thread_settings = []
         for name, value in self.manifest_binding["threads"].items():
             thread_settings.extend(["--setenv", name, str(value)])
@@ -74,6 +149,7 @@ class SandboxRunner:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+        self._verify_campaign_runtime()
         return {"returncode": returncode, "timed_out": timed_out,
                 "wall_seconds": time.monotonic() - started}
 

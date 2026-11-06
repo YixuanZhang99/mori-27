@@ -220,8 +220,23 @@ def _validate_payload(payload: dict) -> None:
                                     and parent != data["id"]),
                  f"Program {data['id']} has an unknown or invalid parent")
         if parent is not None:
-            _require(data.get("generation", 0) > by_id[parent].get("generation", 0),
+            source = by_id[parent]
+            migrant_copy = (data.get("metadata", {}).get("migrant") is True
+                            and data.get("generation", 0) == source.get("generation", 0)
+                            and data["code"] == source["code"]
+                            and data.get("language", "python") == source.get("language", "python")
+                            and data.get("metrics", {}) == source.get("metrics", {}))
+            _require(data.get("generation", 0) > source.get("generation", 0) or migrant_copy,
                      "child generation must exceed parent generation")
+    visited = set()
+    for program_id in by_id:
+        chain = set()
+        current = program_id
+        while current is not None and current not in visited:
+            _require(current not in chain, "Program parent cycle is invalid")
+            chain.add(current)
+            current = by_id[current].get("parent_id")
+        visited.update(chain)
     state = payload["state"]
     _require(isinstance(state, dict) and set(state) == _STATE_FIELDS,
              "unsupported OpenEvolve database state schema")

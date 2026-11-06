@@ -10,6 +10,8 @@ import json
 import os
 from pathlib import Path
 import stat
+import threading
+import urllib.parse
 import uuid
 
 from core.composition.external_provider import (
@@ -38,14 +40,214 @@ def _sync_dir(path):
         os.close(fd)
 
 
+
+def _verify_failed_construction_cycle(rows, event, logical_run_id):
+    """Bind unscored OpenEvolve failure to its original measured construction."""
+    from dataclasses import asdict
+    from core.composition.construction import decode_construction_outcome
+    from core.composition.contracts import OperatorFailure
+    from core.executor.types import CostVec
+    try:
+        cycle, proposal, evidence = event['cycle'], event['proposal'], event['evidence']
+        candidate = proposal['candidate']
+        candidate_id = candidate['id']
+        plans = [row['payload'] for row in rows if row['kind'] == 'openevolve_construction_plan'
+                 and row['payload'].get('candidate_id') == candidate_id]
+        outcomes = [row['payload'] for row in rows if row['kind'] == 'construction_outcome'
+                    and row['payload'].get('identity', {}).get('operation', {}).get('cycle') == cycle
+                    and row['payload']['identity']['operation'].get('run_id') == logical_run_id
+                    and row['payload']['identity']['operation'].get('lane') == 'main'
+                    and row['payload']['identity']['operation'].get('phase') == 'operator']
+        if type(cycle) is not int or len(plans) != 1 or len(outcomes) != 1:
+            raise ValueError('failed construction lacks a unique original plan or terminal')
+        plan, terminal = plans[0], outcomes[0]
+        identity = terminal['identity']
+        starts = [index for index, row in enumerate(rows) if row['kind'] == 'construction_started'
+                  and row['payload'].get('identity') == identity]
+        terminal_index = next(index for index, row in enumerate(rows)
+                              if row['kind'] == 'construction_outcome' and row['payload'] is terminal)
+        plan_index = next(index for index, row in enumerate(rows)
+                          if row['kind'] == 'openevolve_construction_plan' and row['payload'] is plan)
+        planned = plan['plan']['candidate']
+        if len(starts) != 1 or not plan_index < starts[0] < terminal_index or plan['plan_ref'] != 'sha256:' + payload_digest(plan['plan']) or \
+                plan['plan_ref'] != identity['plan_ref'] or identity['operation'].get('slot_id') is not None or \
+                identity['materializer']['kind'] != 'openevolve_diff_materializer_v1' or \
+                {**planned, 'hypothesis': candidate['hypothesis']} != candidate or \
+                candidate['created_cycle'] != cycle or proposal['artifact'] != '':
+            raise ValueError('failed construction differs from its original identity')
+        failure = decode_construction_outcome(terminal, identity)
+        operation = identity['operation']
+        intent_id, fingerprint = operation['intent_id'], operation['fingerprint']
+        if type(intent_id) is not str or not intent_id or type(fingerprint) is not str or not fingerprint:
+            raise ValueError('failed construction lacks its physical operation identity')
+        def budget_events(kind):
+            return [(index, row['payload']['data']) for index, row in enumerate(rows)
+                    if row['kind'] == 'hierarchical_budget' and row['payload'].get('event') == kind and
+                    (row['payload'].get('data', {}).get('intent', {}).get('intent_id') if kind == 'reserve'
+                     else row['payload'].get('data', {}).get('intent_id')) == intent_id]
+        reserves, launches, settlements = (budget_events(kind) for kind in ('reserve', 'start', 'settle'))
+        if len(reserves) != 1 or len(launches) != 1 or len(settlements) != 1:
+            raise ValueError('failed construction lacks its original physical settlement')
+        reserve_i, reserve = reserves[0]
+        launch_i, launch = launches[0]
+        settled_i, settled = settlements[0]
+        intent = reserve['intent']
+        if not reserve_i < launch_i < plan_index < starts[0] < terminal_index < settled_i or \
+                any(item['fingerprint'] != fingerprint for item in (reserve, launch, settled)) or \
+                intent['candidate']['id'] != candidate_id or intent['operation'] != 'operator' or \
+                intent['lane'] != 'main' or intent['control_slot'] is not None:
+            raise ValueError('failed construction differs from physical operation identity')
+        provider_starts = [(index, row['payload']) for index, row in enumerate(rows)
+                           if row['kind'] == 'composed_provider_started' and
+                           row['payload'].get('invocation', {}).get('intent_id') == intent_id]
+        from core.composition.construction import _json
+        from core.composition.openevolve_registration import constructor_factory
+        decoder = constructor_factory(None, {})
+        if not 1 <= len(provider_starts) <= decoder.max_attempts:
+            raise ValueError('failed construction has an invalid number of attempts')
+        total, feedback, previous_completion, bindings, failure_detail = 0, [], starts[0], set(), None
+        for ordinal, (index, started) in enumerate(provider_starts):
+            completions = [(j, row['payload']) for j, row in enumerate(rows)
+                           if row['kind'] == 'composed_provider_completed' and
+                           row['payload'].get('binding') == started['binding']]
+            invocation = started['invocation']
+            if len(completions) != 1 or invocation.get('ordinal') != ordinal or \
+                    invocation.get('fingerprint') != fingerprint or invocation.get('run_id') != logical_run_id or \
+                    invocation.get('lane') != 'main' or invocation.get('slot_id') is not None or \
+                    started['binding'] in bindings:
+                raise ValueError('failed construction lacks unique provider receipts')
+            completed_i, completed = completions[0]
+            tokens = completed['tokens']
+            if not previous_completion < index < completed_i < terminal_index or type(tokens) is not int or tokens < 0:
+                raise ValueError('failed construction provider receipt is not measured')
+            request = decoder.build_request(plan['plan'], hypothesis=planned['hypothesis'],
+                                            attempt=ordinal + 1, feedback=feedback)
+            if started.get('request_sha256') != payload_digest({'args': (_json(request),), 'kwargs': {}}):
+                raise ValueError('failed patch request differs from original plan')
+            outcome = completed.get('outcome', 'returned')
+            if outcome == 'failed':
+                if ordinal != len(provider_starts) - 1 or completed['result'] not in {
+                        'provider invocation failed (ValueError)', 'provider invocation failed (RuntimeError)',
+                        'provider invocation failed (TypeError)', 'provider invocation failed (Exception)'}:
+                    raise ValueError('failed provider receipt is invalid or followed by another attempt')
+                failure_detail = 'RuntimeError: ' + completed['result']
+            elif outcome == 'returned':
+                try:
+                    decoder.decode_output(completed['result'], plan['plan'])
+                except (TypeError, ValueError, RecursionError) as error:
+                    feedback = [str(error)]
+                else:
+                    raise ValueError('successful patch cannot prove failed construction')
+            else:
+                raise ValueError('unsupported failed construction provider outcome')
+            total += tokens
+            bindings.add(started['binding'])
+            previous_completion = completed_i
+        if failure_detail is None:
+            if len(provider_starts) != decoder.max_attempts:
+                raise ValueError('failed patch construction lacks its exhausted attempts')
+            failure_detail = 'construction attempts exhausted: ' + '; '.join(feedback)
+        if str(failure) != failure_detail or \
+                total != failure.cost.tokens_in or \
+                payload_digest(settled['actual_costs']) != payload_digest({
+                    'token': failure.cost.tokens_in + failure.cost.tokens_out,
+                    'node': failure.cost.node_count, 'eval_count': failure.cost.eval_count}) or \
+                not {'token', 'node', 'eval_count'} <= set(settled['measured_units']):
+            raise ValueError('failed construction settlement differs from provider usage')
+        result = evidence['eval_result']
+        if type(failure) is not OperatorFailure or payload_digest(asdict(failure.cost)) != payload_digest(proposal['cost']) or \
+                list(failure.measured_cost_units) != proposal['measured_cost_units'] or \
+                evidence['candidate_id'] != candidate_id or evidence['executor_status'] != 'failed_to_run' or \
+                evidence['result_text'] != str(failure) or result['status'] != 'failed_to_run' or \
+                result['text_feedback'] != str(failure) or result['metrics'] != {} or \
+                payload_digest(result['cost']) != payload_digest(asdict(CostVec())) or result['contract']['binding']['candidate_id'] != candidate_id:
+            raise ValueError('failed construction evidence differs from original outcome')
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid failed construction evidence') from error
+
 class CNYInvocationBridge:
     """Fresh per-runtime adapter; the campaign itself remains independently shared."""
 
-    def __init__(self, ledger, *, usage_dir=None, spool_dir=None):
+    def __init__(self, ledger, *, usage_dir=None, spool_dir=None, cell_deadline_binding=None,
+                 recorded_only=False, recorded_reference=False):
+        if type(recorded_only) is not bool or type(recorded_reference) is not bool or \
+                recorded_reference and not recorded_only:
+            raise ValueError('recorded-only mode must be boolean')
         self.ledger = ledger
+        self._recorded_only = recorded_only
+        self._recorded_reference = recorded_reference
         self._usage_dir = usage_dir
         self._spool_dir = spool_dir
         self._run = None
+        self._cell_deadline = None
+        self._recorded_deadline = None
+        self._deadline_bind_lock = threading.RLock()
+        self._initial_deadline_binding = cell_deadline_binding
+
+    def bind_cell_deadline(self, deadline, *, plan, expected_plan_ref, cell_id):
+        """Bind the draft's shared clock under the physical admission lock."""
+        owner = getattr(getattr(self._run, 'physical_identity_lookup', None), '__self__', None)
+        lock = getattr(owner, '_lock', self._deadline_bind_lock)
+        with lock:
+            return self._bind_cell_deadline(deadline, plan=plan, expected_plan_ref=expected_plan_ref, cell_id=cell_id)
+
+    def _bind_cell_deadline(self, deadline, *, plan, expected_plan_ref, cell_id):
+        from zoo.circle_packing.cell_deadline import CellDeadline
+        from zoo.circle_packing.pilot_plan import validate_draft_cell
+        if self._run is None or self._run.mode != 'live' or self._cell_deadline is not None or \
+                type(deadline) is not CellDeadline or deadline._lifecycle.ledger is not self.ledger:
+            raise ValueError('cell deadline must share the original live currency authority')
+        binding = validate_draft_cell(self.ledger, plan, cell_id, expected_plan_ref=expected_plan_ref)
+        record = deadline._record
+        if record['cell_id'] != binding['cell_id'] or record['plan_ref'] != binding['plan_ref'] or \
+                record['seconds'] != binding['wallclock_seconds']:
+            raise ValueError('cell deadline differs from the frozen draft')
+        fixed = {'schema_version': 1, 'logical_run_id': self._run.logical_run_id,
+                 'campaign_id': binding['campaign_id'], 'cell_id': cell_id,
+                 'plan_ref': binding['plan_ref'], 'deadline_ref': record['record_sha256']}
+        existing = self._load('cell-deadline-binding')
+        run_id = self._ready.authority_binding['currency_run_id']
+        anchored = self.ledger.run_deadline_binding(run_id)
+        proof = {'cell_id': cell_id, 'plan_ref': binding['plan_ref'], 'deadline_ref': record['record_sha256']}
+        if existing is None:
+            if anchored is not None:
+                if anchored != proof:
+                    raise ValueError('cell deadline differs from the campaign binding')
+                deadline.remaining()  # Reconstruct only from the original anchored clock.
+            else:
+                rows = list(self._run.store.read())
+                if self._records() or any(row['kind'] in {'host_stage_started', 'governed_control_started',
+                        'composed_provider_started'} or row['kind'] == 'hierarchical_budget' and
+                        row['payload'].get('event') == 'reserve' for row in rows):
+                    raise ValueError('cell deadline cannot be first bound after work')
+                deadline.check()
+                self.ledger.bind_run_deadline(run_id, **proof)
+            self._save('cell-deadline-binding', fixed)
+        elif existing != fixed or anchored != proof:
+            raise ValueError('cell deadline differs from its durable binding')
+        else:
+            deadline.remaining()  # Validate original identity even after expiry.
+        self._cell_deadline = deadline
+
+    def cell_deadline(self):
+        """Fail closed when a previously bound live clock is absent or changed."""
+        if self._run is not None and self._run.mode == 'recorded':
+            return self._recorded_deadline
+        if self._run is None or self._run.mode != 'live':
+            return None
+        fixed = self._load('cell-deadline-binding')
+        deadline = self._cell_deadline
+        anchored = self.ledger.run_deadline_binding(self._ready.authority_binding['currency_run_id'])
+        if fixed is None and deadline is None and anchored is None:
+            return None
+        if fixed is None or deadline is None or anchored is None or deadline._lifecycle.ledger is not self.ledger or \
+                anchored != {'cell_id': deadline._record['cell_id'], 'plan_ref': deadline._record['plan_ref'],
+                             'deadline_ref': deadline._record['record_sha256']} or fixed != {'schema_version': 1, 'logical_run_id': self._run.logical_run_id,
+                          'campaign_id': deadline._lifecycle.campaign_id,
+                          'cell_id': deadline._record['cell_id'], 'plan_ref': deadline._record['plan_ref'],
+                          'deadline_ref': deadline._record['record_sha256']}:
+            raise UsageError('durable cell deadline binding is missing or changed')
+        return deadline
 
     def _load(self, name):
         path = self._spool / (name + '.json')
@@ -102,14 +304,18 @@ class CNYInvocationBridge:
     def bind_run(self, context):
         if self._run is not None:
             raise ValueError('external bridge is already bound to a runtime')
+        if self._recorded_only and getattr(context, 'mode', None) != 'recorded':
+            raise ValueError('recorded-only bridge refuses live binding')
         self._run = context
         self._bindings = {'main': context.main_provider_binding, **context.control_provider_bindings}
         identity = {key: value for key, value in context.to_dict().items()
                     if key not in {'mode', 'recorded_bundle'}}
         if context.mode == 'recorded':
             bundle = context.recorded_bundle
-            if type(bundle) is not dict or set(bundle) != {'schema_version', 'preparation', 'ready',
-                    'calls', 'terminals', 'currency_evidence'} or bundle['schema_version'] != 1:
+            base = {'schema_version', 'preparation', 'ready', 'calls', 'terminals', 'currency_evidence'}
+            if type(bundle) is not dict or type(bundle.get('schema_version')) is not int or \
+                    bundle['schema_version'] not in (1, 2) or set(bundle) != (
+                        base | {'timing'} if bundle['schema_version'] == 2 else base):
                 raise ValueError('unsupported recorded currency bundle')
             self._bundle = _copy(bundle)
             self._preparation = bundle['preparation']
@@ -121,12 +327,55 @@ class CNYInvocationBridge:
             self._authority = RecordedCurrencyView(bundle['currency_evidence'],
                 expected_run_id=authority['currency_run_id'], expected_plan_ref=self._ready.physical_plan_ref,
                 expected_policy_sha256=authority['policy_sha256'])
+            binding = self._authority.run_deadline_binding(authority['currency_run_id'])
+            if binding is not None:
+                if bundle['schema_version'] != 2 or type(bundle['timing']) is not dict or \
+                        set(bundle['timing']) != {'clock', 'responses'} or type(bundle['timing']['responses']) is not list:
+                    raise UsageError('deadline-bound replay requires recorded eligibility evidence')
+                from zoo.circle_packing.cell_deadline import RecordedCellClock
+                claim = self._authority.cell_deadline_claim(binding['cell_id'])
+                self._recorded_deadline = RecordedCellClock(bundle['timing']['clock'], claim)
+                record = self._recorded_deadline._record
+                if (record['cell_id'], record['plan_ref'], record['record_sha256']) != \
+                        (binding['cell_id'], binding['plan_ref'], binding['deadline_ref']):
+                    raise ValueError('recorded cell clock differs from run deadline binding')
+            elif bundle['schema_version'] != 1:
+                raise ValueError('untimed recorded run cannot carry timing evidence')
+            if self._recorded_deadline is not None:
+                if self._recorded_reference:
+                    self._require_reference_snapshot()
+                else:
+                    self._require_complete_timed_transcript()
+                response_ids = [record['prepared']['call_id'] for record in bundle['calls']
+                                if record['response'] is not None]
+                proofs = bundle['timing']['responses']
+                if any(type(item) is not dict or type(item.get('call_id')) is not str for item in proofs) or \
+                        len(proofs) != len(response_ids) or {item['call_id'] for item in proofs} != set(response_ids):
+                    raise ValueError('recorded response eligibility coverage differs')
             if self.audit()['unknown_cost_calls']:
                 raise UsageError('recorded currency proof contains unresolved provider usage')
             return self._ready
         if self.ledger is None:
             raise ValueError('live currency bridge requires an existing authority')
+        pilot = self.ledger.circle_pilot_binding()
+        if pilot is not None and pilot.get('require_single_run') and self._initial_deadline_binding is None:
+            raise ValueError('single-run pilot requires its initial cell deadline')
+        if pilot is not None and pilot.get('require_single_run') and not self.ledger.is_fixture_campaign():
+            deadline, _plan, _plan_ref, cell = self._initial_deadline_binding
+            if cell not in ('mori-0', 'vendor-0') or deadline._record.get('cell_id') != cell:
+                raise ValueError('live pilot gate allows only the first paired cells')
+            from zoo.circle_packing.supervisor_attestation import require_supervised_process
+            require_supervised_process(self.ledger, deadline)
         self._authority = self.ledger
+        if self.ledger.is_fixture_campaign():
+            for provider in context.provider_sessions.values():
+                try:
+                    url = urllib.parse.urlsplit(provider.manifest_binding()['base_url'])
+                    if url.scheme != 'http' or url.hostname not in {'127.0.0.1', '::1'} or \
+                            not url.port or url.username or url.password or url.query or url.fragment:
+                        raise ValueError('fixture campaign requires a loopback provider')
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError('fixture campaign requires a loopback provider') from error
         if len({id(raw) for raw in context.provider_sessions.values()}) != len(context.provider_sessions):
             raise ValueError('currency provider sessions must be distinct fresh objects')
         self._spool = Path(self._spool_dir or Path(context.workdir) / '.governed-cny').absolute()
@@ -186,7 +435,26 @@ class CNYInvocationBridge:
         elif any(existing.get(key) != value for key, value in fixed.items()):
             raise ValueError('prepared currency run, provider, or relocation changed')
         self._preparation = existing
-        self.ledger.protect_run(existing['currency_run_id'], context.physical_plan['plan_ref'], obligations)
+        deadline_binding = None
+        if self._initial_deadline_binding is not None:
+            from zoo.circle_packing.cell_deadline import CellDeadline
+            from zoo.circle_packing.pilot_plan import validate_draft_cell
+            deadline, plan, expected_plan_ref, cell_id = self._initial_deadline_binding
+            if type(deadline) is not CellDeadline or deadline._lifecycle.ledger is not self.ledger:
+                raise ValueError('cell deadline must share the original live currency authority')
+            binding = validate_draft_cell(self.ledger, plan, cell_id, expected_plan_ref=expected_plan_ref)
+            record = deadline._record
+            if (record['cell_id'], record['plan_ref'], record['seconds']) != \
+                    (binding['cell_id'], binding['plan_ref'], binding['wallclock_seconds']):
+                raise ValueError('cell deadline differs from the frozen draft')
+            deadline_binding = {'cell_id': cell_id, 'plan_ref': binding['plan_ref'],
+                                'deadline_ref': record['record_sha256']}
+            if self.ledger.run_deadline_binding(existing['currency_run_id']) == deadline_binding:
+                deadline.remaining()
+            else:
+                deadline.check()
+        self.ledger.protect_run(existing['currency_run_id'], context.physical_plan['plan_ref'], obligations,
+                                deadline_binding=deadline_binding)
         authority = {'currency_run_id': existing['currency_run_id'], 'campaign_id': policy['campaign_id'],
             'policy_sha256': policy['policy_sha256'],
             'phase_call_limits': {key: value['phase_call_limits'] for key, value in self._bindings.items()},
@@ -201,6 +469,9 @@ class CNYInvocationBridge:
             bridge_plan_ref=_ref(existing), authority_binding=authority)
         self._ready = self._validate_ready(ready.to_dict())
         self._save('ready', ready.to_dict())
+        if self._initial_deadline_binding is not None:
+            deadline, plan, expected_plan_ref, cell_id = self._initial_deadline_binding
+            self.bind_cell_deadline(deadline, plan=plan, expected_plan_ref=expected_plan_ref, cell_id=cell_id)
         return ready
 
     def _validate_ready(self, value):
@@ -224,6 +495,12 @@ class CNYInvocationBridge:
         return ready
 
     def _validate_context(self, context, *, physical=True, admission=True):
+        if self._initial_deadline_binding is not None and self._run.mode == 'live' and \
+                not self.ledger.is_fixture_campaign():
+            pilot = self.ledger.circle_pilot_binding()
+            if pilot is not None and pilot.get('require_single_run'):
+                from zoo.circle_packing.supervisor_attestation import require_supervised_process
+                require_supervised_process(self.ledger, self._initial_deadline_binding[0])
         if not isinstance(context, GovernedCallContext):
             raise ValueError('currency invocation requires trusted context')
         ready, authority = self._ready, self._ready.authority_binding
@@ -263,13 +540,16 @@ class CNYInvocationBridge:
         return 'call-' + payload_digest(context.to_dict())
 
     def _validate_prepared(self, prepared, context):
-        if type(prepared) is not dict or set(prepared) != {'schema_version', 'context', 'call_id',
-                'wire_request_sha256', 'wire_body', 'bound', 'physical_bound', 'provider_binding_sha256'}:
+        fields = {'schema_version', 'context', 'call_id', 'wire_request_sha256', 'wire_body',
+                  'bound', 'physical_bound', 'provider_binding_sha256'}
+        if type(prepared) is not dict or type(prepared.get('schema_version')) is not int or \
+                prepared.get('schema_version') not in (1, 2) or \
+                set(prepared) != fields | ({'argument'} if prepared.get('schema_version') == 2 else set()):
             raise ValueError('invalid prepared currency call')
         key = self._validate_context(context, physical=False, admission=prepared['wire_body'] is not None)
         body = prepared['wire_body'].encode() if prepared['wire_body'] is not None else None
         manifest = self._preparation['manifests'][key]
-        if (prepared['schema_version'] != 1 or prepared['context'] != context.to_dict() or
+        if (prepared['context'] != context.to_dict() or
                 prepared['wire_request_sha256'] != (hashlib.sha256(body).hexdigest() if body is not None else '0' * 64) or
                 prepared['call_id'] != external_call_id(context, prepared['wire_request_sha256']) or
                 prepared['bound'] != self._authority.quote_call(manifest['max_completion_tokens']) or
@@ -278,14 +558,20 @@ class CNYInvocationBridge:
             raise ValueError('prepared currency call identity or bounds differ')
         from .provider_protocol import build_request
         if body is None:
+            if prepared['schema_version'] != 1:
+                raise ValueError('undispatched preparation cannot contain provider arguments')
             return key
         try:
-            prompt = json.loads(body)['messages'][0]['content']
+            mode = manifest.get('message_mode', 'single_user_v1')
+            if (mode in {'openevolve_v1', 'openevolve_host_v1'}) != (prepared['schema_version'] == 2):
+                raise ValueError('prepared message mode differs from frozen provider')
+            prompt = (prepared['argument'] if prepared['schema_version'] == 2
+                      else json.loads(body)['messages'][0]['content'])
             args_hash = payload_digest({'args': (prompt,), 'kwargs': {}})
             if args_hash != context.argument_sha256 or body != build_request(prompt, {
                     'requested_model': manifest['requested_model'], 'request_format': 'deepseek',
                     'max_completion_tokens': manifest['max_completion_tokens'],
-                    'reasoning_effort': manifest.get('reasoning_effort', 'high')}):
+                    'reasoning_effort': manifest.get('reasoning_effort', 'high'), 'message_mode': mode}):
                 raise ValueError('prepared wire differs from canonical invocation arguments')
         except (KeyError, TypeError, IndexError, UnicodeError) as error:
             raise ValueError('prepared wire request is damaged') from error
@@ -364,6 +650,9 @@ class CNYInvocationBridge:
         key = self._validate_context(context)
         raw = self._run.provider_sessions[key]
         raw.last_usage = {'total_tokens': 0}
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         if context.argument_sha256 != payload_digest({'args': args, 'kwargs': kwargs}):
             raise ValueError('currency invocation argument identity changed')
         if type(args) is not tuple or len(args) != 1 or kwargs or type(args[0]) is not str:
@@ -389,10 +678,16 @@ class CNYInvocationBridge:
             'bound': self.ledger.quote_call(self._preparation['manifests'][key]['max_completion_tokens']),
             'physical_bound': self._bindings[key]['call_bound'],
             'provider_binding_sha256': payload_digest(self._preparation['manifests'][key])}
+        if self._preparation['manifests'][key].get('message_mode') in {'openevolve_v1', 'openevolve_host_v1'}:
+            prepared['schema_version'] = 2
+            prepared['argument'] = args[0]
         self._validate_prepared(prepared, context)
         self._save(name + '.prepared', prepared)
         try:
-            raw.validate_dispatch(body)
+            if prepared['schema_version'] == 2:
+                raw.validate_dispatch(body, prompt=prepared['argument'])
+            else:
+                raw.validate_dispatch(body)
         except ValueError:
             # Preparation is durable and validate_dispatch is a pure local
             # check. Confirm no independently committed call before proving zero.
@@ -425,9 +720,16 @@ class CNYInvocationBridge:
             outcome = self._outcome(prepared, None, 'not_admitted', 'capacity_refused')
             self._save(name + '.outcome', outcome.to_dict())
             raise ProviderBudgetExhausted('currency capacity refused before dispatch')
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         self._save(name + '.dispatch', {'call_id': prepared['call_id']})
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            deadline.check()
         raw.last_usage = None
-        response = raw.perform_request(body).to_dict()
+        response = (raw.perform_request(body, prompt=prepared['argument']) if prepared['schema_version'] == 2
+                    else raw.perform_request(body)).to_dict()
         try:
             response['observed_binding_sha256'] = payload_digest(raw.governance_binding())
         except Exception:
@@ -442,14 +744,379 @@ class CNYInvocationBridge:
             response['provider_state_valid'] = False
         self._save(name + '.response', response)
         outcome = self._settle_response(prepared, response)
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            from zoo.circle_packing.cell_deadline import DeadlineExpired
+            def anchor(observation):
+                proof = {'call_id': prepared['call_id'], 'response_sha256': response['response_sha256'],
+                         'observation': observation}
+                self._save(name + '.deadline-eligibility', proof)
+                self.ledger.anchor_response_eligibility(context.currency_run_id, prepared['call_id'],
+                    deadline._record['cell_id'], observation['observation']['sequence'],
+                    observation['observation']['sha256'], payload_digest(proof))
+            observation = deadline.observe_and_anchor(anchor)
+            if not observation['eligible']:
+                raise DeadlineExpired('cell deadline expired')
+            deadline.check()
         if outcome.outcome == 'unknown':
             raise UsageError('provider outcome cannot establish priced currency usage')
         if outcome.outcome == 'known_failed':
             raise RuntimeError('provider invocation failed (' + outcome.integrity_reason + ')')
         return outcome.result
 
+    def _recover_for_accounting(self, context, argument_sha256):
+        """Trusted runtime-only access to original usage, never candidate admission."""
+        return self._recover(context, argument_sha256, refusal_reason='deadline_refused')
+
+    def _check_cell_deadline(self):
+        deadline = self.cell_deadline()
+        if deadline is not None and self._run.mode == 'live':
+            deadline.check()
+
+    def record_evaluation_eligibility(self, receipt, identity, evidence):
+        """Bind a settled native evaluation to the original cell observation."""
+        from core.composition.evaluation import encode_evidence
+        from zoo.circle_packing.cell_deadline import DeadlineExpired
+        deadline = self.cell_deadline()
+        if deadline is None or self._run.mode not in {'live', 'recorded'}:
+            raise ValueError('evaluation eligibility requires its live cell deadline')
+        if type(identity) is not dict or identity.get('intent_id') != receipt.intent_id or \
+                identity.get('fingerprint') != receipt.fingerprint:
+            raise ValueError('evaluation eligibility differs from physical receipt')
+        fixed = {'phase': 'evaluation', 'intent_id': receipt.intent_id, 'fingerprint': receipt.fingerprint,
+                 'lane': identity['lane'], 'slot_id': identity['control_slot'],
+                 'evidence_sha256': payload_digest(encode_evidence(evidence))}
+        run_id = self._ready.authority_binding['currency_run_id']
+        row = self._run.store.peek() if callable(getattr(self._run.store, 'peek', None)) else None
+        if row is not None:
+            if row['kind'] != 'governed_work_eligibility' or any(
+                    row['payload'].get(key) != value for key, value in fixed.items()):
+                raise ValueError('evaluation eligibility differs from the recorded continuation')
+            proof = row['payload']
+            self._verify_evaluation_eligibility(proof, deadline)
+            self._run.store.append('governed_work_eligibility', proof)
+        else:
+            if self._run.mode == 'recorded':
+                raise ValueError('recorded evaluation lacks original eligibility evidence')
+            def anchor(observation):
+                proof = {**fixed, 'observation': observation}
+                self._run.store.append('governed_work_eligibility', proof)
+                self.ledger.anchor_evaluation_eligibility(run_id, payload_digest(receipt.intent_id), deadline._record['cell_id'],
+                    observation['observation']['sequence'], observation['observation']['sha256'], payload_digest(proof))
+            observation = deadline.observe_and_anchor(anchor)
+            proof = {**fixed, 'observation': observation}
+        if not proof['observation']['eligible']:
+            raise DeadlineExpired('cell deadline expired after evaluation accounting')
+        if self._run.mode == 'live':
+            deadline.check()
+
+    def _verify_evaluation_eligibility(self, proof, deadline):
+        fields = {'phase', 'intent_id', 'fingerprint', 'lane', 'slot_id', 'evidence_sha256', 'observation'}
+        if type(proof) is not dict or set(proof) != fields or proof['phase'] != 'evaluation':
+            raise ValueError('invalid evaluation eligibility evidence')
+        deadline.verify_observation(proof['observation'])
+        observation = proof['observation']['observation']
+        run_id = self._ready.authority_binding['currency_run_id']
+        anchor = self._authority.evaluation_eligibility(run_id, payload_digest(proof['intent_id']))
+        if anchor is None or anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != observation['sequence'] or anchor['observation_sha256'] != observation['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('evaluation eligibility differs from campaign anchor')
+
+    def record_cycle_eligibility(self, evidence_event, decision_receipt):
+        """Bind a candidate's measured evidence and proposed decision to the cell clock."""
+        from zoo.circle_packing.cell_deadline import DeadlineExpired
+        deadline = self.cell_deadline()
+        if deadline is None or self._run.mode not in {'live', 'recorded'}:
+            raise ValueError('cycle eligibility requires its live cell deadline')
+        fixed = {'phase': 'cycle_commit', 'cycle': evidence_event['cycle'],
+                 'candidate_id': decision_receipt['candidate_id'],
+                 'evidence_sha256': payload_digest(evidence_event),
+                 'decision_sha256': payload_digest(decision_receipt)}
+        run_id = self._ready.authority_binding['currency_run_id']
+        row = self._run.store.peek() if callable(getattr(self._run.store, 'peek', None)) else None
+        if row is not None:
+            if row['kind'] != 'governed_work_eligibility' or any(
+                    row['payload'].get(key) != value for key, value in fixed.items()):
+                raise ValueError('cycle eligibility differs from the recorded continuation')
+            proof = row['payload']
+            self._verify_cycle_eligibility(proof, deadline)
+            self._run.store.append('governed_work_eligibility', proof)
+        else:
+            if self._run.mode == 'recorded':
+                raise ValueError('recorded cycle lacks original eligibility evidence')
+            def anchor(observation):
+                proof = {**fixed, 'observation': observation}
+                self._run.store.append('governed_work_eligibility', proof)
+                key = payload_digest({'cycle': fixed['cycle'], 'candidate_id': fixed['candidate_id']})
+                self.ledger.anchor_cycle_eligibility(run_id, key, deadline._record['cell_id'],
+                    observation['observation']['sequence'], observation['observation']['sha256'], payload_digest(proof))
+            observation = deadline.observe_and_anchor(anchor)
+            proof = {**fixed, 'observation': observation}
+        if not proof['observation']['eligible']:
+            raise DeadlineExpired('cell deadline expired before candidate use')
+        if self._run.mode == 'live':
+            deadline.check()
+
+    def _verify_cycle_eligibility(self, proof, deadline):
+        fields = {'phase', 'cycle', 'candidate_id', 'evidence_sha256', 'decision_sha256', 'observation'}
+        if type(proof) is not dict or set(proof) != fields or proof['phase'] != 'cycle_commit' or \
+                type(proof['cycle']) is not int or type(proof['candidate_id']) is not str:
+            raise ValueError('invalid cycle eligibility evidence')
+        deadline.verify_observation(proof['observation'])
+        observation = proof['observation']['observation']
+        run_id = self._ready.authority_binding['currency_run_id']
+        key = payload_digest({'cycle': proof['cycle'], 'candidate_id': proof['candidate_id']})
+        anchor = self._authority.cycle_eligibility(run_id, key)
+        if anchor is None or anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != observation['sequence'] or anchor['observation_sha256'] != observation['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('cycle eligibility differs from campaign anchor')
+
+    def _audit_evaluation_eligibility(self, deadline):
+        rows = self._root_rows()
+        completed, settled, proofs = {}, {}, {}
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] == 'governed_evaluation_completed':
+                intent = value.get('identity', {}).get('intent_id')
+                if intent in completed:
+                    raise ValueError('duplicate evaluation eligibility completion')
+                completed[intent] = (index, value)
+            elif row['kind'] == 'hierarchical_budget' and value.get('event') == 'settle':
+                data = value['data']
+                settled[data['intent_id']] = (index, data)
+            elif row['kind'] == 'governed_work_eligibility' and value.get('phase') == 'evaluation':
+                intent = value.get('intent_id')
+                if intent in proofs:
+                    raise ValueError('duplicate evaluation eligibility evidence')
+                self._verify_evaluation_eligibility(value, deadline)
+                proofs[intent] = (index, value)
+        for intent, (index, proof) in proofs.items():
+            completion = completed.get(intent)
+            settlement = settled.get(intent)
+            if completion is None or settlement is None or not completion[0] < settlement[0] < index:
+                raise ValueError('evaluation eligibility lacks prior measured settlement')
+            identity = completion[1]['identity']
+            if identity['fingerprint'] != proof['fingerprint'] or settlement[1]['fingerprint'] != proof['fingerprint'] or \
+                    identity['lane'] != proof['lane'] or identity['control_slot'] != proof['slot_id'] or \
+                    payload_digest(completion[1]['evidence']) != proof['evidence_sha256']:
+                raise ValueError('evaluation eligibility differs from original measured evidence')
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] == 'composed_physical_evidence':
+                intent = value.get('intent_id')
+                if intent not in completed or intent not in proofs or proofs[intent][0] >= index or \
+                        not proofs[intent][1]['observation']['eligible']:
+                    raise ValueError('physical evaluation lacks prior eligibility evidence')
+            elif row['kind'] == 'governed_control_terminal' and value.get('status') == 'evaluated':
+                matching = [intent for intent, (_, completion) in completed.items()
+                            if completion['identity']['lane'] == 'control' and
+                            completion['identity']['control_slot'] == value.get('slot_id')]
+                if len(matching) != 1 or matching[0] not in proofs or proofs[matching[0]][0] >= index or \
+                        not proofs[matching[0]][1]['observation']['eligible']:
+                    raise ValueError('control terminal lacks prior evaluation eligibility evidence')
+
+    def _audit_cycle_eligibility(self, deadline):
+        rows = self._root_rows()
+        proofs = {}
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] != 'governed_work_eligibility' or value.get('phase') != 'cycle_commit':
+                continue
+            self._verify_cycle_eligibility(value, deadline)
+            key = (value['cycle'], value['candidate_id'])
+            if key in proofs:
+                raise ValueError('duplicate cycle eligibility evidence')
+            proofs[key] = (index, value)
+        by_candidate, decisions, pending, unscored = {}, set(), set(), set()
+        for index, row in enumerate(rows):
+            value = row['payload']
+            if row['kind'] == 'composed_evidence':
+                candidate = value['proposal']['candidate']['id']
+                key = (value['cycle'], candidate)
+                proof = proofs.get(key)
+                if proof is None or proof[0] >= index or not proof[1]['observation']['eligible'] or \
+                        proof[1]['evidence_sha256'] != payload_digest(value):
+                    raise ValueError('candidate lacks matching prior cycle eligibility evidence')
+                physical = [item for item in rows[:proof[0]] if item['kind'] == 'composed_physical_evidence'
+                            and item['payload'].get('evidence', {}).get('evidence') == value['evidence']]
+                if not physical:
+                    _verify_failed_construction_cycle(rows[:proof[0]], value, self._run.logical_run_id)
+                    unscored.add(candidate)
+                if candidate in by_candidate:
+                    raise ValueError('duplicate candidate cycle eligibility evidence')
+                by_candidate[candidate] = proof
+                pending.add(candidate)
+            elif row['kind'] == 'composed_decision':
+                candidate = value.get('candidate_id')
+                proof = by_candidate.get(candidate)
+                receipt = {key: item for key, item in value.items() if key not in {'event_id', 'receipt_id'}}
+                if proof is None or candidate in decisions or proof[1]['decision_sha256'] != payload_digest(receipt) or \
+                        (candidate in unscored and value.get('decision', {}).get('admit') is not False):
+                    raise ValueError('decision differs from cycle eligibility evidence')
+                decisions.add(candidate)
+                pending.remove(candidate)
+            elif row['kind'] in {'composed_checkpoint', 'governed_main_stopped'} and pending:
+                raise ValueError('committed cycle lacks a decision after eligibility evidence')
+
+    def _audit_final_eligibility(self):
+        from dataclasses import asdict
+        from core.composition.evaluation import decode_evidence, request_digest
+        from core.executor.types import EvalRequest, EvalStatus
+        rows = self._root_rows()
+        frozen = [(index, row['payload']) for index, row in enumerate(rows) if row['kind'] == 'metric_final_frozen']
+        terminal = [(index, row['payload']) for index, row in enumerate(rows) if row['kind'] == 'metric_final_completed']
+        if len(frozen) > 1 or len(terminal) > 1:
+            raise ValueError('final eligibility has duplicate freeze or report')
+        if not terminal:
+            return
+        index, result = terminal[0]
+        if len(frozen) != 1 or frozen[0][0] >= index or result.get('candidate_id') != frozen[0][1].get('candidate_id'):
+            raise ValueError('final eligibility lacks original selection freeze')
+        selection = frozen[0][1]
+        binding = selection.get('binding')
+        if selection.get('candidate_id') is not None and (type(binding) is not dict or
+                binding.get('candidate_id') != selection['candidate_id']):
+            raise ValueError('final eligibility candidate differs from frozen binding')
+        if selection.get('candidate_id') is None and binding is not None:
+            raise ValueError('final eligibility has binding without a selected candidate')
+        try:
+            request = EvalRequest(**selection['request'])
+            digest = request_digest(request)
+            if request.split_id != 'final_audit' or (binding is not None and
+                    binding['request_sha256'] != digest):
+                raise ValueError('final eligibility differs from frozen request')
+        except (KeyError, TypeError) as error:
+            raise ValueError('final eligibility lacks a valid frozen request') from error
+        state = result.get('state')
+        if state == 'skipped':
+            if set(result) != {'candidate_id', 'state', 'reason'} or type(result['reason']) is not str:
+                raise ValueError('final eligibility cannot report evidence for skipped audit')
+            return
+        if state not in {'completed', 'evaluation_failed'} or set(result) != {'candidate_id', 'state', 'evidence'}:
+            raise ValueError('invalid final eligibility report')
+        try:
+            evidence = decode_evidence(result['evidence'])
+            normalized_binding = json.loads(json.dumps(asdict(evidence.eval_result.contract.binding), allow_nan=False))
+            if normalized_binding != binding or \
+                    (state == 'completed') != (evidence.eval_result.status is EvalStatus.OK):
+                raise ValueError('final eligibility differs from frozen result')
+        except (KeyError, TypeError, AttributeError) as error:
+            raise ValueError('final eligibility lacks valid original evidence') from error
+        physical = [(position, row) for position, row in enumerate(rows[:index])
+                    if row['kind'] == 'composed_physical_evidence'
+                    and row['payload'].get('request') == selection['request']
+                    and row['payload'].get('evidence') == result['evidence']]
+        if len(physical) != 1 or physical[0][0] <= frozen[0][0]:
+            raise ValueError('final eligibility lacks matching original final evaluation')
+
+    def _empty_terminal_prefix(self):
+        rows = self._root_rows()
+        terminals = [index for index, row in enumerate(rows) if row['kind'] == 'metric_final_completed']
+        if len(terminals) != 1:
+            raise UsageError('empty run lacks a unique final report')
+        prefix = rows[:terminals[0] + 1]
+        freezes = [row['payload'] for row in prefix if row['kind'] == 'metric_final_frozen']
+        stops = [row['payload'] for row in prefix if row['kind'] == 'governed_main_stopped']
+        controls = [row['payload'] for row in prefix if row['kind'] == 'governed_control_terminal']
+        if len(freezes) != 1 or freezes[0].get('candidate_id') is not None or freezes[0].get('binding') is not None or \
+                prefix[-1]['payload'] != {'candidate_id': None, 'state': 'skipped', 'reason': 'no successful candidate'} or \
+                len(stops) != 1 or stops[0].get('main_cycles') != 0 or stops[0].get('disposition') != 'ordinary' or \
+                not controls or any(row['kind'] in {'composed_evidence', 'composed_decision'} for row in prefix):
+            raise UsageError('empty run lacks its original stopped, controlled final transcript')
+        return prefix
+
+    def record_empty_terminal(self):
+        deadline = self.cell_deadline()
+        if deadline is None or self._run.mode != 'live':
+            return
+        prefix = self._empty_terminal_prefix()
+        self._audit_evaluation_eligibility(deadline)
+        self._audit_cycle_eligibility(deadline)
+        self._audit_final_eligibility()
+        self.ledger.anchor_empty_terminal(self._ready.authority_binding['currency_run_id'],
+                                          deadline._record['cell_id'], payload_digest(prefix))
+
+    def _require_reference_snapshot(self):
+        from core.composition.external_provider import EXTERNAL_RUNTIME
+        if self._run.runtime_id != EXTERNAL_RUNTIME or self.cell_deadline() is None:
+            raise ValueError('reference recorded audit requires its timed host runtime')
+        run_id = self._ready.authority_binding['currency_run_id']
+        snapshot = self._authority.reference_physical_snapshot(run_id)
+        selection = self._authority.reference_selection(run_id)
+        rows_ref = payload_digest(self._root_rows())
+        if snapshot is None or selection is None or snapshot.get('rows_sha256') != rows_ref or \
+                selection.get('rows_sha256') != rows_ref or 'worker_proof_sha256' not in snapshot:
+            raise ValueError('reference recorded audit requires its anchored selection and physical snapshot')
+
+    def _require_complete_timed_transcript(self):
+        rows = self._root_rows()
+        phases = {row['payload'].get('phase') for row in rows if row['kind'] == 'governed_work_eligibility'}
+        terminals = [(index, row['payload']) for index, row in enumerate(rows)
+                     if row['kind'] == 'metric_final_completed']
+        if 'cycle_commit' not in phases and len(terminals) == 1 and \
+                terminals[0][1].get('reason') == 'no successful candidate':
+            prefix = self._empty_terminal_prefix()
+            anchor = self._authority.empty_terminal(self._ready.authority_binding['currency_run_id'])
+            deadline = self.cell_deadline()
+            if anchor != {'cell_id': deadline._record['cell_id'], 'transcript_sha256': payload_digest(prefix)}:
+                raise UsageError('empty run lacks its original terminal anchor')
+            return
+        if not {'evaluation', 'cycle_commit'}.issubset(phases) or len(terminals) != 1:
+            raise UsageError('deadline-bound replay requires complete recorded eligibility evidence')
+        if terminals[0][1].get('reason') == 'cell deadline expired before final audit':
+            before = rows[:terminals[0][0]]
+            work = [row['payload'] for row in before if row['kind'] == 'governed_work_eligibility']
+            if self._run.mode == 'recorded':
+                responses = self._bundle['timing']['responses']
+            else:
+                responses = [self._load(self._name(GovernedCallContext.from_dict(record['prepared']['context'])) +
+                                        '.deadline-eligibility') for record in self._records()
+                             if record['response'] is not None]
+            late_calls = {item['call_id'] for item in responses if type(item) is dict and
+                          type(item.get('observation')) is dict and item['observation'].get('eligible') is False}
+            late_contexts = {payload_digest(record['prepared']['context']) for record in self._records()
+                             if record['prepared']['call_id'] in late_calls}
+            starts = {row['payload']['binding'] for row in before if row['kind'] == 'composed_provider_started'
+                      and payload_digest(row['payload'].get('invocation', {}).get('external_context')) in late_contexts}
+            marker = any(row['kind'] == 'composed_provider_deadline_expired' and
+                         row['payload'].get('binding') in starts for row in before)
+            if not marker and not any(type(item.get('observation')) is dict and
+                                      item['observation'].get('eligible') is False for item in work):
+                raise UsageError('deadline-bound final skip lacks an expired observation')
+
     def recover(self, context, argument_sha256):
-        return self._recover(context, argument_sha256, refusal_reason='capacity_refused')
+        outcome = self._recover(context, argument_sha256, refusal_reason='capacity_refused')
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            if self._run.mode == 'live':
+                deadline.check()
+            if outcome.response_sha256 is not None:
+                if not self._validate_response_eligibility(context, outcome.call_id, outcome.response_sha256, deadline):
+                    from zoo.circle_packing.cell_deadline import DeadlineExpired
+                    raise DeadlineExpired('deadline eligibility disallows late response recovery')
+        return outcome
+
+    def _validate_response_eligibility(self, context, identifier, response_sha256, deadline):
+        if self._run.mode == 'recorded':
+            matches = [item for item in self._bundle['timing']['responses']
+                       if type(item) is dict and item.get('call_id') == identifier]
+            proof = matches[0] if len(matches) == 1 else None
+        else:
+            proof = self._load(self._name(context) + '.deadline-eligibility')
+        if type(proof) is not dict or set(proof) != {'call_id', 'response_sha256', 'observation'} or \
+                proof['call_id'] != identifier or proof['response_sha256'] != response_sha256:
+            raise ValueError('missing or invalid deadline eligibility evidence')
+        deadline.verify_observation(proof['observation'])
+        anchor = self._authority.response_eligibility(identifier)
+        if anchor is None or anchor['run_id'] != context.currency_run_id or \
+                anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != proof['observation']['observation']['sequence'] or \
+                anchor['observation_sha256'] != proof['observation']['observation']['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('deadline eligibility differs from campaign anchor')
+        return proof['observation']['eligible']
 
     def _recover(self, context, argument_sha256, *, refusal_reason):
         self._validate_context(context, physical=self._run.mode == 'live', admission=False)
@@ -490,7 +1157,7 @@ class CNYInvocationBridge:
             if record['response'] is not None:
                 raise ValueError('provider response has no currency reservation')
             reason = record['outcome'].get('integrity_reason') if record['outcome'] else refusal_reason
-            if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused'}:
+            if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused', 'deadline_refused'}:
                 raise ValueError('unknown pre-admission refusal proof category')
             outcome = self._outcome(prepared, None, 'not_admitted', reason)
             if record['outcome'] is not None and record['outcome'] != outcome.to_dict():
@@ -583,7 +1250,20 @@ class CNYInvocationBridge:
                                        reason='terminal_' + terminal_ref[7:])
         self._save('terminal-' + slot_id, value)
 
-    def audit(self):
+    def _audit_replay_prefix(self):
+        return self.audit(_allow_replay_prefix=True)
+
+    def audit(self, *, _allow_replay_prefix=False):
+        replay_pending = callable(getattr(self._run.store, 'peek', None)) and self._run.store.peek() is not None
+        incomplete = self._run.mode != 'recorded' and (
+            getattr(self._run.store, 'restoring', False) or replay_pending)
+        if incomplete and not _allow_replay_prefix:
+            raise UsageError('currency audit cannot certify an unconsumed replay suffix')
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            self._audit_evaluation_eligibility(deadline)
+            self._audit_cycle_eligibility(deadline)
+            self._audit_final_eligibility()
         authority = self._ready.authority_binding
         evidence = self._authority.export_governance_evidence(authority['currency_run_id'],
                                                               self._ready.physical_plan_ref)
@@ -596,6 +1276,7 @@ class CNYInvocationBridge:
         seen = set()
         outcomes = {}
         observed_bindings = {}
+        eligibility = {}
         integrity_violations = []
         for record in records:
             prepared = record['prepared']
@@ -607,6 +1288,11 @@ class CNYInvocationBridge:
             seen.add(identifier)
             op = operations.pop(identifier, None)
             response, stored = record['response'], record['outcome']
+            if response is not None:
+                deadline = self.cell_deadline()
+                if deadline is not None:
+                    eligibility[payload_digest(context.to_dict())] = self._validate_response_eligibility(
+                        context, identifier, response.get('response_sha256'), deadline)
             if op is None:
                 if prepared['wire_body'] is None and self._unexplained_matching_currency(
                         context, audit['operations'], records):
@@ -614,7 +1300,7 @@ class CNYInvocationBridge:
                 if response is not None or stored is None:
                     raise ValueError('unadmitted currency call lacks known refusal proof')
                 reason = stored.get('integrity_reason')
-                if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused'}:
+                if reason not in {'capacity_refused', 'dispatch_refused', 'invocation_refused', 'deadline_refused'}:
                     raise ValueError('unknown pre-admission refusal proof category')
                 expected = self._outcome(prepared, None, 'not_admitted', reason)
             else:
@@ -648,10 +1334,12 @@ class CNYInvocationBridge:
             raise ValueError('currency authority has extra calls without physical preparation')
         # Full visibility is required for cross-authority coverage. Continuation
         # prefixes are audited again once the runtime finishes reconstruction.
-        if self._run.mode == 'recorded' or not getattr(self._run.store, 'restoring', False):
+        replay_pending = callable(getattr(self._run.store, 'peek', None)) and self._run.store.peek() is not None
+        if self._run.mode == 'recorded' or (not getattr(self._run.store, 'restoring', False) and not replay_pending):
             starts = {}
             pending = None
-            for row in self._root_rows():
+            root_rows = self._root_rows()
+            for index, row in enumerate(root_rows):
                 data = row['payload']
                 if row['kind'] == 'composed_provider_started':
                     inv = data.get('invocation', {})
@@ -669,6 +1357,11 @@ class CNYInvocationBridge:
                 elif row['kind'] == 'composed_provider_completed' and pending is not None:
                     identity, binding = pending
                     outcome = outcomes.get(identity)
+                    if data.get('outcome', 'returned') == 'returned' and eligibility.get(identity) is False:
+                        marker = root_rows[index + 1] if index + 1 < len(root_rows) else None
+                        if marker is None or marker['kind'] != 'composed_provider_deadline_expired' or \
+                                marker['payload'] != {'binding': binding}:
+                            raise ValueError('deadline eligibility forbids late provider completion')
                     expected_kind = ({'returned': 'returned', 'known_failed': 'failed',
                                       'known_refused': 'budget_exhausted'}.get(outcome.outcome) if outcome else None)
                     if outcome is None or expected_kind is None or data.get('outcome', 'returned') != expected_kind or \
@@ -710,9 +1403,11 @@ class CNYInvocationBridge:
             construction['construction'] = audit_construction(self._root_rows(),
                 self._run.construction, logical_run_id=self._run.logical_run_id,
                 provider_arguments={payload_digest(record['prepared']['context']):
-                    (json.loads(record['prepared']['wire_body'])['messages'][0]['content']
+                    (record['prepared']['argument'] if record['prepared']['schema_version'] == 2 else
+                     json.loads(record['prepared']['wire_body'])['messages'][0]['content']
                      if record['prepared']['wire_body'] is not None else None) for record in records})
-        return {**construction, 'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
+        return {**construction, **({'coverage_complete': False} if incomplete else {}),
+            'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
             'authority': run_audit, 'invocations': len(records), 'main_currency_cap_micro_cny':
             self._ready.authority_binding['main_currency_cap_micro_cny'], 'invoice_verified': False,
             'protection_valid': audit['protection_valid'] and not integrity_violations,
@@ -732,6 +1427,8 @@ class CNYInvocationBridge:
                 'request_format': 'deepseek', 'max_completion_tokens': manifest['max_completion_tokens'],
                 'reasoning_effort': manifest.get('reasoning_effort', 'high')}))
             wire.pop('messages')
+            if 'message_mode' in manifest:
+                wire['message_mode'] = manifest['message_mode']
             wire.update(base_url=manifest['base_url'], timeout=manifest['timeout'], policy_sha256=policy['policy_sha256'])
             expected = {'schema_version': 2, 'fresh_session': True, 'state_independent': True,
                 'sampling': {'method': 'supplier_unverified', 'parameters': wire, 'applied': True},
@@ -792,14 +1489,47 @@ class CNYInvocationBridge:
             if any(root.get(slot) != proof['terminal'] for slot, proof in indexed.items()):
                 raise ValueError('currency terminal differs from authoritative root journal')
 
+    def reference_audit_bundle(self):
+        """Export anchored reference currency receipts without live work."""
+        if self._run is None or self._run.mode != 'live':
+            raise ValueError('reference audit export requires the original live authority')
+        self._require_reference_snapshot()
+        return self._export_recorded_bundle(reference=True)
+
     def replay_bundle(self):
         if self._run.mode == 'recorded':
             self.audit()
             return _copy(self._bundle)
+        return self._export_recorded_bundle(reference=False)
+
+    def _export_recorded_bundle(self, *, reference):
         if self.audit()['unknown_cost_calls']:
             raise UsageError('unresolved currency usage cannot produce recorded replay proof')
         authority = self._ready.authority_binding
         terminals = [self._load(path.stem) for path in sorted(self._spool.glob('terminal-*.json'))]
-        return {'schema_version': 1, 'preparation': _copy(self._preparation), 'ready': self._ready.to_dict(),
+        bundle = {'schema_version': 1, 'preparation': _copy(self._preparation), 'ready': self._ready.to_dict(),
             'calls': self._records(), 'terminals': terminals,
             'currency_evidence': _copy(self._last_audit_evidence)}
+        deadline = self.cell_deadline()
+        if deadline is not None:
+            if reference:
+                self._require_reference_snapshot()
+            else:
+                self._require_complete_timed_transcript()
+            from zoo.circle_packing.cell_deadline import RecordedCellClock
+            view = RecordedCurrencyView(bundle['currency_evidence'],
+                expected_run_id=authority['currency_run_id'], expected_plan_ref=self._ready.physical_plan_ref)
+            binding = view.run_deadline_binding(authority['currency_run_id'])
+            if binding is None or binding['cell_id'] != deadline._record['cell_id'] or \
+                    binding['deadline_ref'] != deadline._record['record_sha256']:
+                raise ValueError('recorded eligibility lacks original deadline binding')
+            clock = deadline.export_evidence()
+            RecordedCellClock(clock, view.cell_deadline_claim(binding['cell_id']))
+            responses = []
+            for record in bundle['calls']:
+                if record['response'] is not None:
+                    context = GovernedCallContext.from_dict(record['prepared']['context'])
+                    responses.append(self._load(self._name(context) + '.deadline-eligibility'))
+            bundle['schema_version'] = 2
+            bundle['timing'] = {'clock': clock, 'responses': responses}
+        return bundle
