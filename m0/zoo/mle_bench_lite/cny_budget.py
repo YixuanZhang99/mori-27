@@ -145,6 +145,14 @@ def _outstanding(governance):
                if obligation["status"] == "pending")
 
 
+def _circle_audit_identity(proof):
+    if proof is None:
+        return None
+    keys = ('schema_version', 'plan_ref', 'mori_run_id', 'reference_run_id', 'mori_rows_sha256',
+            'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256')
+    return {**{key: proof[key] for key in keys}, 'proof_sha256': _hash(proof)}
+
+
 def _run(governance, run_id, plan_ref=None):
     _sha(run_id)
     if not governance["enabled"]:
@@ -947,6 +955,27 @@ class CampaignBudget:
             return {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
                     'pilot': json.loads(_json(state['governance']['circle_pilot'])),
                     'claims': json.loads(_json(state['governance']['cell_claims']))}
+
+    def circle_continuation_inventory(self, *, expected_head):
+        """Read original experiment and global funds together; grants no authority."""
+        _head_anchor(expected_head)
+        with self._transaction() as (_db, policy, state):
+            head = {'seq': state['seq'], 'sha256': state['hash']}
+            if head != expected_head:
+                raise ValueError('campaign head changed before continuation inventory')
+            governance = state['governance']
+            protected = _outstanding(governance)
+            value = {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
+                     'governance_enabled': governance['enabled'], 'pilot': governance['circle_pilot'],
+                     'runtime': governance['circle_runtime'],
+                     'first_pair_audit': _circle_audit_identity(governance['first_pair_audit']),
+                     'claims': governance['cell_claims'], 'currency': {
+                         'settled_upper_bound_micro_cny': state['spent'],
+                         'reserved_micro_cny': state['reserved'], 'protected_micro_cny': protected,
+                         'remaining_micro_cny': policy['limit_micro_cny'] - state['spent'] - state['reserved'] - protected,
+                         'pending_calls': [state['pending']] if state['pending'] else [],
+                         'protection_breaches': governance['breaches'], 'invoice_verified': False}}
+            return json.loads(_json(value))
 
     def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
         _plan_ref(plan_ref)
