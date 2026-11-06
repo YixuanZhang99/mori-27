@@ -1,0 +1,75 @@
+"""Launch the named Mori controller for a frozen loopback fixture.
+
+This is not a live pilot or proof of whole-cell descendant termination.
+The controller is trusted; generated candidate programs use the sandbox.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import stat
+
+from core.composition.recovery import ContinuationStore
+from core.executor.process import ProcessJournal
+from zoo.circle_packing.cell_deadline import CellDeadline
+from zoo.circle_packing.mori_fixture_worker import validate_config
+from zoo.mle_bench_lite.cny_budget import CampaignBudget
+
+
+def launch_fixture_controller(config, *, deadline, directory):
+    """Run one fresh fixture controller under its existing cell deadline."""
+    config = validate_config(config)
+    ledger = CampaignBudget(config['ledger'])
+    if not ledger.is_fixture_campaign():
+        raise ValueError('fixture campaign is required')
+    if type(deadline) is not CellDeadline or deadline._lifecycle.ledger.path.resolve() != ledger.path.resolve():
+        raise ValueError('fixture requires the original campaign cell deadline')
+    record = deadline._record
+    if record['cell_id'] != f"mori-{config['seed']}" or record['plan_ref'] != config['ref'] or \
+            Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
+        raise ValueError('fixture controller clock differs from the original cell')
+    from zoo.circle_packing.pilot_plan import validate_draft_cell
+    cell = validate_draft_cell(ledger, config['plan'], record['cell_id'], expected_plan_ref=config['ref'])
+    if cell['campaign_id'] != config['campaign_id'] or record['seconds'] != cell['wallclock_seconds']:
+        raise ValueError('fixture controller differs from the frozen plan')
+    source, runtime = Path(config['source']).resolve(strict=True), Path(config['runtime']).resolve(strict=True)
+    from zoo.circle_packing.frozen_source import verify_frozen_source
+    from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+    verify_frozen_source(ledger, config['plan'], snapshot=source.parent, manifest=config['source_manifest'],
+                         expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'])
+    verify_frozen_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'], base_python='/usr/bin/python3.12')
+    requested = Path(directory)
+    parent = requested.parent.resolve(strict=True)
+    info = parent.stat()
+    if not requested.is_absolute() or requested.name in ('', '.', '..') or info.st_uid != os.getuid() or \
+            stat.S_IMODE(info.st_mode) & 0o077 or requested.exists() or requested.is_symlink():
+        raise ValueError('fixture supervisor requires a fresh private directory')
+    root = parent / requested.name
+    protected = (source, runtime, ledger.path.resolve(), deadline._store.path.resolve(), Path(config['output']).resolve())
+    if any(root == path or root in path.parents or path in root.parents for path in protected):
+        raise ValueError('fixture supervisor directory overlaps protected paths')
+    remaining = deadline.remaining()
+    if remaining <= 0:
+        raise ValueError('fixture controller deadline has expired')
+    root.mkdir(mode=0o700)
+    setup = root / 'config.json'
+    fd = os.open(setup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+        json.dump(config, stream, sort_keys=True, allow_nan=False)
+    journal = ProcessJournal(ContinuationStore(root / 'controller.jsonl'))
+    process, execution = journal.launch(
+        [str(runtime / 'bin' / 'python'), '-m', 'zoo.circle_packing.mori_fixture_worker', str(setup)], root,
+        {'PATH': os.defpath, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'},
+        remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1}, die_with_parent=True,
+        absolute_deadline={'boot_id': record['boot_id'],
+            'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})
+    try:
+        return journal.wait(process, execution)
+    except BaseException:
+        journal.terminate_target(execution)
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        journal.terminate_target(execution)
+        raise

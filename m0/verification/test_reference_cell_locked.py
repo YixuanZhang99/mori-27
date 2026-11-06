@@ -336,20 +336,12 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
     mori_output = tmp_path / 'mori'
     local_endpoint.responses.extend(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}])
                                     for _ in range(2 * plan['iterations']))
-    setup_path = tmp_path / 'mori-fixture.json'
-    setup_path.write_text(json.dumps({'plan': plan, 'ref': ref, 'runtime_manifest': frozen['manifest'],
+    from zoo.circle_packing.mori_supervisor import launch_fixture_controller
+    config = {'plan': plan, 'ref': ref, 'runtime_manifest': frozen['manifest'],
         'source_manifest': exported['manifest'], 'campaign_id': campaign_id, 'seed': 0,
         'source': str(source / 'm0'), 'runtime': str(runtime), 'ledger': str(ledger.path),
-        'clock': str(mori_clock._store.path), 'output': str(mori_output), 'base_url': local_endpoint.url}))
-    journal = ProcessJournal(ContinuationStore(tmp_path / 'mori-coordinator.jsonl'))
-    clock_record = mori_clock._record
-    process, execution = journal.launch(
-        [str(runtime / 'bin' / 'python'), '-m', 'zoo.circle_packing.mori_fixture_worker', str(setup_path)], tmp_path,
-        {'PATH': os.defpath, 'PYTHONPATH': str(source / 'm0'), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}, 240,
-        {'candidate_id': 'fixture-coordinator', 'attempt': 1}, die_with_parent=True,
-        absolute_deadline={'boot_id': clock_record['boot_id'],
-            'deadline_ns': clock_record['start_ns'] + clock_record['seconds'] * 1_000_000_000})
-    process_result = journal.wait(process, execution)
+        'clock': str(mori_clock._store.path), 'output': str(mori_output), 'base_url': local_endpoint.url}
+    process_result = launch_fixture_controller(config, deadline=mori_clock, directory=tmp_path / 'mori-controller')
     assert process_result['returncode'] == 0 and not process_result['timeout'], process_result['stderr']
     assert process_result['wrapper_error'] is None
     mori = json.loads(process_result['stdout'])

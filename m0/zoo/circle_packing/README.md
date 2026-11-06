@@ -176,3 +176,8 @@ In the frozen paired fixture, the named reference worker receives the model
 alias and maximum output allowance from the validated campaign plan. Both
 worker reports expose those settings so the integration checks their equality.
 This does not make the fixture a live entry point or establish score parity.
+
+`launch_fixture_controller` starts the named Mori controller from a fresh
+private directory after checking the original fixture campaign, cell clock,
+frozen plan, source and runtime. Its process journal and deadline guard retain
+execution evidence. It does not certify all descendants or authorize live use.

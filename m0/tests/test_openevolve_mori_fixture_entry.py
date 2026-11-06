@@ -35,6 +35,18 @@ def test_named_fixture_rejects_unmarked_campaign_before_source_or_work(tmp_path)
     assert ledger.snapshot() == before
 
 
+def test_fixture_supervisor_rejects_unmarked_campaign_before_creating_files(tmp_path):
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.mori_supervisor import launch_fixture_controller
+    ledger = campaign_fixture(tmp_path)
+    before = ledger.snapshot()
+    output = tmp_path / 'controller'
+    with pytest.raises(ValueError, match='fixture campaign'):
+        launch_fixture_controller({**config(), 'ledger': str(ledger.path)}, deadline=None, directory=output)
+    assert ledger.snapshot() == before
+    assert not output.exists()
+
+
 def fixture_campaign(tmp_path):
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
     ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
@@ -60,6 +72,17 @@ def test_fixture_marker_is_durable_from_creation(tmp_path):
     ledger = fixture_campaign(tmp_path)
     assert CampaignBudget(ledger.path).is_fixture_campaign()
     assert not ledger.snapshot()['pending_calls']
+
+
+def test_fixture_supervisor_rejects_missing_clock_before_creating_files(tmp_path):
+    from zoo.circle_packing.mori_supervisor import launch_fixture_controller
+    ledger = fixture_campaign(tmp_path)
+    before = ledger.snapshot()
+    output = tmp_path / 'controller'
+    with pytest.raises(ValueError, match='cell deadline'):
+        launch_fixture_controller({**config(), 'ledger': str(ledger.path)}, deadline=None, directory=output)
+    assert ledger.snapshot() == before
+    assert not output.exists()
 
 
 def test_fixture_campaign_cannot_bind_real_provider(tmp_path, monkeypatch):
