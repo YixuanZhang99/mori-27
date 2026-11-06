@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.linux
+
 from test_openevolve_continuation_source import prepared
 
 
