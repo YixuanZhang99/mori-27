@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -106,11 +107,18 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_s
     stages = len(list(AppendOnlyStore(root / 'fixture-stages.jsonl').read('stage')))
     if list(AppendOnlyStore(root / 'fixture-unresolved.jsonl').read('unresolved')):
         raise RuntimeError('host fixture has unresolved stage execution')
-    if result.best_code is None:
+    if type(result.best_code) is not str or not result.best_code or result.best_program is None or \
+            type(result.best_program.id) is not str or not result.best_program.id or \
+            result.best_program.code != result.best_code or type(result.metrics) is not dict or \
+            result.best_program.metrics != result.metrics:
         raise RuntimeError('pinned host returned no evaluated program')
+    selected = {'id': result.best_program.id,
+                'program_ref': 'sha256:' + hashlib.sha256(result.best_code.encode('utf-8')).hexdigest(),
+                'metrics': result.metrics}
     return {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
             'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
-            'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker}
+            'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker,
+            'selected_program': selected}
 
 
 def main():

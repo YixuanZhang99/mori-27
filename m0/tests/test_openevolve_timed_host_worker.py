@@ -1,7 +1,9 @@
 """Offline timed host controller reaches the existing physical/CNY broker."""
 import asyncio
 import hashlib
+import json
 from pathlib import Path
+import shutil
 import subprocess
 import threading
 
@@ -36,6 +38,14 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
         checkout = tmp_path / 'clean-checkout'
         subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
         subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+        # Export the candidate reference entry before its commit when testing a worktree.
+        shutil.copyfile(repository / 'm0/zoo/circle_packing/host_reference.py',
+                        checkout / 'm0/zoo/circle_packing/host_reference.py')
+        subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/host_reference.py'], check=True)
+        subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '--allow-empty',
+                        '-m', 'fixture reference selection'], check=True)
+        commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
         lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
         plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
         ref = 'sha256:' + plan['draft_sha256']
@@ -85,6 +95,19 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     assert budget.audit_governance()['physical_totals']['token'] == 7
     assert provider.audit()['currency']['protection_valid']
     assert stages.audit()['stage_calls'] == 3
+    from core.executor.process import ProcessJournal
+    worker_store = ContinuationStore(tmp_path / 'worker' / 'worker.jsonl')
+    started = list(worker_store.read('executor_process_started'))
+    assert len(started) == 1
+    report = json.loads(ProcessJournal(worker_store).completed_result(started[0]['payload'])['stdout'])
+    best = workspace / 'host-run' / 'host' / 'best' / 'best_program.py'
+    info = json.loads((best.parent / 'best_program_info.json').read_text())
+    selected = report['selected_program']
+    assert selected == {'id': info['id'], 'metrics': info['metrics'],
+                        'program_ref': 'sha256:' + hashlib.sha256(best.read_bytes()).hexdigest()}
+    measured = [row['payload']['result'] for row in budget.store.read('host_stage_completed')]
+    assert any(row['program_ref'] == selected['program_ref'] and row['metrics'] == selected['metrics']
+               for row in measured if row['status'] == 'ok')
     # The fixture capability is available to the worker, but the normal path
     # must not copy it into execution transcripts or accounting evidence.
     for root in (tmp_path / 'worker', workspace / 'host-run', tmp_path / 'events.jsonl'):

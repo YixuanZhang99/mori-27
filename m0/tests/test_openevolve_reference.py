@@ -1,5 +1,6 @@
 """The reference fixture must execute the pinned host worker, not a substitute loop."""
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -22,6 +23,13 @@ def test_offline_reference_runs_actual_host_worker_without_credentials(tmp_path)
     assert report['controller'] == 'pinned_openevolve' and report['provider_calls'] == 1
     assert report['stage_calls'] == 2
     root = tmp_path / 'host'
+    best = root / 'host' / 'best' / 'best_program.py'
+    info = json.loads((best.parent / 'best_program_info.json').read_text())
+    assert report['selected_program'] == {
+        'id': info['id'],
+        'program_ref': 'sha256:' + hashlib.sha256(best.read_bytes()).hexdigest(),
+        'metrics': info['metrics'],
+    }
     stages = [json.loads(line)['payload'] for line in (root / 'fixture-stages.jsonl').read_text().splitlines()]
     assert all(row['status'] == 'ok' and row['stage'] == 1 for row in stages)
     messages = json.loads((root / 'fixture-provider.jsonl').read_text())['payload']
