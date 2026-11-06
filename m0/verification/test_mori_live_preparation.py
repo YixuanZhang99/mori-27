@@ -595,6 +595,9 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert trace['scope'] == 'reference_submitted_future_outcomes' and len(trace['iterations']) == 6
         assert len({item['iteration'] for item in trace['iterations']}) == 6
         assert all(item['state'] not in ('unresolved', 'not_submitted') for item in trace['iterations'])
+        receipts = {item['stage_request_id'] for item in trace['iterations'] if 'stage_request_id' in item}
+        stage_ids = {row['payload']['request_id'] for row in vendor_rows if row['kind'] == 'host_stage_started'}
+        assert receipts and receipts <= stage_ids
         vendor_currency = vendor_view.audit_run(vendor_run, vendor_physical_ref)
         assert not vendor_currency['pending_calls'] and vendor_currency['settled_upper_bound_micro_cny'] > 0
         assert mori_audit['settled_upper_bound_micro_cny'] > 0

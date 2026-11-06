@@ -19,12 +19,13 @@ def test_capture_preserves_futures_and_reports_failed_and_unresolved_iterations(
         assert controller._submit_iteration(2, 0) is controller.futures[2]
         controller.futures[0].set_result(SimpleNamespace(iteration=0, parent_id='parent',
             child_program_dict={'id': 'child', 'code': 'candidate code', 'artifacts_json': '{}'},
-            llm_response='sensitive response', error=None, target_island=0))
+            artifacts={'mori_stage_request_id': 'a' * 32}, llm_response='sensitive response', error=None, target_island=0))
         controller.futures[1].set_result(SimpleNamespace(iteration=1, parent_id='parent',
             child_program_dict=None, llm_response=None, error='sensitive error', target_island=1))
         trace = capture.snapshot()
     assert Controller._submit_iteration is original
     assert [row['state'] for row in trace['iterations']] == ['candidate', 'worker_error', 'unresolved']
     assert trace['iterations'][0]['parent_id'] == 'parent' and trace['iterations'][0]['child_id'] == 'child'
+    assert trace['iterations'][0]['stage_request_id'] == 'a' * 32
     assert 'sensitive response' not in repr(trace) and 'sensitive error' not in repr(trace)
     assert 'candidate code' not in repr(trace)

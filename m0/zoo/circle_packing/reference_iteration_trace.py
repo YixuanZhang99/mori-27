@@ -5,7 +5,7 @@ coverage. Raw prompts, responses, candidate code, and error text are excluded.
 """
 from contextlib import contextmanager
 import hashlib
-import json
+import re
 
 
 def _digest(value):
@@ -43,13 +43,15 @@ class _Capture:
                                 row['state'] = 'invalid_result'
                             else:
                                 row.update(state='candidate', child_id=child_id, program_sha256=_digest(code))
-                                try:
-                                    artifacts = json.loads(child.get('artifacts_json') or '{}')
-                                    receipt = artifacts.get('mori_stage_request_id')
-                                    if type(receipt) is str:
-                                        row['stage_request_id'] = receipt
-                                except (ValueError, TypeError, AttributeError):
+                                artifacts = result.artifacts
+                                if artifacts is not None and type(artifacts) is not dict:
                                     row['stage_receipt_invalid'] = True
+                                elif artifacts is not None and 'mori_stage_request_id' in artifacts:
+                                    receipt = artifacts['mori_stage_request_id']
+                                    if type(receipt) is str and re.fullmatch(r'[0-9a-f]{32}', receipt):
+                                        row['stage_request_id'] = receipt
+                                    else:
+                                        row['stage_receipt_invalid'] = True
                         else:
                             row['state'] = 'no_candidate'
                 except Exception as error:
