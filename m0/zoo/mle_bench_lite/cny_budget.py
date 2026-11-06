@@ -1082,6 +1082,17 @@ class CampaignBudget:
             value = state['governance']['circle_continuations'].get(experiment_id)
             return json.loads(_json(value))
 
+    def fixture_continuation_at_head(self, experiment_id, *, expected_head):
+        """Read one fixture binding atomically at an independently pinned head."""
+        _identifier(experiment_id, 'experiment identity')
+        _head_anchor(expected_head)
+        with self._transaction() as (_db, _policy, state):
+            if expected_head != {'seq': state['seq'], 'sha256': state['hash']} or \
+                    not state['governance']['fixture_campaign']:
+                raise ValueError('fixture continuation requires its exact campaign head')
+            value = state['governance']['circle_continuations'].get(experiment_id)
+            return json.loads(_json(value))
+
     def preflight_continuation_cell(self, cell_id, plan_ref, seconds):
         """Reject an ineligible fixture cell before its clock file is created."""
         _identifier(cell_id, 'cell identity')

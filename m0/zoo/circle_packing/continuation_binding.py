@@ -40,6 +40,15 @@ def _locked_existing_bundle(requested):
         os.close(fd)
 
 
+def _require_bundle_roles(source_path, runtime_path):
+    """Reject swapped roles before acquiring locks in runtime-then-source order."""
+    if not (source_path / 'draft.json').is_file() or not (source_path / 'source-manifest.json').is_file() or \
+            not (runtime_path / 'runtime-manifest.json').is_file() or \
+            (source_path / 'runtime-manifest.json').exists() or (source_path / 'runtime-manifest.json').is_symlink() or \
+            (runtime_path / 'draft.json').exists() or (runtime_path / 'draft.json').is_symlink():
+        raise ValueError('fixture binding bundle roles differ')
+
+
 def bind_fixture_continuation(ledger, draft, *, checkout, source_directory, runtime_directory, base_python):
     """Bind verified prepared artifacts to an exact fixture head; never admit a cell."""
     if type(ledger) is not CampaignBudget or not ledger.is_fixture_campaign():
@@ -78,11 +87,7 @@ def bind_fixture_continuation(ledger, draft, *, checkout, source_directory, runt
     source_path, runtime_path = source_request.resolve(strict=True), runtime_request.resolve(strict=True)
     if source_path == runtime_path or source_path in runtime_path.parents or runtime_path in source_path.parents:
         raise ValueError('fixture binding paths must be separate')
-    if not (source_path / 'draft.json').is_file() or not (source_path / 'source-manifest.json').is_file() or \
-            not (runtime_path / 'runtime-manifest.json').is_file() or \
-            (source_path / 'runtime-manifest.json').exists() or (source_path / 'runtime-manifest.json').is_symlink() or \
-            (runtime_path / 'draft.json').exists() or (runtime_path / 'draft.json').is_symlink():
-        raise ValueError('fixture binding bundle roles differ')
+    _require_bundle_roles(source_path, runtime_path)
     # Runtime preparation holds its runtime lock while checking source; keep
     # the same role order so these two operations cannot deadlock.
     with ExitStack() as locks:
@@ -145,3 +150,63 @@ def bind_fixture_continuation(ledger, draft, *, checkout, source_directory, runt
                     raise ValueError('fixture continuation was bound concurrently; retry recovery')
                 ledger._append(db, state, event)
         return ledger.circle_continuation_binding(draft['experiment_id'])
+
+
+def verify_bound_fixture_continuation(ledger, draft, *, source_directory, runtime_directory,
+                                      base_python, expected_head):
+    """Recheck bound fixture artifacts; no cell or provider is authorized."""
+    if type(ledger) is not CampaignBudget or type(draft) is not dict:
+        raise ValueError('bound verification requires a fixture campaign and draft')
+    try:
+        binding = ledger.fixture_continuation_at_head(draft['experiment_id'], expected_head=expected_head)
+        if binding is None or 'artifact_verification_sha256' not in binding or \
+                payload_digest(draft) != payload_digest(binding['draft']):
+            raise ValueError('continuation does not match a verified fixture binding')
+        source_path, runtime_path = Path(source_directory), Path(runtime_directory)
+        if not source_path.is_absolute() or not runtime_path.is_absolute():
+            raise ValueError('continuation artifact paths must be absolute')
+        source_resolved, runtime_resolved = source_path.resolve(strict=True), runtime_path.resolve(strict=True)
+        if source_resolved == runtime_resolved or source_resolved in runtime_resolved.parents or \
+                runtime_resolved in source_resolved.parents:
+            raise ValueError('continuation artifacts must be separate')
+        base = Path(base_python).resolve(strict=True)
+        if not Path(base_python).is_absolute() or Path('/usr') not in base.parents or not base.is_file():
+            raise ValueError('continuation requires the original system Python')
+        _require_bundle_roles(source_path, runtime_path)
+        with ExitStack() as locks:
+            runtime_bundle = locks.enter_context(_locked_existing_bundle(runtime_path))
+            source_bundle = locks.enter_context(_locked_existing_bundle(source_path))
+            ledger_path = ledger.path.resolve(strict=True)
+            for left, right in ((source_bundle, runtime_bundle), (source_bundle, ledger_path),
+                                (runtime_bundle, ledger_path)):
+                if left == right or left in right.parents or right in left.parents:
+                    raise ValueError('continuation artifacts must be separate')
+            stored = _read_private_json(source_bundle / 'draft.json')
+            source_manifest = _read_private_json(source_bundle / 'source-manifest.json')
+            envelope = _read_private_json(runtime_bundle / 'runtime-manifest.json')
+            if payload_digest(stored) != payload_digest(draft) or \
+                    'sha256:' + payload_digest(source_manifest) != binding['tree_ref'] or \
+                    payload_digest(envelope) != binding['runtime_manifest_sha256'] or \
+                    type(envelope) is not dict or set(envelope) != {'schema_version', 'draft_sha256', 'tree_ref', 'runtime'} or \
+                    type(envelope['schema_version']) is not int or envelope['schema_version'] != 1 or \
+                    envelope['draft_sha256'] != draft['draft_sha256'] or envelope['tree_ref'] != binding['tree_ref']:
+                raise ValueError('continuation manifests differ from the bound identities')
+            manifest = envelope['runtime']
+            runtime = Path(manifest['root'])
+            if not runtime.is_absolute() or runtime.parent != runtime_bundle or runtime.is_symlink() or \
+                    re.fullmatch(r'runtime-[0-9a-f]{32}', runtime.name) is None or \
+                    manifest['base_python'] != str(base) or manifest['base_python_sha256'] != binding['python_sha256'] or \
+                    manifest['lock_sha256'] != draft['dependency_lock_sha256'] or \
+                    'sha256:' + payload_digest(manifest) != binding['runtime_ref']:
+                raise ValueError('continuation runtime differs from its binding')
+            _validate_lock(draft, source_manifest)
+            source = source_bundle / 'source'
+            verify_clean_source(source, source_manifest, expected_tree_ref=binding['tree_ref'])
+            if _runtime_manifest(runtime, base, draft['dependency_lock_sha256']) != manifest:
+                raise ValueError('continuation runtime bytes differ from its binding')
+            if ledger.fixture_continuation_at_head(draft['experiment_id'], expected_head=expected_head) != binding:
+                raise ValueError('continuation binding changed during verification')
+            return {'source': str(source), 'runtime': str(runtime), 'tree_ref': binding['tree_ref'],
+                    'runtime_ref': binding['runtime_ref'], 'journal_head': dict(expected_head)}
+    except (KeyError, TypeError) as error:
+        raise ValueError('bound continuation artifacts are invalid') from error
