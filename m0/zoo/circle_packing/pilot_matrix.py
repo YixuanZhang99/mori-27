@@ -106,6 +106,64 @@ def snapshot_continuation_matrix(ledger, plan, *, expected_plan_ref, expected_he
             'journal_head': inventory['journal_head'], 'cells': cells}
 
 
+def _verified_currency_view(view, campaign, expected_head):
+    """Rebuild a detached proof before trusting any mutable cached summary."""
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    if type(view) is not RecordedCurrencyView or not view._pinned_head or view.manifest_binding() != campaign:
+        raise ValueError('currency requires pinned original evidence')
+    envelope = json.loads(view._evidence)
+    run_id, physical_ref = envelope['run_id'], envelope['plan_ref']
+    verified = RecordedCurrencyView(envelope, expected_run_id=run_id, expected_plan_ref=physical_ref,
+                                    expected_policy_sha256=campaign['policy_sha256'], expected_head=expected_head)
+    if verified.manifest_binding() != campaign or view.audit_run(run_id, physical_ref) != verified.audit_run(run_id, physical_ref):
+        raise ValueError('currency cached audit differs from recorded evidence')
+    return verified, run_id, physical_ref
+
+
+def report_continuation_currency(ledger, plan, *, expected_plan_ref, expected_head, cell_evidence=None):
+    """Attach pinned recorded currency proofs; neither terminal state nor score is certified."""
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+
+    report = snapshot_continuation_matrix(ledger, plan, expected_plan_ref=expected_plan_ref, expected_head=expected_head)
+    if cell_evidence is None:
+        cell_evidence = {}
+    names = {cell['cell_id'] for cell in report['cells']}
+    if type(cell_evidence) is not dict or set(cell_evidence) - names:
+        raise ValueError('continuation currency requires declared cell identities')
+    campaign = ledger.manifest_binding()
+    seen = set()
+    for cell in report['cells']:
+        name = cell['cell_id']
+        cell['currency'] = None
+        if name not in cell_evidence:
+            continue
+        item = cell_evidence[name]
+        if cell['state'] != 'claimed_outcome_unverified' or type(item) is not dict or set(item) != {'view', 'clock'}:
+            raise ValueError('continuation currency requires its claimed cell evidence')
+        view, clock = item['view'], item['clock']
+        if type(view) is not RecordedCurrencyView or not view._pinned_head or \
+                type(clock) is not RecordedCellClock or view.manifest_binding() != campaign:
+            raise ValueError('continuation currency requires pinned original evidence')
+        verified, run_id, physical_ref = _verified_currency_view(view, campaign, expected_head)
+        if run_id in seen or \
+                clock._record['cell_id'] != name or clock._record['plan_ref'] != expected_plan_ref or \
+                clock._record['seconds'] != plan['limits']['wallclock_seconds'] or \
+                verified.run_deadline_binding(run_id) != {'cell_id': name, 'plan_ref': expected_plan_ref,
+                                                         'deadline_ref': clock._record['record_sha256']}:
+            raise ValueError('continuation currency differs from its cell, run or head')
+        RecordedCellClock(clock._evidence, verified.cell_deadline_claim(name))
+        audit = verified.audit_run(run_id, physical_ref)
+        cell['currency'] = {key: audit[key] for key in ('settled_upper_bound_micro_cny',
+            'outstanding_micro_cny', 'reserved_micro_cny', 'pending_calls', 'breaches', 'invoice_verified')}
+        cell['currency']['breaches_scope'] = 'campaign'
+        seen.add(run_id)
+    if ledger.snapshot()['journal_head'] != expected_head:
+        raise ValueError('campaign head changed during continuation currency report')
+    report['scope'] = 'continuation_recorded_currency_at_pinned_head'
+    return report
+
+
 def report_matrix(ledger, plan, *, expected_plan_ref, expected_head, cell_evidence=None, pair_evidence=None):
     """Reduce original cell evidence, replaying supplied pairs in frozen source.
 
@@ -147,11 +205,9 @@ def report_matrix(ledger, plan, *, expected_plan_ref, expected_head, cell_eviden
             if type(view) is not RecordedCurrencyView or not view._pinned_head or \
                     type(clock) is not RecordedCellClock or view.manifest_binding() != campaign:
                 raise ValueError('matrix cell requires original pinned currency and clock')
-            envelope = json.loads(view._evidence)
-            if envelope['journal_head'] != expected_head or clock._record['cell_id'] != name or \
-                    clock._record['plan_ref'] != expected_plan_ref:
+            view, run_id, physical_ref = _verified_currency_view(view, campaign, expected_head)
+            if clock._record['cell_id'] != name or clock._record['plan_ref'] != expected_plan_ref:
                 raise ValueError('matrix cell evidence differs from the original head or plan')
-            run_id, physical_ref = envelope['run_id'], envelope['plan_ref']
             if view.run_deadline_binding(run_id) != {'cell_id': name, 'plan_ref': expected_plan_ref,
                                                      'deadline_ref': clock._record['record_sha256']}:
                 raise ValueError('matrix currency run differs from the original cell')

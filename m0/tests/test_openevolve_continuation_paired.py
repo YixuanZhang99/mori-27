@@ -110,5 +110,27 @@ def test_frozen_continuation_pair_shares_campaign_and_preserves_both_arms(tmp_pa
         inventory = snapshot_continuation_matrix(ledger, draft, expected_plan_ref=ref, expected_head=after['journal_head'])
         assert {c['cell_id'] for c in inventory['cells'] if c['state'] == 'claimed_outcome_unverified'} == {
             'circle-v2--mori-0', 'circle-v2--vendor-0'}
+        from zoo.circle_packing.cell_deadline import RecordedCellClock
+        from zoo.circle_packing.pilot_matrix import report_continuation_currency
+        from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+        clocks = {'circle-v2--mori-0': mori_clock, 'circle-v2--vendor-0': vendor_clock}
+        with ledger._transaction() as (_db, _policy, state):
+            runs = {binding['cell_id']: (run_id, state['governance']['runs'][run_id]['plan_ref'])
+                    for run_id, binding in state['governance']['deadline_bindings'].items()
+                    if binding['cell_id'] in clocks}
+        assert set(runs) == set(clocks)
+        evidence = {}
+        for name, clock in clocks.items():
+            run_id, physical_ref = runs[name]
+            view = RecordedCurrencyView(ledger.export_governance_evidence(run_id, physical_ref),
+                expected_run_id=run_id, expected_plan_ref=physical_ref, expected_head=after['journal_head'])
+            evidence[name] = {'view': view, 'clock': RecordedCellClock(
+                clock.export_evidence(), view.cell_deadline_claim(name))}
+        report = report_continuation_currency(ledger, draft, expected_plan_ref=ref,
+            expected_head=after['journal_head'], cell_evidence=evidence)
+        costs = {cell['cell_id']: cell['currency']['settled_upper_bound_micro_cny']
+                 for cell in report['cells'] if cell['currency'] is not None}
+        assert costs == {'circle-v2--mori-0': 228, 'circle-v2--vendor-0': 228}
+        assert ledger.snapshot() == after
     finally:
         authority.close()

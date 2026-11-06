@@ -157,3 +157,16 @@ def test_pair_replay_cannot_write_into_original_evidence_or_frozen_source(tmp_pa
                                 mori_directory=mori_supervisor, vendor_directory=vendor_supervisor,
                                 ledger_path=ledger)
     assert not destinations[protected].exists()
+
+
+def test_original_matrix_rejects_mutated_recorded_currency_cache(tmp_path, setup):
+    import json
+    from zoo.circle_packing.pilot_matrix import report_matrix
+    ledger, plan, ref, head, item = prepared(tmp_path, setup)
+    forged = copy.deepcopy(item['view'])
+    audit = json.loads(forged._audit)
+    audit['settled_upper_bound_micro_cny'] += 123
+    forged._audit = json.dumps(audit)
+    with pytest.raises(ValueError):
+        report_matrix(ledger, plan, expected_plan_ref=ref, expected_head=head,
+                      cell_evidence={'mori-0': {**item, 'view': forged, 'directory': None}})
