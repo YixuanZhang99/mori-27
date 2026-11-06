@@ -13,6 +13,7 @@ import tempfile
 import pytest
 
 from core.composition.recovery import ContinuationStore
+from core.executor.process import ProcessJournal
 from test_governed_cny_framework import campaign_fixture
 from test_governed_cny_provider import local_endpoint, reply
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
@@ -64,7 +65,6 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     workspace = short_workspace
     from zoo.circle_packing.host_runtime import run_reference_cell_fixture
     if tamper_selection:
-        from core.executor.process import ProcessJournal
         original = ProcessJournal.completed_result
         def changed_report(self, record):
             result = original(self, record)
@@ -151,11 +151,18 @@ print(json.dumps({'limits': profile['budget']['options']['limits']['global'],
     'replay_passed': certificate['passed'], 'source': core.loop.__file__,
     'governed_source': governed.__file__, 'vendor_source': openevolve.__file__, 'executable': sys.executable}))
 '''
-    process = subprocess.run([str(runtime / 'bin' / 'python'), '-c', script, str(setup_path)],
-        env={'PATH': os.defpath, 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'},
-        text=True, capture_output=True, timeout=240)
-    assert process.returncode == 0, process.stderr
-    mori = json.loads(process.stdout)
+    journal = ProcessJournal(ContinuationStore(tmp_path / 'mori-coordinator.jsonl'))
+    clock_record = mori_clock._record
+    process, execution = journal.launch(
+        [str(runtime / 'bin' / 'python'), '-c', script, str(setup_path)], tmp_path,
+        {'PATH': os.defpath, 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}, 240,
+        {'candidate_id': 'fixture-coordinator', 'attempt': 1}, die_with_parent=True,
+        absolute_deadline={'boot_id': clock_record['boot_id'],
+            'deadline_ns': clock_record['start_ns'] + clock_record['seconds'] * 1_000_000_000})
+    process_result = journal.wait(process, execution)
+    assert process_result['returncode'] == 0 and not process_result['timeout'], process_result['stderr']
+    assert process_result['wrapper_error'] is None
+    mori = json.loads(process_result['stdout'])
     assert mori['limits'] == reference_limits
     assert mori['candidate'] is not None and mori['final_state'] == 'completed' and mori['replay_passed']
     assert Path(mori['source']).resolve() == (source / 'm0' / 'core' / 'loop.py').resolve()
