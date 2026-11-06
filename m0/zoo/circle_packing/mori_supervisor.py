@@ -78,19 +78,8 @@ def launch_reference_live_controller(config, *, deadline, directory, api_key):
             entry='zoo.circle_packing.reference_live_worker', api_key=api_key, containment_group=group)
 
 
-def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, containment_group=None):
-    if type(deadline) is not CellDeadline or deadline._lifecycle.ledger.path.resolve() != ledger.path.resolve():
-        raise ValueError('controller requires the original campaign cell deadline')
-    record = deadline._record
-    reference = entry == 'zoo.circle_packing.reference_live_worker'
-    arm = 'vendor' if reference else 'mori'
-    if record['cell_id'] != f"{arm}-{config['seed']}" or record['plan_ref'] != config['ref'] or \
-            Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
-        raise ValueError('fixture controller clock differs from the original cell')
-    from zoo.circle_packing.pilot_plan import validate_draft_cell
-    cell = validate_draft_cell(ledger, config['plan'], record['cell_id'], expected_plan_ref=config['ref'])
-    if cell['campaign_id'] != config['campaign_id'] or record['seconds'] != cell['wallclock_seconds']:
-        raise ValueError('fixture controller differs from the frozen plan')
+def preflight_live_controller(config, *, ledger, directory, reference):
+    """Check static launch prerequisites before permanently claiming a cell."""
     source, runtime = Path(config['source']).resolve(strict=True), Path(config['runtime']).resolve(strict=True)
     from zoo.circle_packing.frozen_source import verify_frozen_source
     from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
@@ -104,11 +93,28 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
             stat.S_IMODE(info.st_mode) & 0o077 or requested.exists() or requested.is_symlink():
         raise ValueError('fixture supervisor requires a fresh private directory')
     root = parent / requested.name
-    protected = (source, runtime, ledger.path.resolve(), deadline._store.path.resolve(), Path(config['output']).resolve())
+    protected = (source, runtime, ledger.path.resolve(), Path(config['clock']).resolve(), Path(config['output']).resolve())
     if reference:
         protected += (Path(config['workspace']).resolve(), Path(config['worker_directory']).resolve())
     if any(root == path or root in path.parents or path in root.parents for path in protected):
         raise ValueError('fixture supervisor directory overlaps protected paths')
+    return root, source, runtime
+
+
+def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, containment_group=None):
+    if type(deadline) is not CellDeadline or deadline._lifecycle.ledger.path.resolve() != ledger.path.resolve():
+        raise ValueError('controller requires the original campaign cell deadline')
+    record = deadline._record
+    reference = entry == 'zoo.circle_packing.reference_live_worker'
+    arm = 'vendor' if reference else 'mori'
+    if record['cell_id'] != f"{arm}-{config['seed']}" or record['plan_ref'] != config['ref'] or \
+            Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
+        raise ValueError('fixture controller clock differs from the original cell')
+    from zoo.circle_packing.pilot_plan import validate_draft_cell
+    cell = validate_draft_cell(ledger, config['plan'], record['cell_id'], expected_plan_ref=config['ref'])
+    if cell['campaign_id'] != config['campaign_id'] or record['seconds'] != cell['wallclock_seconds']:
+        raise ValueError('fixture controller differs from the frozen plan')
+    root, source, runtime = preflight_live_controller(config, ledger=ledger, directory=directory, reference=reference)
     child_path = sandbox_child_path()
     remaining = deadline.remaining()
     if remaining <= 0:

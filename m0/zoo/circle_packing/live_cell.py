@@ -13,13 +13,11 @@ def start_live_cell(arm, config, *, directory, api_key):
         from zoo.circle_packing.mori_live_worker import _require_live_gate
         _require_live_gate(config)
         from zoo.circle_packing.mori_controller import CONFIG_FIELDS
-        from zoo.circle_packing.mori_supervisor import launch_live_controller as launch
         fields = CONFIG_FIELDS
     elif arm == 'vendor':
         from zoo.circle_packing.host_runtime import _require_reference_live_gate
         _require_reference_live_gate()
         from zoo.circle_packing.reference_live_worker import REFERENCE_CONFIG_FIELDS
-        from zoo.circle_packing.mori_supervisor import launch_reference_live_controller as launch
         fields = REFERENCE_CONFIG_FIELDS
     else:
         raise ValueError('live cell arm must be mori or vendor')
@@ -45,9 +43,16 @@ def start_live_cell(arm, config, *, directory, api_key):
     state = ledger.snapshot()
     if state['pending_calls'] or state['protected_micro_cny'] or state['protection_breaches']:
         raise ValueError('live cell requires a quiescent original campaign')
-    clock = CellDeadline.start(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
-                               cell_id=cell, plan_ref=config['ref'], seconds=binding['wallclock_seconds'])
-    return launch(config, deadline=clock, directory=directory, api_key=api_key)
+    from zoo.circle_packing.cell_containment import delegated_cell_group
+    from zoo.circle_packing.mori_supervisor import preflight_live_controller, _launch_controller
+    preflight_live_controller(config, ledger=ledger, directory=directory, reference=arm == 'vendor')
+    entry = ('zoo.circle_packing.mori_live_worker' if arm == 'mori'
+             else 'zoo.circle_packing.reference_live_worker')
+    with delegated_cell_group() as group:
+        clock = CellDeadline.start(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
+                                   cell_id=cell, plan_ref=config['ref'], seconds=binding['wallclock_seconds'])
+        return _launch_controller(config, ledger=ledger, deadline=clock, directory=directory,
+                                  entry=entry, api_key=api_key, containment_group=group)
 
 
 def main():
