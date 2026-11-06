@@ -235,6 +235,12 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             worker_proof=worker_proof, stdout=process_output['stdout'], stderr=process_output['stderr'],
             selected=result['selected_program'], options=authority.budget.options, stamp=asdict(authority.budget.stamp),
             governance=authority.budget._governed.config, rows=rows, request_ids=ids)
+        changed_plan = {**plan, 'public_range_sum_radii': 0}
+        with pytest.raises(ValueError, match='plan'):
+            recalculate_reference_snapshot(view, recorded_clock, run_id, plan=changed_plan, expected_plan_ref=ref,
+                worker_proof=worker_proof, stdout=process_output['stdout'], stderr=process_output['stderr'],
+                selected=result['selected_program'], options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+                governance=authority.budget._governed.config, rows=rows, request_ids=ids)
     assert final['scope'] == 'host_attested_reference_snapshot' and not final['performance_claim']
     assert final['metrics'] == result['selected_program']['metrics']
     assert final['stage_request_id'] == request_id and final['geometry_ref'] == joined['stage']['geometry_ref']
