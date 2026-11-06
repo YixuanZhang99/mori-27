@@ -143,7 +143,7 @@ class _AuthorityLease:
             os.close(fd)
             raise
         self._fd, self._pid = fd, os.getpid()
-        self._mutex, self._active, self._on_start = threading.Lock(), 0, None
+        self._mutex, self._active, self._on_start, self._sealed = threading.Lock(), 0, None, False
 
     def bind_start(self, callback):
         if self._on_start is not None or not callable(callback):
@@ -158,6 +158,8 @@ class _AuthorityLease:
     def session(self):
         with self._mutex:
             self.check()
+            if self._sealed:
+                raise RuntimeError('reference authority is sealed')
             self._active += 1
         try:
             yield
@@ -172,6 +174,17 @@ class _AuthorityLease:
                 raise RuntimeError('reference owner lacks its work-start authority')
             self._on_start()
             yield
+
+    def seal(self, callback):
+        """Stop new work before recording a selection; failure stays sealed."""
+        if not callable(callback):
+            raise ValueError('reference seal requires an anchor callback')
+        with self._mutex:
+            self.check()
+            if self._sealed or self._active != 1:
+                raise RuntimeError('reference authority has active or sealed work')
+            self._sealed = True
+        callback()
 
     def close(self):
         with self._mutex:
@@ -568,6 +581,18 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
                     worker['worker_ref'], request_ids, value['sequence'], value['sha256'],
                     worker_proof_sha256=payload_digest(worker_proof))
             deadline.observe_and_anchor(anchor)
+        # Stop future host operations before anchoring the exact selection.
+        # If the anchor fails, the owner stays sealed and the cell is unresolved.
+        def freeze_selection():
+            def anchor_selection(observation):
+                if not observation['eligible']:
+                    from zoo.circle_packing.cell_deadline import DeadlineExpired
+                    raise DeadlineExpired('reference selection freeze is late')
+                value = observation['observation']
+                ledger.freeze_reference_selection(run_id, deadline._record['cell_id'], payload_digest(selected),
+                                                   value['sequence'], value['sha256'])
+            deadline.observe_and_anchor(anchor_selection)
+        authority._lease.seal(freeze_selection)
         return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
                 'selected_program': selected, 'stage_request_id': matches[0][0],
                 'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref'],

@@ -351,6 +351,23 @@ def audit_anchored_reference_worker(view, clock, run_id, worker_proof, *, stdout
         if 'selection_stage_request_id' in report and (not anchor['request_ids'] or
                 report['selection_stage_request_id'] != anchor['request_ids'][-1]):
             raise ValueError('anchored worker stage receipt differs from physical stage')
+        frozen = view.reference_selection(run_id)
+        if frozen is not None and (frozen['cell_id'] != anchor['cell_id'] or
+                frozen['rows_sha256'] != anchor['rows_sha256'] or
+                frozen['selection_sha256'] != payload_digest(selected)):
+            raise ValueError('frozen reference selection differs from worker report')
+        if frozen is not None:
+            sequence = frozen['sequence']
+            observations = clock._evidence['observations']
+            if type(sequence) is not int or not anchor['sequence'] < sequence <= len(observations):
+                raise ValueError('frozen reference selection observation is missing')
+            observation = observations[sequence - 1]
+            remaining = max(0, clock._record['seconds'] * 1_000_000_000 -
+                            (observation['observed_ns'] - clock._record['start_ns']))
+            clock.verify_observation({'deadline_ref': clock._record['record_sha256'],
+                'observation': observation, 'eligible': remaining > 0, 'remaining_ns': remaining})
+            if remaining <= 0 or observation['sha256'] != frozen['observation_sha256']:
+                raise ValueError('frozen reference selection is late or has a different clock anchor')
     except (TypeError, UnicodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError('anchored worker report is invalid') from error
     return {'worker_ref': anchor['worker_ref'], 'execution_id': started['execution_id']}

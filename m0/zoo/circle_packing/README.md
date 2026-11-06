@@ -146,3 +146,12 @@ bounded no-follow journal and execution-bound output files, then invokes the
 same pinned campaign and physical-evidence recalculation. It starts no worker,
 model or evaluator. Missing, changed or unanchored evidence is rejected; this
 recovers a previously anchored snapshot, not interrupted work or a final winner.
+
+The offline reference fixture freezes its host-reported selection after the
+worker and broker finish, binds it to the prior physical snapshot and a fresh
+on-time clock observation, and rejects later operations through that authority
+and new currency reservations for that run. This is a trusted-host assertion;
+it is not proof that every descendant terminated or that the cell is a live
+benchmark result. A crash between the snapshot and freeze remains unresolved.
+The new campaign event is used only by temporary fixtures and requires a reader
+that understands it.

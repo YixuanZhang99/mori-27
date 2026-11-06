@@ -82,6 +82,7 @@ def recalculate_reference_snapshot(view, clock, run_id, *, plan, expected_plan_r
             expected_geometry_ref=stage['geometry_ref'], expected_metrics=stage['metrics'])
         return {'schema_version': 1, 'scope': 'host_attested_reference_snapshot',
                 'performance_claim': False, 'plan_ref': expected_plan_ref, 'run_id': run_id,
+                'selection_frozen': view.reference_selection(run_id) is not None,
                 'selected_program': selected, 'stage_request_id': request_ids[-1],
                 'stage_evidence_ref': stage['evidence_ref'], **geometry,
                 'public_range_threshold': expected['public_range_sum_radii'],

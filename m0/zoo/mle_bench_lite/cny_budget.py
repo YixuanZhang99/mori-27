@@ -353,6 +353,26 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if 'worker_proof_sha256' in event:
             snapshot['worker_proof_sha256'] = _sha(event['worker_proof_sha256'])
         governance['reference_physical_snapshots'][run_id] = snapshot
+    elif kind == 'freeze_reference_selection':
+        if set(event) != {'kind', 'schema_version', 'run_id', 'cell_id', 'selection_sha256',
+                          'sequence', 'observation_sha256'}:
+            raise ValueError('reference selection freeze has invalid fields')
+        run_id, cell_id = _sha(event['run_id']), _identifier(event['cell_id'], 'cell identity')
+        selection = _sha(event['selection_sha256'])
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        observation = _sha(event['observation_sha256'])
+        snapshot = governance['reference_physical_snapshots'].get(run_id)
+        authority = governance['reference_authority_claims'].get(cell_id)
+        clock = governance['cell_claims'].get(cell_id)
+        if pending is not None or snapshot is None or snapshot['cell_id'] != cell_id or \
+                'worker_proof_sha256' not in snapshot or authority is None or \
+                authority['currency_run_id'] != run_id or not authority['work_started'] or \
+                clock is None or clock['observation_sequence'] != sequence or \
+                clock['observation_sha256'] != observation or sequence <= snapshot['sequence'] or \
+                run_id in governance['reference_selections']:
+            raise ValueError('reference selection lacks an unsealed anchored worker snapshot')
+        governance['reference_selections'][run_id] = {'cell_id': cell_id, 'selection_sha256': selection,
+            'rows_sha256': snapshot['rows_sha256'], 'sequence': sequence, 'observation_sha256': observation}
     elif kind == 'claim_reference_authority':
         if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'authority_ref',
                           'currency_run_id', 'initial_budget_ref'}:
@@ -428,6 +448,8 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if set(event) != required:
             raise ValueError("governed currency reservation shape is invalid")
         call_id = _identifier(event["call_id"], "call identity")
+        if event['run_id'] in governance['reference_selections']:
+            raise ValueError('reference selection is sealed against new calls')
         run = _run(governance, event["run_id"], event["plan_ref"])
         _sha(event["request_sha256"])
         _integer(event["ordinal"], "provider ordinal")
@@ -524,7 +546,7 @@ def _reduce_history(policies, events, heads):
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
                   "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
-                  "reference_physical_snapshots": {}}
+                  "reference_physical_snapshots": {}, "reference_selections": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -941,11 +963,26 @@ class CampaignBudget:
             value = state['governance']['reference_physical_snapshots'].get(run_id)
             return json.loads(json.dumps(value)) if value is not None else None
 
+    def freeze_reference_selection(self, run_id, cell_id, selection_sha256, sequence, observation_sha256):
+        """Freeze the host's selection after its anchored snapshot exists."""
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'freeze_reference_selection', 'schema_version': 2,
+                'run_id': run_id, 'cell_id': cell_id, 'selection_sha256': selection_sha256,
+                'sequence': sequence, 'observation_sha256': observation_sha256})
+
+    def reference_selection(self, run_id):
+        _sha(run_id)
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_selections'].get(run_id)
+            return dict(value) if value is not None else None
+
     def start_reference_authority_work(self, cell_id, authority_ref):
         _identifier(cell_id, 'cell identity')
         _sha(authority_ref)
         with self._transaction() as (db, _policy, state):
             claim = state['governance']['reference_authority_claims'].get(cell_id)
+            if claim is not None and claim['currency_run_id'] in state['governance']['reference_selections']:
+                raise ValueError('reference selection is sealed against new work')
             if claim is None or claim['authority_ref'] != authority_ref:
                 raise ValueError('reference work lacks its original authority')
             if claim['work_started']:

@@ -197,6 +197,13 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         assert sum(row['kind'] == 'host_stage_started' and row['payload']['stage'] == 1 and
                    row['payload']['program_ref'] == result['selected_program']['program_ref'] for row in rows) > 1
     snapshot_anchor = view.reference_physical_snapshot(run_id)
+    selection_anchor = view.reference_selection(run_id)
+    assert selection_anchor['cell_id'] == 'vendor-0'
+    assert selection_anchor['selection_sha256'] == payload_digest(result['selected_program'])
+    assert selection_anchor['rows_sha256'] == payload_digest(rows)
+    assert selection_anchor['sequence'] > snapshot_anchor['sequence']
+    with pytest.raises(RuntimeError, match='sealed'):
+        authority.stages.execute('f' * 32, 'program', stage=1)
     assert snapshot_anchor['rows_sha256'] == payload_digest(rows)
     assert result['physical_snapshot_ref'] == 'sha256:' + snapshot_anchor['rows_sha256']
     worker_proof = result['worker_proof']
@@ -291,6 +298,7 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
                 selected=result['selected_program'], options=authority.budget.options, stamp=asdict(authority.budget.stamp),
                 governance=authority.budget._governed.config, rows=rows, request_ids=ids)
     assert final['scope'] == 'host_attested_reference_snapshot' and not final['performance_claim']
+    assert final['selection_frozen'] is True
     assert final['metrics'] == result['selected_program']['metrics']
     assert final['stage_request_id'] == request_id and final['geometry_ref'] == joined['stage']['geometry_ref']
     assert final['public_range_threshold'] == plan['public_range_sum_radii']

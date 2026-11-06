@@ -561,3 +561,75 @@ def test_reference_cell_closes_broker_connection_waiting_for_frame(tmp_path, loc
             client.close()
         if workers:
             workers[0].join(timeout=5)
+
+
+def test_reference_owner_seals_once_and_rejects_later_work(tmp_path):
+    from zoo.circle_packing.host_runtime import _AuthorityLease
+    owner = _AuthorityLease(tmp_path)
+    calls = []
+    owner.bind_start(lambda: calls.append('started'))
+    with owner.session():
+        owner.seal(lambda: calls.append('sealed'))
+        with pytest.raises(RuntimeError, match='sealed'):
+            with owner.operation():
+                pass
+    assert calls == ['sealed']
+    owner.close()
+
+
+def test_reference_owner_does_not_seal_while_another_session_is_active(tmp_path):
+    from zoo.circle_packing.host_runtime import _AuthorityLease
+    owner = _AuthorityLease(tmp_path)
+    owner.bind_start(lambda: None)
+    called = []
+    with owner.session(), owner.session():
+        with pytest.raises(RuntimeError, match='active'):
+            owner.seal(lambda: called.append(True))
+    assert called == []
+    owner.close()
+
+
+def test_frozen_reference_selection_forbids_later_stage_and_provider_work(tmp_path, local_endpoint, monkeypatch):
+    import asyncio
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    ledger, clock = options['ledger'], options['deadline']
+    try:
+        monkeypatch.setattr('zoo.circle_packing.stage.run_stage',
+                            lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+        monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                            lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+        asyncio.run(authority.control.execute('control-0000'))
+        authority.stages.execute('a' * 32, 'program', stage=1)
+        ledger.claim_cell_worker('vendor-0', clock._record['record_sha256'], 'b' * 64)
+        run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+        def anchor(observation):
+            value = observation['observation']
+            ledger.anchor_reference_physical_snapshot(run_id, 'vendor-0', 'c' * 64, 'b' * 64,
+                ['a' * 32], value['sequence'], value['sha256'], worker_proof_sha256='d' * 64)
+        clock.observe_and_anchor(anchor)
+        selected = {'id': 'winner', 'program_ref': 'sha256:' + 'e' * 64, 'metrics': {'validity': 1.0}}
+        def freeze():
+            def record(observation):
+                assert observation['eligible']
+                value = observation['observation']
+                ledger.freeze_reference_selection(run_id, 'vendor-0', payload_digest(selected),
+                                                  value['sequence'], value['sha256'])
+            clock.observe_and_anchor(record)
+        with authority._lease.session():
+            authority._lease.seal(freeze)
+        assert ledger.reference_selection(run_id)['selection_sha256'] == payload_digest(selected)
+        with pytest.raises(RuntimeError, match='sealed'):
+            authority.stages.execute('f' * 32, 'program', stage=1)
+        with pytest.raises(ValueError, match='sealed'):
+            ledger.start_reference_authority_work('vendor-0', ledger.reference_authority_claim('vendor-0')['authority_ref'])
+        bound = ledger.quote_call(1)
+        with pytest.raises(ValueError, match='sealed'):
+            ledger.admit_call(run_id, 'main', None,
+                {'call_id': 'after-selection', 'request_sha256': '1' * 64, 'phase': 'operator', 'ordinal': 0}, bound)
+        assert not local_endpoint.requests
+    finally:
+        authority.close()

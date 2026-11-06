@@ -123,6 +123,13 @@ class RecordedCurrencyView:
         claim = self._governance()['cell_claims'].get(cell_id)
         return dict(claim) if claim is not None else None
 
+    def reference_selection(self, run_id):
+        _sha(run_id)
+        if run_id != json.loads(self._audit)['run_id']:
+            raise ValueError('recorded selection belongs to another run')
+        value = self._governance()['reference_selections'].get(run_id)
+        return dict(value) if value is not None else None
+
     def run_deadline_binding(self, run_id):
         _sha(run_id)
         if run_id != json.loads(self._audit)['run_id']:
