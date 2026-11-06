@@ -15,7 +15,7 @@ def test_draft_six_cell_plan_has_shared_numeric_ceilings_and_no_calls(tmp_path, 
     assert plan['status'] == 'draft_not_executable'
     assert [(cell['seed'], cell['arm']) for cell in plan['cells']] == [
         (seed, arm) for seed in (0, 1, 2) for arm in ('vendor', 'mori')]
-    assert plan['limits']['token'] == 4 * (1048576 + 16384) == 4259840
+    assert plan['limits']['token'] == 14 * (1048576 + 16384) == 14909440
     assert plan['limits']['eval_count'] == 17
     assert plan['limits']['wallclock_seconds'] == 2700
     profile, _, provider = governed_setup(tmp_path / 'run', ledger=campaign,
@@ -23,7 +23,7 @@ def test_draft_six_cell_plan_has_shared_numeric_ceilings_and_no_calls(tmp_path, 
         total_token_ceiling=plan['limits']['token'])
     assert profile['budget']['options']['limits']['global']['token'] == plan['limits']['token']
     assert profile['budget']['options']['limits']['global']['eval_count'] == plan['limits']['eval_count']
-    assert provider.governance_binding()['call_bound']['units']['token'] * 4 == plan['limits']['token']
+    assert provider.governance_binding()['call_bound']['units']['token'] * 14 == plan['limits']['token']
     assert campaign.snapshot() == before and not local_endpoint.requests
 
 

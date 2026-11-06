@@ -37,7 +37,7 @@ def build_draft_plan(campaign, *, source_commit, dependency_lock_sha256):
         'campaign_policy_sha256': campaign['policy_sha256'], 'model': campaign['model'],
         'reasoning_effort': 'low', 'max_completion_tokens': output_tokens,
         'iterations': iterations, 'migration_interval': 2, 'stage_timeout_seconds': 60,
-        'limits': {'token': 4 * call_bound, 'eval_count': evaluations, 'node': iterations + 2,
+        'limits': {'token': 2 * (iterations + 1) * call_bound, 'eval_count': evaluations, 'node': iterations + 2,
                    'wallclock_seconds': 2700},
         'public_range_sum_radii': 2.372379655271936,
         'cells': [{'seed': seed, 'arm': arm, 'status': 'unrun'}

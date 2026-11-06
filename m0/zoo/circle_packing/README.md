@@ -108,3 +108,10 @@ actual evaluation even when identical code is evaluated repeatedly. The pinned
 host can expose this artifact in later prompts; this is an adapted fixture,
 not an unchanged upstream performance comparison. The receipt is a host-worker
 assertion joined to physical records, not an independent final-winner proof.
+
+The draft paired plan allocates a common token ceiling of 14 worst-case call
+bounds per cell: two bounds remain protected for control and two are reserved
+per Mori mutation across six configured iterations. This is a capacity ceiling,
+not a grant of money; the original shared currency ledger still gates each
+actual call, and budget, deadline, or other termination can stop either arm
+before six iterations. No paid pilot is enabled by this draft.

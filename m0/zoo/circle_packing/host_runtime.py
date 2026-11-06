@@ -307,7 +307,7 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
 
     main, control_provider = provider(1), provider(2)
     bound = main.governance_binding()['call_bound']['units']['token']
-    if plan['limits']['token'] != 4 * bound:
+    if plan['limits']['token'] != 2 * (plan['iterations'] + 1) * bound:
         raise ValueError('reference token limit differs from the frozen provider capacity')
     limits = {unit: plan['limits'][unit] for unit in ('token', 'node', 'eval_count')}
     controls = {'after_main_cycles': [0], 'seed': int(cell.split('-')[1]),
