@@ -360,6 +360,9 @@ class CNYInvocationBridge:
         pilot = self.ledger.circle_pilot_binding()
         if pilot is not None and pilot.get('require_single_run') and self._initial_deadline_binding is None:
             raise ValueError('single-run pilot requires its initial cell deadline')
+        if pilot is not None and pilot.get('require_single_run') and not self.ledger.is_fixture_campaign():
+            from zoo.circle_packing.supervisor_attestation import require_supervised_process
+            require_supervised_process(self.ledger, self._initial_deadline_binding[0])
         self._authority = self.ledger
         if self.ledger.is_fixture_campaign():
             for provider in context.provider_sessions.values():
@@ -489,6 +492,12 @@ class CNYInvocationBridge:
         return ready
 
     def _validate_context(self, context, *, physical=True, admission=True):
+        if self._initial_deadline_binding is not None and self._run.mode == 'live' and \
+                not self.ledger.is_fixture_campaign():
+            pilot = self.ledger.circle_pilot_binding()
+            if pilot is not None and pilot.get('require_single_run'):
+                from zoo.circle_packing.supervisor_attestation import require_supervised_process
+                require_supervised_process(self.ledger, self._initial_deadline_binding[0])
         if not isinstance(context, GovernedCallContext):
             raise ValueError('currency invocation requires trusted context')
         ready, authority = self._ready, self._ready.authority_binding

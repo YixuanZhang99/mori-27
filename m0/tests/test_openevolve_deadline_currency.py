@@ -52,6 +52,21 @@ def test_single_run_bridge_requires_initial_cell_clock(setup):
     assert ledger.snapshot() == before and not calls
 
 
+def test_single_run_bridge_rejects_unsupervised_process_before_protection(setup, tmp_path, monkeypatch):
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    ledger, _bridge, run, _context, _providers, calls, _store, _physical = setup
+    ref = 'sha256:' + 'a' * 64
+    ledger.freeze_circle_pilot(ref, 'sha256:' + 'b' * 64, 5, require_single_run=True)
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='mori-0', plan_ref=ref, seconds=5)
+    ledger.claim_cell_worker('mori-0', clock._record['record_sha256'], 'c' * 64)
+    monkeypatch.delenv('MORI_SUPERVISOR_TARGET', raising=False)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='supervisor'):
+        CNYInvocationBridge(ledger, cell_deadline_binding=(clock, {}, ref, 'mori-0')).bind_run(run)
+    assert ledger.snapshot() == before and not calls
+
+
 def test_cell_clock_events_do_not_change_governed_call_or_recovery(setup, tmp_path):
     ledger, bridge, run, context, providers, calls, store, physical = setup
     lifecycle = CellLifecycle(ledger)

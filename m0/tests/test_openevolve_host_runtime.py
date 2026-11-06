@@ -113,6 +113,9 @@ def test_real_reference_authorities_prepare_but_cannot_start_without_live_gate(t
     import asyncio
     from zoo.circle_packing.host_runtime import build_reference_authorities
     from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+    # This test isolates the separate live-work gate; supervisor identity is
+    # covered by the supervised-process integration and rejection tests.
+    monkeypatch.setattr('zoo.circle_packing.supervisor_attestation.require_supervised_process', lambda *_: None)
     options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
     ledger = options['ledger']
     before = ledger.snapshot()
@@ -167,6 +170,17 @@ def test_live_reference_rejects_legacy_pilot_before_protection(tmp_path, local_e
     ledger = options['ledger']
     before = ledger.snapshot()
     with pytest.raises(ValueError, match='single-run'):
+        build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    assert ledger.snapshot() == before and not local_endpoint.requests
+
+
+def test_live_reference_rejects_unsupervised_process_before_claim(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
+    ledger = options['ledger']
+    monkeypatch.delenv('MORI_SUPERVISOR_TARGET', raising=False)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='supervisor'):
         build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
     assert ledger.snapshot() == before and not local_endpoint.requests
 

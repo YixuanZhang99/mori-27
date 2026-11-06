@@ -283,6 +283,9 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
     pilot, runtime = ledger.circle_pilot_binding(), ledger.circle_runtime_binding()
     if mode == 'live_preparation' and (pilot is None or not pilot.get('require_single_run')):
         raise ValueError('live reference requires a single-run pilot')
+    if mode == 'live_preparation':
+        from zoo.circle_packing.supervisor_attestation import require_supervised_process
+        require_supervised_process(ledger, deadline)
     if pilot is None or not pilot.get('require_runtime') or runtime is None or \
             type(runner) is not SandboxRunner or runner._campaign_runtime is None or \
             runner._campaign_runtime[0] is not ledger or \

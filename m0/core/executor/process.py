@@ -69,6 +69,10 @@ class ProcessJournal:
         directory.mkdir()
         paths = {name + "_path": str(directory / f"{name}.json")
                  for name in ("spec", "result", "target")}
+        if metadata.get('containment_required') is True:
+            if 'MORI_SUPERVISOR_TARGET' in env:
+                raise ValueError('supervisor target environment is reserved')
+            env = {**env, 'MORI_SUPERVISOR_TARGET': paths['target_path']}
         stdout_path, stderr_path = directory / "stdout.txt", directory / "stderr.txt"
         spec = {"args": args, "cwd": str(cwd), "time_limit": time_limit,
                 "resource_limits": resource_limits or {},
