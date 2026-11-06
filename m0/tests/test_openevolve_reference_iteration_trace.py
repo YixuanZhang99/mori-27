@@ -79,3 +79,49 @@ def test_controller_stop_metadata_distinguishes_completed_and_early_stop():
             result = capture.snapshot()
         assert result['controller_run']['stop_reason'] == expected
         assert result['controller_run']['reported_completed_iterations'] == (2 if early else 6)
+
+
+def test_sampled_parent_source_is_saved_before_submission(tmp_path):
+    import hashlib
+    class Database:
+        def sample_from_island(self, **kwargs):
+            return SimpleNamespace(id='parent-1', code='original parent'), []
+    class Controller:
+        def __init__(self):
+            self.database = Database()
+        def _submit_iteration(self, iteration, island=None):
+            self.database.sample_from_island(island_id=island)
+            future = Future()
+            future.set_result(SimpleNamespace(iteration=iteration, parent_id=None, child_program_dict=None,
+                llm_response=None, error='no change', target_island=island))
+            return future
+    controller = Controller()
+    with capture_reference_iterations(Controller, parent_directory=tmp_path) as capture:
+        controller._submit_iteration(1, 0)
+        trace = capture.snapshot()
+    digest = hashlib.sha256(b'original parent').hexdigest()
+    assert trace['iterations'][0]['sampled_parent_id'] == 'parent-1'
+    assert trace['iterations'][0]['sampled_parent_sha256'] == digest
+    assert (tmp_path / 'parent-programs' / (digest + '.py')).read_text() == 'original parent'
+    assert 'original parent' not in repr(trace)
+
+
+def test_parent_capture_failure_cannot_be_swallowed_as_submission_failure(tmp_path, monkeypatch):
+    import pytest
+    class Database:
+        def sample_from_island(self, **kwargs):
+            return SimpleNamespace(id='parent', code='source'), []
+    class Controller:
+        def __init__(self):
+            self.database = Database()
+        def _submit_iteration(self, iteration, island=None):
+            try:
+                self.database.sample_from_island(island_id=island)
+            except Exception:
+                return None
+            return Future()
+    monkeypatch.setattr('zoo.circle_packing.reference_iteration_trace._save_sampled_parent',
+                        lambda *_: (_ for _ in ()).throw(OSError('storage failure')))
+    with capture_reference_iterations(Controller, parent_directory=tmp_path):
+        with pytest.raises(RuntimeError, match='parent capture failed'):
+            Controller()._submit_iteration(1, 0)

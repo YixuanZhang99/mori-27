@@ -146,7 +146,8 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
     from openevolve import process_parallel
     from zoo.circle_packing.reference_iteration_trace import capture_reference_iterations
     with contextlib.redirect_stdout(sys.stderr), _hide_stage_receipts_from_prompts(), \
-            capture_reference_iterations(process_parallel.ProcessParallelController, parallel_module=process_parallel) as capture:
+            capture_reference_iterations(process_parallel.ProcessParallelController, parallel_module=process_parallel,
+                                         parent_directory=root) as capture:
         result = run_evolution(seed_code, evaluator, config=config, iterations=iterations,
                                output_dir=str(root / 'host'), cleanup=False)
         iteration_trace = capture.snapshot()

@@ -597,6 +597,10 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert trace['controller_run']['reported_completed_iterations'] == 6
         assert len({item['iteration'] for item in trace['iterations']}) == 6
         assert all(item['state'] not in ('unresolved', 'not_submitted') for item in trace['iterations'])
+        for item in trace['iterations']:
+            parent_path = Path(workspace) / 'host-run' / 'parent-programs' / (item['sampled_parent_sha256'] + '.py')
+            assert hashlib.sha256(parent_path.read_bytes()).hexdigest() == item['sampled_parent_sha256']
+            assert item['sampled_parent_id']
         prompt_bindings = trace['prompt_bindings']
         provider_requests = {row['payload']['request_sha256'] for row in vendor_rows
                              if row['kind'] == 'composed_provider_started'}

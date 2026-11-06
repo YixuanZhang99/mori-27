@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 
 
 def _digest(value):
@@ -105,8 +106,10 @@ class _Capture:
 
     def snapshot(self):
         rows = []
-        for iteration, island, future in self._submitted:
+        for iteration, island, future, sampled_parent in self._submitted:
             row = {'iteration': iteration, 'requested_island': island}
+            if sampled_parent is not None:
+                row.update(sampled_parent)
             if future is None:
                 row['state'] = 'not_submitted'
             elif not future.done():
@@ -151,8 +154,47 @@ class _Capture:
         return report
 
 
+def _save_sampled_parent(root, parent):
+    if type(parent.id) is not str or not parent.id or type(parent.code) is not str:
+        raise ValueError('reference sampled parent identity is invalid')
+    data = parent.code.encode('utf-8')
+    if not data or len(data) > 1024 * 1024:
+        raise ValueError('reference sampled parent source is not bounded')
+    digest = hashlib.sha256(data).hexdigest()
+    directory = Path(root) / 'parent-programs'
+    directory.mkdir(mode=0o700, exist_ok=True)
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError('reference parent source directory is invalid')
+    root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(root_fd)
+    finally:
+        os.close(root_fd)
+    path = directory / (digest + '.py')
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or \
+                    stream.read(1024 * 1024 + 1) != data:
+                raise ValueError('reference parent source differs from its digest')
+    else:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    return {'sampled_parent_id': parent.id, 'sampled_parent_sha256': digest}
+
+
 @contextmanager
-def capture_reference_iterations(controller_class, *, parallel_module=None):
+def capture_reference_iterations(controller_class, *, parallel_module=None, parent_directory=None):
     """Wrap submissions temporarily, returning the exact unmodified futures."""
     capture = _Capture()
     original = controller_class._submit_iteration
@@ -163,8 +205,35 @@ def capture_reference_iterations(controller_class, *, parallel_module=None):
         _original_worker_initializer = previous_initializer
         parallel_module._worker_init = _traced_worker_initializer
     def submit(controller, iteration, island_id=None):
-        future = original(controller, iteration, island_id)
-        capture._submitted.append((iteration, island_id, future))
+        parent = None
+        capture_error = None
+        database = getattr(controller, 'database', None)
+        original_sample = getattr(database, 'sample_from_island', None)
+        if parent_directory is not None and callable(original_sample):
+            had_local = 'sample_from_island' in vars(database)
+            previous_local = vars(database).get('sample_from_island')
+            def sample(*args, **kwargs):
+                nonlocal parent, capture_error
+                result = original_sample(*args, **kwargs)
+                try:
+                    parent = _save_sampled_parent(parent_directory, result[0])
+                except Exception as error:
+                    capture_error = error
+                    raise
+                return result
+            database.sample_from_island = sample
+            try:
+                future = original(controller, iteration, island_id)
+            finally:
+                if had_local:
+                    database.sample_from_island = previous_local
+                else:
+                    del database.sample_from_island
+            if capture_error is not None:
+                raise RuntimeError('reference sampled parent capture failed') from capture_error
+        else:
+            future = original(controller, iteration, island_id)
+        capture._submitted.append((iteration, island_id, future, parent))
         return future
     controller_class._submit_iteration = submit
     if original_run is not None:
