@@ -10,6 +10,7 @@ from pathlib import Path
 import socket
 import subprocess
 import tempfile
+import time
 import urllib.request
 
 import pytest
@@ -34,7 +35,7 @@ def prepared_cell(tmp_path, request):
     checkout = tmp_path / 'checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
-    if getattr(request, 'param', None) == 'supervised_fake_live':
+    if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
         gate = "    raise ValueError('live pilot gate is not complete')"
@@ -64,6 +65,10 @@ def prepared_cell(tmp_path, request):
             return Response()
     test_request.build_opener = lambda *args: Opener()
 '''
+        if request.param == 'supervised_fake_live_stall':
+            fake += ("    import time as test_time\n"
+                     "    (Path(config['output']).parent / 'controller-ready').write_text('ready')\n"
+                     "    test_time.sleep(60)\n")
         worker.write_text(code.replace(gate, '    return None').replace(insertion, fake + insertion))
         subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/mori_live_worker.py'], check=True)
         subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
@@ -124,6 +129,60 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
         for path in root.rglob('*'):
             if path.is_file() and not path.is_symlink():
                 assert b'fixture-only-secret' not in path.read_bytes(), f'fixture credential persisted in {path}'
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['supervised_fake_live_stall'], indirect=True)
+def test_killed_live_supervisor_leaves_cell_unresolved_and_group_can_be_cleaned(prepared_cell, tmp_path):
+    from core.executor.process import ProcessJournal
+    from zoo.circle_packing.mori_supervisor import reconcile_live_containment
+    config, ledger, clock, _runner = prepared_cell
+    setup, directory = tmp_path / 'crash-config.json', tmp_path / 'crash-supervisor'
+    setup.write_text(json.dumps(config))
+    script = '''import json,sys
+from pathlib import Path
+from core.composition.recovery import ContinuationStore
+from zoo.circle_packing.cell_deadline import CellDeadline,CellLifecycle
+from zoo.circle_packing.mori_supervisor import launch_live_controller
+from zoo.mle_bench_lite.cny_budget import CampaignBudget
+c=json.loads(Path(sys.argv[1]).read_text()); l=CampaignBudget(c['ledger'])
+d=CellDeadline.restore(ContinuationStore(c['clock']),lifecycle=CellLifecycle(l),
+    cell_id='mori-0',plan_ref=c['ref'],seconds=c['plan']['limits']['wallclock_seconds'])
+launch_live_controller(c,deadline=d,directory=Path(sys.argv[2]),api_key='fixture-only-secret')
+'''
+    env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
+           'PYTHONDONTWRITEBYTECODE': '1'}
+    owner = subprocess.Popen([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
+                              str(setup), str(directory)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        marker, end = tmp_path / 'controller-ready', time.monotonic() + 60
+        while not marker.exists() and time.monotonic() < end:
+            if owner.poll() is not None:
+                raise AssertionError('test supervisor exited before controller became ready')
+            time.sleep(.05)
+        assert marker.exists()
+        owner.kill()
+        owner.wait(timeout=10)
+        end = time.monotonic() + 10
+        while True:
+            try:
+                result = reconcile_live_containment(config, deadline=clock, directory=directory)
+                break
+            except RuntimeError as error:
+                if 'running original process' not in str(error) or time.monotonic() >= end:
+                    raise
+                time.sleep(.05)
+        assert result['state'] == 'group_cleaned_cell_unresolved'
+        journal = ProcessJournal(ContinuationStore(directory / 'controller.jsonl'))
+        started = journal.started()
+        assert len(started) == 1 and not journal.finished_ids()
+        with pytest.raises(RuntimeError, match='containment'):
+            journal.recover(started[0])
+        assert not ledger.snapshot()['pending_calls']
+    finally:
+        if owner.poll() is None:
+            owner.kill(); owner.wait()
+        owner.stdout.close(); owner.stderr.close()
 
 
 @pytest.mark.linux

@@ -6,8 +6,10 @@ The controller is trusted; generated candidate programs use the sandbox.
 from __future__ import annotations
 
 import json
+import fcntl
 import os
 from pathlib import Path
+import re
 import stat
 
 from core.composition.recovery import ContinuationStore
@@ -136,3 +138,85 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
             process.wait()
         journal.terminate_target(execution)
         raise
+
+
+def reconcile_live_containment(config, *, deadline, directory):
+    """Clean the original group after owner death; the cell remains unresolved."""
+    from core.executor.process_identity import process_alive, start_ticks
+    from zoo.circle_packing.cell_containment import finish_cell_group
+    from zoo.circle_packing.cell_deadline import _boot_identity
+    if type(config) is not dict or type(deadline) is not CellDeadline or \
+            type(config.get('seed')) is not int or config['seed'] not in (0, 1, 2):
+        raise ValueError('reconciliation requires the original cell configuration')
+    ledger = deadline._lifecycle.ledger
+    if ledger.is_fixture_campaign() or config.get('ledger') != str(ledger.path) or \
+            config.get('clock') != str(deadline._store.path) or config.get('ref') != deadline._record['plan_ref'] or \
+            deadline._record['cell_id'] != f"mori-{config['seed']}":
+        raise ValueError('reconciliation differs from the original campaign or cell')
+    deadline.export_evidence()  # Check original anchored clock and boot without extending it.
+    root = Path(directory)
+    if not root.is_absolute() or root.is_symlink() or root.resolve(strict=True) != root:
+        raise ValueError('reconciliation requires the original private directory')
+    info = root.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise ValueError('reconciliation requires the original private directory')
+    journal_path = root / 'controller.jsonl'
+    info = journal_path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid():
+        raise ValueError('reconciliation requires the original private journal')
+    lock_fd = os.open(root / 'reconcile.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        lock_info = os.fstat(lock_fd)
+        if not stat.S_ISREG(lock_info.st_mode) or lock_info.st_nlink != 1 or \
+                lock_info.st_uid != os.getuid() or stat.S_IMODE(lock_info.st_mode) != 0o600:
+            raise ValueError('reconciliation requires a private lock')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        store = ContinuationStore(journal_path)
+        rows = list(store.read())
+        started = [row['payload'] for row in rows if row['kind'] == 'executor_process_started']
+        if len(started) != 1 or any(row['kind'] in ('executor_process_finished', 'executor_containment_verified',
+                'circle_containment_reconciled') for row in rows):
+            raise ValueError('reconciliation requires one unfinished original process')
+        process = started[0]
+        binding = process.get('containment_binding')
+        fields = {'schema_version', 'cell_id', 'deadline_ref', 'config_sha256', 'directory', 'entry',
+                  'containment_group', 'containment_identity', 'supervisor_pid', 'supervisor_start_ticks', 'boot_id'}
+        if type(binding) is not dict or set(binding) != fields or type(binding['schema_version']) is not int or \
+                binding['schema_version'] != 1 or \
+                process.get('containment_required') is not True or process.get('candidate_id') != 'fixture-coordinator' or \
+                type(process.get('attempt')) is not int or process['attempt'] != 1 or \
+                type(process.get('execution_id')) is not str or re.fullmatch(r'[0-9a-f]{32}', process['execution_id']) is None or \
+                binding['cell_id'] != deadline._record['cell_id'] or binding['deadline_ref'] != deadline._record['record_sha256'] or \
+                binding['config_sha256'] != payload_digest(config) or binding['directory'] != str(root) or \
+                binding['entry'] != 'zoo.circle_packing.mori_live_worker' or binding['boot_id'] != _boot_identity() or \
+                binding['boot_id'] != deadline._record['boot_id']:
+            raise ValueError('reconciliation process identity differs')
+        worker_ref = payload_digest(binding)
+        if process.get('worker_ref') != worker_ref or ledger.cell_worker_claim(binding['cell_id']) != {
+                'deadline_ref': binding['deadline_ref'], 'worker_ref': worker_ref}:
+            raise ValueError('reconciliation differs from the original worker claim')
+        for pid, ticks in ((binding['supervisor_pid'], binding['supervisor_start_ticks']),
+                           (process.get('wrapper_pid'), process.get('wrapper_start_ticks'))):
+            if type(pid) is not int or pid <= 0 or type(ticks) is not int or ticks < 0:
+                raise ValueError('reconciliation requires stable process identities')
+            if Path(f'/proc/{pid}').exists():
+                current = start_ticks(pid)
+                if current is None:
+                    raise ValueError('reconciliation cannot verify process identity')
+                if current == ticks and process_alive(pid, ticks):
+                    raise RuntimeError('reconciliation refuses a running original process')
+        group = Path(binding['containment_group'])
+        cg_root = Path('/sys/fs/cgroup').resolve(strict=True)
+        if not group.is_absolute() or group.is_symlink() or group.resolve(strict=True) != group or \
+                cg_root not in group.parents or re.fullmatch(r'mori-cell-[0-9a-f]{32}', group.name) is None:
+            raise ValueError('reconciliation requires the original containment group')
+        identity = binding['containment_identity']
+        if type(identity) is not dict or set(identity) != {'device', 'inode'} or \
+                any(type(identity[key]) is not int or identity[key] < 0 for key in identity):
+            raise ValueError('reconciliation requires the original containment identity')
+        finish_cell_group(group, expected_identity=identity)
+        store.append('circle_containment_reconciled', {'execution_id': process['execution_id'],
+                                                       'worker_ref': worker_ref})
+        return {'state': 'group_cleaned_cell_unresolved', 'execution_id': process['execution_id']}
+    finally:
+        os.close(lock_fd)
