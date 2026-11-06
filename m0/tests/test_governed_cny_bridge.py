@@ -139,7 +139,7 @@ def test_host_role_bridge_preserves_exact_messages_and_audits_record(setup):
 
 
 @pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
-def test_host_socket_calls_existing_currency_bridge_after_physical_admission(setup, tmp_path, monkeypatch):
+def test_host_socket_calls_existing_currency_bridge_after_physical_admission(setup, tmp_path, monkeypatch, short_socket_dir):
     import asyncio
     import threading
     from types import SimpleNamespace
@@ -148,7 +148,7 @@ def test_host_socket_calls_existing_currency_bridge_after_physical_admission(set
     def dispatch(request_id, argument):
         result = bridge.invoke(context, (json.dumps(argument),), {})
         return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
-    path = tmp_path / 'host.sock'
+    path = short_socket_dir / 'host.sock'
     with HostBroker(path, 'a' * 64, dispatch) as broker:
         worker = threading.Thread(target=broker.serve_one, daemon=True)
         worker.start()
@@ -164,7 +164,7 @@ def test_host_socket_calls_existing_currency_bridge_after_physical_admission(set
 
 
 @pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
-def test_host_broker_stops_after_unknown_currency_usage(setup, tmp_path, monkeypatch):
+def test_host_broker_stops_after_unknown_currency_usage(setup, tmp_path, monkeypatch, short_socket_dir):
     import asyncio
     import threading
     from types import SimpleNamespace
@@ -179,7 +179,7 @@ def test_host_broker_stops_after_unknown_currency_usage(setup, tmp_path, monkeyp
     def dispatch(request_id, argument):
         result = bridge.invoke(context, (json.dumps(argument),), {})
         return {'state': 'ok', 'result': result, 'usage': providers['control-0000'].last_usage}
-    path = tmp_path / 'unknown.sock'
+    path = short_socket_dir / 'unknown.sock'
     with HostBroker(path, 'a' * 64, dispatch) as broker:
         thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(2)], daemon=True)
         thread.start()

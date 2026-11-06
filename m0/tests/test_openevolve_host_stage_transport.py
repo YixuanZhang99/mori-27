@@ -7,7 +7,7 @@ import pytest
 from test_openevolve_host_stage_budget import fake_result, stage_budget
 
 
-def test_broker_routes_qualified_stages_to_physical_budget(tmp_path, monkeypatch):
+def test_broker_routes_qualified_stages_to_physical_budget(tmp_path, monkeypatch, short_socket_dir):
     from zoo.circle_packing.host_physical import HostStageAdmission
     from zoo.circle_packing.host_transport import HostBroker, HostEvaluationClient
     from zoo.circle_packing.host_dispatch import HostDispatchRouter
@@ -16,7 +16,7 @@ def test_broker_routes_qualified_stages_to_physical_budget(tmp_path, monkeypatch
     monkeypatch.setattr(module, 'run_stage', lambda program, *, stage, **kwargs: fake_result(program, stage))
     stages = HostStageAdmission(budget, runner=object(), workspace=tmp_path / 'sandbox')
     router = HostDispatchRouter(None, stages)
-    path = tmp_path / 'stages.sock'
+    path = short_socket_dir / 'stages.sock'
     with HostBroker(path, 'a' * 64, router) as broker:
         thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(2)], daemon=True)
         thread.start()
@@ -30,14 +30,14 @@ def test_broker_routes_qualified_stages_to_physical_budget(tmp_path, monkeypatch
     assert budget.audit_governance()['physical_totals']['eval_count'] == 2
 
 
-def test_bad_predecessor_is_refused_before_stage_execution(tmp_path, monkeypatch):
+def test_bad_predecessor_is_refused_before_stage_execution(tmp_path, monkeypatch, short_socket_dir):
     from zoo.circle_packing.host_physical import HostStageAdmission
     from zoo.circle_packing.host_transport import HostBroker, HostEvaluationClient
     from zoo.circle_packing.host_dispatch import HostDispatchRouter
     from core.llm import UsageError
     budget = stage_budget(tmp_path)
     stages = HostStageAdmission(budget, runner=object(), workspace=tmp_path / 'sandbox')
-    path = tmp_path / 'stages.sock'
+    path = short_socket_dir / 'stages.sock'
     with HostBroker(path, 'a' * 64, HostDispatchRouter(None, stages)) as broker:
         thread = threading.Thread(target=broker.serve_one, daemon=True)
         thread.start()

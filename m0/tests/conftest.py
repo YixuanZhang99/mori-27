@@ -12,10 +12,18 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+import tempfile
 
 import pytest
 
 TEST_ROOT = Path(__file__).resolve().parent
+
+
+@pytest.fixture
+def short_socket_dir():
+    """AF_UNIX paths must fit macOS's short sun_path limit."""
+    with tempfile.TemporaryDirectory(prefix='mori-sock-', dir='/tmp') as directory:
+        yield Path(directory).resolve()
 
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {

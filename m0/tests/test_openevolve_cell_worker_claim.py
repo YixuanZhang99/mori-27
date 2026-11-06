@@ -7,6 +7,8 @@ from core.composition.recovery import ContinuationStore
 from test_openevolve_cell_deadline import _lifecycle
 from zoo.circle_packing.cell_deadline import CellDeadline
 
+pytestmark = pytest.mark.linux
+
 
 def authority(tmp_path):
     store = ContinuationStore(tmp_path / 'clock.jsonl')

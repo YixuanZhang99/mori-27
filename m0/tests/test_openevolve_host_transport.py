@@ -26,9 +26,9 @@ def serve_once(path, received, reply):
     return thread
 
 
-def test_worker_sends_bound_host_messages_and_reports_usage(tmp_path, monkeypatch):
+def test_worker_sends_bound_host_messages_and_reports_usage(short_socket_dir, monkeypatch):
     from zoo.circle_packing.host_transport import HostBridgeClient
-    path = tmp_path / 'broker.sock'
+    path = short_socket_dir / 'broker.sock'
     received = []
     thread = serve_once(path, received, {'state': 'ok', 'result': 'diff', 'usage': {
         'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}})
@@ -43,9 +43,9 @@ def test_worker_sends_bound_host_messages_and_reports_usage(tmp_path, monkeypatc
     assert 'api_key' not in json.dumps(received)
 
 
-def test_lost_broker_reply_is_unknown_and_not_retried(tmp_path, monkeypatch):
+def test_lost_broker_reply_is_unknown_and_not_retried(short_socket_dir, monkeypatch):
     from zoo.circle_packing.host_transport import HostBridgeClient
-    path = tmp_path / 'broker.sock'
+    path = short_socket_dir / 'broker.sock'
     received = []
     thread = serve_once(path, received, None)
     monkeypatch.setenv('MORI_CIRCLE_BROKER_SOCKET', str(path))
@@ -60,14 +60,14 @@ def test_lost_broker_reply_is_unknown_and_not_retried(tmp_path, monkeypatch):
     assert len(received) == 1
 
 
-def test_broker_authenticates_and_invokes_only_bound_message(tmp_path, monkeypatch):
+def test_broker_authenticates_and_invokes_only_bound_message(short_socket_dir, monkeypatch):
     from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker
     calls = []
     def dispatch(request_id, argument):
         calls.append((request_id, argument))
         return {'state': 'ok', 'result': 'diff', 'usage': {
             'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}}
-    path = tmp_path / 'protected.sock'
+    path = short_socket_dir / 'protected.sock'
     with HostBroker(path, 'a' * 64, dispatch) as broker:
         thread = threading.Thread(target=broker.serve_one, daemon=True)
         thread.start()
@@ -80,10 +80,10 @@ def test_broker_authenticates_and_invokes_only_bound_message(tmp_path, monkeypat
     assert not path.exists()
 
 
-def test_broker_rejects_bad_token_before_dispatch(tmp_path):
+def test_broker_rejects_bad_token_before_dispatch(short_socket_dir):
     from zoo.circle_packing.host_transport import HostBroker
     calls = []
-    path = tmp_path / 'protected.sock'
+    path = short_socket_dir / 'protected.sock'
     with HostBroker(path, 'a' * 64, lambda *args: calls.append(args)) as broker:
         thread = threading.Thread(target=broker.serve_one, daemon=True)
         thread.start()
@@ -96,7 +96,7 @@ def test_broker_rejects_bad_token_before_dispatch(tmp_path):
     assert reply['state'] != 'ok' and calls == []
 
 
-def test_broker_serializes_multiple_worker_requests(tmp_path, monkeypatch):
+def test_broker_serializes_multiple_worker_requests(short_socket_dir, monkeypatch):
     import time
     from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker
     active, maximum = 0, 0
@@ -108,7 +108,7 @@ def test_broker_serializes_multiple_worker_requests(tmp_path, monkeypatch):
         active -= 1
         return {'state': 'ok', 'result': 'diff', 'usage': {
             'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}}
-    path = tmp_path / 'serial.sock'
+    path = short_socket_dir / 'serial.sock'
     with HostBroker(path, 'a' * 64, dispatch) as broker:
         workers = [threading.Thread(target=broker.serve_one, daemon=True) for _ in range(2)]
         for worker in workers:
@@ -125,9 +125,9 @@ def test_broker_serializes_multiple_worker_requests(tmp_path, monkeypatch):
     assert maximum == 1
 
 
-def test_known_billed_failure_retains_usage_and_stops_client(tmp_path, monkeypatch):
+def test_known_billed_failure_retains_usage_and_stops_client(short_socket_dir, monkeypatch):
     from zoo.circle_packing.host_transport import HostBridgeClient, HostBroker
-    path = tmp_path / 'failed.sock'
+    path = short_socket_dir / 'failed.sock'
     usage = {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}
     with HostBroker(path, 'a' * 64, lambda *_: {'state': 'known_failed', 'result': None, 'usage': usage}) as broker:
         thread = threading.Thread(target=broker.serve_one, daemon=True)
