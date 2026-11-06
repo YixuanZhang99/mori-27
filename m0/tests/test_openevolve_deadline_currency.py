@@ -74,8 +74,108 @@ def test_late_provider_response_is_billed_but_not_returned(setup, tmp_path, monk
         bridge.invoke(context, ('prompt',), {})
     assert len(calls) == 1 and not ledger.snapshot()['pending_calls']
     assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 36
+    proof = bridge._load(bridge._name(context) + '.deadline-eligibility')
+    assert proof['call_id'] == bridge._load(bridge._name(context) + '.prepared')['call_id']
+    assert proof['observation']['eligible'] is False
+    from test_governed_cny_bridge import complete
+    complete(store)
+    with pytest.raises(ValueError, match='eligibility'):
+        bridge.audit()
     with pytest.raises(DeadlineExpired):
         bridge.recover(context, context.argument_sha256)
+
+
+def test_ontime_provider_response_records_original_eligibility(setup, tmp_path, monkeypatch):
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    proof = bridge._load(bridge._name(context) + '.deadline-eligibility')
+    assert proof['call_id'] == bridge._load(bridge._name(context) + '.prepared')['call_id']
+    assert proof['observation']['eligible'] is True
+    assert proof['observation']['observation']['sha256'] == ledger.response_eligibility(proof['call_id'])['observation_sha256']
+
+
+def test_audit_rejects_missing_or_tampered_response_eligibility(setup, tmp_path, monkeypatch):
+    import json
+    from core.x1.checkpoint import payload_digest
+    from test_governed_cny_bridge import complete
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    complete(store)
+    assert bridge.audit()['protection_valid']
+    path = bridge._spool / (bridge._name(context) + '.deadline-eligibility.json')
+    original = path.read_text()
+    data = json.loads(original)
+    data['payload']['observation']['eligible'] = False
+    data['sha256'] = payload_digest(data['payload'])
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match='eligibility'):
+        bridge.audit()
+    # A different valid observation cannot be substituted for this response.
+    data = json.loads(original)
+    rows = list(ContinuationStore(bridge.cell_deadline()._store.path).read('circle_cell_deadline_observed'))
+    data['payload']['observation']['observation'] = rows[0]['payload']
+    data['sha256'] = payload_digest(data['payload'])
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match='eligibility'):
+        bridge.audit()
+    path.unlink()
+    with pytest.raises(ValueError, match='eligibility'):
+        bridge.audit()
+
+
+def test_crash_before_eligibility_anchor_preserves_charge_and_blocks_recovery(setup, tmp_path, monkeypatch):
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    def crash(*args, **kwargs):
+        raise RuntimeError('fixture anchor failure')
+    monkeypatch.setattr(ledger, 'anchor_response_eligibility', crash)
+    with pytest.raises(RuntimeError, match='anchor failure'):
+        bridge.invoke(context, ('prompt',), {})
+    assert len(calls) == 1 and not ledger.snapshot()['pending_calls']
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 36
+    with pytest.raises(ValueError, match='eligibility'):
+        bridge.recover(context, context.argument_sha256)
+
+
+def test_response_observation_and_anchor_are_serialized(setup, tmp_path, monkeypatch):
+    import threading
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    original = ledger.anchor_response_eligibility
+    started, finished = threading.Event(), threading.Event()
+    workers = []
+    def competing_check():
+        started.set()
+        bridge.cell_deadline().check()
+        finished.set()
+    def anchor(*args, **kwargs):
+        worker = threading.Thread(target=competing_check)
+        workers.append(worker)
+        worker.start()
+        assert started.wait(2)
+        assert not finished.wait(.1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(ledger, 'anchor_response_eligibility', anchor)
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    workers[0].join(timeout=5)
+    assert finished.is_set()
+
+
+def test_response_is_not_returned_if_deadline_expires_during_anchor(setup, tmp_path, monkeypatch):
+    from zoo.circle_packing.cell_deadline import DeadlineExpired
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    current = _bound_clock(ledger, bridge, tmp_path, monkeypatch)
+    original = ledger.anchor_response_eligibility
+    def expire_after_anchor(*args, **kwargs):
+        result = original(*args, **kwargs)
+        current['ns'] += 2700 * 1_000_000_000
+        return result
+    monkeypatch.setattr(ledger, 'anchor_response_eligibility', expire_after_anchor)
+    with pytest.raises(DeadlineExpired):
+        bridge.invoke(context, ('prompt',), {})
+    assert len(calls) == 1 and not ledger.snapshot()['pending_calls']
 
 
 def test_deadline_after_currency_admission_retains_pending_and_never_dispatches(setup, tmp_path, monkeypatch):

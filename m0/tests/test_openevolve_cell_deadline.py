@@ -32,6 +32,23 @@ def test_deadline_survives_restart_without_extending(tmp_path):
             restored.check()
 
 
+def test_observation_returns_campaign_anchored_eligibility(tmp_path):
+    from zoo.circle_packing.cell_deadline import CellDeadline
+    path = tmp_path / 'cell.jsonl'
+    plan = 'sha256:' + 'a' * 64
+    with patch('zoo.circle_packing.cell_deadline._boot_identity', return_value='boot-a'), \
+            patch('zoo.circle_packing.cell_deadline._clock_ns', side_effect=[100, 101, 5_000_000_100]):
+        clock = CellDeadline.start(ContinuationStore(path), lifecycle=_lifecycle(path),
+                                   cell_id='mori-0', plan_ref=plan, seconds=5)
+        inside = clock.observe()
+        late = clock.observe()
+    claim = clock._lifecycle.ledger.cell_deadline_claim('mori-0')
+    assert inside['eligible'] is True and late['eligible'] is False
+    assert inside['deadline_ref'] == late['deadline_ref'] == claim['record_sha256']
+    assert late['observation']['sequence'] == claim['observation_sequence']
+    assert late['observation']['sha256'] == claim['observation_sha256']
+
+
 def test_deadline_rejects_restart_after_reboot_or_clock_regression(tmp_path):
     from zoo.circle_packing.cell_deadline import CellDeadline
     path = tmp_path / 'cell.jsonl'

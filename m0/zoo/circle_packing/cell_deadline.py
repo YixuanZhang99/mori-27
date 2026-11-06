@@ -173,7 +173,7 @@ class CellDeadline:
             instance._remaining()
             return instance
 
-    def _remaining(self):
+    def _checked_history(self):
         claim = self._lifecycle.verify(self._record)
         rows = _rows(self._store)
         if any(row['kind'] not in {_KIND, _OBSERVED} for row in rows):
@@ -195,6 +195,10 @@ class CellDeadline:
             previous, last = observation['sha256'], observation['observed_ns']
         if (claim['observation_sequence'], claim['observation_sha256']) != (len(observations), previous):
             raise ValueError('cell deadline observation head differs from campaign authority')
+        return observations, previous, last
+
+    def _observe(self):
+        observations, previous, last = self._checked_history()
         now = _clock_ns()
         if type(now) is not int or now < max(self._last_ns, last):
             raise ValueError('cell monotonic clock regressed')
@@ -204,7 +208,43 @@ class CellDeadline:
         self._lifecycle.ledger.anchor_cell_deadline_observation(
             self._record['cell_id'], observation['sequence'], observation['previous'], observation['sha256'])
         self._last_ns = now
-        return max(0, self._record['seconds'] * 1_000_000_000 - (now - self._record['start_ns'])) / 1_000_000_000
+        remaining_ns = max(0, self._record['seconds'] * 1_000_000_000 - (now - self._record['start_ns']))
+        return {'deadline_ref': self._record['record_sha256'], 'observation': observation,
+                'eligible': remaining_ns > 0, 'remaining_ns': remaining_ns}
+
+    def _remaining(self):
+        return self._observe()['remaining_ns'] / 1_000_000_000
+
+    def observe(self):
+        """Return the just-anchored clock observation and its current eligibility."""
+        with self._lock, _exclusive(self._store):
+            return self._observe()
+
+    def observe_and_anchor(self, anchor):
+        """Serialize the operation's authority anchor with its clock observation."""
+        if not callable(anchor):
+            raise ValueError('deadline observation requires an anchor callback')
+        with self._lock, _exclusive(self._store):
+            observation = self._observe()
+            anchor(observation)
+            return observation
+
+    def verify_observation(self, proof):
+        """Check an operation's observation against the original anchored clock chain."""
+        with self._lock, _exclusive(self._store):
+            observations, _, _ = self._checked_history()
+            if type(proof) is not dict or set(proof) != {'deadline_ref', 'observation', 'eligible', 'remaining_ns'} \
+                    or proof['deadline_ref'] != self._record['record_sha256'] or type(proof['observation']) is not dict:
+                raise ValueError('invalid deadline eligibility evidence')
+            value = proof['observation']
+            seq = value.get('sequence')
+            if type(seq) is not int or seq < 1 or seq > len(observations) or observations[seq - 1] != value:
+                raise ValueError('deadline eligibility observation is not anchored')
+            remaining = max(0, self._record['seconds'] * 1_000_000_000 -
+                            (value['observed_ns'] - self._record['start_ns']))
+            if type(proof['remaining_ns']) is not int or proof['remaining_ns'] != remaining or \
+                    type(proof['eligible']) is not bool or proof['eligible'] != (remaining > 0):
+                raise ValueError('deadline eligibility differs from observation')
 
     def remaining(self):
         with self._lock, _exclusive(self._store):

@@ -543,6 +543,17 @@ class CNYInvocationBridge:
         outcome = self._settle_response(prepared, response)
         deadline = self.cell_deadline()
         if deadline is not None:
+            from zoo.circle_packing.cell_deadline import DeadlineExpired
+            def anchor(observation):
+                proof = {'call_id': prepared['call_id'], 'response_sha256': response['response_sha256'],
+                         'observation': observation}
+                self._save(name + '.deadline-eligibility', proof)
+                self.ledger.anchor_response_eligibility(context.currency_run_id, prepared['call_id'],
+                    deadline._record['cell_id'], observation['observation']['sequence'],
+                    observation['observation']['sha256'], payload_digest(proof))
+            observation = deadline.observe_and_anchor(anchor)
+            if not observation['eligible']:
+                raise DeadlineExpired('cell deadline expired')
             deadline.check()
         if outcome.outcome == 'unknown':
             raise UsageError('provider outcome cannot establish priced currency usage')
@@ -564,7 +575,25 @@ class CNYInvocationBridge:
         deadline = self.cell_deadline()
         if deadline is not None:
             deadline.check()
+            if outcome.response_sha256 is not None:
+                if not self._validate_response_eligibility(context, outcome.call_id, outcome.response_sha256, deadline):
+                    raise ValueError('deadline eligibility disallows late response recovery')
         return outcome
+
+    def _validate_response_eligibility(self, context, identifier, response_sha256, deadline):
+        proof = self._load(self._name(context) + '.deadline-eligibility')
+        if type(proof) is not dict or set(proof) != {'call_id', 'response_sha256', 'observation'} or \
+                proof['call_id'] != identifier or proof['response_sha256'] != response_sha256:
+            raise ValueError('missing or invalid deadline eligibility evidence')
+        deadline.verify_observation(proof['observation'])
+        anchor = self.ledger.response_eligibility(identifier)
+        if anchor is None or anchor['run_id'] != context.currency_run_id or \
+                anchor['cell_id'] != deadline._record['cell_id'] or \
+                anchor['sequence'] != proof['observation']['observation']['sequence'] or \
+                anchor['observation_sha256'] != proof['observation']['observation']['sha256'] or \
+                anchor['proof_sha256'] != payload_digest(proof):
+            raise ValueError('deadline eligibility differs from campaign anchor')
+        return proof['observation']['eligible']
 
     def _recover(self, context, argument_sha256, *, refusal_reason):
         self._validate_context(context, physical=self._run.mode == 'live', admission=False)
@@ -719,6 +748,7 @@ class CNYInvocationBridge:
         seen = set()
         outcomes = {}
         observed_bindings = {}
+        eligibility = {}
         integrity_violations = []
         for record in records:
             prepared = record['prepared']
@@ -730,6 +760,11 @@ class CNYInvocationBridge:
             seen.add(identifier)
             op = operations.pop(identifier, None)
             response, stored = record['response'], record['outcome']
+            if response is not None and self._run.mode == 'live':
+                deadline = self.cell_deadline()
+                if deadline is not None:
+                    eligibility[payload_digest(context.to_dict())] = self._validate_response_eligibility(
+                        context, identifier, response.get('response_sha256'), deadline)
             if op is None:
                 if prepared['wire_body'] is None and self._unexplained_matching_currency(
                         context, audit['operations'], records):
@@ -775,7 +810,8 @@ class CNYInvocationBridge:
         if self._run.mode == 'recorded' or (not getattr(self._run.store, 'restoring', False) and not replay_pending):
             starts = {}
             pending = None
-            for row in self._root_rows():
+            root_rows = self._root_rows()
+            for index, row in enumerate(root_rows):
                 data = row['payload']
                 if row['kind'] == 'composed_provider_started':
                     inv = data.get('invocation', {})
@@ -793,6 +829,11 @@ class CNYInvocationBridge:
                 elif row['kind'] == 'composed_provider_completed' and pending is not None:
                     identity, binding = pending
                     outcome = outcomes.get(identity)
+                    if data.get('outcome', 'returned') == 'returned' and eligibility.get(identity) is False:
+                        marker = root_rows[index + 1] if index + 1 < len(root_rows) else None
+                        if marker is None or marker['kind'] != 'composed_provider_deadline_expired' or \
+                                marker['payload'] != {'binding': binding}:
+                            raise ValueError('deadline eligibility forbids late provider completion')
                     expected_kind = ({'returned': 'returned', 'known_failed': 'failed',
                                       'known_refused': 'budget_exhausted'}.get(outcome.outcome) if outcome else None)
                     if outcome is None or expected_kind is None or data.get('outcome', 'returned') != expected_kind or \

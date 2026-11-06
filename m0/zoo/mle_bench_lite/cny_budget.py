@@ -235,6 +235,25 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if claim is None or sequence != claim["observation_sequence"] + 1 or previous != claim["observation_sha256"]:
             raise ValueError("cell deadline observation anchor is not consecutive")
         claim.update(observation_sequence=sequence, observation_sha256=digest)
+    elif kind == "anchor_response_eligibility":
+        if set(event) != {"kind", "schema_version", "run_id", "call_id", "cell_id",
+                          "sequence", "observation_sha256", "proof_sha256"}:
+            raise ValueError("response eligibility anchor has invalid fields")
+        run_id = _sha(event['run_id'])
+        call_id = _identifier(event['call_id'], 'call identity')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        sequence = _integer(event['sequence'], 'cell observation sequence', 1)
+        digest = _sha(event['observation_sha256'])
+        proof = _sha(event['proof_sha256'])
+        claim = governance['cell_claims'].get(cell_id)
+        binding = governance['deadline_bindings'].get(run_id)
+        operation = operations.get(call_id)
+        if claim is None or binding is None or binding['cell_id'] != cell_id or operation is None or \
+                operation.get('run_id') != run_id or claim['observation_sequence'] != sequence or \
+                claim['observation_sha256'] != digest or call_id in governance['response_eligibility']:
+            raise ValueError('response eligibility must bind the current original call and clock')
+        governance['response_eligibility'][call_id] = {'run_id': run_id, 'cell_id': cell_id,
+            'sequence': sequence, 'observation_sha256': digest, 'proof_sha256': proof}
     elif kind == "claim_cell_worker":
         if set(event) != {"kind", "schema_version", "cell_id", "deadline_ref", "worker_ref"}:
             raise ValueError("cell worker claim has invalid fields")
@@ -373,7 +392,8 @@ def _reduce_history(policies, events, heads):
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
-                  "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None}
+                  "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
+                  "response_eligibility": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -675,6 +695,18 @@ class CampaignBudget:
         _identifier(cell_id, "cell identity")
         with self._transaction() as (_db, _policy, state):
             value = state["governance"]["cell_claims"].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def anchor_response_eligibility(self, run_id, call_id, cell_id, sequence, observation_sha256, proof_sha256):
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'anchor_response_eligibility', 'schema_version': 2,
+                'run_id': run_id, 'call_id': call_id, 'cell_id': cell_id, 'sequence': sequence,
+                'observation_sha256': observation_sha256, 'proof_sha256': proof_sha256})
+
+    def response_eligibility(self, call_id):
+        _identifier(call_id, 'call identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['response_eligibility'].get(call_id)
             return dict(value) if value is not None else None
 
     def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):
