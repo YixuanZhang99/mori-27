@@ -226,8 +226,7 @@ def audit_recorded_reference_physical(view, clock, run_id, *, options, stamp, go
         raise ValueError('invalid recorded physical transcript') from error
 
 
-def audit_anchored_reference_physical(view, clock, run_id, *, options, stamp, governance, rows, request_ids):
-    """Audit a host-attested prefix; a worker claim is not worker completion proof."""
+def _validated_reference_snapshot(view, clock, run_id):
     from zoo.circle_packing.cell_deadline import RecordedCellClock
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
     if type(view) is not RecordedCurrencyView or not view._pinned_head or type(clock) is not RecordedCellClock:
@@ -235,7 +234,8 @@ def audit_anchored_reference_physical(view, clock, run_id, *, options, stamp, go
     anchor = view.reference_physical_snapshot(run_id)
     binding = view.run_deadline_binding(run_id)
     if anchor is None or binding is None or anchor['cell_id'] != binding['cell_id'] or \
-            anchor['request_ids'] != request_ids or anchor['cell_id'] != clock._record['cell_id']:
+            anchor['cell_id'] != clock._record['cell_id'] or binding['plan_ref'] != clock._record['plan_ref'] or \
+            binding['deadline_ref'] != clock._record['record_sha256']:
         raise ValueError('reference physical snapshot differs from its campaign binding')
     RecordedCellClock(clock._evidence, view.cell_deadline_claim(anchor['cell_id']))
     sequence = anchor['sequence']
@@ -250,6 +250,58 @@ def audit_anchored_reference_physical(view, clock, run_id, *, options, stamp, go
     clock.verify_observation(proof)
     if not proof['eligible'] or observation['sha256'] != anchor['observation_sha256']:
         raise ValueError('reference physical snapshot is late or differs from its clock anchor')
+    return anchor
+
+
+def audit_anchored_reference_physical(view, clock, run_id, *, options, stamp, governance, rows, request_ids):
+    """Audit a host-attested prefix; a worker claim is not worker completion proof."""
+    anchor = _validated_reference_snapshot(view, clock, run_id)
+    if anchor['request_ids'] != request_ids:
+        raise ValueError('reference physical snapshot stage identities differ')
     return audit_recorded_reference_physical(view, clock, run_id, options=options, stamp=stamp,
         governance=governance, rows=rows, expected_rows_ref='sha256:' + anchor['rows_sha256'],
         request_ids=request_ids)
+
+
+def audit_anchored_reference_worker(view, clock, run_id, worker_proof, *, stdout, stderr, selected):
+    """Check a host-attested worker terminal and report, without OS attestation."""
+    anchor = _validated_reference_snapshot(view, clock, run_id)
+    if type(worker_proof) is not dict or set(worker_proof) != {'schema_version', 'started', 'terminal', 'result'} or \
+            type(worker_proof['schema_version']) is not int or worker_proof['schema_version'] != 1 or \
+            anchor.get('worker_proof_sha256') != payload_digest(worker_proof):
+        raise ValueError('worker evidence differs from its campaign anchor')
+    started, terminal, result = worker_proof['started'], worker_proof['terminal'], worker_proof['result']
+    if type(started) is not dict or type(terminal) is not dict or type(result) is not dict or \
+            set(result) != {'returncode', 'timeout', 'stdout_sha256', 'stderr_sha256', 'wrapper_error'} or \
+            type(started.get('execution_id')) is not str or \
+            not re.fullmatch(r'[0-9a-f]{32}', started['execution_id']) or \
+            started.get('cell_id') != anchor['cell_id'] or started.get('worker_ref') != anchor['worker_ref'] or \
+            started.get('candidate_id') != 'cell-worker' or type(started.get('attempt')) is not int or \
+            started['attempt'] != 1 or type(terminal.get('attempt')) is not int or \
+            type(terminal.get('returncode')) is not int or type(terminal.get('timeout')) is not bool or \
+            type(terminal.get('recovered')) is not bool or terminal != {
+                'execution_id': started['execution_id'], 'candidate_id': 'cell-worker', 'attempt': 1,
+                'returncode': 0, 'timeout': False, 'recovered': False} or \
+            type(result['returncode']) is not int or result['returncode'] != 0 or \
+            type(result['timeout']) is not bool or result['timeout'] is not False or result['wrapper_error'] is not None:
+        raise ValueError('anchored worker process identity or terminal differs')
+    if type(stdout) is not str or type(stderr) is not str or \
+            len(stdout.encode('utf-8')) > 8 * 1024 * 1024 or len(stderr.encode('utf-8')) > 32 * 1024 * 1024 or \
+            result['stdout_sha256'] != hashlib.sha256(stdout.encode('utf-8')).hexdigest() or \
+            result['stderr_sha256'] != hashlib.sha256(stderr.encode('utf-8')).hexdigest():
+        raise ValueError('anchored worker output differs')
+    try:
+        report = json.loads(stdout, object_pairs_hook=_unique,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite JSON')))
+        if type(report) is not dict or type(report.get('schema_version')) is not int or report['schema_version'] != 1 or \
+                report.get('mode') != 'fixture' or report.get('performance_claim') is not False or \
+                report.get('controller') != 'pinned_openevolve' or type(selected) is not dict or \
+                set(selected) != {'id', 'program_ref', 'metrics'} or type(selected['id']) is not str or \
+                not selected['id'] or type(selected['program_ref']) is not str or \
+                not re.fullmatch(r'sha256:[0-9a-f]{64}', selected['program_ref']) or type(selected['metrics']) is not dict or \
+                json.dumps(report.get('selected_program'), sort_keys=True, allow_nan=False) != \
+                json.dumps(selected, sort_keys=True, allow_nan=False):
+            raise ValueError('anchored worker report differs from the selected program')
+    except (TypeError, UnicodeError, json.JSONDecodeError, RecursionError) as error:
+        raise ValueError('anchored worker report is invalid') from error
+    return {'worker_ref': anchor['worker_ref'], 'execution_id': started['execution_id']}

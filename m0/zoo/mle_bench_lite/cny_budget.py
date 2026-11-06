@@ -323,7 +323,7 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
     elif kind == 'anchor_reference_physical_snapshot':
         fields = {'kind', 'schema_version', 'run_id', 'cell_id', 'rows_sha256', 'worker_ref',
                   'request_ids', 'sequence', 'observation_sha256'}
-        if set(event) != fields:
+        if set(event) not in (fields, fields | {'worker_proof_sha256'}):
             raise ValueError('reference physical snapshot has invalid fields')
         run_id, cell_id = _sha(event['run_id']), _identifier(event['cell_id'], 'cell identity')
         rows_sha256, worker_ref = _sha(event['rows_sha256']), _sha(event['worker_ref'])
@@ -347,9 +347,12 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                     governance['stage_eligibility'].get((run_id, item), {}).get('cell_id') != cell_id
                     for item in requests):
             raise ValueError('reference physical snapshot lacks its original worker, stages or clock')
-        governance['reference_physical_snapshots'][run_id] = {
+        snapshot = {
             'cell_id': cell_id, 'rows_sha256': rows_sha256, 'worker_ref': worker_ref,
             'request_ids': list(requests), 'sequence': sequence, 'observation_sha256': digest}
+        if 'worker_proof_sha256' in event:
+            snapshot['worker_proof_sha256'] = _sha(event['worker_proof_sha256'])
+        governance['reference_physical_snapshots'][run_id] = snapshot
     elif kind == 'claim_reference_authority':
         if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'authority_ref',
                           'currency_run_id', 'initial_budget_ref'}:
@@ -911,12 +914,15 @@ class CampaignBudget:
             return dict(value) if value is not None else None
 
     def anchor_reference_physical_snapshot(self, run_id, cell_id, rows_sha256, worker_ref,
-                                           request_ids, sequence, observation_sha256):
+                                           request_ids, sequence, observation_sha256, *, worker_proof_sha256=None):
         """Record a trusted host assertion, not proof of worker termination."""
         with self._transaction() as (db, _policy, state):
-            self._append(db, state, {'kind': 'anchor_reference_physical_snapshot', 'schema_version': 2,
+            event = {'kind': 'anchor_reference_physical_snapshot', 'schema_version': 2,
                 'run_id': run_id, 'cell_id': cell_id, 'rows_sha256': rows_sha256, 'worker_ref': worker_ref,
-                'request_ids': request_ids, 'sequence': sequence, 'observation_sha256': observation_sha256})
+                'request_ids': request_ids, 'sequence': sequence, 'observation_sha256': observation_sha256}
+            if worker_proof_sha256 is not None:
+                event['worker_proof_sha256'] = worker_proof_sha256
+            self._append(db, state, event)
 
     def reference_physical_snapshot(self, run_id):
         _sha(run_id)

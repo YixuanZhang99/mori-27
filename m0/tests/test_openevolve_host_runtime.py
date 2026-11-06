@@ -84,6 +84,15 @@ def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path
             anchor(worker_ref, ['a' * 32, 'a' * 32])
         anchor(worker_ref, ['a' * 32])
         assert ledger.reference_physical_snapshot(run_id)['rows_sha256'] == rows_sha
+        from zoo.circle_packing.cell_deadline import RecordedCellClock
+        from zoo.circle_packing.reference_selection import audit_anchored_reference_worker
+        from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+        evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
+        view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+        recorded_clock = RecordedCellClock(clock.export_evidence(), view.cell_deadline_claim('vendor-0'))
+        assert 'worker_proof_sha256' not in view.reference_physical_snapshot(run_id)
+        with pytest.raises(ValueError, match='worker evidence'):
+            audit_anchored_reference_worker(view, recorded_clock, run_id, {}, stdout='', stderr='', selected={})
         with pytest.raises(ValueError):
             anchor(worker_ref, ['a' * 32])
     finally:

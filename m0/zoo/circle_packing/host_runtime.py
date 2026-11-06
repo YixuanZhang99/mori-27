@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 import asyncio
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -68,7 +69,7 @@ def _read_verified_worker_result(worker_directory, started):
         for component in ('executor-processes', execution_id):
             fd = os.open(component, flags, dir_fd=fd)
             fds.append(fd)
-        contents = {}
+        contents, identities = {}, {}
         for key, (name, limit) in files.items():
             child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, 'O_NONBLOCK', 0), dir_fd=fd)
             try:
@@ -88,8 +89,20 @@ def _read_verified_worker_result(worker_directory, started):
                         (after.st_size, after.st_mtime_ns, after.st_ctime_ns):
                     raise ValueError('reference worker process artifact changed while reading')
                 contents[key] = data.decode('utf-8')
+                identities[name] = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
             finally:
                 os.close(child)
+        for name, identity in identities.items():
+            current = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            if (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns, current.st_ctime_ns) != identity:
+                raise ValueError('reference worker process path changed while reading')
+        for parent, name, original in ((None, worker_directory, fds[0]),
+                                       (fds[0], 'executor-processes', fds[1]),
+                                       (fds[1], execution_id, fds[2])):
+            current = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            opened = os.fstat(original)
+            if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+                raise ValueError('reference worker process directory changed while reading')
         def unique(pairs):
             result = {}
             for key, value in pairs:
@@ -491,6 +504,11 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
         process = _read_verified_worker_result(worker_directory, started)
         if process['returncode'] != 0 or process['timeout'] or process['wrapper_error']:
             raise ValueError('reference fixture worker did not complete')
+        worker_proof = {'schema_version': 1, 'started': started, 'terminal': terminal,
+            'result': {'returncode': process['returncode'], 'timeout': process['timeout'],
+                'stdout_sha256': hashlib.sha256(process['stdout'].encode('utf-8')).hexdigest(),
+                'stderr_sha256': hashlib.sha256(process['stderr'].encode('utf-8')).hexdigest(),
+                'wrapper_error': process['wrapper_error']}}
         report = json.loads(process['stdout'])
         selected = report.get('selected_program') if type(report) is dict else None
         if type(report) is not dict or report.get('mode') != 'fixture' or report.get('performance_claim') is not False or \
@@ -542,11 +560,12 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
                     raise DeadlineExpired('reference physical snapshot is late')
                 value = observation['observation']
                 ledger.anchor_reference_physical_snapshot(run_id, deadline._record['cell_id'], rows_sha256,
-                    worker['worker_ref'], request_ids, value['sequence'], value['sha256'])
+                    worker['worker_ref'], request_ids, value['sequence'], value['sha256'],
+                    worker_proof_sha256=payload_digest(worker_proof))
             deadline.observe_and_anchor(anchor)
         return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
                 'selected_program': selected, 'stage_request_id': matches[0][0],
                 'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref'],
-                'physical_snapshot_ref': 'sha256:' + rows_sha256}
+                'physical_snapshot_ref': 'sha256:' + rows_sha256, 'worker_proof': worker_proof}
     finally:
         token_path.unlink(missing_ok=True)

@@ -30,7 +30,7 @@ def short_workspace():
         yield Path(directory).resolve()
 
 
-@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race'])
+@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race', 'race_dir'])
 def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
                                                                                 monkeypatch, tamper_selection,
                                                                                 short_workspace):
@@ -65,22 +65,36 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     workspace = short_workspace
     from zoo.circle_packing.host_runtime import run_reference_cell_fixture
     swapped = []
-    if tamper_selection == 'race':
+    if tamper_selection in ('race', 'race_dir'):
         original_open = os.open
         def replace_after_open(path, flags, *args, **kwargs):
             fd = original_open(path, flags, *args, **kwargs)
             if path == 'stdout.txt' and kwargs.get('dir_fd') is not None and not swapped:
                 directory = kwargs['dir_fd']
-                os.rename('stdout.txt', 'stdout-original.txt', src_dir_fd=directory, dst_dir_fd=directory)
-                replacement = original_open('stdout.txt', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
-                                            dir_fd=directory)
-                try:
-                    os.write(replacement, b'not the original worker report')
-                finally:
-                    os.close(replacement)
+                if tamper_selection == 'race_dir':
+                    original_directory = Path(os.readlink('/proc/self/fd/' + str(directory)))
+                    original_directory.rename(original_directory.with_name(original_directory.name + '-old'))
+                    original_directory.mkdir()
+                else:
+                    os.rename('stdout.txt', 'stdout-original.txt', src_dir_fd=directory, dst_dir_fd=directory)
+                    replacement = original_open('stdout.txt', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+                                                dir_fd=directory)
+                    try:
+                        os.write(replacement, b'not the original worker report')
+                    finally:
+                        os.close(replacement)
                 swapped.append(True)
             return fd
         monkeypatch.setattr(os, 'open', replace_after_open)
+        with pytest.raises(ValueError, match='worker process.*changed'):
+            run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
+                source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
+                expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
+                base_python='/usr/bin/python3.12', iterations=1)
+        assert swapped == [True]
+        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+        authority.close()
+        return
     if tamper_selection in ('process', 'terminal', 'terminal_type', 'path'):
         original = ContinuationStore.read
         def changed_worker_start(self, kind=None):
@@ -143,8 +157,6 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
         expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
         base_python='/usr/bin/python3.12', iterations=1)
-    if tamper_selection == 'race':
-        assert swapped == [True]
     assert result['state'] == 'completed'
     assert result['mode'] == 'fixture' and result['performance_claim'] is False
     assert result['selected_program']['metrics']['validity'] == 1.0
@@ -156,7 +168,8 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     from zoo.circle_packing.cell_deadline import RecordedCellClock
     from dataclasses import asdict
     from core.x1.checkpoint import payload_digest
-    from zoo.circle_packing.reference_selection import audit_recorded_reference_cascade, audit_anchored_reference_physical
+    from zoo.circle_packing.reference_selection import (audit_recorded_reference_cascade,
+        audit_anchored_reference_physical, audit_anchored_reference_worker)
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
     run_id = authority.dispatch.ready.authority_binding['currency_run_id']
     evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
@@ -177,6 +190,20 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     snapshot_anchor = view.reference_physical_snapshot(run_id)
     assert snapshot_anchor['rows_sha256'] == payload_digest(rows)
     assert result['physical_snapshot_ref'] == 'sha256:' + snapshot_anchor['rows_sha256']
+    worker_proof = result['worker_proof']
+    assert snapshot_anchor['worker_proof_sha256'] == payload_digest(worker_proof)
+    from zoo.circle_packing.host_runtime import _read_verified_worker_result
+    process_output = _read_verified_worker_result(tmp_path / 'worker', worker_proof['started'])
+    verified_worker = audit_anchored_reference_worker(view, recorded_clock, run_id, worker_proof,
+        stdout=process_output['stdout'], stderr=process_output['stderr'], selected=result['selected_program'])
+    assert verified_worker['worker_ref'] == snapshot_anchor['worker_ref']
+    altered = dict(worker_proof, terminal={**worker_proof['terminal'], 'returncode': 3})
+    with pytest.raises(ValueError):
+        audit_anchored_reference_worker(view, recorded_clock, run_id, altered,
+            stdout=process_output['stdout'], stderr=process_output['stderr'], selected=result['selected_program'])
+    with pytest.raises(ValueError):
+        audit_anchored_reference_worker(view, recorded_clock, run_id, worker_proof,
+            stdout=process_output['stdout'] + 'changed', stderr=process_output['stderr'], selected=result['selected_program'])
     physical_audit = audit_anchored_reference_physical(view, recorded_clock, run_id,
         options=authority.budget.options, stamp=asdict(authority.budget.stamp),
         governance=authority.budget._governed.config, rows=rows,
