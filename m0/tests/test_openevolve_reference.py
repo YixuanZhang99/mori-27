@@ -242,3 +242,30 @@ def test_internal_stage_receipt_is_hidden_from_host_prompts(monkeypatch):
             assert original_artifacts['mori_stage_request_id'] == 'a' * 32
             raise RuntimeError('ensure restoration')
     assert ProgramDatabase.get_artifacts is original
+
+
+def test_receipt_filter_serializes_overlapping_host_runs(monkeypatch):
+    import threading
+    from core.openevolve_interop import ProgramDatabase
+    from zoo.circle_packing.host_reference import _hide_stage_receipts_from_prompts
+    original = ProgramDatabase.get_artifacts
+    first_entered, release_first, second_entered = threading.Event(), threading.Event(), threading.Event()
+    def first():
+        with _hide_stage_receipts_from_prompts():
+            first_entered.set()
+            assert release_first.wait(5)
+    def second():
+        assert first_entered.wait(5)
+        with _hide_stage_receipts_from_prompts():
+            second_entered.set()
+    a, b = threading.Thread(target=first), threading.Thread(target=second)
+    a.start(); b.start()
+    try:
+        assert first_entered.wait(5)
+        assert not second_entered.wait(.15)
+    finally:
+        release_first.set()
+        a.join(5); b.join(5)
+    assert not a.is_alive() and not b.is_alive()
+    assert second_entered.is_set()
+    assert ProgramDatabase.get_artifacts is original

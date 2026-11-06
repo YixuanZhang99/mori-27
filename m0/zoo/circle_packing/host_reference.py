@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 
 # Installs the pinned vendored OpenEvolve package path.
 from core.openevolve_interop import ProgramDatabase as _ProgramDatabase  # noqa: F401
@@ -24,6 +25,7 @@ from zoo.circle_packing.reproducibility import require_hash_seed_zero
 _ALLOWED_ENV = ('PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'PYTHONPATH',
                 'PYTHONHASHSEED', 'LD_LIBRARY_PATH')
 _BROKER_ENV = ('MORI_CIRCLE_BROKER_SOCKET', 'MORI_CIRCLE_BROKER_TOKEN')
+_FIXTURE_LOCK = threading.RLock()
 
 
 class FixtureHostClient:
@@ -55,18 +57,26 @@ def fixture_broker_client(model):
 @contextlib.contextmanager
 def _hide_stage_receipts_from_prompts():
     """Keep the internal receipt in the database, outside upstream prompts."""
-    original = _ProgramDatabase.get_artifacts
-    def public_artifacts(database, program_id):
-        return {key: value for key, value in original(database, program_id).items()
-                if key != 'mori_stage_request_id'}
-    _ProgramDatabase.get_artifacts = public_artifacts
-    try:
-        yield
-    finally:
-        _ProgramDatabase.get_artifacts = original
+    with _FIXTURE_LOCK:
+        original = _ProgramDatabase.get_artifacts
+        def public_artifacts(database, program_id):
+            return {key: value for key, value in original(database, program_id).items()
+                    if key != 'mori_stage_request_id'}
+        _ProgramDatabase.get_artifacts = public_artifacts
+        try:
+            yield
+        finally:
+            _ProgramDatabase.get_artifacts = original
 
 
 def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_stage_broker=False):
+    # The pinned controller and its environment use process-global state.
+    with _FIXTURE_LOCK:
+        return _run_fixture(output, seed=seed, iterations=iterations, fixture_broker=fixture_broker,
+                            fixture_stage_broker=fixture_stage_broker)
+
+
+def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_broker):
     if type(seed) is not int or seed < 0 or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('fixture requires nonnegative seed and one to six iterations')
     if os.environ.get('PYTHONHASHSEED') != '0':
