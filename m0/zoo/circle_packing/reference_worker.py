@@ -42,7 +42,10 @@ def run_reference_fixture(deadline, directory, workspace, *, snapshot, source_ma
     if type(deadline) is not CellDeadline or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('reference fixture requires a bounded cell and iterations')
     cell_id = deadline._record['cell_id']
-    if re.fullmatch(r'vendor-[012]', cell_id) is None:
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    experiment_id, arm, seed = parse_cell_identity(cell_id)
+    if arm != 'vendor' or seed not in (0, 1, 2) or \
+            (experiment_id is not None and not deadline._lifecycle.ledger.is_fixture_campaign()):
         raise ValueError('reference fixture requires a vendor cell')
     from zoo.circle_packing.host_transport import HostBroker, probe_broker
     if type(broker) is not HostBroker or broker._socket.fileno() < 0:
@@ -82,7 +85,7 @@ def run_reference_fixture(deadline, directory, workspace, *, snapshot, source_ma
         raise ValueError('reference iterations exceed frozen plan')
     command = ['/usr/bin/env', 'PYTHONHASHSEED=0', str(python), '-c', _BOOTSTRAP, str(source),
                '--socket', str(socket), '--token-file', str(token), '--output', str(output),
-               '--seed', cell_id.split('-')[1], '--iterations', str(iterations),
+               '--seed', str(seed), '--iterations', str(iterations),
                '--model', frozen_plan['model'], '--max-completion-tokens', str(frozen_plan['max_completion_tokens'])]
     return run_cell_worker(deadline, directory, workspace, command, readonly_source=source,
         readonly_runtime=runtime_root, frozen_plan=frozen_plan, snapshot=snapshot,

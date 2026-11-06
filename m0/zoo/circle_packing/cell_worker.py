@@ -60,37 +60,65 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
             runtime in deadline._lifecycle.ledger.path.resolve().parents):
         raise ValueError('read-only runtime must be separate from workspace and authorities')
     ledger = deadline._lifecycle.ledger
-    pilot = ledger.circle_pilot_binding()
-    frozen_args = (frozen_plan, snapshot, source_manifest, expected_plan_ref, expected_campaign_id)
-    if pilot is None:
-        if any(value is not None for value in frozen_args):
-            raise ValueError('worker has no frozen pilot binding')
-        verify_source = None
-    else:
-        if any(value is None for value in frozen_args) or source is None or \
+    versioned = type(frozen_plan) is dict and type(frozen_plan.get('schema_version')) is int and \
+        frozen_plan['schema_version'] == 3
+    if versioned:
+        from zoo.circle_packing.continuation_binding import verify_bound_fixture_continuation
+        from zoo.circle_packing.pilot_plan import validate_draft_cell
+        if source is None or runtime is None or any(value is None for value in
+                (snapshot, source_manifest, expected_plan_ref, expected_campaign_id, runtime_manifest, base_python)) or \
+                expected_campaign_id != ledger.manifest_binding()['campaign_id'] or \
                 deadline._record['plan_ref'] != expected_plan_ref:
-            raise ValueError('worker requires the frozen pilot source binding')
+            raise ValueError('worker requires the bound continuation authorities')
+        validate_draft_cell(ledger, frozen_plan, deadline._record['cell_id'], expected_plan_ref=expected_plan_ref)
         snapshot_root = Path(snapshot).resolve(strict=True)
-        if source != (snapshot_root / 'm0').resolve(strict=True):
-            raise ValueError('worker source differs from the frozen snapshot')
-        from zoo.circle_packing.frozen_source import verify_frozen_source
+        if source != (snapshot_root / 'm0').resolve(strict=True) or snapshot_root.name != 'source':
+            raise ValueError('worker source differs from the continuation snapshot')
+        continuation = ledger.circle_continuation_binding(frozen_plan['experiment_id'])
+        if continuation is None or 'sha256:' + payload_digest(source_manifest) != continuation['tree_ref'] or \
+                payload_digest(runtime_manifest) != continuation['runtime_manifest_sha256']:
+            raise ValueError('worker manifests differ from the continuation binding')
         def verify_source():
-            return verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
-                expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
+            result = verify_bound_fixture_continuation(ledger, frozen_plan, source_directory=snapshot_root.parent,
+                runtime_directory=runtime.parent, base_python=base_python,
+                expected_head=ledger.snapshot()['journal_head'])
+            if result['source'] != str(snapshot_root) or result['runtime'] != str(runtime):
+                raise ValueError('worker runtime differs from the continuation binding')
+            return result
         verify_source()
-    runtime_binding = ledger.circle_runtime_binding()
-    if runtime_binding is None:
-        if runtime_manifest is not None or base_python is not None:
-            raise ValueError('worker has no frozen runtime binding')
-        verify_runtime = None
+        verify_runtime = None  # Source verification above rechecks both complete artifacts.
     else:
-        if runtime is None or runtime_manifest is None or base_python is None or pilot is None or \
-                runtime_binding['plan_ref'] != expected_plan_ref or runtime_binding['tree_ref'] != pilot['tree_ref']:
-            raise ValueError('worker requires the frozen runtime binding')
-        from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
-        def verify_runtime():
-            return verify_frozen_runtime(ledger, runtime=runtime, manifest=runtime_manifest, base_python=base_python)
-        verify_runtime()
+        pilot = ledger.circle_pilot_binding()
+        frozen_args = (frozen_plan, snapshot, source_manifest, expected_plan_ref, expected_campaign_id)
+        if pilot is None:
+            if any(value is not None for value in frozen_args):
+                raise ValueError('worker has no frozen pilot binding')
+            verify_source = None
+        else:
+            if any(value is None for value in frozen_args) or source is None or \
+                    deadline._record['plan_ref'] != expected_plan_ref:
+                raise ValueError('worker requires the frozen pilot source binding')
+            snapshot_root = Path(snapshot).resolve(strict=True)
+            if source != (snapshot_root / 'm0').resolve(strict=True):
+                raise ValueError('worker source differs from the frozen snapshot')
+            from zoo.circle_packing.frozen_source import verify_frozen_source
+            def verify_source():
+                return verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
+                    expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
+            verify_source()
+        runtime_binding = ledger.circle_runtime_binding()
+        if runtime_binding is None:
+            if runtime_manifest is not None or base_python is not None:
+                raise ValueError('worker has no frozen runtime binding')
+            verify_runtime = None
+        else:
+            if runtime is None or runtime_manifest is None or base_python is None or pilot is None or \
+                    runtime_binding['plan_ref'] != expected_plan_ref or runtime_binding['tree_ref'] != pilot['tree_ref']:
+                raise ValueError('worker requires the frozen runtime binding')
+            from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
+            def verify_runtime():
+                return verify_frozen_runtime(ledger, runtime=runtime, manifest=runtime_manifest, base_python=base_python)
+            verify_runtime()
     remaining = deadline.remaining()
     if remaining <= 0:
         raise DeadlineExpired('cell deadline expired before worker claim')

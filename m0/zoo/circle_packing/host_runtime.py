@@ -527,14 +527,24 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
     if ledger is not authority.bridge.ledger or ledger.manifest_binding()['campaign_id'] != expected_campaign_id:
         raise ValueError('reference fixture differs from its original campaign')
     validate_draft_cell(ledger, frozen_plan, deadline._record['cell_id'], expected_plan_ref=expected_plan_ref)
-    verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
-                         expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
     runner = authority.control.domain.runner
     frozen_runtime = runner._campaign_runtime
     if frozen_runtime is None or frozen_runtime[0] is not ledger or \
-            Path(runtime).resolve(strict=True) != runner.runtime_root or runtime_manifest != frozen_runtime[1] or \
-            str(base_python) != frozen_runtime[2]:
+            Path(runtime).resolve(strict=True) != runner.runtime_root or str(base_python) != frozen_runtime[2]:
         raise ValueError('reference fixture requires its original campaign runtime')
+    if runner._continuation_runtime is not None:
+        draft, source_directory, _runtime_directory = runner._continuation_runtime
+        continuation = ledger.circle_continuation_binding(draft['experiment_id'])
+        if payload_digest(draft) != payload_digest(frozen_plan) or \
+                Path(snapshot).resolve(strict=True) != (Path(source_directory) / 'source').resolve(strict=True) or \
+                continuation is None or 'sha256:' + payload_digest(source_manifest) != continuation['tree_ref'] or \
+                payload_digest(runtime_manifest) != continuation['runtime_manifest_sha256']:
+            raise ValueError('reference fixture differs from its continuation binding')
+    else:
+        if runtime_manifest != frozen_runtime[1]:
+            raise ValueError('reference fixture requires its original campaign runtime')
+        verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
+                             expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
     runner._verify_campaign_runtime()
     if Path(workspace).is_symlink() or Path(worker_directory).is_symlink():
         raise ValueError('reference fixture requires fresh isolated worker locations')
