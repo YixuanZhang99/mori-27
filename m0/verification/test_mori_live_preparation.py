@@ -331,6 +331,30 @@ def test_supervisor_passes_original_ledger_to_later_seed_gate(prepared_cell, tmp
 
 @pytest.mark.linux
 @pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori', 'coordinator_fake_vendor'], indirect=True)
+def test_generated_pilot_config_runs_the_matching_offline_supervisor(prepared_cell, request, monkeypatch):
+    from zoo.circle_packing.live_cell import start_live_cell
+    from zoo.circle_packing.pilot_prepare import prepare_cell_configs
+    config, ledger, clock, _ = prepared_cell
+    assert clock is None
+    reference = request.node.callspec.params['prepared_cell'] == 'coordinator_fake_vendor'
+    arm = 'vendor' if reference else 'mori'
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    with tempfile.TemporaryDirectory(prefix='mori-cfg-', dir='/tmp') as root:
+        entries = prepare_cell_configs(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+            source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+            runtime=config['runtime'], runtime_manifest=config['runtime_manifest'], directory=root)
+        entry = next(item for item in entries if item['cell_id'] == f'{arm}-0')
+        generated = json.loads(Path(entry['config_path']).read_text())
+        result = start_live_cell(arm, generated, directory=entry['supervisor_directory'],
+                                 api_key='fixture-only-secret')
+        assert result['returncode'] == 0 and not result['timeout'] and not result['wrapper_error'], result['stderr']
+        assert json.loads(result['stdout'])['performance_claim'] is False
+        assert ledger.cell_deadline_claim(f'{arm}-0')['plan_ref'] == config['ref']
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori', 'coordinator_fake_vendor'], indirect=True)
 def test_live_cell_coordinator_starts_one_clock_and_runs_frozen_host(prepared_cell, tmp_path, request, monkeypatch):
     from zoo.circle_packing.live_cell import start_live_cell
     config, ledger, clock, _runner = prepared_cell
