@@ -91,7 +91,16 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
         'deadline_ref': record['record_sha256'], 'config_sha256': payload_digest(config),
         'directory': str(root), 'entry': entry}
     if containment_group is not None:
+        from core.executor.process_identity import start_ticks
+        info, pid = containment_group.stat(), os.getpid()
+        ticks = start_ticks(pid)
+        if ticks is None:
+            raise RuntimeError('containment requires a stable supervisor identity')
         worker_binding['containment_group'] = str(containment_group)
+        worker_binding['containment_identity'] = {'device': info.st_dev, 'inode': info.st_ino}
+        worker_binding['supervisor_pid'] = pid
+        worker_binding['supervisor_start_ticks'] = ticks
+        worker_binding['boot_id'] = record['boot_id']
     worker_ref = payload_digest(worker_binding)
     ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], worker_ref)
     remaining = deadline.remaining()
@@ -108,6 +117,7 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
     metadata = {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}
     if containment_group is not None:
         metadata['containment_required'] = True
+        metadata['containment_binding'] = worker_binding
     process, execution = journal.launch(
         command, root, env,
         remaining, metadata, die_with_parent=True,
@@ -117,7 +127,8 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
         if containment_group is None:
             return journal.wait(process, execution)
         from zoo.circle_packing.cell_containment import finish_cell_group
-        return journal.wait(process, execution, before_record=lambda: finish_cell_group(containment_group))
+        return journal.wait(process, execution, before_record=lambda: finish_cell_group(
+            containment_group, expected_identity=worker_binding['containment_identity']))
     except BaseException:
         journal.terminate_target(execution)
         if process.poll() is None:

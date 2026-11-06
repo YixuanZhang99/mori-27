@@ -177,6 +177,7 @@ def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypat
            'source': str(source), 'runtime': str(runtime), 'output': str(tmp_path / 'output'),
            'campaign_id': policy['campaign_id'], 'base_url': policy['provider_base_url'], 'ref': ref}
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    (tmp_path / 'test-cgroup').mkdir()
     monkeypatch.setattr('zoo.circle_packing.cell_containment.delegated_cell_group',
                         lambda: nullcontext(tmp_path / 'test-cgroup'))
     monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
@@ -187,6 +188,14 @@ def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypat
     def launch(self, args, cwd, env, timeout, metadata, **kwargs):
         assert env['DEEPSEEK_API_KEY'] == 'fixture-only-secret'
         assert 'fixture-only-secret' not in repr(args) + repr(metadata)
+        from core.x1.checkpoint import payload_digest
+        binding = metadata['containment_binding']
+        info = (tmp_path / 'test-cgroup').stat()
+        assert binding['containment_identity'] == {'device': info.st_dev, 'inode': info.st_ino}
+        assert binding['supervisor_pid'] == os.getpid()
+        assert binding['boot_id'] == clock._record['boot_id']
+        assert payload_digest(binding) == metadata['worker_ref']
+        assert ledger.cell_worker_claim('mori-0')['worker_ref'] == metadata['worker_ref']
         launches.append(1)
         return None, {}
     monkeypatch.setattr(ProcessJournal, 'launch', launch)

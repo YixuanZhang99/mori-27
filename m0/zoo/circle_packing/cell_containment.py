@@ -25,22 +25,40 @@ def delegated_cell_group():
         raise ValueError('cell containment requires a writable delegated cgroup')
     group = parent / ('mori-cell-' + secrets.token_hex(16))
     group.mkdir(mode=0o700)
+    info = group.stat()
+    identity = {'device': info.st_dev, 'inode': info.st_ino}
     try:
         yield group
     finally:
         if group.exists():
-            finish_cell_group(group)
+            finish_cell_group(group, expected_identity=identity)
 
 
-def finish_cell_group(group):
+def finish_cell_group(group, *, expected_identity):
     """Kill and remove the group before recording a successful process result."""
-    (group / 'cgroup.kill').write_text('1')
-    end = time.monotonic() + 10
-    while time.monotonic() < end and 'populated 0' not in (group / 'cgroup.events').read_text().splitlines():
-        time.sleep(.02)
-    if 'populated 0' not in (group / 'cgroup.events').read_text().splitlines():
-        raise RuntimeError('cell containment could not confirm termination')
-    group.rmdir()
+    fd = os.open(group, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if expected_identity != {'device': info.st_dev, 'inode': info.st_ino}:
+            raise ValueError('cell containment group identity changed')
+        def read_events():
+            event_fd = os.open('cgroup.events', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+            with os.fdopen(event_fd, 'r') as stream:
+                return stream.read().splitlines()
+        kill_fd = os.open('cgroup.kill', os.O_WRONLY | os.O_NOFOLLOW, dir_fd=fd)
+        with os.fdopen(kill_fd, 'w') as stream:
+            stream.write('1')
+        end = time.monotonic() + 10
+        while time.monotonic() < end and 'populated 0' not in read_events():
+            time.sleep(.02)
+        if 'populated 0' not in read_events():
+            raise RuntimeError('cell containment could not confirm termination')
+        current = os.stat(group, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+            raise ValueError('cell containment group identity changed')
+        group.rmdir()
+    finally:
+        os.close(fd)
 
 
 def contained_command(group, command):

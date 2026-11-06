@@ -82,3 +82,17 @@ def test_cell_containment_stops_detached_child_after_controller_exits():
             child.stdout.close()
             child.stderr.close()
     assert not group.exists()
+
+
+@pytest.mark.linux
+def test_containment_refuses_to_kill_a_group_with_the_wrong_identity():
+    from zoo.circle_packing.cell_containment import delegated_cell_group, finish_cell_group
+    membership = Path('/proc/self/cgroup').read_text().strip().splitlines()
+    v2 = [row[3:] for row in membership if row.startswith('0::/')]
+    if len(v2) != 1 or not os.access(Path('/sys/fs/cgroup') / v2[0].lstrip('/'), os.W_OK):
+        pytest.skip('run inside a writable delegated cgroup-v2 scope')
+    with delegated_cell_group() as group:
+        info = group.stat()
+        with pytest.raises(ValueError, match='identity'):
+            finish_cell_group(group, expected_identity={'device': info.st_dev, 'inode': info.st_ino + 1})
+        assert group.exists()

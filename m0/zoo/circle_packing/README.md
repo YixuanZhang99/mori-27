@@ -218,7 +218,10 @@ trusted controller in a fresh child group before executing it. On return it
 kills remaining members and requires the kernel to report the group empty.
 The process journal records that confirmation before publishing its terminal
 result; without the confirmation, ordinary recovery fails closed. This does
-not yet recover an interrupted containment group or protect against a process
+not yet recover an interrupted containment group. Its path, device/inode,
+boot and supervisor identity are bound to the original worker claim and
+recorded at launch; a changed group identity is rejected before killing it.
+It does not protect against a process
 that can itself write the delegated cgroup; candidate sandboxing and the
 closed pilot gate remain necessary.
 `verification/test_mori_live_preparation.py` exercises the latter composition

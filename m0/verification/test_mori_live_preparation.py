@@ -107,6 +107,10 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
     events = list(ContinuationStore(directory / 'controller.jsonl').read())
     kinds = [event['kind'] for event in events]
     assert kinds.index('executor_containment_verified') < kinds.index('executor_process_finished')
+    started = next(event['payload'] for event in events if event['kind'] == 'executor_process_started')
+    from core.x1.checkpoint import payload_digest
+    assert payload_digest(started['containment_binding']) == ledger.cell_worker_claim('mori-0')['worker_ref']
+    assert not Path(started['containment_binding']['containment_group']).exists()
     report = json.loads(result['stdout'])
     assert report['mode'] == 'live' and report['performance_claim'] is False
     assert report['candidate'] and report['final_state'] == 'completed' and report['replay_passed']
