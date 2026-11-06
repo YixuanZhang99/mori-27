@@ -105,6 +105,20 @@ def test_domain_freezes_geometry_and_final_validation_never_reruns_candidate(tmp
         asyncio.run(domain.evaluate(changed, EvalRequest(fidelity='final_audit', split_id='final_audit')))
 
 
+def test_final_validation_rejects_geometry_rejected_by_pinned_upstream(tmp_path, monkeypatch):
+    import asyncio
+    from core.composition.contracts import Proposal
+    from core.executor.types import Candidate, EvalRequest, EvalStatus
+    from zoo.circle_packing.domain import CirclePackingDomain
+    domain = CirclePackingDomain(tmp_path, runner=SandboxRunner())
+    proposal = Proposal(Candidate('circle-seed', hypothesis='fixed'), SOURCE.read_text())
+    dev = asyncio.run(domain.evaluate(proposal, EvalRequest(fidelity='dev', split_id='dev')))
+    assert dev.status == EvalStatus.OK
+    monkeypatch.setattr('zoo.circle_packing.reference_final._validate_with_pinned_upstream', lambda _: False)
+    with pytest.raises(ValueError, match='upstream'):
+        asyncio.run(domain.evaluate(proposal, EvalRequest(fidelity='final_audit', split_id='final_audit')))
+
+
 def test_domain_restore_requires_original_evidence_and_rejects_tampering(tmp_path):
     import asyncio
     from dataclasses import asdict

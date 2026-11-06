@@ -140,6 +140,9 @@ The upstream cross-check validates the recorded coordinates independently of
 the shared validator; it does not rerun the candidate or establish provenance
 on its own. Borderline coordinates may be rejected when the two floating-point
 implementations differ at the tolerance boundary.
+Mori's frozen final audit now uses the same independent upstream cross-check
+on its original selected stage; it does not rerun candidate code or call a
+model. The validator implementations are bound in the domain identity.
 
 `recover_reference_snapshot` reconstructs the original worker proof from its
 bounded no-follow journal and execution-bound output files, then invokes the

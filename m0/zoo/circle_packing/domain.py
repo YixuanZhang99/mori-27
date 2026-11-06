@@ -53,7 +53,7 @@ class CirclePackingDomain:
     def _implementation_refs(self):
         root = Path(__file__).resolve().parent
         return {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-                for name in ('domain.py', 'stage.py', 'geometry.py')}
+                for name in ('domain.py', 'stage.py', 'geometry.py', 'reference_final.py', 'host_physical.py')}
 
     @property
     def evaluation_context(self):
@@ -245,7 +245,11 @@ class CirclePackingDomain:
                 self._validate_record(identity['candidate_id'], record)
                 if record['status'] != 'ok':
                     raise ValueError('failed candidate has no frozen geometry')
-                geometry_metrics = validate_geometry(record['geometry'])
+                from zoo.circle_packing.reference_final import recalculate_geometry
+                verified = recalculate_geometry(record['stages'][-1],
+                    expected_program_ref=identity['program_ref'], expected_geometry_ref=record['geometry_ref'],
+                    expected_metrics=record['metrics'])
+                geometry_metrics = verified['metrics']
                 status = EvalStatus.OK
                 metrics = {'test/score': geometry_metrics['combined_score']}
                 cost = CostVec(wall_seconds=time.monotonic() - started, eval_count=1)
