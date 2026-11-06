@@ -357,6 +357,9 @@ class CNYInvocationBridge:
             return self._ready
         if self.ledger is None:
             raise ValueError('live currency bridge requires an existing authority')
+        pilot = self.ledger.circle_pilot_binding()
+        if pilot is not None and pilot.get('require_single_run') and self._initial_deadline_binding is None:
+            raise ValueError('single-run pilot requires its initial cell deadline')
         self._authority = self.ledger
         if self.ledger.is_fixture_campaign():
             for provider in context.provider_sessions.values():
@@ -426,7 +429,26 @@ class CNYInvocationBridge:
         elif any(existing.get(key) != value for key, value in fixed.items()):
             raise ValueError('prepared currency run, provider, or relocation changed')
         self._preparation = existing
-        self.ledger.protect_run(existing['currency_run_id'], context.physical_plan['plan_ref'], obligations)
+        deadline_binding = None
+        if self._initial_deadline_binding is not None:
+            from zoo.circle_packing.cell_deadline import CellDeadline
+            from zoo.circle_packing.pilot_plan import validate_draft_cell
+            deadline, plan, expected_plan_ref, cell_id = self._initial_deadline_binding
+            if type(deadline) is not CellDeadline or deadline._lifecycle.ledger is not self.ledger:
+                raise ValueError('cell deadline must share the original live currency authority')
+            binding = validate_draft_cell(self.ledger, plan, cell_id, expected_plan_ref=expected_plan_ref)
+            record = deadline._record
+            if (record['cell_id'], record['plan_ref'], record['seconds']) != \
+                    (binding['cell_id'], binding['plan_ref'], binding['wallclock_seconds']):
+                raise ValueError('cell deadline differs from the frozen draft')
+            deadline_binding = {'cell_id': cell_id, 'plan_ref': binding['plan_ref'],
+                                'deadline_ref': record['record_sha256']}
+            if self.ledger.run_deadline_binding(existing['currency_run_id']) == deadline_binding:
+                deadline.remaining()
+            else:
+                deadline.check()
+        self.ledger.protect_run(existing['currency_run_id'], context.physical_plan['plan_ref'], obligations,
+                                deadline_binding=deadline_binding)
         authority = {'currency_run_id': existing['currency_run_id'], 'campaign_id': policy['campaign_id'],
             'policy_sha256': policy['policy_sha256'],
             'phase_call_limits': {key: value['phase_call_limits'] for key, value in self._bindings.items()},

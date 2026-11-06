@@ -43,7 +43,7 @@ def test_installer_inputs_reject_local_sources_and_artifacts(tmp_path):
         _validate_install_inputs(project)
 
 
-def fixture(tmp_path, *, require_runtime=False, fixture_campaign=False):
+def fixture(tmp_path, *, require_runtime=False, fixture_campaign=False, require_single_run=False):
     uv = shutil.which('uv')
     assert uv is not None
     root = tmp_path / 'checkout'
@@ -78,7 +78,7 @@ def fixture(tmp_path, *, require_runtime=False, fixture_campaign=False):
     snapshot = tmp_path / 'source'
     exported = freeze_source_plan(ledger, plan, checkout=root, destination=snapshot,
                                   expected_plan_ref=ref, expected_campaign_id=campaign_id,
-                                  require_runtime=require_runtime)
+                                  require_runtime=require_runtime, require_single_run=require_single_run)
     return ledger, plan, ref, campaign_id, snapshot, exported, cache
 
 

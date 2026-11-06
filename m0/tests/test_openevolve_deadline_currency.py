@@ -8,6 +8,50 @@ from test_governed_cny_bridge import setup
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 
 
+def test_frozen_single_run_cell_requires_worker_and_rejects_a_second_run(setup, tmp_path, monkeypatch):
+    ledger, bridge, run, context, _providers, calls, _store, _physical = setup
+    ref, tree = 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64
+    ledger.freeze_circle_pilot(ref, tree, 5, require_single_run=True)
+    monkeypatch.setattr('zoo.circle_packing.cell_deadline._boot_identity', lambda: 'boot-a')
+    monkeypatch.setattr('zoo.circle_packing.cell_deadline._clock_ns', lambda: 100)
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'one-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='mori-0', plan_ref=ref, seconds=5)
+    run_id = context.currency_run_id
+    head = ledger.snapshot()['journal_head']
+    with pytest.raises(ValueError, match='worker'):
+        ledger.bind_run_deadline(run_id, 'mori-0', ref, clock._record['record_sha256'])
+    assert ledger.snapshot()['journal_head'] == head
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='worker'):
+        ledger.protect_run('d' * 64, run.physical_plan['plan_ref'], bridge._preparation['obligations'],
+                           deadline_binding={'cell_id': 'mori-0', 'plan_ref': ref,
+                                             'deadline_ref': clock._record['record_sha256']})
+    assert ledger.snapshot() == before
+    ledger.claim_cell_worker('mori-0', clock._record['record_sha256'], 'c' * 64)
+    ledger.bind_run_deadline(run_id, 'mori-0', ref, clock._record['record_sha256'])
+    ledger.bind_run_deadline(run_id, 'mori-0', ref, clock._record['record_sha256'])
+    other = 'a' * 64
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='another.*run'):
+        ledger.protect_run(other, run.physical_plan['plan_ref'], bridge._preparation['obligations'],
+                           deadline_binding={'cell_id': 'mori-0', 'plan_ref': ref,
+                                             'deadline_ref': clock._record['record_sha256']})
+    after = ledger.snapshot()
+    assert after['journal_head'] == before['journal_head']
+    assert after['protected_micro_cny'] == before['protected_micro_cny'] and not calls
+
+
+def test_single_run_bridge_requires_initial_cell_clock(setup):
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    ledger, _bridge, run, _context, _providers, calls, _store, _physical = setup
+    ledger.freeze_circle_pilot('sha256:' + 'a' * 64, 'sha256:' + 'b' * 64, 5,
+                               require_single_run=True)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='initial cell deadline'):
+        CNYInvocationBridge(ledger).bind_run(run)
+    assert ledger.snapshot() == before and not calls
+
+
 def test_cell_clock_events_do_not_change_governed_call_or_recovery(setup, tmp_path):
     ledger, bridge, run, context, providers, calls, store, physical = setup
     lifecycle = CellLifecycle(ledger)

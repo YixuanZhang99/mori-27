@@ -281,6 +281,8 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
             deadline._record['seconds'] != binding['wallclock_seconds']:
         raise ValueError('reference cell differs from the frozen campaign or plan')
     pilot, runtime = ledger.circle_pilot_binding(), ledger.circle_runtime_binding()
+    if mode == 'live_preparation' and (pilot is None or not pilot.get('require_single_run')):
+        raise ValueError('live reference requires a single-run pilot')
     if pilot is None or not pilot.get('require_runtime') or runtime is None or \
             type(runner) is not SandboxRunner or runner._campaign_runtime is None or \
             runner._campaign_runtime[0] is not ledger or \
@@ -430,9 +432,8 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
         control_provider_bindings={'control-0000': control_provider.governance_binding()},
         mode='live', recorded_bundle=None, store=store, physical_identity_lookup=budget.invocation_identity,
         provider_sessions={'main': main, 'control-0000': control_provider})
-    bridge = CNYInvocationBridge(ledger)
+    bridge = CNYInvocationBridge(ledger, cell_deadline_binding=(deadline, plan, expected_plan_ref, cell))
     ready = bridge.bind_run(run)
-    bridge.bind_cell_deadline(deadline, plan=plan, expected_plan_ref=expected_plan_ref, cell_id=cell)
     protected = HostSeedControl(budget, bridge, run, ready, domain, owner_check=lease.check,
                                 owner_operation=lease.operation)
     dispatch = HostDispatchCoordinator(budget, bridge, run, ready, runner=runner, owner_check=lease.check,

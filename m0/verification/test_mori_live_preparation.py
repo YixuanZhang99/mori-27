@@ -217,7 +217,7 @@ def prepared_cell(tmp_path, request, monkeypatch):
     ref, campaign_id = 'sha256:' + plan['draft_sha256'], ledger.manifest_binding()['campaign_id']
     source, runtime = tmp_path / 'source', tmp_path / 'runtime'
     exported = freeze_source_plan(ledger, plan, checkout=checkout, destination=source,
-        expected_plan_ref=ref, expected_campaign_id=campaign_id, require_runtime=True)
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, require_runtime=True, require_single_run=True)
     frozen = prepare_frozen_runtime(ledger, plan, snapshot=source, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
         base_python='/usr/bin/python3.12', uv_cache=cache)

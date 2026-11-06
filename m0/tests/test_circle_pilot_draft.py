@@ -106,6 +106,8 @@ def test_source_bundle_can_resume_if_anchor_fails_without_losing_original_manife
                                   checkout=checkout, directory=bundle)
     assert ledger.circle_pilot_binding()['plan_ref'] == draft['plan_ref']
     assert result['tree_ref'] == ledger.circle_pilot_binding()['tree_ref']
+    assert ledger.circle_pilot_binding()['require_single_run'] is True
+    assert result['single_run_enforced'] is True
     assert ledger.snapshot()['journal_head'] == anchored
     assert freeze_source_bundle(ledger, plan=plan, expected_plan_ref=draft['plan_ref'],
                                 checkout=checkout, directory=bundle) == result
@@ -117,6 +119,34 @@ def test_source_bundle_can_resume_if_anchor_fails_without_losing_original_manife
         capture_output=True, text=True, timeout=60)
     assert cli.returncode == 0, cli.stderr
     assert json.loads(cli.stdout) == result and ledger.snapshot()['journal_head'] == anchored
+
+
+def test_legacy_source_bundle_resumes_without_upgrading_its_authority(tmp_path, monkeypatch):
+    repository = Path(__file__).resolve().parents[2]
+    checkout = tmp_path / 'checkout'
+    subprocess.run(['git', 'clone', '--quiet', '--shared', str(repository), str(checkout)], check=True)
+    head = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+    subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', head], check=True)
+    ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
+    ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                             expected_head=ledger.snapshot()['journal_head'])
+    monkeypatch.setattr('zoo.circle_packing.pilot_draft._sync_source_tree', lambda _: None)
+    draft = write_pilot_draft(ledger, checkout=checkout, destination=tmp_path / 'plan.json')
+    plan = json.loads((tmp_path / 'plan.json').read_text())
+    original_freeze = ledger.freeze_circle_pilot
+    def legacy_freeze(*args, **kwargs):
+        kwargs.pop('require_single_run')
+        original_freeze(*args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(ledger, 'freeze_circle_pilot', legacy_freeze)
+        result = freeze_source_bundle(ledger, plan=plan, expected_plan_ref=draft['plan_ref'],
+                                      checkout=checkout, directory=tmp_path / 'bundle')
+    anchored = ledger.snapshot()['journal_head']
+    assert result['single_run_enforced'] is False
+    assert 'require_single_run' not in ledger.circle_pilot_binding()
+    assert freeze_source_bundle(ledger, plan=plan, expected_plan_ref=draft['plan_ref'],
+                                checkout=checkout, directory=tmp_path / 'bundle') == result
+    assert ledger.snapshot()['journal_head'] == anchored
 
 
 def test_source_sync_flushes_files_directories_and_bundle_parent(tmp_path, monkeypatch):

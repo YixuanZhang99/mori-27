@@ -144,17 +144,20 @@ def freeze_source_bundle(ledger, *, plan, expected_plan_ref, checkout, directory
     except (OSError, subprocess.SubprocessError, UnicodeError, KeyError, TypeError) as error:
         raise ValueError('cannot verify the pinned source tree') from error
     expected = {'plan_ref': expected_plan_ref, 'tree_ref': tree_ref,
-                'wallclock_seconds': plan['limits']['wallclock_seconds'], 'require_runtime': True}
+                'wallclock_seconds': plan['limits']['wallclock_seconds'],
+                'require_runtime': True, 'require_single_run': True}
     binding = ledger.circle_pilot_binding()
     if binding is None:
         _sync_source_tree(root / 'source')
         verify_clean_source(root / 'source', manifest, expected_tree_ref=tree_ref)
         ledger.freeze_circle_pilot(expected_plan_ref, tree_ref, plan['limits']['wallclock_seconds'],
-                                   require_runtime=True)
+                                   require_runtime=True, require_single_run=True)
         binding = ledger.circle_pilot_binding()
-    if binding != expected:
+    legacy = {key: value for key, value in expected.items() if key != 'require_single_run'}
+    if binding != expected and binding != legacy:
         raise ValueError('campaign is frozen to a different source bundle')
     return {'scope': 'frozen_source_bundle', 'plan_ref': expected_plan_ref, 'tree_ref': tree_ref,
+            'single_run_enforced': binding == expected,
             'source_root': str(root / 'source'), 'source_manifest': str(root / 'source-manifest.json')}
 
 

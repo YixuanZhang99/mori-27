@@ -26,6 +26,9 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
         raise ValueError('existing campaign must be quiescent and governance enabled')
     pilot = ledger.circle_pilot_binding()
     binding = ledger.circle_runtime_binding()
+    if not recorded_only and pilot is not None and not ledger.is_fixture_campaign() and \
+            not pilot.get('require_single_run'):
+        raise ValueError('live governed setup requires a single-run pilot')
     if pilot is not None and pilot.get('require_runtime') and binding is None:
         raise ValueError('frozen pilot requires a bound runtime before setup')
     if runner is not None and type(runner) is not SandboxRunner:

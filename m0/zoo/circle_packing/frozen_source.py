@@ -27,17 +27,17 @@ def _validate_lock(plan, manifest):
 
 
 def freeze_source_plan(ledger, plan, *, checkout, destination, expected_plan_ref, expected_campaign_id,
-                       require_runtime=False):
+                       require_runtime=False, require_single_run=False):
     """An export left by a failed ledger binding is not authorized for use."""
-    if type(require_runtime) is not bool:
-        raise ValueError('runtime requirement must be boolean')
+    if type(require_runtime) is not bool or type(require_single_run) is not bool:
+        raise ValueError('runtime and single-run requirements must be boolean')
     _validate_campaign(ledger, plan, expected_plan_ref, expected_campaign_id)
     result = export_clean_source(ledger, plan, 'vendor-0', checkout=checkout, destination=destination,
                                  expected_plan_ref=expected_plan_ref)
     _validate_lock(plan, result['manifest'])
     verify_clean_source(destination, result['manifest'], expected_tree_ref=result['tree_ref'])
     ledger.freeze_circle_pilot(expected_plan_ref, result['tree_ref'], plan['limits']['wallclock_seconds'],
-                               require_runtime=require_runtime)
+                               require_runtime=require_runtime, require_single_run=require_single_run)
     return result
 
 

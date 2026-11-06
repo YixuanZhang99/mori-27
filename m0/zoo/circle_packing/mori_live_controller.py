@@ -28,6 +28,9 @@ def prepare_live_controller(config, *, api_key):
     ledger = CampaignBudget(config['ledger'])
     if ledger.is_fixture_campaign():
         raise ValueError('live controller requires a non-fixture campaign')
+    pilot = ledger.circle_pilot_binding()
+    if pilot is None or not pilot.get('require_single_run'):
+        raise ValueError('live controller requires a single-run pilot')
     if type(api_key) is not str or not api_key.strip():
         raise ValueError('live controller requires an in-memory credential')
     source, runtime = Path(config['source']), Path(config['runtime'])

@@ -288,6 +288,17 @@ def test_governed_circle_unknown_usage_keeps_reservation(tmp_path, local_endpoin
     assert len(campaign.snapshot()['pending_calls']) == 1
 
 
+def test_live_governed_setup_rejects_legacy_frozen_pilot(tmp_path):
+    from zoo.circle_packing.governed import governed_setup
+    campaign = campaign_fixture(tmp_path)
+    campaign.freeze_circle_pilot('sha256:' + 'a' * 64, 'sha256:' + 'b' * 64, 2700,
+                                 require_runtime=True)
+    before = campaign.snapshot()
+    with pytest.raises(ValueError, match='single-run'):
+        governed_setup(tmp_path / 'run', ledger=campaign, api_key='fixture-only-secret', seed=0, iterations=1)
+    assert campaign.snapshot() == before
+
+
 def test_common_ceiling_must_fit_protected_control_and_main_attempts(tmp_path, local_endpoint):
     from zoo.circle_packing.governed import governed_setup
     campaign = campaign_fixture(tmp_path)

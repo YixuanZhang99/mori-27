@@ -52,9 +52,10 @@ def test_reference_provider_uses_original_real_service_config_without_dispatch(t
 pytestmark = pytest.mark.linux
 
 
-def prepared_reference(tmp_path, local_endpoint, *, fixture_campaign=True):
+def prepared_reference(tmp_path, local_endpoint, *, fixture_campaign=True, require_single_run=True):
     ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(
-        tmp_path, require_runtime=True, fixture_campaign=fixture_campaign)
+        tmp_path, require_runtime=True, fixture_campaign=fixture_campaign,
+        require_single_run=require_single_run)
     runtime = tmp_path / 'runtime'
     frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
@@ -158,6 +159,16 @@ def test_live_reference_preparation_rejects_fixture_campaign(tmp_path, local_end
     with pytest.raises(ValueError, match='non-fixture campaign'):
         build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
     assert ledger.snapshot() == before
+
+
+def test_live_reference_rejects_legacy_pilot_before_protection(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False, require_single_run=False)
+    ledger = options['ledger']
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='single-run'):
+        build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    assert ledger.snapshot() == before and not local_endpoint.requests
 
 
 def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path, local_endpoint, monkeypatch):

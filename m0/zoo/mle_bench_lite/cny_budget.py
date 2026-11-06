@@ -190,8 +190,9 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         raise ValueError('reference selection is sealed against new work evidence')
     if kind == "freeze_circle_pilot":
         fields = {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}
-        if set(event) not in (fields, fields | {"require_runtime"}) or \
-                ("require_runtime" in event and event["require_runtime"] is not True):
+        optional = {"require_runtime", "require_single_run"}
+        if not fields <= set(event) or set(event) - fields - optional or \
+                any(event[name] is not True for name in optional if name in event):
             raise ValueError("circle pilot binding has invalid fields")
         seconds = _integer(event["wallclock_seconds"], "cell duration", 1)
         if seconds > 86400:
@@ -200,6 +201,8 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                  "wallclock_seconds": seconds}
         if "require_runtime" in event:
             value['require_runtime'] = True
+        if "require_single_run" in event:
+            value['require_single_run'] = True
         if governance["circle_pilot"] is not None or governance["cell_claims"] or pending is not None:
             raise ValueError("circle pilot must freeze once before any cell or unresolved call")
         governance["circle_pilot"] = value
@@ -495,6 +498,12 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         reference = governance['reference_authority_claims'].get(cell_id)
         if reference is not None and reference['currency_run_id'] != run_id:
             raise ValueError('reference cell is bound to another currency authority')
+        pilot = governance['circle_pilot']
+        if pilot is not None and pilot.get('require_single_run'):
+            if cell_id.startswith('mori-') and cell_id not in governance['worker_claims']:
+                raise ValueError('single-run Mori cell requires its original worker claim')
+            if any(existing['cell_id'] == cell_id for existing in governance['deadline_bindings'].values()):
+                raise ValueError('cell is already bound to another run')
         if claim is None or claim["plan_ref"] != value["plan_ref"] or \
                 claim["record_sha256"] != value["deadline_ref"] or \
                 run_id in governance["deadline_bindings"] or \
@@ -892,18 +901,21 @@ class CampaignBudget:
         with self._transaction() as (_db, _policy, state):
             return state['governance']['fixture_campaign']
 
-    def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds, *, require_runtime=False):
+    def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds, *, require_runtime=False,
+                            require_single_run=False):
         """Anchor one draft and source tree before any cell starts."""
         _plan_ref(plan_ref)
         _plan_ref(tree_ref)
         _integer(wallclock_seconds, "cell duration", 1)
-        if type(require_runtime) is not bool:
-            raise ValueError('runtime requirement must be boolean')
+        if type(require_runtime) is not bool or type(require_single_run) is not bool:
+            raise ValueError('pilot requirements must be boolean')
         with self._transaction() as (db, _policy, state):
             event = {"kind": "freeze_circle_pilot", "schema_version": 2,
                      "plan_ref": plan_ref, "tree_ref": tree_ref, "wallclock_seconds": wallclock_seconds}
             if require_runtime:
                 event['require_runtime'] = True
+            if require_single_run:
+                event['require_single_run'] = True
             self._append(db, state, event)
 
     def circle_pilot_binding(self):
@@ -1163,7 +1175,7 @@ class CampaignBudget:
             value = state["governance"]["deadline_bindings"].get(run_id)
             return dict(value) if value is not None else None
 
-    def protect_run(self, run_id, plan_ref, obligations):
+    def protect_run(self, run_id, plan_ref, obligations, *, deadline_binding=None):
         _sha(run_id)
         _plan_ref(plan_ref)
         with self._transaction() as (db, policy, state):
@@ -1174,10 +1186,22 @@ class CampaignBudget:
             previous = governance["runs"].get(run_id)
             if previous is not None:
                 if previous["plan_ref"] == plan_ref and previous["frozen"] == frozen:
-                    return
-                raise ValueError("protected currency run cannot change its frozen plan or obligations")
-            self._append(db, state, {"kind": "protect_run", "schema_version": 2,
-                "run_id": run_id, "plan_ref": plan_ref, "obligations": frozen})
+                    pass
+                else:
+                    raise ValueError("protected currency run cannot change its frozen plan or obligations")
+            else:
+                self._append(db, state, {"kind": "protect_run", "schema_version": 2,
+                    "run_id": run_id, "plan_ref": plan_ref, "obligations": frozen})
+                _, state = self._read(db)
+            if deadline_binding is not None:
+                if type(deadline_binding) is not dict or set(deadline_binding) != {'cell_id', 'plan_ref', 'deadline_ref'}:
+                    raise ValueError('invalid atomic deadline binding')
+                existing = state['governance']['deadline_bindings'].get(run_id)
+                if existing is not None and existing != deadline_binding:
+                    raise ValueError('run deadline binding cannot change')
+                if existing is None:
+                    self._append(db, state, {'kind': 'bind_run_deadline', 'schema_version': 2,
+                                             'run_id': run_id, **deadline_binding})
 
     def admit_call(self, run_id, lane, slot_id, call_binding, bound):
         """Commit a real reservation and consume its control obligation atomically.
