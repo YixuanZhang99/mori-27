@@ -190,7 +190,9 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
         raise ValueError('reference provider audit requires recorded evidence')
     try:
         bindings = trace.get('prompt_bindings', [])
-        if type(bindings) is not list or len(bindings) > reference_iteration_attempt_limit(planned_iterations):
+        submitted = trace.get('iterations')
+        if type(bindings) is not list or type(submitted) is not list or \
+                len(bindings) > reference_iteration_attempt_limit(planned_iterations):
             raise ValueError('reference prompt bindings are invalid')
         for item in bindings:
             if type(item) is not dict or set(item) != {'iteration', 'request_sha256'} or \
@@ -203,14 +205,19 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
         calls = bundle['calls']
         if type(calls) is not list:
             raise ValueError('reference provider calls are invalid')
-        outcomes = []
+        outcomes, attributed = [], set()
         for item in bindings:
             digest = item['request_sha256']
             matching_bindings = [entry for entry in bindings if entry['request_sha256'] == digest]
+            same_iteration = [entry for entry in bindings if entry['iteration'] == item['iteration']]
+            submissions = [entry for entry in submitted if entry['iteration'] == item['iteration']
+                           and entry['state'] != 'not_submitted']
             matching_starts = [entry for entry in starts if entry['request_sha256'] == digest]
             result = {'iteration': item['iteration'], 'request_sha256': digest}
-            if len(matching_bindings) != 1 or len(matching_starts) > 1:
+            if len(matching_bindings) != 1 or len(same_iteration) != 1 or len(submissions) > 1 or len(matching_starts) > 1:
                 result['state'] = 'ambiguous'
+            elif not submissions:
+                result['state'] = 'unverified_submission'
             elif not matching_starts:
                 result['state'] = 'not_observed'
             else:
@@ -229,8 +236,13 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
                         matched_completions[0]['tokens'] != usage['total_tokens']:
                     raise ValueError('reference provider receipt differs from its physical completion')
                 result.update(state='matched', call_id=call_id, total_tokens=usage['total_tokens'])
+                attributed.add(start['binding'])
             outcomes.append(result)
         return {'schema_version': 1, 'scope': 'caller_pinned_reference_iteration_provider',
-                'performance_claim': False, 'iterations': outcomes}
+                'performance_claim': False, 'iterations': outcomes,
+                'missing_prompt_iterations': [number for number in range(1, planned_iterations + 1)
+                                              if not any(item['iteration'] == number for item in bindings)],
+                'unattributed_provider_bindings': [start['binding'] for start in starts
+                                                   if start['binding'] not in attributed]}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid reference iteration provider evidence') from error
