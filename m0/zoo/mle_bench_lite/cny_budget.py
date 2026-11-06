@@ -199,6 +199,17 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if claim is None or sequence != claim["observation_sequence"] + 1 or previous != claim["observation_sha256"]:
             raise ValueError("cell deadline observation anchor is not consecutive")
         claim.update(observation_sequence=sequence, observation_sha256=digest)
+    elif kind == "claim_cell_worker":
+        if set(event) != {"kind", "schema_version", "cell_id", "deadline_ref", "worker_ref"}:
+            raise ValueError("cell worker claim has invalid fields")
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        deadline_ref, worker_ref = _sha(event["deadline_ref"]), _sha(event["worker_ref"])
+        clock = governance["cell_claims"].get(cell_id)
+        if clock is None or clock["record_sha256"] != deadline_ref:
+            raise ValueError("cell worker requires the original deadline")
+        if cell_id in governance["worker_claims"]:
+            raise ValueError("cell worker was already claimed")
+        governance["worker_claims"][cell_id] = {"deadline_ref": deadline_ref, "worker_ref": worker_ref}
     elif kind == "bind_run_deadline":
         if set(event) != {"kind", "schema_version", "run_id", "cell_id", "plan_ref", "deadline_ref"}:
             raise ValueError("run deadline binding has invalid fields")
@@ -325,7 +336,8 @@ def _reduce_history(policies, events, heads):
     if limit > 200000000:
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
-    governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {}, "deadline_bindings": {}}
+    governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
+                  "deadline_bindings": {}, "worker_claims": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -590,6 +602,22 @@ class CampaignBudget:
         _identifier(cell_id, "cell identity")
         with self._transaction() as (_db, _policy, state):
             value = state["governance"]["cell_claims"].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):
+        """Consume the one worker start for a cell in the original ledger."""
+        _identifier(cell_id, "cell identity")
+        _sha(deadline_ref)
+        _sha(worker_ref)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "claim_cell_worker", "schema_version": 2,
+                                    "cell_id": cell_id, "deadline_ref": deadline_ref,
+                                    "worker_ref": worker_ref})
+
+    def cell_worker_claim(self, cell_id):
+        _identifier(cell_id, "cell identity")
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["worker_claims"].get(cell_id)
             return dict(value) if value is not None else None
 
     def bind_run_deadline(self, run_id, cell_id, plan_ref, deadline_ref):
