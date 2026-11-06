@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import json
+import threading
 import sys
 
 import pytest
@@ -298,3 +299,74 @@ run_cell_worker(deadline, directory, workspace, ['/usr/bin/python3', '-c', "open
     time.sleep(1)
     assert not (workspace / 'late').exists()
     assert deadline._lifecycle.ledger.cell_worker_claim('vendor-0') is not None
+
+
+def test_isolated_worker_reaches_local_broker_without_provider_key(tmp_path):
+    from zoo.circle_packing.cell_worker import run_cell_worker
+    from zoo.circle_packing.host_transport import HostBroker
+    deadline, workspace = setup(tmp_path, 30)
+    workspace.chmod(0o700)
+    socket_path, token_path = workspace / 'broker.sock', workspace / 'token'
+    token = 'a' * 64  # Disposable fixture capability, not a provider credential.
+    token_path.write_text(token)
+    token_path.chmod(0o600)
+    observed = []
+    def dispatch(request_id, argument):
+        observed.append(argument)
+        return {'state': 'ok', 'result': 'fixture patch',
+                'usage': {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7}}
+    program = """import asyncio,os,sys
+from types import SimpleNamespace
+sys.path.insert(0,sys.argv[1])
+os.environ['MORI_CIRCLE_BROKER_SOCKET']=sys.argv[2]
+os.environ['MORI_CIRCLE_BROKER_TOKEN']=open(sys.argv[3]).read().strip()
+from zoo.circle_packing.host_transport import HostBridgeClient
+client=HostBridgeClient(SimpleNamespace(name='fixture'))
+result=asyncio.run(client.generate_with_context('system',[{'role':'user','content':'user'}]))
+assert result=='fixture patch' and client.last_usage['total_tokens']==7
+"""
+    source = Path(__file__).resolve().parents[1]
+    with HostBroker(socket_path, token, dispatch) as broker:
+        thread = threading.Thread(target=broker.serve_one, daemon=True)
+        thread.start()
+        result = run_cell_worker(deadline, tmp_path / 'worker', workspace,
+            [sys.executable, '-c', program, str(source), str(socket_path), str(token_path)],
+            readonly_source=source)
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert result['state'] == 'completed'
+    assert observed[0]['host_messages'] == {'system': 'system', 'user': 'user'}
+    # The disposable token is passed in a private file, not the durable process spec.
+    specs = list((tmp_path / 'worker').rglob('spec.json'))
+    assert len(specs) == 1 and token not in specs[0].read_text()
+
+
+def test_readonly_source_is_not_writable_inside_worker(tmp_path):
+    from zoo.circle_packing.cell_worker import run_cell_worker
+    deadline, workspace = setup(tmp_path, 30)
+    source = tmp_path / 'source'
+    source.mkdir()
+    target = source / 'module.py'
+    target.write_text('original')
+    program = """import pathlib,sys
+try:
+    pathlib.Path(sys.argv[1]).write_text('changed')
+except OSError:
+    pass
+else:
+    raise AssertionError('source was writable')
+"""
+    result = run_cell_worker(deadline, tmp_path / 'worker', workspace,
+        ['/usr/bin/python3', '-c', program, str(target)], readonly_source=source)
+    assert result['state'] == 'completed'
+    assert target.read_text() == 'original'
+
+
+def test_readonly_source_must_not_contain_worker_authority(tmp_path):
+    from zoo.circle_packing.cell_worker import run_cell_worker
+    deadline, workspace = setup(tmp_path, 30)
+    source = tmp_path / 'source'
+    source.mkdir()
+    with pytest.raises(ValueError, match='source'):
+        run_cell_worker(deadline, source / 'worker', workspace, ['/bin/true'], readonly_source=source)
+    assert deadline._lifecycle.ledger.cell_worker_claim('vendor-0') is None
