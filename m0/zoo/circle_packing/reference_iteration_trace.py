@@ -75,3 +75,44 @@ def capture_reference_iterations(controller_class):
         yield capture
     finally:
         controller_class._submit_iteration = original
+
+
+def audit_reference_iteration_receipts(trace, rows, *, planned_iterations):
+    """Compare recorded future receipts with a caller-pinned physical prefix.
+
+    Missing receipts and worker failures remain explicit; this does not prove
+    complete iteration, physical operation, or provider-cost coverage.
+    """
+    if type(trace) is not dict or trace.get('scope') != 'reference_submitted_future_outcomes' or \
+            trace.get('performance_claim') is not False or type(trace.get('iterations')) is not list or \
+            type(rows) is not list or type(planned_iterations) is not int or planned_iterations < 1:
+        raise ValueError('reference receipt audit requires recorded iteration and stage evidence')
+    try:
+        outcomes, seen_iterations, seen_receipts = [], set(), set()
+        for item in trace['iterations']:
+            iteration = item['iteration']
+            if type(iteration) is not int or not 1 <= iteration <= planned_iterations or iteration in seen_iterations:
+                raise ValueError('reference iteration identity is repeated or outside the plan')
+            seen_iterations.add(iteration)
+            state = item['state']
+            if state not in ('candidate', 'worker_error', 'no_candidate', 'unresolved', 'not_submitted',
+                             'cancelled', 'future_error', 'invalid_result'):
+                raise ValueError('reference iteration has an invalid outcome')
+            receipt = item.get('stage_request_id')
+            receipt_state = 'not_available'
+            if receipt is not None:
+                program = item.get('program_sha256')
+                if state != 'candidate' or type(receipt) is not str or re.fullmatch(r'[0-9a-f]{32}', receipt) is None or \
+                        type(program) is not str or re.fullmatch(r'[0-9a-f]{64}', program) is None or receipt in seen_receipts:
+                    raise ValueError('reference iteration stage identity is invalid')
+                matches = [row['payload'] for row in rows if row['kind'] == 'host_stage_started'
+                           and row['payload']['request_id'] == receipt]
+                if len(matches) != 1 or matches[0]['program_ref'] != 'sha256:' + program:
+                    raise ValueError('reference iteration differs from its original physical stage')
+                seen_receipts.add(receipt)
+                receipt_state = 'matched'
+            outcomes.append({'iteration': iteration, 'state': state, 'receipt_state': receipt_state})
+        return {'schema_version': 1, 'scope': 'caller_pinned_reference_iteration_receipts',
+                'performance_claim': False, 'iterations': outcomes}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid reference iteration receipt evidence') from error

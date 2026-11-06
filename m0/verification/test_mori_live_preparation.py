@@ -615,6 +615,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert [row['state'] for row in pair['cells']].count('not_claimed') == 4
         assert pair['mori']['sum_radii'] == mori_report['final_measurement']['sum_radii']
         assert pair['reference']['sum_radii'] == vendor_report['selected_program']['metrics']['sum_radii']
+        assert any(item['receipt_state'] == 'matched' for item in pair['reference_iteration_receipts']['iterations'])
         supervised = audit_supervised_pair_snapshot(mori_config=config, reference_config=vendor_config,
             mori_supervisor_directory=tmp_path / 'mori-supervisor',
             reference_supervisor_directory=tmp_path / 'reference-supervisor', seed=0,

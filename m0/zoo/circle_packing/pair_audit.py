@@ -70,6 +70,12 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
             options=options, stamp=stamp, governance=governance, rows=reference_rows)
         if not reference['selection_frozen']:
             raise ValueError('reference selection is not frozen')
+        from zoo.circle_packing.reference_iteration_trace import audit_reference_iteration_receipts
+        reference_trace = reference.get('iteration_trace')
+        reference_receipts = (audit_reference_iteration_receipts(reference_trace, reference_rows,
+                               planned_iterations=plan['iterations']) if reference_trace is not None else
+                              {'schema_version': 1, 'scope': 'reference_iteration_receipts_unverified',
+                               'performance_claim': False})
         summaries = {'mori': {'candidate': mori['candidate'], 'sum_radii': mori['measurement']['sum_radii'],
                               'validity': mori['measurement']['validity'],
                               'settled_upper_bound_micro_cny': mori['settled_upper_bound_micro_cny']},
@@ -90,6 +96,7 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
         return {'schema_version': 1, 'scope': 'paired_anchored_final_snapshots', 'performance_claim': False,
                 'seed': seed, 'plan_ref': expected_plan_ref, 'journal_head': mori_currency['journal_head'],
                 'cells': cells, **summaries,
+                'reference_iteration_receipts': reference_receipts,
                 'sum_radii_difference': summaries['mori']['sum_radii'] - summaries['reference']['sum_radii'],
                 'invoice_verified': False}
     except (KeyError, TypeError, AttributeError, IndexError) as error:
