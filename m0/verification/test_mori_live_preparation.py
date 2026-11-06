@@ -31,6 +31,9 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 @pytest.fixture
 def prepared_cell(tmp_path, request, monkeypatch):
     cache = os.environ['MORI_TEST_OFFLINE_CACHE']
+    if getattr(request, 'param', None) == 'runtime_recovery_no_sync':
+        # File-sync semantics are exercised separately on a small real tree.
+        monkeypatch.setattr('zoo.circle_packing.frozen_runtime._sync_runtime_tree', lambda *_: None)
     repository = Path(__file__).resolve().parents[2]
     commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
     checkout = tmp_path / 'checkout'
@@ -231,6 +234,106 @@ def prepared_cell(tmp_path, request, monkeypatch):
         'clock': str(clock_path), 'output': str(output),
         'base_url': ledger.manifest_binding()['provider_base_url']}
     return config, ledger, clock, runner
+
+
+@pytest.mark.linux
+def test_prepare_runtime_recovers_manifest_if_interrupted_after_binding(tmp_path, monkeypatch):
+    from zoo.circle_packing.pilot_draft import freeze_source_bundle, write_pilot_draft
+    from zoo.circle_packing.pilot_freeze_runtime import freeze_runtime_bundle
+    repository = Path(__file__).resolve().parents[2]
+    checkout = tmp_path / 'checkout'
+    subprocess.run(['git', 'clone', '--quiet', '--shared', str(repository), str(checkout)], check=True)
+    commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+    subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+    ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
+    ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                             expected_head=ledger.snapshot()['journal_head'])
+    draft = write_pilot_draft(ledger, checkout=checkout, destination=tmp_path / 'plan.json')
+    plan = json.loads((tmp_path / 'plan.json').read_text())
+    monkeypatch.setattr('zoo.circle_packing.pilot_draft._sync_source_tree', lambda _: None)
+    bundle = freeze_source_bundle(ledger, plan=plan, expected_plan_ref=draft['plan_ref'],
+                                  checkout=checkout, directory=tmp_path / 'bundle')
+    manifest = json.loads(Path(bundle['source_manifest']).read_text())
+    runtime_path, manifest_path = tmp_path / 'runtime', tmp_path / 'runtime-manifest.json'
+    kwargs = dict(plan=plan, expected_plan_ref=draft['plan_ref'], source_root=bundle['source_root'],
+                  source_manifest=manifest, runtime=runtime_path, manifest_path=manifest_path,
+                  uv_cache=os.environ['MORI_TEST_OFFLINE_CACHE'])
+    before = ledger.snapshot()['journal_head']
+    with monkeypatch.context() as patch:
+        patch.setattr('zoo.circle_packing.frozen_runtime._sync_runtime_tree',
+                      lambda *_: (_ for _ in ()).throw(RuntimeError('runtime sync failed')))
+        with pytest.raises(RuntimeError, match='runtime sync failed'):
+            freeze_runtime_bundle(ledger, **{**kwargs, 'runtime': tmp_path / 'failed-runtime'})
+    assert ledger.circle_runtime_binding() is None and ledger.snapshot()['journal_head'] == before
+    # The real sync implementation is covered on a small tree separately.
+    monkeypatch.setattr('zoo.circle_packing.frozen_runtime._sync_runtime_tree', lambda *_: None)
+    with monkeypatch.context() as patch:
+        patch.setattr('zoo.circle_packing.pilot_freeze_runtime._persist_manifest',
+                      lambda *_: (_ for _ in ()).throw(RuntimeError('after runtime anchor')))
+        with pytest.raises(RuntimeError, match='after runtime anchor'):
+            freeze_runtime_bundle(ledger, **kwargs)
+    assert ledger.circle_runtime_binding() is not None and not manifest_path.exists()
+    head = ledger.snapshot()['journal_head']
+    result = freeze_runtime_bundle(ledger, **kwargs)
+    assert result['runtime_ref'] == ledger.circle_runtime_binding()['runtime_ref']
+    assert manifest_path.is_file() and ledger.snapshot()['journal_head'] == head
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['runtime_recovery_no_sync'], indirect=True)
+def test_recover_bound_runtime_manifest_without_changing_original_ledger(prepared_cell, tmp_path, monkeypatch):
+    from zoo.circle_packing.pilot_freeze_runtime import freeze_runtime_bundle
+    config, ledger, _, _ = prepared_cell
+    manifest_path = tmp_path / 'recovered-runtime.json'
+    head = ledger.snapshot()['journal_head']
+    original_unlink = Path.unlink
+    def interrupt_unlink(path, *args, **kwargs):
+        if path.name.startswith('.mori-runtime-manifest-'):
+            raise RuntimeError('after manifest link')
+        return original_unlink(path, *args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, 'unlink', interrupt_unlink)
+        with pytest.raises(RuntimeError, match='after manifest link'):
+            freeze_runtime_bundle(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+                source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+                runtime=config['runtime'], manifest_path=manifest_path, uv_cache=str(tmp_path))
+    assert manifest_path.is_file() and manifest_path.stat().st_nlink == 2
+    result = freeze_runtime_bundle(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+        source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+        runtime=config['runtime'], manifest_path=manifest_path, uv_cache=str(tmp_path))
+    assert json.loads(manifest_path.read_text()) == config['runtime_manifest']
+    assert result['runtime_ref'] == ledger.circle_runtime_binding()['runtime_ref']
+    assert ledger.snapshot()['journal_head'] == head
+    assert freeze_runtime_bundle(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+        source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+        runtime=config['runtime'], manifest_path=manifest_path, uv_cache=str(tmp_path)) == result
+    assert ledger.snapshot()['journal_head'] == head
+    unrelated = tmp_path / 'unrelated-link'
+    os.link(manifest_path, unrelated)
+    with pytest.raises(ValueError, match='unrecognized'):
+        freeze_runtime_bundle(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+            source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+            runtime=config['runtime'], manifest_path=manifest_path, uv_cache=str(tmp_path))
+    assert unrelated.is_file() and ledger.snapshot()['journal_head'] == head
+    unrelated.unlink()
+    input_paths = {}
+    for name, value in (('plan', config['plan']), ('source-manifest', config['source_manifest'])):
+        input_paths[name] = tmp_path / (name + '.json')
+        input_paths[name].write_text(json.dumps(value))
+        input_paths[name].chmod(0o600)
+    cli = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.pilot_freeze_runtime',
+        '--ledger', str(ledger.path), '--plan', str(input_paths['plan']), '--expected-plan-ref', config['ref'],
+        '--source-root', str(Path(config['source']).parent), '--source-manifest', str(input_paths['source-manifest']),
+        '--runtime', config['runtime'], '--manifest-path', str(manifest_path), '--uv-cache', str(tmp_path)],
+        env={'PATH': os.defpath, 'PYTHONPATH': str(Path(__file__).resolve().parents[1])},
+        capture_output=True, text=True, timeout=60)
+    assert cli.returncode == 0, cli.stderr
+    assert json.loads(cli.stdout) == result and ledger.snapshot()['journal_head'] == head
+    manifest_path.write_text('{}')
+    with pytest.raises(ValueError):
+        freeze_runtime_bundle(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+            source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+            runtime=config['runtime'], manifest_path=manifest_path, uv_cache=str(tmp_path))
 
 
 @pytest.mark.linux

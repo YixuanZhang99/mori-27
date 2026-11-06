@@ -117,6 +117,35 @@ def _runtime_manifest(runtime, base_python, lock_sha256):
             'entries': sorted(entries, key=lambda entry: entry['path'])}
 
 
+def _sync_runtime_tree(runtime):
+    """Persist regular runtime files, directories and the root's parent."""
+    def onerror(error):
+        raise error
+    for directory, dirs, files in os.walk(runtime, topdown=False, followlinks=False, onerror=onerror):
+        for name in files:
+            path = Path(directory) / name
+            if path.is_symlink():
+                continue
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                info = os.fstat(fd)
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise ValueError('runtime file must be a private regular file')
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    fd = os.open(Path(runtime).parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def prepare_frozen_runtime(ledger, plan, *, snapshot, source_manifest, expected_plan_ref,
                            expected_campaign_id, destination, base_python, uv_cache):
     """Install locked wheels offline in a fresh private directory and anchor it."""
@@ -165,6 +194,9 @@ def prepare_frozen_runtime(ledger, plan, *, snapshot, source_manifest, expected_
         verify_frozen_source(ledger, plan, snapshot=snapshot, manifest=source_manifest,
                              expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
         manifest = _runtime_manifest(dest, base, plan['dependency_lock_sha256'])
+        _sync_runtime_tree(dest)
+        if _runtime_manifest(dest, base, plan['dependency_lock_sha256']) != manifest:
+            raise ValueError('runtime changed during durability verification')
         runtime_ref = 'sha256:' + payload_digest(manifest)
         ledger.freeze_circle_runtime(expected_plan_ref, source['tree_ref'], runtime_ref,
                                      manifest['base_python_sha256'])

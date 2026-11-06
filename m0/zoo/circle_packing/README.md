@@ -313,6 +313,43 @@ clock before launching that arm's supervisor. Its CLI accepts an arm, a
 credential-free JSON configuration and supervisor directory; the provider key
 is taken from the environment and is not written to the configuration. The
 entry does not open either live gate or authorize the six-cell matrix.
+To create the initial non-executable plan from a clean checkout and the
+existing campaign, use a fresh JSON destination in a private directory:
+
+```sh
+PYTHONPATH="$CHECKOUT/m0" "$PYTHON" -m zoo.circle_packing.pilot_draft \
+  --ledger "$CAMPAIGN_LEDGER" --checkout "$CHECKOUT" --destination "$PLAN_JSON"
+```
+
+The output supplies the plan reference and current campaign head. This reads
+the existing ledger and checks the actual tracked source bytes and dependency
+lock; it does not reserve funds, freeze the plan, or read a provider key.
+To persist and bind that source to the campaign before preparing a runtime:
+
+```sh
+PYTHONPATH="$CHECKOUT/m0" "$PYTHON" -m zoo.circle_packing.pilot_freeze_source \
+  --ledger "$CAMPAIGN_LEDGER" --plan "$PLAN_JSON" --expected-plan-ref "$PLAN_REF" \
+  --checkout "$CHECKOUT" --directory "$PRIVATE_SOURCE_BUNDLE"
+```
+
+This writes a source-freeze event to the existing ledger, but starts no cell
+and reserves no funds. It saves and syncs the source and manifest first. If
+interrupted after those files are complete, the same command verifies and
+resumes the original bundle; it never replaces a different frozen plan.
+Then prepare the locked runtime from an existing offline `uv` cache:
+
+```sh
+PYTHONPATH="$CHECKOUT/m0" "$PYTHON" -m zoo.circle_packing.pilot_freeze_runtime \
+  --ledger "$CAMPAIGN_LEDGER" --plan "$PLAN_JSON" --expected-plan-ref "$PLAN_REF" \
+  --source-root "$FROZEN_SOURCE" --source-manifest "$SOURCE_MANIFEST_JSON" \
+  --runtime "$FROZEN_RUNTIME" --manifest-path "$RUNTIME_MANIFEST_JSON" --uv-cache "$UV_CACHE"
+```
+
+The runtime freeze is another campaign binding; it does not start a cell or
+reserve model funds. If interrupted after that binding but before saving the
+runtime manifest, rerunning the command reconstructs and verifies the
+manifest against the original binding. An unbound partial runtime is retained
+and needs a fresh destination, not an automatic overwrite.
 After freezing the plan, source and runtime against the original campaign,
 prepare the six configurations under a fresh, private directory with a short
 absolute path. The plan and manifest files are the original JSON outputs of
