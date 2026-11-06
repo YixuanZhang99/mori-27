@@ -78,6 +78,18 @@ def test_deepseek_wire_protocol_applies_only_supported_fields():
                    b'"thinking":{"type":"enabled"}}')
 
 
+def test_openevolve_two_role_transport_uses_original_bound_argument(local_endpoint):
+    from test_openevolve_governed_transport import prompt
+    local_endpoint.responses.append(reply())
+    p = provider(local_endpoint, message_mode='openevolve_v1')
+    body = p.prepare_request(prompt())
+    result = p.perform_request(body, prompt=prompt())
+    assert result.result == 'answer' and result.usage['total_tokens'] == 7
+    wire = json.loads(local_endpoint.requests[0])
+    assert wire['messages'][0] == {'role': 'system', 'content': 'vendor system'}
+    assert wire['messages'][1]['content'].startswith('vendor user')
+
+
 def test_legacy_openai_wire_protocol_is_preserved():
     assert protocol().build_request('hello', binding(request_format='openai', temperature=0.25)) == (
         b'{"max_completion_tokens":16,"messages":[{"content":"hello","role":"user"}],'

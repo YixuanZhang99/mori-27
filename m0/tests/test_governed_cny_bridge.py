@@ -22,16 +22,22 @@ class Store:
 
 
 @pytest.fixture
-def setup(tmp_path):
+def setup(tmp_path, request):
+    mode = getattr(request, 'param', 'single_user_v1')
+    if mode == 'openevolve_v1':
+        from test_openevolve_governed_transport import prompt
+        argument = prompt()
+    else:
+        argument = 'prompt'
     ledger = CampaignBudget.create(tmp_path / 'campaign.db')
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
         expected_head=ledger.snapshot()['journal_head'])
     providers = {key: GovernedCNYProvider('deepseek-flash', 'http://127.0.0.1:1',
-        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture')
+        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture', message_mode=mode)
         for key in ('main', 'control-0000')}
     calls = []
     for key, provider in providers.items():
-        def transport(body, provider=provider, key=key):
+        def transport(body, provider=provider, key=key, **_kwargs):
             assert ledger.snapshot()['pending_calls']
             calls.append((key, body))
             return parse_response(json.dumps({'model': 'deepseek-flash',
@@ -57,7 +63,7 @@ def setup(tmp_path):
         provider_sessions=providers)
     bridge = CNYInvocationBridge(ledger)
     ready = bridge.bind_run(run)
-    args_sha = payload_digest({'args': ('prompt',), 'kwargs': {}})
+    args_sha = payload_digest({'args': (argument,), 'kwargs': {}})
     authority = ready.authority_binding
     context = GovernedCallContext(schema_version=1, runtime_id=run.runtime_id,
         logical_run_id=run.logical_run_id, currency_run_id=authority['currency_run_id'],
@@ -88,6 +94,48 @@ def test_bridge_admits_before_transport_and_replays_without_ledger(setup, monkey
     bundle = bridge.replay_bundle()
     expected = bridge.audit()
     ledger.path.unlink()
+    recorded = CNYInvocationBridge(None)
+    recorded.bind_run(ExternalRunContext(**{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': bundle},
+        store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
+    assert recorded.audit() == expected
+    assert recorded.recover(context, context.argument_sha256).result == 'answer'
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('setup', ['openevolve_v1'], indirect=True)
+def test_two_role_unknown_usage_keeps_campaign_reservation(setup):
+    from test_openevolve_governed_transport import prompt
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    def missing_usage(body, **kwargs):
+        return parse_response(json.dumps({'model': 'deepseek-flash',
+            'choices': [{'finish_reason': 'stop', 'message': {'content': 'answer'}}]}).encode(),
+            providers['control-0000'].protocol_binding())
+    providers['control-0000'].perform_request = missing_usage
+    with pytest.raises(UsageError):
+        bridge.invoke(context, (prompt(),), {})
+    assert ledger.snapshot()['pending_calls']
+    assert bridge.recover(context, context.argument_sha256).outcome == 'unknown'
+    assert ledger.snapshot()['pending_calls']
+
+
+@pytest.mark.parametrize('setup', ['openevolve_v1'], indirect=True)
+def test_two_role_bridge_binds_original_argument_and_replays_without_dispatch(setup):
+    from test_openevolve_governed_transport import prompt
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, (prompt(),), {}) == 'answer'
+    assert [item['role'] for item in json.loads(calls[0][1])['messages']] == ['system', 'user']
+    complete(store)
+    bundle = bridge.replay_bundle()
+    prepared = bundle['calls'][0]['prepared']
+    assert prepared['schema_version'] == 2 and prepared['argument'] == prompt()
+    import copy
+    damaged = copy.deepcopy(bundle)
+    damaged['calls'][0]['prepared']['argument'] += ' '
+    with pytest.raises(ValueError):
+        CNYInvocationBridge(None).bind_run(ExternalRunContext(
+            **{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': damaged},
+            store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
+    expected = bridge.audit()
     recorded = CNYInvocationBridge(None)
     recorded.bind_run(ExternalRunContext(**{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': bundle},
         store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))

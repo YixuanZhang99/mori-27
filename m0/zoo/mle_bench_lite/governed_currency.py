@@ -263,13 +263,16 @@ class CNYInvocationBridge:
         return 'call-' + payload_digest(context.to_dict())
 
     def _validate_prepared(self, prepared, context):
-        if type(prepared) is not dict or set(prepared) != {'schema_version', 'context', 'call_id',
-                'wire_request_sha256', 'wire_body', 'bound', 'physical_bound', 'provider_binding_sha256'}:
+        fields = {'schema_version', 'context', 'call_id', 'wire_request_sha256', 'wire_body',
+                  'bound', 'physical_bound', 'provider_binding_sha256'}
+        if type(prepared) is not dict or type(prepared.get('schema_version')) is not int or \
+                prepared.get('schema_version') not in (1, 2) or \
+                set(prepared) != fields | ({'argument'} if prepared.get('schema_version') == 2 else set()):
             raise ValueError('invalid prepared currency call')
         key = self._validate_context(context, physical=False, admission=prepared['wire_body'] is not None)
         body = prepared['wire_body'].encode() if prepared['wire_body'] is not None else None
         manifest = self._preparation['manifests'][key]
-        if (prepared['schema_version'] != 1 or prepared['context'] != context.to_dict() or
+        if (prepared['context'] != context.to_dict() or
                 prepared['wire_request_sha256'] != (hashlib.sha256(body).hexdigest() if body is not None else '0' * 64) or
                 prepared['call_id'] != external_call_id(context, prepared['wire_request_sha256']) or
                 prepared['bound'] != self._authority.quote_call(manifest['max_completion_tokens']) or
@@ -278,14 +281,20 @@ class CNYInvocationBridge:
             raise ValueError('prepared currency call identity or bounds differ')
         from .provider_protocol import build_request
         if body is None:
+            if prepared['schema_version'] != 1:
+                raise ValueError('undispatched preparation cannot contain provider arguments')
             return key
         try:
-            prompt = json.loads(body)['messages'][0]['content']
+            mode = manifest.get('message_mode', 'single_user_v1')
+            if (mode == 'openevolve_v1') != (prepared['schema_version'] == 2):
+                raise ValueError('prepared message mode differs from frozen provider')
+            prompt = (prepared['argument'] if mode == 'openevolve_v1'
+                      else json.loads(body)['messages'][0]['content'])
             args_hash = payload_digest({'args': (prompt,), 'kwargs': {}})
             if args_hash != context.argument_sha256 or body != build_request(prompt, {
                     'requested_model': manifest['requested_model'], 'request_format': 'deepseek',
                     'max_completion_tokens': manifest['max_completion_tokens'],
-                    'reasoning_effort': manifest.get('reasoning_effort', 'high')}):
+                    'reasoning_effort': manifest.get('reasoning_effort', 'high'), 'message_mode': mode}):
                 raise ValueError('prepared wire differs from canonical invocation arguments')
         except (KeyError, TypeError, IndexError, UnicodeError) as error:
             raise ValueError('prepared wire request is damaged') from error
@@ -389,10 +398,16 @@ class CNYInvocationBridge:
             'bound': self.ledger.quote_call(self._preparation['manifests'][key]['max_completion_tokens']),
             'physical_bound': self._bindings[key]['call_bound'],
             'provider_binding_sha256': payload_digest(self._preparation['manifests'][key])}
+        if self._preparation['manifests'][key].get('message_mode') == 'openevolve_v1':
+            prepared['schema_version'] = 2
+            prepared['argument'] = args[0]
         self._validate_prepared(prepared, context)
         self._save(name + '.prepared', prepared)
         try:
-            raw.validate_dispatch(body)
+            if prepared['schema_version'] == 2:
+                raw.validate_dispatch(body, prompt=prepared['argument'])
+            else:
+                raw.validate_dispatch(body)
         except ValueError:
             # Preparation is durable and validate_dispatch is a pure local
             # check. Confirm no independently committed call before proving zero.
@@ -427,7 +442,8 @@ class CNYInvocationBridge:
             raise ProviderBudgetExhausted('currency capacity refused before dispatch')
         self._save(name + '.dispatch', {'call_id': prepared['call_id']})
         raw.last_usage = None
-        response = raw.perform_request(body).to_dict()
+        response = (raw.perform_request(body, prompt=prepared['argument']) if prepared['schema_version'] == 2
+                    else raw.perform_request(body)).to_dict()
         try:
             response['observed_binding_sha256'] = payload_digest(raw.governance_binding())
         except Exception:
@@ -710,7 +726,8 @@ class CNYInvocationBridge:
             construction['construction'] = audit_construction(self._root_rows(),
                 self._run.construction, logical_run_id=self._run.logical_run_id,
                 provider_arguments={payload_digest(record['prepared']['context']):
-                    (json.loads(record['prepared']['wire_body'])['messages'][0]['content']
+                    (record['prepared']['argument'] if record['prepared']['schema_version'] == 2 else
+                     json.loads(record['prepared']['wire_body'])['messages'][0]['content']
                      if record['prepared']['wire_body'] is not None else None) for record in records})
         return {**construction, 'schema_version': 1, 'bridge_plan_ref': self._ready.bridge_plan_ref,
             'authority': run_audit, 'invocations': len(records), 'main_currency_cap_micro_cny':
@@ -732,6 +749,8 @@ class CNYInvocationBridge:
                 'request_format': 'deepseek', 'max_completion_tokens': manifest['max_completion_tokens'],
                 'reasoning_effort': manifest.get('reasoning_effort', 'high')}))
             wire.pop('messages')
+            if 'message_mode' in manifest:
+                wire['message_mode'] = manifest['message_mode']
             wire.update(base_url=manifest['base_url'], timeout=manifest['timeout'], policy_sha256=policy['policy_sha256'])
             expected = {'schema_version': 2, 'fresh_session': True, 'state_independent': True,
                 'sampling': {'method': 'supplier_unverified', 'parameters': wire, 'applied': True},
