@@ -14,6 +14,14 @@ from zoo.circle_packing.stage import EVALUATOR_SHA256
 from zoo.mle_bench_lite.cny_budget import POLICY, _hash
 
 
+def require_first_pair_audit(seed):
+    """Fail closed for later seeds until the paired audit can be durably bound."""
+    if type(seed) is not int or seed not in (0, 1, 2):
+        raise ValueError('cell seed is outside the frozen pilot')
+    if seed != 0:
+        raise ValueError('later seeds require the first pair independent audit')
+
+
 def build_draft_plan(campaign, *, source_commit, dependency_lock_sha256):
     if type(source_commit) is not str or not re.fullmatch(r'[0-9a-f]{40}', source_commit) or \
             type(dependency_lock_sha256) is not str or not re.fullmatch(r'[0-9a-f]{64}', dependency_lock_sha256):

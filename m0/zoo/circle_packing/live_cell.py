@@ -33,7 +33,7 @@ def start_live_cell(arm, config, *, directory, api_key):
         raise ValueError('live cell requires its exact configuration and in-memory credential')
     from core.composition.recovery import ContinuationStore
     from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
-    from zoo.circle_packing.pilot_plan import validate_draft_cell
+    from zoo.circle_packing.pilot_plan import require_first_pair_audit, validate_draft_cell
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
     ledger = CampaignBudget(config['ledger'])
     if ledger.is_fixture_campaign() or config['campaign_id'] != ledger.manifest_binding()['campaign_id'] or \
@@ -41,6 +41,7 @@ def start_live_cell(arm, config, *, directory, api_key):
         raise ValueError('live cell requires its original non-fixture campaign')
     cell = f"{arm}-{config['seed']}"
     binding = validate_draft_cell(ledger, config['plan'], cell, expected_plan_ref=config['ref'])
+    require_first_pair_audit(config['seed'])
     state = ledger.snapshot()
     if state['pending_calls'] or state['protected_micro_cny'] or state['protection_breaches']:
         raise ValueError('live cell requires a quiescent original campaign')

@@ -306,3 +306,7 @@ clock before launching that arm's supervisor. Its CLI accepts an arm, a
 credential-free JSON configuration and supervisor directory; the provider key
 is taken from the environment and is not written to the configuration. The
 entry does not open either live gate or authorize the six-cell matrix.
+The entry refuses seeds 1 and 2 before starting their clocks, and both live
+supervisors also refuse them before launch. This remains fail-closed until an
+independently verified seed-0 pair can be durably recorded; the existing
+final-snapshot report alone is not sufficient for that decision.

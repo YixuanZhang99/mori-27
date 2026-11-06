@@ -186,6 +186,40 @@ def test_live_cell_coordinator_closed_gate_does_not_start_clock(tmp_path, monkey
     assert not (tmp_path / 'supervisor').exists()
 
 
+@pytest.mark.parametrize('arm', ['mori', 'vendor'])
+def test_later_seed_refuses_before_first_pair_is_verified(tmp_path, monkeypatch, arm):
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.live_cell import start_live_cell
+    ledger = campaign_fixture(tmp_path)
+    policy = ledger.manifest_binding()
+    cfg = {**config(), 'seed': 1, 'ledger': str(ledger.path), 'campaign_id': policy['campaign_id'],
+           'base_url': policy['provider_base_url'], 'clock': str(tmp_path / 'clock.jsonl')}
+    if arm == 'vendor':
+        cfg.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
+                        lambda *args, **kwargs: {'wallclock_seconds': 30})
+    monkeypatch.setattr('zoo.circle_packing.cell_deadline.CellDeadline.start',
+                        lambda *args, **kwargs: pytest.fail('unverified seed started a clock'))
+    with pytest.raises(ValueError, match='first pair'):
+        start_live_cell(arm, cfg, directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
+    assert not (tmp_path / 'clock.jsonl').exists()
+
+
+@pytest.mark.parametrize('arm', ['mori', 'vendor'])
+def test_later_seed_supervisor_refuses_before_any_launch(tmp_path, monkeypatch, arm):
+    from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
+    cfg = {**config(), 'seed': 1}
+    if arm == 'vendor':
+        cfg.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    launch = launch_reference_live_controller if arm == 'vendor' else launch_live_controller
+    with pytest.raises(ValueError, match='first pair'):
+        launch(cfg, deadline=None, directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
+
+
 def test_recorded_only_currency_bridge_refuses_live_binding():
     from types import SimpleNamespace
     from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
