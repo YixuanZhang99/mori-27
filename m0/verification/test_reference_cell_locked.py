@@ -250,7 +250,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
                                     cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
     mori_output = tmp_path / 'mori'
     local_endpoint.responses.extend(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}])
-                                    for _ in range(2 * iterations))
+                                    for _ in range(2 * plan['iterations']))
     setup_path = tmp_path / 'mori-fixture.json'
     setup_path.write_text(json.dumps({'plan': plan, 'ref': ref, 'runtime_manifest': frozen['manifest'],
         'source': str(source / 'm0'), 'runtime': str(runtime), 'ledger': str(ledger.path),
@@ -323,10 +323,7 @@ print(json.dumps({'limits': profile['budget']['options']['limits']['global'],
     verify_frozen_source(ledger, plan, snapshot=source, manifest=exported['manifest'],
                          expected_plan_ref=ref, expected_campaign_id=campaign_id)
     verify_frozen_runtime(ledger, runtime=runtime, manifest=frozen['manifest'], base_python='/usr/bin/python3.12')
-    assert iterations + 1 <= len(local_endpoint.requests) <= 3 * iterations
-    if iterations == 1:
-        assert len(local_endpoint.requests) == 2
-    if iterations == 6:
-        rows = [json.loads(line) for line in (mori_output / 'framework' / 'x1.jsonl').read_text().splitlines()]
-        assert len([row for row in rows if row['kind'] == 'composed_evidence']) == 7
+    assert iterations + 1 <= len(local_endpoint.requests) <= iterations + 2 * plan['iterations']
+    rows = [json.loads(line) for line in (mori_output / 'framework' / 'x1.jsonl').read_text().splitlines()]
+    assert len([row for row in rows if row['kind'] == 'composed_evidence']) == plan['iterations'] + 1
     assert not ledger.snapshot()['pending_calls']
