@@ -235,6 +235,24 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             worker_proof=worker_proof, stdout=process_output['stdout'], stderr=process_output['stderr'],
             selected=result['selected_program'], options=authority.budget.options, stamp=asdict(authority.budget.stamp),
             governance=authority.budget._governed.config, rows=rows, request_ids=ids)
+        from zoo.circle_packing.reference_recovery import recover_reference_snapshot
+        recovered = recover_reference_snapshot(view, recorded_clock, run_id, plan=plan, expected_plan_ref=ref,
+            worker_directory=tmp_path / 'worker', options=authority.budget.options,
+            stamp=asdict(authority.budget.stamp), governance=authority.budget._governed.config, rows=rows)
+        assert recovered == final
+        journal = tmp_path / 'worker' / 'worker.jsonl'
+        saved_journal = journal.read_bytes()
+        try:
+            records = [json.loads(line) for line in saved_journal.splitlines()]
+            terminal = next(row for row in records if row['kind'] == 'executor_process_finished')
+            terminal['payload']['returncode'] = 1
+            journal.write_text(''.join(json.dumps(row) + '\n' for row in records))
+            with pytest.raises(ValueError):
+                recover_reference_snapshot(view, recorded_clock, run_id, plan=plan, expected_plan_ref=ref,
+                    worker_directory=tmp_path / 'worker', options=authority.budget.options,
+                    stamp=asdict(authority.budget.stamp), governance=authority.budget._governed.config, rows=rows)
+        finally:
+            journal.write_bytes(saved_journal)
         changed_plan = {**plan, 'public_range_sum_radii': 0}
         with pytest.raises(ValueError, match='plan'):
             recalculate_reference_snapshot(view, recorded_clock, run_id, plan=changed_plan, expected_plan_ref=ref,

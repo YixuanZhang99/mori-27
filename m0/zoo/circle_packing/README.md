@@ -140,3 +140,9 @@ The upstream cross-check validates the recorded coordinates independently of
 the shared validator; it does not rerun the candidate or establish provenance
 on its own. Borderline coordinates may be rejected when the two floating-point
 implementations differ at the tolerance boundary.
+
+`recover_reference_snapshot` reconstructs the original worker proof from its
+bounded no-follow journal and execution-bound output files, then invokes the
+same pinned campaign and physical-evidence recalculation. It starts no worker,
+model or evaluator. Missing, changed or unanchored evidence is rejected; this
+recovers a previously anchored snapshot, not interrupted work or a final winner.
