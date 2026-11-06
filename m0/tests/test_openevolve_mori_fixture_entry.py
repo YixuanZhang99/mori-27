@@ -194,6 +194,16 @@ def test_recorded_only_currency_bridge_refuses_live_binding():
         bridge.bind_run(SimpleNamespace(mode='live'))
 
 
+def test_recorded_replay_cli_removes_key_before_reading_config(tmp_path, monkeypatch):
+    import sys
+    from zoo.circle_packing import mori_recorded
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'fixture-only-secret')
+    monkeypatch.setattr(sys, 'argv', ['mori_recorded', str(tmp_path / 'missing'), 'input', 'digest', '{}', 'output'])
+    with pytest.raises(FileNotFoundError):
+        mori_recorded.main()
+    assert 'DEEPSEEK_API_KEY' not in os.environ
+
+
 def test_recorded_mori_setup_needs_no_provider_key_and_refuses_live_run(tmp_path):
     from core.loop import Framework, LoopConfig
     from zoo.circle_packing.domain import CirclePackingDomain

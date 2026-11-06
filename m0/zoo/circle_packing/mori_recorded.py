@@ -100,3 +100,25 @@ def replay_mori_snapshot(config, evidence, *, expected_evidence_sha256, expected
         raise ValueError('recorded Mori replay differs from its original checkpoint or transcript')
     return {'schema_version': 1, 'scope': 'independent_recorded_mori_replay', 'performance_claim': False,
             'passed': True, 'external_calls': 0, 'candidate': result['best_candidate_id']}
+
+
+def main():
+    os.environ.pop('DEEPSEEK_API_KEY', None)
+    if len(sys.argv) != 6:
+        raise SystemExit('usage: python -m zoo.circle_packing.mori_recorded CONFIG INPUT SHA256 HEAD_JSON OUTPUT')
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    config = json.loads(Path(sys.argv[1]).read_text())
+    evidence = json.loads(Path(sys.argv[2]).read_text())
+    expected_head = json.loads(sys.argv[4])
+    ledger = CampaignBudget(config['ledger'])
+    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=config['runtime'], manifest=config['runtime_manifest'],
+                                                base_python='/usr/bin/python3.12')
+    result = replay_mori_snapshot(config, evidence, expected_evidence_sha256=sys.argv[3],
+                                  expected_campaign_head=expected_head, ledger=ledger, runner=runner,
+                                  output=Path(sys.argv[5]))
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()

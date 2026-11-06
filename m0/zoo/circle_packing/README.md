@@ -253,6 +253,11 @@ The trusted Mori host exports its recorded replay input before its own replay.
 workspace using a pinned campaign head and a recorded-only bridge, without a
 provider key or live provider/evaluator execution. This checks the recorded
 transcript and checkpoint; it does not prove the supplied head is the latest.
+Run it from the frozen source and Python environment with
+`python -m zoo.circle_packing.mori_recorded CONFIG INPUT SHA256 HEAD_JSON OUTPUT`,
+where `SHA256` and `HEAD_JSON` are independently retained evidence identities
+and `OUTPUT` is a fresh private workspace. The command removes an inherited
+`DEEPSEEK_API_KEY` before reading its inputs.
 It also exercises the reference controller with a test-only override of the
 closed live gate, fake responses, and only local socket connections. The test
 reconstructs the anchored selection and geometry without any new model or
