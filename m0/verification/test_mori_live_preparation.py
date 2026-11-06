@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -28,14 +29,15 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
 
 @pytest.fixture
-def prepared_cell(tmp_path, request):
+def prepared_cell(tmp_path, request, monkeypatch):
     cache = os.environ['MORI_TEST_OFFLINE_CACHE']
     repository = Path(__file__).resolve().parents[2]
     commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
     checkout = tmp_path / 'checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
-    if getattr(request, 'param', None) in ('reference_fake_live', 'reference_fake_live_stall', 'paired_fake_live'):
+    if getattr(request, 'param', None) in ('reference_fake_live', 'reference_fake_live_stall',
+                                           'reference_fake_live_inflight', 'reference_fake_live_timeout', 'paired_fake_live'):
         host = checkout / 'm0/zoo/circle_packing/host_runtime.py'
         worker = checkout / 'm0/zoo/circle_packing/reference_live_worker.py'
         code = host.read_text()
@@ -69,6 +71,12 @@ def prepared_cell(tmp_path, request):
             return Response()
     test_request.build_opener = lambda *args: Opener()
 '''
+        if request.param in ('reference_fake_live_inflight', 'reference_fake_live_timeout'):
+            needle = '            return Response()'
+            assert fake.count(needle) == 1
+            fake = fake.replace(needle, "            import time as test_time\n"
+                "            (Path(config['output']).parent / 'provider-inflight').write_text('ready')\n"
+                "            test_time.sleep(60)\n" + needle)
         if request.param == 'reference_fake_live_stall':
             fake += ("    import time as test_time\n"
                      "    (Path(config['output']).parent / 'reference-ready').write_text('ready')\n"
@@ -80,7 +88,8 @@ def prepared_cell(tmp_path, request):
                         '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
                         '-m', 'offline reference live host test'], check=True)
         commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
-    if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall', 'paired_fake_live'):
+    if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall',
+                                           'supervised_fake_live_inflight', 'supervised_fake_live_timeout', 'paired_fake_live'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
         gate = "    raise ValueError('live pilot gate is not complete')"
@@ -110,6 +119,12 @@ def prepared_cell(tmp_path, request):
             return Response()
     test_request.build_opener = lambda *args: Opener()
 '''
+        if request.param in ('supervised_fake_live_inflight', 'supervised_fake_live_timeout'):
+            needle = '            return Response()'
+            assert fake.count(needle) == 1
+            fake = fake.replace(needle, "            import time as test_time\n"
+                "            (Path(config['output']).parent / 'provider-inflight').write_text('ready')\n"
+                "            test_time.sleep(60)\n" + needle)
         if request.param == 'supervised_fake_live_stall':
             fake += ("    import time as test_time\n"
                      "    (Path(config['output']).parent / 'controller-ready').write_text('ready')\n"
@@ -120,6 +135,28 @@ def prepared_cell(tmp_path, request):
                         '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
                         '-m', 'offline supervised live test'], check=True)
         commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
+    if getattr(request, 'param', None) in ('reference_fake_live_timeout', 'supervised_fake_live_timeout'):
+        # Shorten only this disposable source and plan; production keeps 2700 s.
+        from core.x1.checkpoint import payload_digest
+        from zoo.circle_packing import pilot_plan
+        pilot = checkout / 'm0/zoo/circle_packing/pilot_plan.py'
+        source_text = pilot.read_text()
+        assert source_text.count("'wallclock_seconds': 2700") == 1
+        pilot.write_text(source_text.replace("'wallclock_seconds': 2700", "'wallclock_seconds': 45"))
+        subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/pilot_plan.py'], check=True)
+        subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                        '-m', 'offline shortened deadline test'], check=True)
+        commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
+        original_plan = pilot_plan.build_draft_plan
+        def short_plan(*args, **kwargs):
+            value = original_plan(*args, **kwargs)
+            value['limits']['wallclock_seconds'] = 45
+            del value['draft_sha256']
+            value['draft_sha256'] = payload_digest(value)
+            return value
+        monkeypatch.setattr(pilot_plan, 'build_draft_plan', short_plan)
+        monkeypatch.setattr(sys.modules[__name__], 'build_draft_plan', short_plan)
     ledger = CampaignBudget.create(tmp_path / 'campaign.db')
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
                              expected_head=ledger.snapshot()['journal_head'])
@@ -143,6 +180,118 @@ def prepared_cell(tmp_path, request):
         'clock': str(clock._store.path), 'output': str(output),
         'base_url': ledger.manifest_binding()['provider_base_url']}
     return config, ledger, clock, runner
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['supervised_fake_live_timeout', 'reference_fake_live_timeout'], indirect=True)
+def test_outer_deadline_during_provider_call_preserves_pending(prepared_cell, tmp_path, request, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
+    config, ledger, clock, _runner = prepared_cell
+    reference = request.node.callspec.params['prepared_cell'] == 'reference_fake_live_timeout'
+    if reference:
+        clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+            cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    with tempfile.TemporaryDirectory(prefix='mori-timeout-', dir='/tmp') as workspace:
+        if reference:
+            config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
+                      'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
+        launch = launch_reference_live_controller if reference else launch_live_controller
+        directory = tmp_path / 'timeout-supervisor'
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(launch, config, deadline=clock, directory=directory, api_key='fixture-only-secret')
+            marker, end = tmp_path / 'provider-inflight', time.monotonic() + 35
+            while not marker.exists() and time.monotonic() < end:
+                if future.done():
+                    future.result()
+                    raise AssertionError('supervisor exited before fake request reached transport')
+                time.sleep(.05)
+            assert marker.exists()
+            before = ledger.snapshot()
+            assert len(before['pending_calls']) == 1
+            assert before['reserved_micro_cny'] > 0
+            result = future.result(timeout=65)
+        assert result['timeout'] is True
+        after = ledger.snapshot()
+        assert after['pending_calls'] == before['pending_calls']
+        assert after['reserved_micro_cny'] == before['reserved_micro_cny']
+        assert after['settled_upper_bound_micro_cny'] == before['settled_upper_bound_micro_cny']
+        events = list(ContinuationStore(directory / 'controller.jsonl').read())
+        kinds = [event['kind'] for event in events]
+        assert kinds.count('executor_process_started') == 1
+        assert kinds.index('executor_containment_verified') < kinds.index('executor_process_finished')
+        start = next(event['payload'] for event in events if event['kind'] == 'executor_process_started')
+        assert not Path(start['containment_binding']['containment_group']).exists()
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['supervised_fake_live_inflight', 'reference_fake_live_inflight'], indirect=True)
+def test_inflight_provider_interruption_preserves_original_pending_charge(prepared_cell, tmp_path, request):
+    from core.executor.process import ProcessJournal
+    from zoo.circle_packing.mori_supervisor import reconcile_live_containment
+    config, ledger, clock, _runner = prepared_cell
+    reference = request.node.callspec.params['prepared_cell'] == 'reference_fake_live_inflight'
+    cell = 'vendor-0' if reference else 'mori-0'
+    if reference:
+        clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+            cell_id=cell, plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
+    with tempfile.TemporaryDirectory(prefix='mori-inflight-', dir='/tmp') as workspace:
+        if reference:
+            config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
+                      'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
+        setup, directory = tmp_path / 'inflight-config.json', tmp_path / 'inflight-supervisor'
+        setup.write_text(json.dumps(config))
+        script = '''import json,sys
+from pathlib import Path
+from core.composition.recovery import ContinuationStore
+from zoo.circle_packing.cell_deadline import CellDeadline,CellLifecycle
+from zoo.circle_packing.mori_supervisor import launch_live_controller,launch_reference_live_controller
+from zoo.mle_bench_lite.cny_budget import CampaignBudget
+c=json.loads(Path(sys.argv[1]).read_text()); l=CampaignBudget(c['ledger']); cell=sys.argv[3]
+d=CellDeadline.restore(ContinuationStore(c['clock']),lifecycle=CellLifecycle(l),
+    cell_id=cell,plan_ref=c['ref'],seconds=c['plan']['limits']['wallclock_seconds'])
+launch=(launch_reference_live_controller if cell.startswith('vendor-') else launch_live_controller)
+launch(c,deadline=d,directory=Path(sys.argv[2]),api_key='fixture-only-secret')
+'''
+        env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
+               'PYTHONDONTWRITEBYTECODE': '1'}
+        owner = subprocess.Popen([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
+            str(setup), str(directory), cell], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            marker, end = tmp_path / 'provider-inflight', time.monotonic() + 120
+            while not marker.exists() and time.monotonic() < end:
+                if owner.poll() is not None:
+                    raise AssertionError('supervisor exited before fake request reached transport')
+                time.sleep(.05)
+            assert marker.exists()
+            before = ledger.snapshot()
+            assert len(before['pending_calls']) == 1
+            assert before['reserved_micro_cny'] > 0
+            owner.kill(); owner.wait(timeout=10)
+            end = time.monotonic() + 10
+            while True:
+                try:
+                    result = reconcile_live_containment(config, deadline=clock, directory=directory)
+                    break
+                except RuntimeError as error:
+                    if 'running original process' not in str(error) or time.monotonic() >= end:
+                        raise
+                    time.sleep(.05)
+            assert result['state'] == 'group_cleaned_cell_unresolved'
+            after = ledger.snapshot()
+            assert after['pending_calls'] == before['pending_calls']
+            assert after['reserved_micro_cny'] == before['reserved_micro_cny']
+            assert after['settled_upper_bound_micro_cny'] == before['settled_upper_bound_micro_cny']
+            journal = ProcessJournal(ContinuationStore(directory / 'controller.jsonl'))
+            assert len(journal.started()) == 1 and not journal.finished_ids()
+            with pytest.raises(RuntimeError, match='containment'):
+                journal.recover(journal.started()[0])
+        finally:
+            if owner.poll() is None:
+                owner.kill(); owner.wait()
+            owner.stdout.close(); owner.stderr.close()
 
 
 @pytest.mark.linux

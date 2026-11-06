@@ -280,6 +280,11 @@ offline pair test uses one temporary campaign and source plan, runs each arm
 for six configured rounds with fake transport, and audits both at the same
 campaign head. The test records the other four cells as unclaimed; it is not a
 fairness, live-readiness or benchmark certification.
+An offline process test pauses the fake provider after currency admission on
+each arm. It checks both supervisor death and a shortened 45-second test-only
+deadline: the original call remains pending without retry or invented zero
+cost. The temporary source and campaign are isolated; the production plan
+retains its 2700-second limit. These tests do not resolve unknown charges.
 `pair_audit.audit_pair_snapshot` independently reconstructs both final
 snapshots and currency upper bounds from views pinned to the same campaign
 head, checks their declared seed and plan, and reports all six claim states.
