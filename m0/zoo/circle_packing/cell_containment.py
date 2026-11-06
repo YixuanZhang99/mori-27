@@ -28,14 +28,19 @@ def delegated_cell_group():
     try:
         yield group
     finally:
-        # Never report clean termination unless the kernel confirms no member.
-        (group / 'cgroup.kill').write_text('1')
-        end = time.monotonic() + 10
-        while time.monotonic() < end and 'populated 0' not in (group / 'cgroup.events').read_text().splitlines():
-            time.sleep(.02)
-        if 'populated 0' not in (group / 'cgroup.events').read_text().splitlines():
-            raise RuntimeError('cell containment could not confirm termination')
-        group.rmdir()
+        if group.exists():
+            finish_cell_group(group)
+
+
+def finish_cell_group(group):
+    """Kill and remove the group before recording a successful process result."""
+    (group / 'cgroup.kill').write_text('1')
+    end = time.monotonic() + 10
+    while time.monotonic() < end and 'populated 0' not in (group / 'cgroup.events').read_text().splitlines():
+        time.sleep(.02)
+    if 'populated 0' not in (group / 'cgroup.events').read_text().splitlines():
+        raise RuntimeError('cell containment could not confirm termination')
+    group.rmdir()
 
 
 def contained_command(group, command):

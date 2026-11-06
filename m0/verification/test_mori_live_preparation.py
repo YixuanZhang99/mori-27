@@ -104,6 +104,9 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
     directory = tmp_path / 'live-supervisor'
     result = launch_live_controller(config, deadline=clock, directory=directory, api_key='fixture-only-secret')
     assert result['returncode'] == 0 and not result['timeout'] and not result.get('wrapper_error'), result['stderr']
+    events = list(ContinuationStore(directory / 'controller.jsonl').read())
+    kinds = [event['kind'] for event in events]
+    assert kinds.index('executor_containment_verified') < kinds.index('executor_process_finished')
     report = json.loads(result['stdout'])
     assert report['mode'] == 'live' and report['performance_claim'] is False
     assert report['candidate'] and report['final_state'] == 'completed' and report['replay_passed']

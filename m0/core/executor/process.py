@@ -139,8 +139,15 @@ class ProcessJournal:
             "recovered": recovered})
         return completed
 
-    def wait(self, proc: subprocess.Popen, record: dict) -> dict:
+    def wait(self, proc: subprocess.Popen, record: dict, *, before_record=None) -> dict:
         proc.wait()
+        if record.get('containment_required') is True:
+            if not callable(before_record):
+                raise RuntimeError('required process containment is unresolved')
+            before_record()
+            self.store.append('executor_containment_verified', {'execution_id': record['execution_id']})
+        elif before_record is not None:
+            raise ValueError('unexpected process containment callback')
         return self._completed(record, recovered=False)
 
     def fail(self, record: dict, detail: str) -> None:
@@ -215,6 +222,11 @@ class ProcessJournal:
             # Already-completed historical executions remain readable under the
             # policy they actually used; never rewrite their record as current.
             return {"status": "finished", **self.completed_result(record)}
+        if record.get('containment_required') is True:
+            proofs = [row['payload'] for row in self.store.read('executor_containment_verified')
+                      if row['payload'].get('execution_id') == record['execution_id']]
+            if proofs != [{'execution_id': record['execution_id']}]:
+                raise RuntimeError('required process containment is unresolved')
         try:
             self._validate_recovery_policy(record)
         except (OSError, ValueError, RuntimeError, UnicodeError) as error:

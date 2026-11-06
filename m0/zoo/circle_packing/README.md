@@ -216,7 +216,9 @@ run or certify termination of every descendant.
 The live supervisor now requires a writable delegated cgroup v2 and places its
 trusted controller in a fresh child group before executing it. On return it
 kills remaining members and requires the kernel to report the group empty.
-This does not yet verify supervisor-crash recovery or protect against a process
+The process journal records that confirmation before publishing its terminal
+result; without the confirmation, ordinary recovery fails closed. This does
+not yet recover an interrupted containment group or protect against a process
 that can itself write the delegated cgroup; candidate sandboxing and the
 closed pilot gate remain necessary.
 `verification/test_mori_live_preparation.py` exercises the latter composition

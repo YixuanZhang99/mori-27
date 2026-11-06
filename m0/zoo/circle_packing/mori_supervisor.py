@@ -105,13 +105,19 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
     if containment_group is not None:
         from zoo.circle_packing.cell_containment import contained_command
         command = contained_command(containment_group, command)
+    metadata = {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}
+    if containment_group is not None:
+        metadata['containment_required'] = True
     process, execution = journal.launch(
         command, root, env,
-        remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}, die_with_parent=True,
+        remaining, metadata, die_with_parent=True,
         absolute_deadline={'boot_id': record['boot_id'],
             'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})
     try:
-        return journal.wait(process, execution)
+        if containment_group is None:
+            return journal.wait(process, execution)
+        from zoo.circle_packing.cell_containment import finish_cell_group
+        return journal.wait(process, execution, before_record=lambda: finish_cell_group(containment_group))
     except BaseException:
         journal.terminate_target(execution)
         if process.poll() is None:
