@@ -209,6 +209,10 @@ only in memory. `mori_live_worker.run` connects search, frozen final audit and
 recorded replay, but its live pilot gate is deliberately closed; it is not yet
 a supervised or authorized live launch command. The offline test overrides the
 gate only with a disposable campaign, fake key and blocked external network.
+`mori_supervisor.launch_live_controller` connects that trusted host to the
+existing one-claim process journal and original deadline. The gate remains
+closed in both supervisor and worker, so this wiring does not enable a paid
+run or certify termination of every descendant.
 `verification/test_mori_live_preparation.py` exercises the latter composition
 with a disposable unmarked ledger and a fake key. It forbids provider and
 sandbox execution and checks that no calls or charges occurred. This is a

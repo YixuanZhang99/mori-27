@@ -149,6 +149,53 @@ def test_live_run_fails_closed_before_preparation_when_gate_is_incomplete(monkey
     assert 'DEEPSEEK_API_KEY' not in os.environ
 
 
+def test_live_supervisor_closed_gate_does_not_claim_or_create_files(tmp_path):
+    from zoo.circle_packing.mori_supervisor import launch_live_controller
+    target = tmp_path / 'controller'
+    with pytest.raises(ValueError, match='pilot gate'):
+        launch_live_controller(config(), deadline=None, directory=target, api_key='fixture-only-secret')
+    assert not target.exists()
+
+
+@pytest.mark.linux
+def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+    from core.executor.process import ProcessJournal
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.mori_supervisor import launch_live_controller
+    ledger = campaign_fixture(tmp_path)
+    policy = ledger.manifest_binding()
+    ref = 'sha256:' + 'a' * 64
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='mori-0', plan_ref=ref, seconds=30)
+    source, runtime = tmp_path / 'source' / 'm0', tmp_path / 'runtime'
+    source.mkdir(parents=True)
+    runtime.mkdir()
+    cfg = {**config(), 'ledger': str(ledger.path), 'clock': str(clock._store.path),
+           'source': str(source), 'runtime': str(runtime), 'output': str(tmp_path / 'output'),
+           'campaign_id': policy['campaign_id'], 'base_url': policy['provider_base_url'], 'ref': ref}
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
+                        lambda *a, **k: {'campaign_id': policy['campaign_id'], 'wallclock_seconds': 30})
+    monkeypatch.setattr('zoo.circle_packing.frozen_source.verify_frozen_source', lambda *a, **k: None)
+    monkeypatch.setattr('zoo.circle_packing.frozen_runtime.verify_frozen_runtime', lambda *a, **k: None)
+    launches = []
+    def launch(self, args, cwd, env, timeout, metadata, **kwargs):
+        assert env['DEEPSEEK_API_KEY'] == 'fixture-only-secret'
+        assert 'fixture-only-secret' not in repr(args) + repr(metadata)
+        launches.append(1)
+        return None, {}
+    monkeypatch.setattr(ProcessJournal, 'launch', launch)
+    monkeypatch.setattr(ProcessJournal, 'wait', lambda *a, **k: {'returncode': 0})
+    directory = tmp_path / 'controller'
+    launch_live_controller(cfg, deadline=clock, directory=directory, api_key='fixture-only-secret')
+    assert launches == [1] and ledger.cell_worker_claim('mori-0') is not None
+    for path in directory.rglob('*'):
+        if path.is_file() and not path.is_symlink():
+            assert b'fixture-only-secret' not in path.read_bytes()
+
+
 def test_shared_controller_rejects_mismatched_ledger_before_setup(tmp_path):
     from test_governed_cny_framework import campaign_fixture
     from zoo.circle_packing.mori_controller import build_controller

@@ -25,8 +25,32 @@ def launch_fixture_controller(config, *, deadline, directory):
     ledger = CampaignBudget(config['ledger'])
     if not ledger.is_fixture_campaign():
         raise ValueError('fixture campaign is required')
+    return _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
+                              entry='zoo.circle_packing.mori_fixture_worker', api_key=None)
+
+
+def launch_live_controller(config, *, deadline, directory, api_key):
+    """Supervise a live controller only after the still-closed pilot gate."""
+    from zoo.circle_packing.mori_live_worker import _require_live_gate
+    _require_live_gate(config)
+    from zoo.circle_packing.mori_controller import CONFIG_FIELDS
+    if type(config) is not dict or set(config) != CONFIG_FIELDS or \
+            type(config['seed']) is not int or config['seed'] not in (0, 1, 2) or \
+            any(type(config[name]) is not str or not Path(config[name]).is_absolute()
+                for name in ('source', 'runtime', 'ledger', 'clock', 'output')):
+        raise ValueError('live controller requires its exact configuration')
+    if type(api_key) is not str or not api_key.strip():
+        raise ValueError('live controller requires an in-memory credential')
+    ledger = CampaignBudget(config['ledger'])
+    if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
+        raise ValueError('live controller requires its original non-fixture provider')
+    return _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
+                              entry='zoo.circle_packing.mori_live_worker', api_key=api_key)
+
+
+def _launch_controller(config, *, ledger, deadline, directory, entry, api_key):
     if type(deadline) is not CellDeadline or deadline._lifecycle.ledger.path.resolve() != ledger.path.resolve():
-        raise ValueError('fixture requires the original campaign cell deadline')
+        raise ValueError('controller requires the original campaign cell deadline')
     record = deadline._record
     if record['cell_id'] != f"mori-{config['seed']}" or record['plan_ref'] != config['ref'] or \
             Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
@@ -62,15 +86,17 @@ def launch_fixture_controller(config, *, deadline, directory):
         json.dump(config, stream, sort_keys=True, allow_nan=False)
     worker_ref = payload_digest({'schema_version': 1, 'cell_id': record['cell_id'],
         'deadline_ref': record['record_sha256'], 'config_sha256': payload_digest(config),
-        'directory': str(root), 'entry': 'zoo.circle_packing.mori_fixture_worker'})
+        'directory': str(root), 'entry': entry})
     ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], worker_ref)
     remaining = deadline.remaining()
     if remaining <= 0:
         raise ValueError('fixture controller deadline expired after claim')
     journal = ProcessJournal(ContinuationStore(root / 'controller.jsonl'))
+    env = {'PATH': child_path, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
+    if api_key is not None:
+        env['DEEPSEEK_API_KEY'] = api_key
     process, execution = journal.launch(
-        [str(runtime / 'bin' / 'python'), '-m', 'zoo.circle_packing.mori_fixture_worker', str(setup)], root,
-        {'PATH': child_path, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'},
+        [str(runtime / 'bin' / 'python'), '-m', entry, str(setup)], root, env,
         remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}, die_with_parent=True,
         absolute_deadline={'boot_id': record['boot_id'],
             'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})

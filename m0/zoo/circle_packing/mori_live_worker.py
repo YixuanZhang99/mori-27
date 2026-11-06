@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import os
+import json
+from pathlib import Path
+import sys
 
 
 def _prepare(config, *, api_key):
@@ -54,3 +57,14 @@ def run(config):
             'replay_passed': replay['passed'], 'limits': profile['budget']['options']['limits']['global'],
             'model_config': {'model': provider.manifest_binding()['requested_model'],
                              'max_completion_tokens': provider.manifest_binding()['max_completion_tokens']}}
+
+
+def main():
+    if len(sys.argv) != 2:
+        raise SystemExit('usage: python -m zoo.circle_packing.mori_live_worker CONFIG')
+    config = json.loads(Path(sys.argv[1]).read_text())
+    print(json.dumps(run(config), sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()
