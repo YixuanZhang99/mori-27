@@ -228,6 +228,12 @@ def test_recorded_only_currency_bridge_refuses_live_binding():
         bridge.bind_run(SimpleNamespace(mode='live'))
 
 
+def test_reference_recorded_bridge_cannot_be_constructed_for_live_work():
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    with pytest.raises(ValueError, match='recorded'):
+        CNYInvocationBridge(None, recorded_reference=True)
+
+
 def test_recorded_replay_cli_removes_key_before_reading_config(tmp_path, monkeypatch):
     import sys
     from zoo.circle_packing import mori_recorded

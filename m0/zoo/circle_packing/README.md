@@ -284,6 +284,11 @@ not older versions. After supervisor death, the same reconciliation entry can
 check the original reference-host claim and clean its surviving group; the
 whole cell and accounting stay unresolved, with no automatic retry. Independent
 paired audits and the remaining pilot gates are still required before paid use.
+On a completed reference cell the trusted host exports its recorded currency
+bundle. `reference_currency.audit_reference_currency` independently checks
+the anchored transcript, provider receipts and campaign charges with a
+recorded-only bridge and no provider key. This is a currency audit of the
+pinned snapshot, not proof of complete-run or benchmark performance.
 `reference_budget_config` independently reconstructs the reference physical
 budget from the frozen plan and campaign, without a provider credential. An
 offline pair test uses one temporary campaign and source plan, runs each arm

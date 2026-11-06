@@ -168,11 +168,14 @@ def _verify_failed_construction_cycle(rows, event, logical_run_id):
 class CNYInvocationBridge:
     """Fresh per-runtime adapter; the campaign itself remains independently shared."""
 
-    def __init__(self, ledger, *, usage_dir=None, spool_dir=None, cell_deadline_binding=None, recorded_only=False):
-        if type(recorded_only) is not bool:
+    def __init__(self, ledger, *, usage_dir=None, spool_dir=None, cell_deadline_binding=None,
+                 recorded_only=False, recorded_reference=False):
+        if type(recorded_only) is not bool or type(recorded_reference) is not bool or \
+                recorded_reference and not recorded_only:
             raise ValueError('recorded-only mode must be boolean')
         self.ledger = ledger
         self._recorded_only = recorded_only
+        self._recorded_reference = recorded_reference
         self._usage_dir = usage_dir
         self._spool_dir = spool_dir
         self._run = None
@@ -339,7 +342,10 @@ class CNYInvocationBridge:
             elif bundle['schema_version'] != 1:
                 raise ValueError('untimed recorded run cannot carry timing evidence')
             if self._recorded_deadline is not None:
-                self._require_complete_timed_transcript()
+                if self._recorded_reference:
+                    self._require_reference_snapshot()
+                else:
+                    self._require_complete_timed_transcript()
                 response_ids = [record['prepared']['call_id'] for record in bundle['calls']
                                 if record['response'] is not None]
                 proofs = bundle['timing']['responses']
@@ -998,6 +1004,18 @@ class CNYInvocationBridge:
         self.ledger.anchor_empty_terminal(self._ready.authority_binding['currency_run_id'],
                                           deadline._record['cell_id'], payload_digest(prefix))
 
+    def _require_reference_snapshot(self):
+        from core.composition.external_provider import EXTERNAL_RUNTIME
+        if self._run.runtime_id != EXTERNAL_RUNTIME or self.cell_deadline() is None:
+            raise ValueError('reference recorded audit requires its timed host runtime')
+        run_id = self._ready.authority_binding['currency_run_id']
+        snapshot = self._authority.reference_physical_snapshot(run_id)
+        selection = self._authority.reference_selection(run_id)
+        rows_ref = payload_digest(self._root_rows())
+        if snapshot is None or selection is None or snapshot.get('rows_sha256') != rows_ref or \
+                selection.get('rows_sha256') != rows_ref or 'worker_proof_sha256' not in snapshot:
+            raise ValueError('reference recorded audit requires its anchored selection and physical snapshot')
+
     def _require_complete_timed_transcript(self):
         rows = self._root_rows()
         phases = {row['payload'].get('phase') for row in rows if row['kind'] == 'governed_work_eligibility'}
@@ -1437,10 +1455,20 @@ class CNYInvocationBridge:
             if any(root.get(slot) != proof['terminal'] for slot, proof in indexed.items()):
                 raise ValueError('currency terminal differs from authoritative root journal')
 
+    def reference_audit_bundle(self):
+        """Export anchored reference currency receipts without live work."""
+        if self._run is None or self._run.mode != 'live':
+            raise ValueError('reference audit export requires the original live authority')
+        self._require_reference_snapshot()
+        return self._export_recorded_bundle(reference=True)
+
     def replay_bundle(self):
         if self._run.mode == 'recorded':
             self.audit()
             return _copy(self._bundle)
+        return self._export_recorded_bundle(reference=False)
+
+    def _export_recorded_bundle(self, *, reference):
         if self.audit()['unknown_cost_calls']:
             raise UsageError('unresolved currency usage cannot produce recorded replay proof')
         authority = self._ready.authority_binding
@@ -1450,7 +1478,10 @@ class CNYInvocationBridge:
             'currency_evidence': _copy(self._last_audit_evidence)}
         deadline = self.cell_deadline()
         if deadline is not None:
-            self._require_complete_timed_transcript()
+            if reference:
+                self._require_reference_snapshot()
+            else:
+                self._require_complete_timed_transcript()
             from zoo.circle_packing.cell_deadline import RecordedCellClock
             view = RecordedCurrencyView(bundle['currency_evidence'],
                 expected_run_id=authority['currency_run_id'], expected_plan_ref=self._ready.physical_plan_ref)

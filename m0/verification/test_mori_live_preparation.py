@@ -502,6 +502,39 @@ def test_reference_supervisor_runs_live_host_with_fake_transport_and_original_au
         result = json.loads(process['stdout'])
         assert result['mode'] == 'live' and result['performance_claim'] is False and result['state'] == 'completed'
         assert result['selected_program']['metrics']['validity'] == 1.0
+        from core.x1.checkpoint import payload_digest
+        from zoo.circle_packing.reference_currency import audit_reference_currency
+        bundle = json.loads((Path(config['output']) / 'reference-currency.json').read_text())
+        assert payload_digest(bundle) == result['currency_bundle_sha256']
+        rows = list(ContinuationStore(Path(config['output']) / 'events.jsonl').read())
+        def forbidden(*args, **kwargs):
+            raise AssertionError('independent reference currency audit attempted live work')
+        monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+        monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', forbidden)
+        audited = audit_reference_currency(bundle, rows=rows, expected_head=ledger.snapshot()['journal_head'],
+                                            expected_plan_ref=config['ref'], plan=config['plan'], seed=0)
+        assert audited['settled_upper_bound_micro_cny'] == config['plan']['iterations'] * 38
+        script = '''import json,socket,sys
+from pathlib import Path
+from core.composition.recovery import ContinuationStore
+from zoo.circle_packing.reference_currency import audit_reference_currency
+from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+def forbidden(*args,**kwargs): raise AssertionError('reference audit attempted external work')
+socket.socket.connect=forbidden
+GovernedCNYProvider.perform_request=forbidden
+c=json.loads(Path(sys.argv[1]).read_text()); b=json.loads(Path(sys.argv[2]).read_text())
+rows=list(ContinuationStore(sys.argv[3]).read())
+print(json.dumps(audit_reference_currency(b,rows=rows,expected_head=json.loads(sys.argv[4]),
+    expected_plan_ref=c['ref'],plan=c['plan'],seed=c['seed']),sort_keys=True))
+'''
+        audit_env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
+                     'PYTHONDONTWRITEBYTECODE': '1'}
+        independent = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
+            str(directory / 'config.json'), str(Path(config['output']) / 'reference-currency.json'),
+            str(Path(config['output']) / 'events.jsonl'), json.dumps(ledger.snapshot()['journal_head'])],
+            env=audit_env, cwd=tmp_path, capture_output=True, text=True, timeout=120)
+        assert independent.returncode == 0, independent.stderr
+        assert json.loads(independent.stdout) == audited
         assert ledger.snapshot()['settled_upper_bound_micro_cny'] == config['plan']['iterations'] * 38
         assert not ledger.snapshot()['pending_calls']
         assert ledger.reference_host_claim('vendor-0') is not None
@@ -883,5 +916,17 @@ def test_reference_real_provider_path_with_test_gate_override_and_no_network(pre
             governance=authority.budget._governed.config, rows=list(authority.budget.store.read()))
         assert recovered['metrics'] == result['selected_program']['metrics']
         assert recovered['selection_frozen'] and recovered['performance_claim'] is False
+        from zoo.circle_packing.reference_currency import audit_reference_currency
+        bundle = authority.bridge.reference_audit_bundle()
+        currency = audit_reference_currency(bundle, rows=list(authority.budget.store.read()),
+            expected_head=ledger.snapshot()['journal_head'], expected_plan_ref=config['ref'], plan=plan, seed=0)
+        assert currency['settled_upper_bound_micro_cny'] == len(calls) * 38
+        assert currency['invocations'] == len(calls) and currency['performance_claim'] is False
+        import copy
+        changed = copy.deepcopy(bundle)
+        changed['calls'][0]['prepared']['bound']['reserved_micro_cny'] += 1
+        with pytest.raises(ValueError):
+            audit_reference_currency(changed, rows=list(authority.budget.store.read()),
+                expected_head=ledger.snapshot()['journal_head'], expected_plan_ref=config['ref'], plan=plan, seed=0)
     finally:
         authority.close()
