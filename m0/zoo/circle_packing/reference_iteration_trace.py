@@ -12,6 +12,15 @@ def _digest(value):
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
+def reference_iteration_attempt_limit(planned_iterations):
+    """Bound initial submissions plus one attempt per island per completion."""
+    from core.composition.openevolve_registration import host_database_options
+    if type(planned_iterations) is not int or not 1 <= planned_iterations <= 6:
+        raise ValueError('reference iteration limit differs from the frozen pilot')
+    islands = host_database_options(2)['num_islands']
+    return planned_iterations * (1 + islands)
+
+
 class _Capture:
     def __init__(self):
         self._submitted = []

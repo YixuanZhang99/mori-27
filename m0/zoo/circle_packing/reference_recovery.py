@@ -86,10 +86,12 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
             options=options, stamp=stamp, governance=governance, rows=rows, request_ids=anchor['request_ids'])
         trace = report.get('iteration_trace')
         if trace is not None:
+            from zoo.circle_packing.reference_iteration_trace import reference_iteration_attempt_limit
             if type(trace) is not dict or set(trace) != {'schema_version', 'scope', 'performance_claim', 'iterations'} or \
                     type(trace['schema_version']) is not int or trace['schema_version'] != 1 or \
                     trace['scope'] != 'reference_submitted_future_outcomes' or trace['performance_claim'] is not False or \
-                    type(trace['iterations']) is not list or len(trace['iterations']) > 2 * plan['iterations']:
+                    type(trace['iterations']) is not list or \
+                    len(trace['iterations']) > reference_iteration_attempt_limit(plan['iterations']):
                 raise ValueError('reference worker iteration trace is invalid')
             result['iteration_trace'] = trace
         return result

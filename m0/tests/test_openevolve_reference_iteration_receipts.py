@@ -3,7 +3,7 @@ import copy
 
 import pytest
 
-from zoo.circle_packing.reference_iteration_trace import audit_reference_iteration_receipts
+from zoo.circle_packing.reference_iteration_trace import audit_reference_iteration_receipts, reference_iteration_attempt_limit
 
 
 def test_iteration_receipts_match_original_stage_and_preserve_unlinked_failures():
@@ -36,3 +36,7 @@ def test_not_submitted_iteration_can_be_retried_without_hiding_missing_work():
     report = audit_reference_iteration_receipts(trace, [], planned_iterations=2)
     assert [item['attempt'] for item in report['iterations']] == [1, 2, 1]
     assert report['missing_iterations'] == [2]
+
+
+def test_attempt_bound_accounts_for_each_island_per_completion():
+    assert reference_iteration_attempt_limit(6) >= 14
