@@ -788,3 +788,44 @@ def test_mori_candidate_cannot_be_committed_after_deadline(tmp_path, local_endpo
     assert calls['count'] == 2 and len(fw._composed.proposals) == 1
     assert len(list(fw._composed.store.read('composed_decision'))) == 1
     assert not fw._composed.budget.state()['open_intents']
+
+
+@pytest.mark.linux
+def test_timed_known_provider_failure_is_settled_and_replays(tmp_path, local_endpoint, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.governed import governed_setup
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+
+    campaign = campaign_fixture(tmp_path)
+    plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
+                            dependency_lock_sha256='b' * 64)
+    ref = 'sha256:' + plan['draft_sha256']
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(campaign),
+                               cell_id='mori-0', plan_ref=ref, seconds=2700)
+    options = dict(ledger=campaign, api_key='fixture-only-secret', seed=0, iterations=1,
+                   base_url=local_endpoint.url, max_completion_tokens=4,
+                   cell_deadline=clock, draft_plan=plan, expected_plan_ref=ref)
+    profile, registry, provider = governed_setup(tmp_path / 'run', **options)
+    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'length', 'message': {'content': 'partial'}}]))
+    cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
+                     reeval_floor=0, baseline_every=100)
+    domain = CirclePackingDomain(tmp_path / 'run' / 'domain', runner=SandboxRunner())
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(tmp_path / 'run' / 'framework'),
+                                component_registry=registry)
+    fw.evolve('Improve the arrangement of 26 circles in a square')
+    outcomes = [row['payload'] for row in fw._composed.store.read('construction_outcome')]
+    assert any(row['outcome']['kind'] == 'failed' for row in outcomes)
+    assert len(local_endpoint.requests) == 1 and not campaign.snapshot()['pending_calls']
+    assert fw._composed.governed.external.audit()['protection_valid']
+    assert fw._composed.budget.audit_governance()['physical_totals']['token'] == 7
+    def adapters(path, store):
+        _, _, replay_provider = governed_setup(tmp_path / 'run', **options)
+        return replay_provider, CirclePackingDomain(tmp_path / 'replay-domain', runner=SandboxRunner())
+    def forbidden(*args, **kwargs):
+        raise AssertionError('recorded replay performed external work')
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    monkeypatch.setattr(CirclePackingDomain, 'evaluate', forbidden)
+    assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
+    assert len(local_endpoint.requests) == 1
