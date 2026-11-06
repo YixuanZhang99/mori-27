@@ -18,6 +18,11 @@ def prompt():
                        'response_instruction': 'Return a diff.', 'repair_feedback': ['fix mismatch']})
 
 
+def host_prompt():
+    messages = {'system': 'host system', 'user': 'host user'}
+    return json.dumps({'host_messages': messages, 'host_prompt_ref': 'sha256:' + payload_digest(messages)})
+
+
 def test_opt_in_sends_vendor_roles_and_repair_feedback():
     wire = json.loads(build_request(prompt(), binding()))
     assert wire['messages'][0] == {'role': 'system', 'content': 'vendor system'}
@@ -25,6 +30,12 @@ def test_opt_in_sends_vendor_roles_and_repair_feedback():
     assert wire['messages'][1]['content'].startswith('vendor user')
     assert 'Return a diff.' in wire['messages'][1]['content']
     assert 'fix mismatch' in wire['messages'][1]['content']
+
+
+def test_host_mode_preserves_exact_upstream_system_and_user_messages():
+    wire = json.loads(build_request(host_prompt(), binding(message_mode='openevolve_host_v1')))
+    assert wire['messages'] == [{'role': 'system', 'content': 'host system'},
+                                {'role': 'user', 'content': 'host user'}]
 
 
 @pytest.mark.parametrize('value', ['ordinary user request', '{}', '{"vendor_messages":{}}'])

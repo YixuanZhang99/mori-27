@@ -286,9 +286,9 @@ class CNYInvocationBridge:
             return key
         try:
             mode = manifest.get('message_mode', 'single_user_v1')
-            if (mode == 'openevolve_v1') != (prepared['schema_version'] == 2):
+            if (mode in {'openevolve_v1', 'openevolve_host_v1'}) != (prepared['schema_version'] == 2):
                 raise ValueError('prepared message mode differs from frozen provider')
-            prompt = (prepared['argument'] if mode == 'openevolve_v1'
+            prompt = (prepared['argument'] if prepared['schema_version'] == 2
                       else json.loads(body)['messages'][0]['content'])
             args_hash = payload_digest({'args': (prompt,), 'kwargs': {}})
             if args_hash != context.argument_sha256 or body != build_request(prompt, {
@@ -398,7 +398,7 @@ class CNYInvocationBridge:
             'bound': self.ledger.quote_call(self._preparation['manifests'][key]['max_completion_tokens']),
             'physical_bound': self._bindings[key]['call_bound'],
             'provider_binding_sha256': payload_digest(self._preparation['manifests'][key])}
-        if self._preparation['manifests'][key].get('message_mode') == 'openevolve_v1':
+        if self._preparation['manifests'][key].get('message_mode') in {'openevolve_v1', 'openevolve_host_v1'}:
             prepared['schema_version'] = 2
             prepared['argument'] = args[0]
         self._validate_prepared(prepared, context)

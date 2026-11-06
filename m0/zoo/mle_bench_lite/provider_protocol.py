@@ -41,6 +41,20 @@ def build_request(prompt: str, binding: dict) -> bytes:
             suffix += '\nRepair feedback:\n' + '\n'.join(feedback)
         messages = [{'role': 'system', 'content': vendor['system']},
                     {'role': 'user', 'content': vendor['user'] + suffix}]
+    elif mode == 'openevolve_host_v1':
+        from core.x1.checkpoint import payload_digest
+        try:
+            request = json.loads(prompt)
+            vendor = request['host_messages']
+            if type(request) is not dict or set(request) != {'host_messages', 'host_prompt_ref'} or \
+                    type(vendor) is not dict or set(vendor) != {'system', 'user'} or \
+                    any(type(vendor[key]) is not str or not vendor[key].strip() for key in vendor) or \
+                    request['host_prompt_ref'] != 'sha256:' + payload_digest(vendor):
+                raise ValueError('invalid bound host messages')
+        except (TypeError, KeyError, json.JSONDecodeError) as error:
+            raise ValueError('invalid bound host messages') from error
+        messages = [{'role': 'system', 'content': vendor['system']},
+                    {'role': 'user', 'content': vendor['user']}]
     else:
         raise ValueError('unsupported provider message mode')
     payload = {'model': model, 'messages': messages}

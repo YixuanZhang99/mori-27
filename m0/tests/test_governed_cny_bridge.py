@@ -27,6 +27,9 @@ def setup(tmp_path, request):
     if mode == 'openevolve_v1':
         from test_openevolve_governed_transport import prompt
         argument = prompt()
+    elif mode == 'openevolve_host_v1':
+        from test_openevolve_governed_transport import host_prompt
+        argument = host_prompt()
     else:
         argument = 'prompt'
     ledger = CampaignBudget.create(tmp_path / 'campaign.db')
@@ -116,6 +119,18 @@ def test_two_role_unknown_usage_keeps_campaign_reservation(setup):
     assert ledger.snapshot()['pending_calls']
     assert bridge.recover(context, context.argument_sha256).outcome == 'unknown'
     assert ledger.snapshot()['pending_calls']
+
+
+@pytest.mark.parametrize('setup', ['openevolve_host_v1'], indirect=True)
+def test_host_role_bridge_preserves_exact_messages_and_audits_record(setup):
+    from test_openevolve_governed_transport import host_prompt
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, (host_prompt(),), {}) == 'answer'
+    assert json.loads(calls[0][1])['messages'] == [
+        {'role': 'system', 'content': 'host system'}, {'role': 'user', 'content': 'host user'}]
+    complete(store)
+    assert bridge.audit()['protection_valid']
+    assert bridge.replay_bundle()['calls'][0]['prepared']['argument'] == host_prompt()
 
 
 @pytest.mark.parametrize('setup', ['openevolve_v1'], indirect=True)

@@ -90,6 +90,17 @@ def test_openevolve_two_role_transport_uses_original_bound_argument(local_endpoi
     assert wire['messages'][1]['content'].startswith('vendor user')
 
 
+def test_upstream_host_transport_preserves_exact_messages(local_endpoint):
+    from test_openevolve_governed_transport import host_prompt
+    local_endpoint.responses.append(reply())
+    p = provider(local_endpoint, message_mode='openevolve_host_v1')
+    body = p.prepare_request(host_prompt())
+    result = p.perform_request(body, prompt=host_prompt())
+    assert result.result == 'answer'
+    assert json.loads(local_endpoint.requests[0])['messages'] == [
+        {'role': 'system', 'content': 'host system'}, {'role': 'user', 'content': 'host user'}]
+
+
 def test_legacy_openai_wire_protocol_is_preserved():
     assert protocol().build_request('hello', binding(request_format='openai', temperature=0.25)) == (
         b'{"max_completion_tokens":16,"messages":[{"content":"hello","role":"user"}],'

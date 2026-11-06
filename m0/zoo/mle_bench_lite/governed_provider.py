@@ -29,7 +29,7 @@ class GovernedCNYProvider:
     def __init__(self, model, base_url, *, campaign_binding, max_completion_tokens=4096,
                  timeout=120.0, api_key=None, token_admission='model_capacity_v1',
                  phase_call_limits=None, reasoning_effort='high', message_mode='single_user_v1'):
-        if message_mode not in {'single_user_v1', 'openevolve_v1'}:
+        if message_mode not in {'single_user_v1', 'openevolve_v1', 'openevolve_host_v1'}:
             raise ValueError('unsupported provider message mode')
         if type(reasoning_effort) is not str or reasoning_effort not in {'low', 'high', 'max'}:
             raise ValueError('reasoning effort must be low, high or max')
