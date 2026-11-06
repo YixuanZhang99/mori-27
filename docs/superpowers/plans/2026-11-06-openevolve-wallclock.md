@@ -52,5 +52,23 @@
 
 **Interface:** The same authority bounds setup, control, controller worker, sandbox and final validation. On expiry terminate and verify every worker descendant or preserve an unresolved terminal; restart never creates a new deadline. Export original timing, process and accounting evidence for independent recalculation.
 
+2026-11-06 feasibility probe: this host can create a delegated user systemd
+scope even though its current cgroup is read-only. Inside that scope, a fresh
+cgroup-v2 child contains a process that calls `setsid`; `cgroup.kill` stops it
+and `cgroup.events` reports `populated 0`. Reproduce with:
+
+```sh
+systemd-run --user --scope --quiet --property=Delegate=yes /usr/bin/env \
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=m0:m0/tests \
+  <locked-python> -m pytest -q -p no:cacheprovider m0/verification/test_openevolve_cgroup_probe.py
+```
+
+This is a host capability probe, not integrated supervision or a security
+boundary against a process that can write the delegated hierarchy. Integration
+must prevent untrusted processes from moving themselves out, place the worker
+before it starts work, preserve unresolved accounting, and cover supervisor
+crash/restart and unavailable delegation. Gate live execution until those
+properties and both arms are verified; an unsupported host must fail closed.
+
 - [ ] Add real-process tests for expiry during sandbox execution, timeout between search and final validation, child escape/unresolved handling, supervisor restart and reboot identity mismatch.
 - [ ] Wire both arms into an executable frozen plan; run offline paired integration, independent review and full checks. Until then retain `draft_not_executable` and no paid launch.
