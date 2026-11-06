@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 
 from zoo.circle_packing.reference_final import recalculate_reference_snapshot
@@ -105,6 +106,16 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
                     len(trace['stage_bindings']) > 2 * reference_iteration_attempt_limit(plan['iterations'])):
                 raise ValueError('reference worker stage bindings are invalid')
             result['iteration_trace'] = trace
+        database_capture = report.get('database_capture')
+        if database_capture is not None:
+            if type(database_capture) is not dict or set(database_capture) != {'schema_version', 'scope', 'sha256', 'count'} or \
+                    type(database_capture['schema_version']) is not int or database_capture['schema_version'] != 1 or \
+                    database_capture['scope'] != 'reference_database_additions' or \
+                    type(database_capture['sha256']) is not str or \
+                    not re.fullmatch(r'[0-9a-f]{64}', database_capture['sha256']) or \
+                    type(database_capture['count']) is not int or not 1 <= database_capture['count'] <= 1000:
+                raise ValueError('reference database capture metadata is invalid')
+            result['database_capture'] = database_capture
         return result
     except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:
         raise ValueError('invalid original reference recovery evidence') from error

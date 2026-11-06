@@ -144,8 +144,10 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
         setattr(config.database, name, value)
     evaluator = Path(__file__).with_name('reference_evaluator.py')
     from openevolve import process_parallel
+    from zoo.circle_packing.reference_database_trace import capture_database_additions
     from zoo.circle_packing.reference_iteration_trace import capture_reference_iterations
     with contextlib.redirect_stdout(sys.stderr), _hide_stage_receipts_from_prompts(), \
+            capture_database_additions(_ProgramDatabase, root) as database_capture, \
             capture_reference_iterations(process_parallel.ProcessParallelController, parallel_module=process_parallel,
                                          parent_directory=root) as capture:
         result = run_evolution(seed_code, evaluator, config=config, iterations=iterations,
@@ -157,6 +159,7 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
             AppendOnlyStore(root / 'iteration-requests.jsonl').read('reference_iteration_request')]
         iteration_trace['stage_bindings'] = [row['payload'] for row in
             AppendOnlyStore(root / 'iteration-stages.jsonl').read('reference_iteration_stage')]
+        database_capture_report = database_capture.finish()
     calls = None if fixture_broker else len(list(AppendOnlyStore(root / 'fixture-provider.jsonl').read('provider')))
     stages = len(list(AppendOnlyStore(root / 'fixture-stages.jsonl').read('stage')))
     if list(AppendOnlyStore(root / 'fixture-unresolved.jsonl').read('unresolved')):
@@ -173,6 +176,7 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
               'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
               'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker,
               'iteration_trace': iteration_trace,
+              'database_capture': database_capture_report,
               'model_config': {'model': model.name, 'max_completion_tokens': model.max_tokens},
               'selected_program': selected}
     if fixture_stage_broker:
