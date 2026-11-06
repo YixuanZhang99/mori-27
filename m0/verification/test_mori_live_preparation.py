@@ -690,7 +690,8 @@ launch(c,deadline=d,directory=Path(sys.argv[2]),api_key='fixture-only-secret')
         env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
                'PYTHONDONTWRITEBYTECODE': '1'}
         owner = subprocess.Popen([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
-            str(setup), str(directory), cell], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            str(setup), str(directory), cell], cwd=config['source'], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             marker, end = tmp_path / 'provider-inflight', time.monotonic() + 120
             while not marker.exists() and time.monotonic() < end:
@@ -1051,7 +1052,8 @@ launch_reference_live_controller(c,deadline=d,directory=Path(sys.argv[2]),api_ke
         env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
                'PYTHONDONTWRITEBYTECODE': '1'}
         owner = subprocess.Popen([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
-                                  str(setup), str(directory)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                  str(setup), str(directory)], cwd=config['source'], env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             marker, end = tmp_path / 'reference-ready', time.monotonic() + 60
             while not marker.exists() and time.monotonic() < end:
@@ -1304,7 +1306,8 @@ launch_live_controller(c,deadline=d,directory=Path(sys.argv[2]),api_key='fixture
     env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
            'PYTHONDONTWRITEBYTECODE': '1'}
     owner = subprocess.Popen([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
-                              str(setup), str(directory)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                              str(setup), str(directory)], cwd=config['source'], env=env,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         marker, end = tmp_path / 'controller-ready', time.monotonic() + 60
         while not marker.exists() and time.monotonic() < end:
