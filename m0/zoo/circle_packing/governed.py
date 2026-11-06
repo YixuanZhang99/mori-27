@@ -16,7 +16,9 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
 def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
                    max_completion_tokens=16384, total_token_ceiling=None,
-                   cell_deadline=None, draft_plan=None, expected_plan_ref=None, runner=None):
+                   cell_deadline=None, draft_plan=None, expected_plan_ref=None, runner=None, recorded_only=False):
+    if type(recorded_only) is not bool or recorded_only and (api_key is not None or cell_deadline is not None):
+        raise ValueError('recorded-only setup cannot receive a live key or deadline')
     policy = ledger.manifest_binding()
     snapshot = ledger.snapshot()
     if snapshot.get('pending_calls') or snapshot.get('protection_breaches') or \
@@ -34,7 +36,7 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
             raise ValueError('control runner must use the original campaign runtime')
     elif runner is not None and runner._campaign_runtime is not None:
         raise ValueError('control runtime is not bound to this campaign')
-    if pilot is not None and pilot.get('require_runtime') and any(
+    if not recorded_only and pilot is not None and pilot.get('require_runtime') and any(
             value is None for value in (cell_deadline, draft_plan, expected_plan_ref)):
         raise ValueError('frozen pilot setup requires its original cell clock')
     root = Path(output).resolve()
@@ -61,7 +63,7 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
         deadline_binding = (cell_deadline, draft_plan, expected_plan_ref, cell_id)
     registry = default_registry()
     registry.install_external_bridge('cny_invocation_v1', lambda: CNYInvocationBridge(
-        ledger, cell_deadline_binding=deadline_binding))
+        ledger, cell_deadline_binding=deadline_binding, recorded_only=recorded_only))
     registry.register('provider', 'circle-control', lambda _ctx, _opts: fresh(),
                       governance=fresh().governance_binding())
     registry.register('domain', 'circle-control', lambda ctx, _opts: CirclePackingDomain(

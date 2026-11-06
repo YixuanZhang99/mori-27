@@ -186,6 +186,31 @@ def test_live_cell_coordinator_closed_gate_does_not_start_clock(tmp_path, monkey
     assert not (tmp_path / 'supervisor').exists()
 
 
+def test_recorded_only_currency_bridge_refuses_live_binding():
+    from types import SimpleNamespace
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    bridge = CNYInvocationBridge(None, recorded_only=True)
+    with pytest.raises(ValueError, match='recorded'):
+        bridge.bind_run(SimpleNamespace(mode='live'))
+
+
+def test_recorded_mori_setup_needs_no_provider_key_and_refuses_live_run(tmp_path):
+    from core.loop import Framework, LoopConfig
+    from zoo.circle_packing.domain import CirclePackingDomain
+    from zoo.circle_packing.governed import governed_setup
+    ledger = fixture_campaign(tmp_path)
+    profile, registry, provider = governed_setup(tmp_path / 'run', ledger=ledger, api_key=None, seed=0,
+        iterations=1, base_url='http://127.0.0.1:1234/v1', max_completion_tokens=4, recorded_only=True)
+    assert provider._api_key is None
+    cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
+                     reeval_floor=0, baseline_every=100)
+    framework = Framework.from_profile(profile, provider, CirclePackingDomain(tmp_path / 'domain'), cfg,
+                                       str(tmp_path / 'framework'), component_registry=registry)
+    with pytest.raises(ValueError, match='recorded-only'):
+        framework.evolve('test replay must not dispatch')
+    assert not ledger.snapshot()['pending_calls']
+
+
 @pytest.mark.linux
 def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypatch):
     from contextlib import nullcontext

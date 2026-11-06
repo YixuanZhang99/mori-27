@@ -248,6 +248,11 @@ original eligibility proof against a caller-pinned campaign head and recorded
 clock, and reports the independently reduced currency upper bound only when
 that run has no unresolved calls or reservations. It does not establish that
 the supplied head is the latest or that every part of the run was audited.
+The trusted Mori host exports its recorded replay input before its own replay.
+`mori_recorded.replay_mori_snapshot` can reconstruct it in a separate fresh
+workspace using a pinned campaign head and a recorded-only bridge, without a
+provider key or live provider/evaluator execution. This checks the recorded
+transcript and checkpoint; it does not prove the supplied head is the latest.
 It also exercises the reference controller with a test-only override of the
 closed live gate, fake responses, and only local socket connections. The test
 reconstructs the anchored selection and geometry without any new model or

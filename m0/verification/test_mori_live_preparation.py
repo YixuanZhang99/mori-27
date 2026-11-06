@@ -519,6 +519,7 @@ def test_reference_supervisor_runs_live_host_with_fake_transport_and_original_au
 @pytest.mark.parametrize('prepared_cell', ['supervised_fake_live'], indirect=True)
 def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepared_cell, tmp_path, monkeypatch):
     from zoo.circle_packing.mori_supervisor import launch_live_controller
+    from zoo.circle_packing.mori_recorded import replay_mori_snapshot
     from zoo.circle_packing.mori_final import recalculate_mori_geometry, audit_anchored_mori_geometry
     config, ledger, clock, _runner = prepared_cell
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
@@ -536,6 +537,47 @@ def test_live_supervisor_runs_real_entry_with_test_source_and_no_network(prepare
     assert report['mode'] == 'live' and report['performance_claim'] is False
     assert report['candidate'] and report['final_state'] == 'completed' and report['replay_passed']
     assert report['final_measurement']['validity'] == 1.0
+    replay_path = Path(config['output']) / 'replay-input.json'
+    assert replay_path.is_file()
+    replay_input = json.loads(replay_path.read_text())
+    from core.x1.checkpoint import payload_digest
+    assert payload_digest(replay_input) == report['replay_input_sha256']
+    replay_head = replay_input['currency_bundle']['currency_evidence']['journal_head']
+    assert replay_head == ledger.snapshot()['journal_head']
+    clock_before = Path(config['clock']).read_bytes()
+    script = '''import json,socket,sys
+from pathlib import Path
+from zoo.circle_packing.domain import CirclePackingDomain
+from zoo.circle_packing.mori_recorded import replay_mori_snapshot
+from zoo.mle_bench_lite.cny_budget import CampaignBudget
+from zoo.mle_bench_lite.composed_domain import SandboxRunner
+from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+def forbidden(*args,**kwargs): raise AssertionError('independent replay attempted external work')
+socket.socket.connect=forbidden
+GovernedCNYProvider.perform_request=forbidden
+CirclePackingDomain.evaluate=forbidden
+c=json.loads(Path(sys.argv[1]).read_text()); e=json.loads(Path(sys.argv[2]).read_text())
+l=CampaignBudget(c['ledger']); r=SandboxRunner.for_campaign_runtime(l,runtime=c['runtime'],
+    manifest=c['runtime_manifest'],base_python='/usr/bin/python3.12')
+print(json.dumps(replay_mori_snapshot(c,e,expected_evidence_sha256=sys.argv[3],
+    expected_campaign_head=e['currency_bundle']['currency_evidence']['journal_head'],
+    ledger=l,runner=r,output=Path(sys.argv[4])),sort_keys=True))
+'''
+    env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
+           'PYTHONDONTWRITEBYTECODE': '1'}
+    independent = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
+        str(directory / 'config.json'), str(replay_path), report['replay_input_sha256'],
+        str(tmp_path / 'independent-replay')], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=240)
+    assert independent.returncode == 0, independent.stderr
+    replay_result = json.loads(independent.stdout)
+    assert replay_result['passed'] and replay_result['external_calls'] == 0
+    assert replay_result['candidate'] == report['candidate']
+    assert ledger.snapshot()['journal_head'] == replay_head and Path(config['clock']).read_bytes() == clock_before
+    rejected = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-c', script,
+        str(directory / 'config.json'), str(replay_path), '0' * 64, str(tmp_path / 'rejected-replay')],
+        env=env, cwd=tmp_path, capture_output=True, text=True, timeout=240)
+    assert rejected.returncode != 0 and not (tmp_path / 'rejected-replay').exists()
+    assert ledger.snapshot()['journal_head'] == replay_head and Path(config['clock']).read_bytes() == clock_before
     rows = list(ContinuationStore(Path(config['output']) / 'framework' / 'x1.jsonl').read())
     from core.x1.checkpoint import payload_digest
     def forbidden(*args, **kwargs):

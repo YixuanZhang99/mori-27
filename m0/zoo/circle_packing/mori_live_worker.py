@@ -38,8 +38,10 @@ def run(config):
     from zoo.circle_packing.domain import CirclePackingDomain
     from zoo.circle_packing.mori_controller import final_measurement
     from zoo.circle_packing.runner import TASK
+    from zoo.circle_packing.mori_recorded import export_replay_input
     from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
     outcome = framework.evolve(TASK)
+    replay_input_sha256 = export_replay_input(framework, Path(config['output']) / 'replay-input.json')
     def forbidden(*args, **kwargs):
         raise AssertionError('recorded replay attempted external work')
     original_provider, original_evaluate = GovernedCNYProvider.perform_request, CirclePackingDomain.evaluate
@@ -54,7 +56,8 @@ def run(config):
             'final_state': final['state'],
             'final_measurement': final_measurement(final, outcome['best_candidate_id'],
                                                    config['plan']['public_range_sum_radii']),
-            'replay_passed': replay['passed'], 'limits': profile['budget']['options']['limits']['global'],
+            'replay_passed': replay['passed'], 'replay_input_sha256': replay_input_sha256,
+            'limits': profile['budget']['options']['limits']['global'],
             'model_config': {'model': provider.manifest_binding()['requested_model'],
                              'max_completion_tokens': provider.manifest_binding()['max_completion_tokens']}}
 

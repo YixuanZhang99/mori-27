@@ -168,8 +168,11 @@ def _verify_failed_construction_cycle(rows, event, logical_run_id):
 class CNYInvocationBridge:
     """Fresh per-runtime adapter; the campaign itself remains independently shared."""
 
-    def __init__(self, ledger, *, usage_dir=None, spool_dir=None, cell_deadline_binding=None):
+    def __init__(self, ledger, *, usage_dir=None, spool_dir=None, cell_deadline_binding=None, recorded_only=False):
+        if type(recorded_only) is not bool:
+            raise ValueError('recorded-only mode must be boolean')
         self.ledger = ledger
+        self._recorded_only = recorded_only
         self._usage_dir = usage_dir
         self._spool_dir = spool_dir
         self._run = None
@@ -298,6 +301,8 @@ class CNYInvocationBridge:
     def bind_run(self, context):
         if self._run is not None:
             raise ValueError('external bridge is already bound to a runtime')
+        if self._recorded_only and getattr(context, 'mode', None) != 'recorded':
+            raise ValueError('recorded-only bridge refuses live binding')
         self._run = context
         self._bindings = {'main': context.main_provider_binding, **context.control_provider_bindings}
         identity = {key: value for key, value in context.to_dict().items()
