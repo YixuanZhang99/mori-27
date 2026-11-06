@@ -29,7 +29,7 @@ def build_draft_plan(campaign, *, source_commit, dependency_lock_sha256):
     iterations = 6
     # Includes seed + six candidates, one independent control and final audit.
     evaluations = 2 * (iterations + 1) + 2 + 1
-    payload = {'schema_version': 1, 'status': 'draft_not_executable',
+    payload = {'schema_version': 2, 'status': 'draft_not_executable',
         'source_commit': source_commit, 'dependency_lock_sha256': dependency_lock_sha256,
         'upstream_commit': '5153a7d74ee615b7090ec52903629870ecdacdf1',
         'seed_sha256': _SEED_SHA, 'database_sha256': _DATABASE_SHA,

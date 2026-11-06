@@ -12,6 +12,7 @@ def test_draft_six_cell_plan_has_shared_numeric_ceilings_and_no_calls(tmp_path, 
     before = campaign.snapshot()
     plan = build_draft_plan(campaign.manifest_binding(), source_commit='a' * 40,
                             dependency_lock_sha256='b' * 64)
+    assert plan['schema_version'] == 2
     assert plan['status'] == 'draft_not_executable'
     assert [(cell['seed'], cell['arm']) for cell in plan['cells']] == [
         (seed, arm) for seed in (0, 1, 2) for arm in ('vendor', 'mori')]
