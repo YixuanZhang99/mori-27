@@ -177,19 +177,17 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
             raise ValueError("currency governance migration anchor is invalid or has unresolved calls")
         governance["enabled"] = True
         return pending, spent
+    if kind == 'mark_fixture_campaign':
+        if set(event) != {'kind', 'schema_version'} or seq != 0 or previous != ZERO_HASH:
+            raise ValueError('fixture marker must be the first campaign event')
+        governance['fixture_campaign'] = True
+        return pending, spent
     if not governance["enabled"]:
         raise ValueError("currency governance events precede explicit migration")
     if kind in {'anchor_response_eligibility', 'anchor_stage_eligibility',
                 'anchor_evaluation_eligibility', 'anchor_cycle_eligibility'} and \
             event.get('run_id') in governance['reference_selections']:
         raise ValueError('reference selection is sealed against new work evidence')
-    if kind == 'mark_fixture_campaign':
-        if set(event) != {'kind', 'schema_version'} or governance['fixture_campaign'] or \
-                pending is not None or spent != 0 or operations or governance['runs'] or \
-                governance['circle_pilot'] is not None or governance['cell_claims']:
-            raise ValueError('fixture campaign marker requires an unused campaign')
-        governance['fixture_campaign'] = True
-        return pending, spent
     if kind == "freeze_circle_pilot":
         fields = {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}
         if set(event) not in (fields, fields | {"require_runtime"}) or \
@@ -657,6 +655,15 @@ class CampaignBudget:
 
     @classmethod
     def create(cls, path, *, limit_micro_cny=200000000):
+        return cls._create(path, limit_micro_cny=limit_micro_cny, fixture=False)
+
+    @classmethod
+    def create_fixture(cls, path, *, limit_micro_cny=200000000):
+        """Create a new, permanently marked test ledger; never convert an existing one."""
+        return cls._create(path, limit_micro_cny=limit_micro_cny, fixture=True)
+
+    @classmethod
+    def _create(cls, path, *, limit_micro_cny, fixture):
         _integer(limit_micro_cny, "campaign limit", 1)
         if limit_micro_cny > 200000000:
             raise ValueError("campaign limit exceeds the supported CNY 200 authorization")
@@ -672,6 +679,9 @@ class CampaignBudget:
             db.execute("CREATE TABLE head (seq INTEGER NOT NULL, hash TEXT NOT NULL)")
             db.execute("INSERT INTO policy VALUES (?)", (_json(policy),))
             db.execute("INSERT INTO head VALUES (0, ?)", (ZERO_HASH,))
+            if fixture:
+                _, state = cls._read(db)
+                cls._append(db, state, {'kind': 'mark_fixture_campaign', 'schema_version': 2})
         directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(directory_fd)
@@ -812,11 +822,6 @@ class CampaignBudget:
             if state["governance"]["circle_pilot"] is not None:
                 event["seconds"] = seconds
             self._append(db, state, event)
-
-    def mark_fixture_campaign(self):
-        """Irreversibly identify an unused temporary campaign as fixture-only."""
-        with self._transaction() as (db, _policy, state):
-            self._append(db, state, {'kind': 'mark_fixture_campaign', 'schema_version': 2})
 
     def is_fixture_campaign(self):
         with self._transaction() as (_db, _policy, state):

@@ -15,7 +15,7 @@ import pytest
 
 from core.composition.recovery import ContinuationStore
 from core.executor.process import ProcessJournal
-from test_governed_cny_framework import campaign_fixture
+from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from test_governed_cny_provider import local_endpoint, reply
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime, verify_frozen_runtime
@@ -42,8 +42,9 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     checkout = tmp_path / 'checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
-    ledger = campaign_fixture(tmp_path)
-    ledger.mark_fixture_campaign()
+    ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
+    ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                             expected_head=ledger.snapshot()['journal_head'])
     lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
     plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
     ref, campaign_id = 'sha256:' + plan['draft_sha256'], ledger.manifest_binding()['campaign_id']

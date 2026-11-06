@@ -19,6 +19,21 @@ def test_hash_seed_must_match_actual_process_not_mutated_environment():
     assert bad.returncode != 0 and 'hash' in bad.stderr.lower()
 
 
+def test_hash_seed_probe_does_not_write_into_venv(tmp_path):
+    import venv
+    runtime = tmp_path / 'runtime'
+    venv.create(runtime)
+    site = next((runtime / 'lib').glob('python*/site-packages'))
+    (site / 'fixture_probe.py').write_text('pass\n')
+    (site / 'fixture_probe.pth').write_text('import fixture_probe\n')
+    child = subprocess.run([str(runtime / 'bin' / 'python'), '-B', '-c',
+        'from zoo.circle_packing.reproducibility import require_hash_seed_zero; require_hash_seed_zero()'],
+        env={'PATH': os.defpath, 'PYTHONHASHSEED': '0', 'PYTHONPATH': os.pathsep.join(sys.path)},
+        capture_output=True, text=True, timeout=15)
+    assert child.returncode == 0, child.stderr
+    assert not list(site.rglob('*.pyc'))
+
+
 def test_source_identity_distinguishes_different_dirty_runtime_changes(tmp_path):
     from zoo.circle_packing.reproducibility import fixture_source_identity
     source = tmp_path / 'm0' / 'core' / 'example.py'

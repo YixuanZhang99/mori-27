@@ -12,7 +12,7 @@ def require_hash_seed_zero():
         raise ValueError('OpenEvolve requires PYTHONHASHSEED=0 before process start')
     code = 'import json; print(json.dumps([hash(x) for x in ' + repr(_PROBES) + ']))'
     try:
-        reference = subprocess.run([sys.executable, '-c', code], check=True, capture_output=True,
+        reference = subprocess.run([sys.executable, '-B', '-c', code], check=True, capture_output=True,
             text=True, timeout=10, env={'PYTHONHASHSEED': '0', 'PATH': os.defpath})
         expected = json.loads(reference.stdout)
     except (OSError, ValueError, subprocess.SubprocessError) as error:

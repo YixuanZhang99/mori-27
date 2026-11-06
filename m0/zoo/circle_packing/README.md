@@ -161,8 +161,8 @@ loopback integration. It accepts only an explicit loopback HTTP endpoint and a
 fixed fake credential, verifies the frozen source, runtime and original cell
 clock, then runs the public Framework and its zero-external-work replay. It is
 not a live entry point or proof of whole-cell supervision.
-The controller requires a dedicated, unused campaign explicitly marked as a
-fixture before its plan is frozen. That irreversible marker is only for
-temporary test ledgers and cannot be added after campaign work has begun.
+The controller requires a dedicated campaign created with `create_fixture`.
+Its irreversible marker is written during creation, and an existing ledger
+cannot be converted. Use this only for temporary test ledgers.
 The governed currency bridge restricts marked campaigns to loopback providers;
 older ledger readers do not understand the fixture marker event.

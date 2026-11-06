@@ -35,43 +35,37 @@ def test_named_fixture_rejects_unmarked_campaign_before_source_or_work(tmp_path)
     assert ledger.snapshot() == before
 
 
-def test_fixture_marker_cannot_be_added_after_any_campaign_operation(tmp_path):
-    from test_governed_cny_framework import campaign_fixture
-    ledger = campaign_fixture(tmp_path)
-    ledger.reserve('existing-call', 'a' * 64, 1)
-    ledger.settle('existing-call', {'prompt_tokens': 1, 'completion_tokens': 0, 'total_tokens': 1}, 'b' * 64)
-    with pytest.raises(ValueError, match='fixture'):
-        ledger.mark_fixture_campaign()
+def fixture_campaign(tmp_path):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
+    ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                             expected_head=ledger.snapshot()['journal_head'])
+    return ledger
 
 
-def test_fixture_marker_cannot_be_added_after_pilot_freeze(tmp_path):
-    from test_governed_cny_framework import campaign_fixture
-    ledger = campaign_fixture(tmp_path)
-    ledger.freeze_circle_pilot('sha256:' + 'a' * 64, 'sha256:' + 'b' * 64, 2700)
-    with pytest.raises(ValueError, match='fixture'):
-        ledger.mark_fixture_campaign()
-
-
-def test_fixture_marker_is_durable_but_does_not_reset_campaign(tmp_path):
+def test_fixture_creation_cannot_convert_existing_campaign(tmp_path):
     from test_governed_cny_framework import campaign_fixture
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
     ledger = campaign_fixture(tmp_path)
     before = ledger.snapshot()
-    ledger.mark_fixture_campaign()
-    after = ledger.snapshot()
+    with pytest.raises(FileExistsError):
+        CampaignBudget.create_fixture(ledger.path)
+    assert ledger.snapshot() == before
+    assert not ledger.is_fixture_campaign()
+    assert not hasattr(ledger, 'mark_fixture_campaign')
+
+
+def test_fixture_marker_is_durable_from_creation(tmp_path):
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    ledger = fixture_campaign(tmp_path)
     assert CampaignBudget(ledger.path).is_fixture_campaign()
-    assert after['settled_upper_bound_micro_cny'] == before['settled_upper_bound_micro_cny']
-    assert after['remaining_micro_cny'] == before['remaining_micro_cny']
-    assert not after['pending_calls']
-    with pytest.raises(ValueError, match='fixture'):
-        ledger.mark_fixture_campaign()
+    assert not ledger.snapshot()['pending_calls']
 
 
 def test_fixture_campaign_cannot_bind_real_provider(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from test_governed_cny_framework import campaign_fixture, framework, CountedProvider
-    ledger = campaign_fixture(tmp_path)
-    ledger.mark_fixture_campaign()
+    from test_governed_cny_framework import framework, CountedProvider
+    ledger = fixture_campaign(tmp_path)
     def forbidden(*args, **kwargs):
         raise RuntimeError('fixture would reach a real provider')
     monkeypatch.setattr(CountedProvider, 'perform_request', forbidden)
