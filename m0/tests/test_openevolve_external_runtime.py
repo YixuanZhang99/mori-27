@@ -13,6 +13,21 @@ from zoo.mle_bench_lite.composed_domain import SandboxRunner
 pytestmark = pytest.mark.linux
 
 
+def test_sanitized_child_path_preserves_selected_bubblewrap(tmp_path, monkeypatch):
+    import shutil
+    from core.executor.sandbox import sandbox_child_path
+    approved = tmp_path / 'approved'
+    approved.mkdir()
+    executable = approved / 'bwrap'
+    executable.write_text('#!/bin/sh\nexit 0\n')
+    executable.chmod(0o755)
+    monkeypatch.setenv('PATH', str(approved) + os.pathsep + os.defpath)
+    assert shutil.which('bwrap') == str(executable)
+    child = subprocess.run([sys.executable, '-c', 'import shutil; print(shutil.which("bwrap"))'],
+                           env={'PATH': sandbox_child_path()}, capture_output=True, text=True, check=True)
+    assert child.stdout.strip() == str(executable)
+
+
 def test_sandbox_runner_reads_external_virtualenv(tmp_path, monkeypatch):
     runtime = tmp_path / 'runtime'
     subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(runtime)], check=True)
@@ -56,6 +71,7 @@ def test_coordinator_deadline_stops_its_active_candidate_sandbox(tmp_path, paren
     """A killed coordinator must not leave its detached evaluator running."""
     from core.composition.recovery import ContinuationStore
     from core.executor.process import ProcessJournal
+    from core.executor.sandbox import sandbox_child_path
     from test_openevolve_cell_worker import setup
 
     deadline, workspace = setup(tmp_path, 5)
@@ -81,7 +97,7 @@ def test_coordinator_deadline_stops_its_active_candidate_sandbox(tmp_path, paren
     process, execution = journal.launch(
         [sys.executable, '-c', script, str(workspace),
          'parent-guard' if parent_death_guard else 'no-parent-guard'], tmp_path,
-        {'PATH': os.defpath, 'PYTHONPATH': str(source)}, None,
+        {'PATH': sandbox_child_path(), 'PYTHONPATH': str(source)}, None,
         {'candidate_id': 'fixture-coordinator', 'attempt': 1},
         absolute_deadline={'boot_id': record['boot_id'],
                            'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})

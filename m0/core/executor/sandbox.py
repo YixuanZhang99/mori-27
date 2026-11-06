@@ -6,11 +6,20 @@ not a complete resource-limit policy or a boundary against a hostile kernel.
 """
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 from core.executor.seccomp import (SECCOMP_FD_PLACEHOLDER, build_seccomp_policy)
 from core.executor.workspace import safe_relative
+
+
+def sandbox_child_path():
+    """Keep the host-selected bwrap available in a sanitized child environment."""
+    executable = shutil.which('bwrap')
+    if not executable or not Path(executable).is_file():
+        raise RuntimeError('BubblewrapSandbox requires an installed bwrap executable')
+    return str(Path(executable).absolute().parent) + os.pathsep + os.defpath
 
 
 class BubblewrapSandbox:

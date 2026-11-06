@@ -95,6 +95,7 @@ def test_failed_process_start_journal_does_not_leave_running_worker(tmp_path, mo
 
 
 def test_supervisor_crash_stops_worker_without_restarting_it(tmp_path):
+    from core.executor.sandbox import sandbox_child_path
     deadline, workspace = setup(tmp_path, 20)
     source = Path(__file__).resolve().parents[1]
     script = """
@@ -111,7 +112,7 @@ run_cell_worker(deadline, directory, workspace, ['/usr/bin/python3', '-c',
 """
     process = subprocess.Popen([sys.executable, '-c', script, str(tmp_path / 'clock.jsonl'),
         str(tmp_path / 'campaign.db'), str(tmp_path / 'worker'), str(workspace)],
-        env={'PATH': os.defpath, 'PYTHONPATH': str(source)}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        env={'PATH': sandbox_child_path(), 'PYTHONPATH': str(source)}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         until = time.monotonic() + 10
         while time.monotonic() < until and not (workspace / 'ready').exists():
@@ -269,6 +270,7 @@ def test_target_waits_for_watchdog_before_running(tmp_path, monkeypatch):
 
 def test_gate_stops_if_supervisor_dies_after_release(tmp_path):
     import core.executor.process as process_module
+    from core.executor.sandbox import sandbox_child_path
     deadline, workspace = setup(tmp_path, 20)
     source = Path(process_module.__file__).parent
     copied = tmp_path / 'fixture-executor'
@@ -298,7 +300,7 @@ run_cell_worker(deadline, directory, workspace, ['/usr/bin/python3', '-c', "open
     src = str(Path(__file__).resolve().parents[1])
     process = subprocess.run([sys.executable, '-c', script, str(tmp_path / 'clock.jsonl'),
         str(tmp_path / 'campaign.db'), str(tmp_path / 'worker'), str(workspace), str(copied / 'process.py')],
-        env={'PATH': os.defpath, 'PYTHONPATH': src}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10)
+        env={'PATH': sandbox_child_path(), 'PYTHONPATH': src}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10)
     assert process.returncode == -9
     time.sleep(1)
     assert not (workspace / 'late').exists()

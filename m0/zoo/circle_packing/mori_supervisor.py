@@ -12,6 +12,7 @@ import stat
 
 from core.composition.recovery import ContinuationStore
 from core.executor.process import ProcessJournal
+from core.executor.sandbox import sandbox_child_path
 from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import CellDeadline
 from zoo.circle_packing.mori_fixture_worker import validate_config
@@ -50,6 +51,7 @@ def launch_fixture_controller(config, *, deadline, directory):
     protected = (source, runtime, ledger.path.resolve(), deadline._store.path.resolve(), Path(config['output']).resolve())
     if any(root == path or root in path.parents or path in root.parents for path in protected):
         raise ValueError('fixture supervisor directory overlaps protected paths')
+    child_path = sandbox_child_path()
     remaining = deadline.remaining()
     if remaining <= 0:
         raise ValueError('fixture controller deadline has expired')
@@ -68,7 +70,7 @@ def launch_fixture_controller(config, *, deadline, directory):
     journal = ProcessJournal(ContinuationStore(root / 'controller.jsonl'))
     process, execution = journal.launch(
         [str(runtime / 'bin' / 'python'), '-m', 'zoo.circle_packing.mori_fixture_worker', str(setup)], root,
-        {'PATH': os.defpath, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'},
+        {'PATH': child_path, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'},
         remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}, die_with_parent=True,
         absolute_deadline={'boot_id': record['boot_id'],
             'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})

@@ -12,6 +12,7 @@ import subprocess
 import pytest
 
 from core.composition.recovery import ContinuationStore
+from core.executor.sandbox import sandbox_child_path
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
 from zoo.circle_packing.frozen_source import freeze_source_plan
@@ -140,7 +141,7 @@ print(json.dumps({'candidate': outcome['best_candidate_id'], 'state': final['sta
 '''
     code = tmp_path / 'blocked_transport.py'
     code.write_text(script)
-    env = {'PATH': os.defpath, 'PYTHONPATH': config['source'],
+    env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'],
            'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
     process = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-B', str(code), str(setup)],
                              cwd=tmp_path, env=env, capture_output=True, text=True, timeout=240)
