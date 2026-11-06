@@ -17,7 +17,7 @@
 - Never place credentials in workers, plans or journals. This plan does not authorize a live run before all pilot gates pass.
 - The initial native clock implementation is Linux-only (`CLOCK_BOOTTIME` and boot UUID); other platforms fail closed, rather than claim a suspend-aware deadline.
 - The deadline journal must be dedicated to clock records and never share a Framework replay cursor.
-- Before live use, a separately durable cell lifecycle authority must prove first creation and reject a missing/recreated deadline journal. A missing journal alone never establishes that a cell is new.
+- The original campaign journal anchors the first creation and each observation head. The pilot must validate that ledger and cell identity against the frozen matrix before using this authority; a missing journal alone never establishes that a cell is new. A crash between clock-journal and campaign-head writes remains unresolved.
 - Both arms enforce the same mechanism and cap; results arriving after expiry are not eligible candidates.
 
 ## Review focus
@@ -32,7 +32,7 @@
 
 **Files:** Create `m0/zoo/circle_packing/cell_deadline.py` and `m0/tests/test_openevolve_cell_deadline.py`.
 
-**Interface:** `CellDeadline.start(store, *, cell_id, plan_ref, seconds)` and `CellDeadline.restore(store, *, cell_id, plan_ref, seconds)` create or recover exactly one frozen deadline. `remaining()` returns finite nonnegative seconds; `check()` raises `DeadlineExpired` after expiry and raises on identity, journal, boot or monotonic regression. Use the current system boot identity and monotonic clock; journal a single initial authority and reject duplicate, altered or malformed boundaries.
+**Interface:** `CellDeadline.start(store, *, lifecycle, cell_id, plan_ref, seconds)` and `CellDeadline.restore(store, *, lifecycle, cell_id, plan_ref, seconds)` create or recover exactly one frozen deadline. `remaining()` returns finite nonnegative seconds; `check()` raises `DeadlineExpired` after expiry and raises on identity, journal, boot or monotonic regression. Use the current system boot identity and monotonic clock; journal a single initial authority and reject duplicate, altered or malformed boundaries.
 
 - [ ] Write red tests for a real start/restore, expiry, duplicate or altered identity, monotonic regression and changed boot.
 - [ ] Implement and run focused tests. The authority alone is not a live pilot or a claim of hard time enforcement.

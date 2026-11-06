@@ -179,7 +179,27 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         return pending, spent
     if not governance["enabled"]:
         raise ValueError("currency governance events precede explicit migration")
-    if kind == "protect_run":
+    if kind == "claim_cell_deadline":
+        if set(event) != {"kind", "schema_version", "cell_id", "plan_ref", "record_sha256"}:
+            raise ValueError("cell deadline claim has invalid fields")
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        plan_ref = _plan_ref(event["plan_ref"])
+        digest = _sha(event["record_sha256"])
+        if cell_id in governance["cell_claims"]:
+            raise ValueError("cell deadline claim already exists")
+        governance["cell_claims"][cell_id] = {"plan_ref": plan_ref, "record_sha256": digest,
+                                               "observation_sequence": 0, "observation_sha256": digest}
+    elif kind == "observe_cell_deadline":
+        if set(event) != {"kind", "schema_version", "cell_id", "sequence", "previous", "observation_sha256"}:
+            raise ValueError("cell deadline observation anchor has invalid fields")
+        cell_id = _identifier(event["cell_id"], "cell identity")
+        claim = governance["cell_claims"].get(cell_id)
+        sequence = _integer(event["sequence"], "cell observation sequence", 1)
+        previous, digest = _sha(event["previous"]), _sha(event["observation_sha256"])
+        if claim is None or sequence != claim["observation_sequence"] + 1 or previous != claim["observation_sha256"]:
+            raise ValueError("cell deadline observation anchor is not consecutive")
+        claim.update(observation_sequence=sequence, observation_sha256=digest)
+    elif kind == "protect_run":
         if set(event) != {"kind", "schema_version", "run_id", "plan_ref", "obligations"}:
             raise ValueError("currency protection event has invalid fields")
         run_id, plan_ref = _sha(event["run_id"]), _plan_ref(event["plan_ref"])
@@ -290,7 +310,7 @@ def _reduce_history(policies, events, heads):
     if limit > 200000000:
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
-    governance = {"enabled": False, "runs": {}, "breaches": []}
+    governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -529,6 +549,33 @@ class CampaignBudget:
         with self._transaction() as (_, policy, _state):
             return _call_bound(policy, {"schema_version": 1, "output_allowance": output_allowance,
                 "reserved_micro_cny": policy["context_tokens"] * 2 + output_allowance * 8})
+
+    def claim_cell_deadline(self, cell_id, plan_ref, record_sha256):
+        """Permanently bind one cell clock to this existing campaign journal."""
+        _identifier(cell_id, "cell identity")
+        _plan_ref(plan_ref)
+        _sha(record_sha256)
+        with self._transaction() as (db, _policy, state):
+            if not state["governance"]["enabled"]:
+                raise ValueError("cell deadline claim requires currency governance")
+            self._append(db, state, {"kind": "claim_cell_deadline", "schema_version": 2,
+                "cell_id": cell_id, "plan_ref": plan_ref, "record_sha256": record_sha256})
+
+    def anchor_cell_deadline_observation(self, cell_id, sequence, previous, observation_sha256):
+        _identifier(cell_id, "cell identity")
+        _integer(sequence, "cell observation sequence", 1)
+        _sha(previous)
+        _sha(observation_sha256)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "observe_cell_deadline", "schema_version": 2,
+                "cell_id": cell_id, "sequence": sequence, "previous": previous,
+                "observation_sha256": observation_sha256})
+
+    def cell_deadline_claim(self, cell_id):
+        _identifier(cell_id, "cell identity")
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["cell_claims"].get(cell_id)
+            return dict(value) if value is not None else None
 
     def protect_run(self, run_id, plan_ref, obligations):
         _sha(run_id)

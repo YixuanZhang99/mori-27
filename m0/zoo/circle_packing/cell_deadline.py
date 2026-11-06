@@ -80,11 +80,7 @@ def _rows(store):
     _validate_path(store)
     if store.restoring or store.cursor != len(store.rows):
         raise ValueError('cell deadline requires a dedicated non-replaying journal')
-    # Refuse stale continuation views before appending to a shared journal.
-    durable = list(AppendOnlyStore(store.path).read())
-    if list(store.read()) != durable:
-        raise ValueError('cell deadline continuation differs from durable journal')
-    return durable
+    return list(AppendOnlyStore(store.path).read())
 
 
 def _records(store):
@@ -99,16 +95,41 @@ def _sync_directory(path):
         os.close(fd)
 
 
+class CellLifecycle:
+    """First-start claims in the original campaign's transactional journal."""
+    def __init__(self, ledger):
+        from zoo.mle_bench_lite.cny_budget import CampaignBudget
+        if type(ledger) is not CampaignBudget:
+            raise ValueError('cell lifecycle requires the original campaign ledger')
+        self.ledger = ledger
+        self.campaign_id = ledger.manifest_binding()['campaign_id']
+
+    def create(self, record):
+        self.ledger.claim_cell_deadline(record['cell_id'], record['plan_ref'], record['record_sha256'])
+
+    def verify(self, record):
+        claim = self.ledger.cell_deadline_claim(record['cell_id'])
+        if self.ledger.manifest_binding()['campaign_id'] != self.campaign_id or claim is None or \
+                claim['plan_ref'] != record['plan_ref'] or claim['record_sha256'] != record['record_sha256']:
+            raise ValueError('cell lifecycle claim is missing or differs from the frozen deadline')
+        return claim
+
+
 class CellDeadline:
-    def __init__(self, store, record):
+    def __init__(self, store, record, *, lifecycle):
         _validate_record(store, record)
-        self._store, self._record = store, record
+        if type(lifecycle) is not CellLifecycle:
+            raise ValueError('cell deadline requires an independent lifecycle authority')
+        lifecycle.verify(record)
+        self._store, self._record, self._lifecycle = store, record, lifecycle
         self._lock = threading.RLock()
         self._last_ns = record['start_ns']
 
     @classmethod
-    def start(cls, store, *, cell_id, plan_ref, seconds):
+    def start(cls, store, *, lifecycle, cell_id, plan_ref, seconds):
         _parameters(store, cell_id, plan_ref, seconds)
+        if type(lifecycle) is not CellLifecycle or lifecycle.ledger.path.resolve() == store.path.resolve():
+            raise ValueError('cell lifecycle must be independent from the cell journal directory')
         with _exclusive(store):
             rows = _rows(store)
             if any(row['kind'] == _KIND for row in rows):
@@ -121,15 +142,18 @@ class CellDeadline:
             record = {'schema_version': 1, 'cell_id': cell_id, 'plan_ref': plan_ref,
                       'seconds': seconds, 'boot_id': boot, 'start_ns': start_ns}
             record['record_sha256'] = payload_digest(record)
-            store.append(_KIND, record)
+            lifecycle.create(record)
+            ContinuationStore(store.path).append(_KIND, record)
             _sync_directory(store.path.parent)
             if _records(store) != [record]:
                 raise ValueError('cell deadline was not durably recorded')
-            return cls(store, record)
+            return cls(store, record, lifecycle=lifecycle)
 
     @classmethod
-    def restore(cls, store, *, cell_id, plan_ref, seconds):
+    def restore(cls, store, *, lifecycle, cell_id, plan_ref, seconds):
         _parameters(store, cell_id, plan_ref, seconds)
+        if type(lifecycle) is not CellLifecycle or lifecycle.ledger.path.resolve() == store.path.resolve():
+            raise ValueError('cell lifecycle must be independent from the cell journal directory')
         with _exclusive(store):
             records = _records(store)
             if len(records) != 1:
@@ -138,11 +162,12 @@ class CellDeadline:
             _validate_record(store, record)
             if (record['cell_id'], record['plan_ref'], record['seconds']) != (cell_id, plan_ref, seconds):
                 raise ValueError('cell deadline differs from frozen identity')
-            instance = cls(store, record)
+            instance = cls(store, record, lifecycle=lifecycle)
             instance._remaining()
             return instance
 
     def _remaining(self):
+        claim = self._lifecycle.verify(self._record)
         rows = _rows(self._store)
         if any(row['kind'] not in {_KIND, _OBSERVED} for row in rows):
             raise ValueError('cell deadline requires a dedicated journal')
@@ -161,12 +186,16 @@ class CellDeadline:
                         {key: value for key, value in observation.items() if key != 'sha256'}):
                 raise ValueError('cell deadline observation differs from its journal')
             previous, last = observation['sha256'], observation['observed_ns']
+        if (claim['observation_sequence'], claim['observation_sha256']) != (len(observations), previous):
+            raise ValueError('cell deadline observation head differs from campaign authority')
         now = _clock_ns()
         if type(now) is not int or now < max(self._last_ns, last):
             raise ValueError('cell monotonic clock regressed')
         observation = {'sequence': len(observations) + 1, 'previous': previous, 'observed_ns': now}
         observation['sha256'] = payload_digest(observation)
-        self._store.append(_OBSERVED, observation)
+        ContinuationStore(self._store.path).append(_OBSERVED, observation)
+        self._lifecycle.ledger.anchor_cell_deadline_observation(
+            self._record['cell_id'], observation['sequence'], observation['previous'], observation['sha256'])
         self._last_ns = now
         return max(0, self._record['seconds'] * 1_000_000_000 - (now - self._record['start_ns'])) / 1_000_000_000
 
