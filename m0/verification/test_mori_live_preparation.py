@@ -458,6 +458,7 @@ from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import RecordedCellClock
 from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.circle_packing.pair_audit import record_first_pair_audit
+from zoo.circle_packing.pilot_plan import require_first_pair_audit
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
@@ -485,6 +486,9 @@ except ValueError: pass
 else: raise AssertionError('altered replay accepted')
 assert not Path(sys.argv[2]+'-bad').exists()
 assert ledger.snapshot()['journal_head']==p['head'] and ledger.first_pair_audit() is None
+try: require_first_pair_audit(1, ledger=ledger, expected_plan_ref=c['ref'])
+except ValueError: pass
+else: raise AssertionError('later seed accepted without an audit')
 proof=record_first_pair_audit(replay_input=p['replay_input'],ledger=ledger,runner=runner,
  replay_output=Path(sys.argv[2]),**args)
 result=proof['result']
@@ -493,6 +497,10 @@ assert result['replay']['passed'] and result['replay']['external_calls']==0
 assert result['replay']['candidate']==result['mori']['candidate']
 assert result['performance_claim'] is False and ledger.first_pair_audit()==proof
 assert ledger.snapshot()['journal_head']['seq']==p['head']['seq']+1
+for seed in (1,2): require_first_pair_audit(seed, ledger=ledger, expected_plan_ref=c['ref'])
+try: require_first_pair_audit(1, ledger=ledger, expected_plan_ref='sha256:'+'0'*64)
+except ValueError: pass
+else: raise AssertionError('audit for a different plan accepted')
 try: ledger._record_first_pair_audit(proof, expected_head=p['head'])
 except ValueError: pass
 else: raise AssertionError('duplicate or stale pair audit accepted')

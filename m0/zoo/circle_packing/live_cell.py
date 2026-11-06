@@ -41,7 +41,7 @@ def start_live_cell(arm, config, *, directory, api_key):
         raise ValueError('live cell requires its original non-fixture campaign')
     cell = f"{arm}-{config['seed']}"
     binding = validate_draft_cell(ledger, config['plan'], cell, expected_plan_ref=config['ref'])
-    require_first_pair_audit(config['seed'])
+    require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
     state = ledger.snapshot()
     if state['pending_calls'] or state['protected_micro_cny'] or state['protection_breaches']:
         raise ValueError('live cell requires a quiescent original campaign')

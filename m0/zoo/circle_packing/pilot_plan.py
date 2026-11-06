@@ -14,12 +14,21 @@ from zoo.circle_packing.stage import EVALUATOR_SHA256
 from zoo.mle_bench_lite.cny_budget import POLICY, _hash
 
 
-def require_first_pair_audit(seed):
-    """Fail closed for later seeds until the paired audit can be durably bound."""
+def require_first_pair_audit(seed, *, ledger=None, expected_plan_ref=None):
+    """Require the recorded first-pair audit before later seed admission.
+
+    This is only the pair-ordering check; the separate live gate still applies.
+    """
     if type(seed) is not int or seed not in (0, 1, 2):
         raise ValueError('cell seed is outside the frozen pilot')
     if seed != 0:
-        raise ValueError('later seeds require the first pair independent audit')
+        from zoo.mle_bench_lite.cny_budget import CampaignBudget
+        if type(ledger) is not CampaignBudget:
+            raise ValueError('later seeds require the first pair independent audit')
+        proof = ledger.first_pair_audit()
+        if proof is None or type(expected_plan_ref) is not str or proof['plan_ref'] != expected_plan_ref or \
+                ledger.circle_pilot_binding()['plan_ref'] != expected_plan_ref:
+            raise ValueError('later seeds require the first pair independent audit for the original plan')
 
 
 def build_draft_plan(campaign, *, source_commit, dependency_lock_sha256):
