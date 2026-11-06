@@ -25,7 +25,6 @@ from core.composition.contracts import GovernanceConfig
 from core.composition.external_provider import ExternalRunContext, EXTERNAL_RUNTIME
 from core.composition.governance import ControlPlan
 from core.composition.recovery import ContinuationStore
-from core.executor.process import ProcessJournal
 from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import CellDeadline
 from zoo.circle_packing.domain import CirclePackingDomain
@@ -48,6 +47,71 @@ def _sync_directory(path):
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def _read_verified_worker_result(worker_directory, started):
+    """Read bounded worker outputs from their opened, execution-bound files."""
+    execution_id = started.get('execution_id')
+    if type(execution_id) is not str or not re.fullmatch(r'[0-9a-f]{32}', execution_id):
+        raise ValueError('reference worker process path has invalid execution identity')
+    root = Path(worker_directory) / 'executor-processes' / execution_id
+    files = {'result_path': ('result.json', 65536), 'stdout_path': ('stdout.txt', 8 * 1024 * 1024),
+             'stderr_path': ('stderr.txt', 32 * 1024 * 1024)}
+    if any(type(started.get(key)) is not str or started[key] != str(root / name)
+           for key, (name, _limit) in files.items()):
+        raise ValueError('reference worker process path differs from its execution identity')
+    fds = []
+    try:
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        fd = os.open(worker_directory, flags)
+        fds.append(fd)
+        for component in ('executor-processes', execution_id):
+            fd = os.open(component, flags, dir_fd=fd)
+            fds.append(fd)
+        contents = {}
+        for key, (name, limit) in files.items():
+            child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, 'O_NONBLOCK', 0), dir_fd=fd)
+            try:
+                info = os.fstat(child)
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or \
+                        info.st_size > limit:
+                    raise ValueError('reference worker process path is not a bounded private artifact')
+                chunks, remaining = [], limit + 1
+                while remaining:
+                    part = os.read(child, remaining)
+                    if not part:
+                        break
+                    chunks.append(part)
+                    remaining -= len(part)
+                data, after = b''.join(chunks), os.fstat(child)
+                if len(data) > limit or (info.st_size, info.st_mtime_ns, info.st_ctime_ns) != \
+                        (after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                    raise ValueError('reference worker process artifact changed while reading')
+                contents[key] = data.decode('utf-8')
+            finally:
+                os.close(child)
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError('duplicate worker result field')
+                result[key] = value
+            return result
+        result = json.loads(contents['result_path'], object_pairs_hook=unique,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite JSON')))
+        if type(result) is not dict or set(result) not in ({'returncode', 'timeout'},
+                {'returncode', 'timeout', 'wrapper_error'}) or type(result['returncode']) is not int or \
+                type(result['timeout']) is not bool or \
+                ('wrapper_error' in result and type(result['wrapper_error']) is not str):
+            raise ValueError('reference worker process terminal is invalid')
+        return {'returncode': result['returncode'], 'timeout': result['timeout'],
+                'stdout': contents['stdout_path'], 'stderr': contents['stderr_path'],
+                'wrapper_error': result.get('wrapper_error')}
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError('reference worker process path cannot be safely inspected') from error
+    finally:
+        for fd in reversed(fds):
+            os.close(fd)
 
 
 class _AuthorityLease:
@@ -406,9 +470,25 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
         authority.stages.audit()
         store = ContinuationStore(worker_directory / 'worker.jsonl')
         starts = list(store.read('executor_process_started'))
-        if len(starts) != 1:
-            raise ValueError('reference fixture lacks its original worker process')
-        process = ProcessJournal(store).completed_result(starts[0]['payload'])
+        claim = ledger.cell_worker_claim(deadline._record['cell_id'])
+        if len(starts) != 1 or claim is None:
+            raise ValueError('reference worker process lacks its original claim')
+        started = starts[0]['payload']
+        if type(started) is not dict or started.get('cell_id') != deadline._record['cell_id'] or \
+                started.get('worker_ref') != claim['worker_ref'] or \
+                claim['deadline_ref'] != deadline._record['record_sha256'] or \
+                started.get('candidate_id') != 'cell-worker' or type(started.get('attempt')) is not int or \
+                started['attempt'] != 1:
+            raise ValueError('reference worker process differs from its original claim')
+        finished = list(store.read('executor_process_finished'))
+        terminal = finished[0]['payload'] if len(finished) == 1 else None
+        if type(terminal) is not dict or type(terminal.get('attempt')) is not int or \
+                type(terminal.get('returncode')) is not int or type(terminal.get('timeout')) is not bool or \
+                type(terminal.get('recovered')) is not bool or terminal != {
+                'execution_id': started.get('execution_id'), 'candidate_id': 'cell-worker', 'attempt': 1,
+                'returncode': 0, 'timeout': False, 'recovered': False}:
+            raise ValueError('reference worker process lacks its matching successful terminal')
+        process = _read_verified_worker_result(worker_directory, started)
         if process['returncode'] != 0 or process['timeout'] or process['wrapper_error']:
             raise ValueError('reference fixture worker did not complete')
         report = json.loads(process['stdout'])
@@ -453,7 +533,7 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
             physical_rows = list(authority.budget.store.read())
             rows_sha256 = payload_digest(physical_rows)
             worker = ledger.cell_worker_claim(deadline._record['cell_id'])
-            if worker is None or worker['deadline_ref'] != deadline._record['record_sha256']:
+            if worker != claim:
                 raise ValueError('reference snapshot lacks its original worker claim')
             run_id = authority.dispatch.ready.authority_binding['currency_run_id']
             def anchor(observation):

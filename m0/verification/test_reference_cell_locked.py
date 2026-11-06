@@ -30,7 +30,7 @@ def short_workspace():
         yield Path(directory).resolve()
 
 
-@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact'])
+@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race'])
 def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
                                                                                 monkeypatch, tamper_selection,
                                                                                 short_workspace):
@@ -64,6 +64,49 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
     workspace = short_workspace
     from zoo.circle_packing.host_runtime import run_reference_cell_fixture
+    swapped = []
+    if tamper_selection == 'race':
+        original_open = os.open
+        def replace_after_open(path, flags, *args, **kwargs):
+            fd = original_open(path, flags, *args, **kwargs)
+            if path == 'stdout.txt' and kwargs.get('dir_fd') is not None and not swapped:
+                directory = kwargs['dir_fd']
+                os.rename('stdout.txt', 'stdout-original.txt', src_dir_fd=directory, dst_dir_fd=directory)
+                replacement = original_open('stdout.txt', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+                                            dir_fd=directory)
+                try:
+                    os.write(replacement, b'not the original worker report')
+                finally:
+                    os.close(replacement)
+                swapped.append(True)
+            return fd
+        monkeypatch.setattr(os, 'open', replace_after_open)
+    if tamper_selection in ('process', 'terminal', 'terminal_type', 'path'):
+        original = ContinuationStore.read
+        def changed_worker_start(self, kind=None):
+            for row in original(self, kind):
+                if kind == 'executor_process_started' and self.path.name == 'worker.jsonl' and any(
+                        value['kind'] == 'executor_process_finished' for value in self.rows) and tamper_selection == 'process':
+                    row['payload']['worker_ref'] = 'f' * 64
+                if kind == 'executor_process_finished' and self.path.name == 'worker.jsonl' and tamper_selection == 'terminal':
+                    row['payload']['execution_id'] = 'f' * 32
+                if kind == 'executor_process_finished' and self.path.name == 'worker.jsonl' and tamper_selection == 'terminal_type':
+                    row['payload']['returncode'] = False
+                if kind == 'executor_process_started' and self.path.name == 'worker.jsonl' and tamper_selection == 'path' and any(
+                        value['kind'] == 'executor_process_finished' for value in self.rows):
+                    alias = tmp_path / 'alternate-worker-stdout'
+                    alias.hardlink_to(Path(row['payload']['stdout_path']))
+                    row['payload']['stdout_path'] = str(alias)
+                yield row
+        monkeypatch.setattr(ContinuationStore, 'read', changed_worker_start)
+        with pytest.raises(ValueError, match='worker process.*(claim|terminal|path)'):
+            run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
+                source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
+                expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
+                base_python='/usr/bin/python3.12', iterations=1)
+        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+        authority.close()
+        return
     if tamper_selection == 'artifact':
         from zoo.circle_packing import reference_selection
         original = reference_selection.read_reference_selection
@@ -79,14 +122,15 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
         authority.close()
         return
-    if tamper_selection:
-        original = ProcessJournal.completed_result
-        def changed_report(self, record):
-            result = original(self, record)
+    if tamper_selection is True:
+        from zoo.circle_packing import host_runtime
+        original = host_runtime._read_verified_worker_result
+        def changed_report(directory, record):
+            result = original(directory, record)
             report = json.loads(result['stdout'])
             report['selected_program']['program_ref'] = 'sha256:' + 'f' * 64
             return {**result, 'stdout': json.dumps(report)}
-        monkeypatch.setattr(ProcessJournal, 'completed_result', changed_report)
+        monkeypatch.setattr(host_runtime, '_read_verified_worker_result', changed_report)
         with pytest.raises(ValueError, match='unique eligible stage'):
             run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
                 source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
@@ -99,6 +143,8 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
         expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
         base_python='/usr/bin/python3.12', iterations=1)
+    if tamper_selection == 'race':
+        assert swapped == [True]
     assert result['state'] == 'completed'
     assert result['mode'] == 'fixture' and result['performance_claim'] is False
     assert result['selected_program']['metrics']['validity'] == 1.0
