@@ -260,5 +260,7 @@ its environment, and calls the gated reference entry. The gated reference
 supervisor gives that host its own one-time campaign claim, separate from the
 inner upstream worker claim, and uses the delegated cgroup and deadline.
 The new reference-host event is understood by the current journal reader but
-not older versions. Interrupted reference-host cleanup, independent paired
-audits and the remaining pilot gates are still required before paid use.
+not older versions. After supervisor death, the same reconciliation entry can
+check the original reference-host claim and clean its surviving group; the
+whole cell and accounting stay unresolved, with no automatic retry. Independent
+paired audits and the remaining pilot gates are still required before paid use.

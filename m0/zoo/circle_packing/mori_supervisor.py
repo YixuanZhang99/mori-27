@@ -179,9 +179,14 @@ def reconcile_live_containment(config, *, deadline, directory):
             type(config.get('seed')) is not int or config['seed'] not in (0, 1, 2):
         raise ValueError('reconciliation requires the original cell configuration')
     ledger = deadline._lifecycle.ledger
+    cell_id = deadline._record['cell_id']
+    if cell_id not in (f"mori-{config['seed']}", f"vendor-{config['seed']}"):
+        raise ValueError('reconciliation differs from the original campaign or cell')
+    reference = cell_id.startswith('vendor-')
+    expected_entry = ('zoo.circle_packing.reference_live_worker' if reference
+                      else 'zoo.circle_packing.mori_live_worker')
     if ledger.is_fixture_campaign() or config.get('ledger') != str(ledger.path) or \
-            config.get('clock') != str(deadline._store.path) or config.get('ref') != deadline._record['plan_ref'] or \
-            deadline._record['cell_id'] != f"mori-{config['seed']}":
+            config.get('clock') != str(deadline._store.path) or config.get('ref') != deadline._record['plan_ref']:
         raise ValueError('reconciliation differs from the original campaign or cell')
     deadline.export_evidence()  # Check original anchored clock and boot without extending it.
     root = Path(directory)
@@ -218,12 +223,15 @@ def reconcile_live_containment(config, *, deadline, directory):
                 type(process.get('execution_id')) is not str or re.fullmatch(r'[0-9a-f]{32}', process['execution_id']) is None or \
                 binding['cell_id'] != deadline._record['cell_id'] or binding['deadline_ref'] != deadline._record['record_sha256'] or \
                 binding['config_sha256'] != payload_digest(config) or binding['directory'] != str(root) or \
-                binding['entry'] != 'zoo.circle_packing.mori_live_worker' or binding['boot_id'] != _boot_identity() or \
+                binding['entry'] != expected_entry or binding['boot_id'] != _boot_identity() or \
                 binding['boot_id'] != deadline._record['boot_id']:
             raise ValueError('reconciliation process identity differs')
         worker_ref = payload_digest(binding)
-        if process.get('worker_ref') != worker_ref or ledger.cell_worker_claim(binding['cell_id']) != {
-                'deadline_ref': binding['deadline_ref'], 'worker_ref': worker_ref}:
+        claim = (ledger.reference_host_claim(binding['cell_id']) if reference
+                 else ledger.cell_worker_claim(binding['cell_id']))
+        expected_claim = {'deadline_ref': binding['deadline_ref'],
+                          'host_ref' if reference else 'worker_ref': worker_ref}
+        if process.get('worker_ref') != worker_ref or claim != expected_claim:
             raise ValueError('reconciliation differs from the original worker claim')
         for pid, ticks in ((binding['supervisor_pid'], binding['supervisor_start_ticks']),
                            (process.get('wrapper_pid'), process.get('wrapper_start_ticks'))):
