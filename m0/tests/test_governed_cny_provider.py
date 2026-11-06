@@ -269,3 +269,26 @@ def test_known_content_failure_does_not_poison_later_distinct_invocation(local_e
     assert later.result == 'answer'
     assert take_usage(p) == 7
     assert len(local_endpoint.requests) == 2
+
+
+def test_explicit_non_thinking_protocol_is_frozen_and_used(local_endpoint):
+    local_endpoint.responses.append(reply())
+    p = provider(local_endpoint, reasoning_effort='none')
+    manifest = p.manifest_binding()
+    assert manifest['reasoning_effort'] == 'none'
+    assert manifest['thinking'] == {'type': 'disabled'}
+    body = p.prepare_request('hello')
+    assert body == (b'{"max_tokens":16,"messages":[{"content":"hello","role":"user"}],'
+                    b'"model":"deepseek-flash","reasoning_effort":"none","stream":false,'
+                    b'"thinking":{"type":"disabled"}}')
+    assert json.loads(body)['thinking'] == {'type': 'disabled'}
+    assert json.loads(body)['reasoning_effort'] == 'none'
+    assert p.governance_binding()['sampling']['parameters']['thinking'] == {'type': 'disabled'}
+    assert p.perform_request(body).result == 'answer'
+    assert local_endpoint.requests == [body]
+
+
+@pytest.mark.parametrize('effort', [None, True, '', 'disabled', 'medium'])
+def test_non_thinking_requires_supported_explicit_effort(local_endpoint, effort):
+    with pytest.raises(ValueError):
+        provider(local_endpoint, reasoning_effort=effort)

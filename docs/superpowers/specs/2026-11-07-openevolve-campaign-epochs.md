@@ -65,3 +65,15 @@ after uncertainty, and verify the complete-coverage gate before any paid seed
 after the new first pair. Independent no-model, no-candidate replay must
 reproduce the old pair and the new experiment's evidence without reading or
 copying credentials.
+
+## Candidate provider protocol for a future experiment
+
+The frozen first pair used `reasoning_effort=low`; all six Mori completions
+spent their output allowance on reasoning and produced no usable candidate.
+A later experiment may explicitly set `reasoning_effort=none` and
+`thinking.type=disabled` in both arms. DeepSeek's
+[Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/)
+documents this combination. Freeze the changed setting in the new experiment,
+provider binding, request receipts and report; it is a different protocol, not
+an extension of the original fixed-source matrix. This is a testable hypothesis,
+not evidence of improved performance. It does not authorize paid calls.

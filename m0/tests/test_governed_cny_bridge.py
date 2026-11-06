@@ -25,6 +25,9 @@ class Store:
 @pytest.fixture
 def setup(tmp_path, request):
     mode = getattr(request, 'param', 'single_user_v1')
+    no_thinking = mode == 'no_thinking'
+    if no_thinking:
+        mode = 'single_user_v1'
     loopback = mode == 'openevolve_host_loopback'
     endpoint = request.getfixturevalue('local_endpoint') if loopback else None
     if loopback:
@@ -41,7 +44,8 @@ def setup(tmp_path, request):
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
         expected_head=ledger.snapshot()['journal_head'])
     providers = {key: GovernedCNYProvider('deepseek-flash', endpoint.url if loopback else 'http://127.0.0.1:1',
-        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture-only-secret', message_mode=mode)
+        campaign_binding=ledger.manifest_binding(), max_completion_tokens=4, api_key='fixture-only-secret', message_mode=mode,
+        reasoning_effort='none' if no_thinking else 'high')
         for key in ('main', 'control-0000')}
     calls = []
     for key, provider in (() if loopback else providers.items()):
@@ -546,3 +550,18 @@ def test_new_main_intent_zero_proof_distinguishes_complete_old_call_from_orphan(
         assert outcome.usage == {'total_tokens': 0}
     assert len(calls) == 1
     assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 36
+
+
+@pytest.mark.parametrize('setup', ['no_thinking'], indirect=True)
+def test_non_thinking_call_replays_from_frozen_journal_without_redispatch(setup):
+    ledger, bridge, run, context, providers, calls, store, physical = setup
+    assert bridge.invoke(context, ('prompt',), {}) == 'answer'
+    assert json.loads(calls[0][1])['thinking'] == {'type': 'disabled'}
+    complete(store)
+    bundle = bridge.replay_bundle()
+    recorded = CNYInvocationBridge(None)
+    recorded.bind_run(ExternalRunContext(**{**run.to_dict(), 'mode': 'recorded', 'recorded_bundle': bundle},
+        store=store, physical_identity_lookup=run.physical_identity_lookup, provider_sessions=providers))
+    assert recorded.audit() == bridge.audit()
+    assert recorded.recover(context, context.argument_sha256).result == 'answer'
+    assert len(calls) == 1 and not ledger.snapshot()['pending_calls']

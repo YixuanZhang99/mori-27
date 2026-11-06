@@ -31,8 +31,8 @@ class GovernedCNYProvider:
                  phase_call_limits=None, reasoning_effort='high', message_mode='single_user_v1'):
         if message_mode not in {'single_user_v1', 'openevolve_v1', 'openevolve_host_v1'}:
             raise ValueError('unsupported provider message mode')
-        if type(reasoning_effort) is not str or reasoning_effort not in {'low', 'high', 'max'}:
-            raise ValueError('reasoning effort must be low, high or max')
+        if type(reasoning_effort) is not str or reasoning_effort not in {'none', 'low', 'high', 'max'}:
+            raise ValueError('reasoning effort must be none, low, high or max')
         if type(model) is not str or not model.strip():
             raise ValueError('an explicit model is required')
         if type(base_url) is not str:
@@ -70,7 +70,7 @@ class GovernedCNYProvider:
         self._manifest = {'schema_version': 1, 'requested_model': model,
             'base_url': base_url.rstrip('/'), 'max_completion_tokens': max_completion_tokens,
             'timeout': float(timeout), 'request_format': 'deepseek', 'retry_policy': 'never',
-            'response_model_required': True, 'thinking': {'type': 'enabled'},
+            'response_model_required': True, 'thinking': {'type': 'disabled' if reasoning_effort == 'none' else 'enabled'},
             'reasoning_effort': reasoning_effort, 'temperature_applied': False, 'seed_applied': False,
             'immutable_snapshot_verified': False, 'campaign': campaign,
             'token_admission': admission_policy(token_admission, campaign),
