@@ -53,11 +53,34 @@ def launch_live_controller(config, *, deadline, directory, api_key):
                                   containment_group=group)
 
 
+def launch_reference_live_controller(config, *, deadline, directory, api_key):
+    """Supervise the trusted reference host only after the closed pilot gate."""
+    from zoo.circle_packing.host_runtime import _require_reference_live_gate
+    _require_reference_live_gate()
+    from zoo.circle_packing.reference_live_worker import REFERENCE_CONFIG_FIELDS
+    if type(config) is not dict or set(config) != REFERENCE_CONFIG_FIELDS or \
+            type(config['seed']) is not int or config['seed'] not in (0, 1, 2) or \
+            any(type(config[name]) is not str or not Path(config[name]).is_absolute()
+                for name in ('source', 'runtime', 'ledger', 'clock', 'output', 'worker_directory', 'workspace')):
+        raise ValueError('reference supervisor requires its exact cell configuration')
+    if type(api_key) is not str or not api_key.strip():
+        raise ValueError('reference supervisor requires an in-memory credential')
+    ledger = CampaignBudget(config['ledger'])
+    if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
+        raise ValueError('reference supervisor requires its original non-fixture provider')
+    from zoo.circle_packing.cell_containment import delegated_cell_group
+    with delegated_cell_group() as group:
+        return _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
+            entry='zoo.circle_packing.reference_live_worker', api_key=api_key, containment_group=group)
+
+
 def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, containment_group=None):
     if type(deadline) is not CellDeadline or deadline._lifecycle.ledger.path.resolve() != ledger.path.resolve():
         raise ValueError('controller requires the original campaign cell deadline')
     record = deadline._record
-    if record['cell_id'] != f"mori-{config['seed']}" or record['plan_ref'] != config['ref'] or \
+    reference = entry == 'zoo.circle_packing.reference_live_worker'
+    arm = 'vendor' if reference else 'mori'
+    if record['cell_id'] != f"{arm}-{config['seed']}" or record['plan_ref'] != config['ref'] or \
             Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
         raise ValueError('fixture controller clock differs from the original cell')
     from zoo.circle_packing.pilot_plan import validate_draft_cell
@@ -78,6 +101,8 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
         raise ValueError('fixture supervisor requires a fresh private directory')
     root = parent / requested.name
     protected = (source, runtime, ledger.path.resolve(), deadline._store.path.resolve(), Path(config['output']).resolve())
+    if reference:
+        protected += (Path(config['workspace']).resolve(), Path(config['worker_directory']).resolve())
     if any(root == path or root in path.parents or path in root.parents for path in protected):
         raise ValueError('fixture supervisor directory overlaps protected paths')
     child_path = sandbox_child_path()
@@ -104,7 +129,10 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
         worker_binding['supervisor_start_ticks'] = ticks
         worker_binding['boot_id'] = record['boot_id']
     worker_ref = payload_digest(worker_binding)
-    ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], worker_ref)
+    if reference:
+        ledger.claim_reference_host(record['cell_id'], record['record_sha256'], worker_ref)
+    else:
+        ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], worker_ref)
     remaining = deadline.remaining()
     if remaining <= 0:
         raise ValueError('fixture controller deadline expired after claim')
@@ -112,6 +140,8 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
     env = {'PATH': child_path, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
     if api_key is not None:
         env['DEEPSEEK_API_KEY'] = api_key
+    if reference:
+        env['MORI_REFERENCE_HOST_REF'] = worker_ref
     command = [str(runtime / 'bin' / 'python'), '-m', entry, str(setup)]
     if containment_group is not None:
         from zoo.circle_packing.cell_containment import contained_command

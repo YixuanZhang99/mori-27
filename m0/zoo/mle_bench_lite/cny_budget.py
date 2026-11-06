@@ -382,6 +382,17 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
             raise ValueError('reference selection lacks an unsealed anchored worker snapshot')
         governance['reference_selections'][run_id] = {'cell_id': cell_id, 'selection_sha256': selection,
             'rows_sha256': snapshot['rows_sha256'], 'sequence': sequence, 'observation_sha256': observation}
+    elif kind == 'claim_reference_host':
+        if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'host_ref'}:
+            raise ValueError('reference host claim has invalid fields')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        deadline_ref, host_ref = _sha(event['deadline_ref']), _sha(event['host_ref'])
+        clock = governance['cell_claims'].get(cell_id)
+        if re.fullmatch(r'vendor-[012]', cell_id) is None or clock is None or \
+                clock['record_sha256'] != deadline_ref or cell_id in governance['reference_host_claims'] or \
+                cell_id in governance['reference_authority_claims'] or cell_id in governance['worker_claims']:
+            raise ValueError('reference host requires an unclaimed original vendor cell')
+        governance['reference_host_claims'][cell_id] = {'deadline_ref': deadline_ref, 'host_ref': host_ref}
     elif kind == 'claim_reference_authority':
         if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'authority_ref',
                           'currency_run_id', 'initial_budget_ref'}:
@@ -555,6 +566,7 @@ def _reduce_history(policies, events, heads):
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
                   "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
+                  "reference_host_claims": {},
                   "reference_physical_snapshots": {}, "reference_selections": {}, "fixture_campaign": False}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
@@ -1016,6 +1028,21 @@ class CampaignBudget:
                 return
             self._append(db, state, {'kind': 'start_reference_authority_work', 'schema_version': 2,
                                     'cell_id': cell_id, 'authority_ref': authority_ref})
+
+    def claim_reference_host(self, cell_id, deadline_ref, host_ref):
+        """Consume the trusted reference host start without consuming its worker claim."""
+        _identifier(cell_id, 'cell identity')
+        _sha(deadline_ref)
+        _sha(host_ref)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'claim_reference_host', 'schema_version': 2,
+                                    'cell_id': cell_id, 'deadline_ref': deadline_ref, 'host_ref': host_ref})
+
+    def reference_host_claim(self, cell_id):
+        _identifier(cell_id, 'cell identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_host_claims'].get(cell_id)
+            return dict(value) if value is not None else None
 
     def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):
         """Consume the one worker start for a cell in the original ledger."""

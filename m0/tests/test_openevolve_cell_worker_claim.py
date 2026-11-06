@@ -49,3 +49,22 @@ def test_concurrent_worker_claims_allow_one_launch(tmp_path):
             return 'rejected'
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(claim, ['b', 'c'])) == ['claimed', 'rejected']
+
+
+def test_reference_host_claim_is_once_only_and_does_not_consume_worker_claim(tmp_path):
+    lifecycle, deadline = authority(tmp_path)
+    ledger, clock_ref = lifecycle.ledger, deadline._record['record_sha256']
+    ledger.claim_reference_host('vendor-0', clock_ref, 'b' * 64)
+    assert ledger.reference_host_claim('vendor-0') == {'deadline_ref': clock_ref, 'host_ref': 'b' * 64}
+    with pytest.raises(ValueError, match='host'):
+        ledger.claim_reference_host('vendor-0', clock_ref, 'c' * 64)
+    ledger.claim_cell_worker('vendor-0', clock_ref, 'd' * 64)
+    assert ledger.cell_worker_claim('vendor-0')['worker_ref'] == 'd' * 64
+
+
+def test_reference_host_claim_rejects_wrong_cell_and_deadline(tmp_path):
+    lifecycle, _ = authority(tmp_path)
+    with pytest.raises(ValueError):
+        lifecycle.ledger.claim_reference_host('mori-0', 'f' * 64, 'b' * 64)
+    with pytest.raises(ValueError):
+        lifecycle.ledger.claim_reference_host('vendor-0', 'f' * 64, 'b' * 64)

@@ -46,6 +46,7 @@ def prepared_cell(tmp_path, request):
         insertion = '    with authority:'
         assert code.count(insertion) == 1
         fake = '''    import socket as test_socket, urllib.request as test_request
+    assert '/mori-cell-' in open('/proc/self/cgroup').read(), 'reference host was not contained'
     original_connect = test_socket.socket.connect
     def local_only(sock, address):
         if sock.family != test_socket.AF_UNIX: raise AssertionError('external network forbidden')
@@ -142,27 +143,31 @@ def prepared_cell(tmp_path, request):
 
 @pytest.mark.linux
 @pytest.mark.parametrize('prepared_cell', ['reference_fake_live'], indirect=True)
-def test_reference_named_live_host_runs_with_fake_transport_and_original_authorities(prepared_cell, tmp_path):
+def test_reference_supervisor_runs_live_host_with_fake_transport_and_original_authorities(prepared_cell, tmp_path,
+                                                                                       monkeypatch):
+    from zoo.circle_packing.mori_supervisor import launch_reference_live_controller
     config, ledger, _clock, _runner = prepared_cell
     clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
     with tempfile.TemporaryDirectory(prefix='mori-ref-', dir='/tmp') as path:
         config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
                   'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(path).resolve())}
-        setup = tmp_path / 'reference-setup.json'
-        setup.write_text(json.dumps(config))
-        env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'DEEPSEEK_API_KEY': 'fixture-only-secret',
-               'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
-        process = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-m',
-            'zoo.circle_packing.reference_live_worker', str(setup)], cwd=tmp_path, env=env,
-            capture_output=True, text=True, timeout=240)
-        assert process.returncode == 0, process.stderr
-        result = json.loads(process.stdout)
+        monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+        directory = tmp_path / 'reference-supervisor'
+        process = launch_reference_live_controller(config, deadline=clock, directory=directory,
+                                                    api_key='fixture-only-secret')
+        assert process['returncode'] == 0 and not process['timeout'] and not process['wrapper_error'], process['stderr']
+        result = json.loads(process['stdout'])
         assert result['mode'] == 'live' and result['performance_claim'] is False and result['state'] == 'completed'
         assert result['selected_program']['metrics']['validity'] == 1.0
         assert ledger.snapshot()['settled_upper_bound_micro_cny'] == config['plan']['iterations'] * 38
         assert not ledger.snapshot()['pending_calls']
-        for root in (Path(config['output']), Path(config['worker_directory']), Path(path)):
+        assert ledger.reference_host_claim('vendor-0') is not None
+        assert ledger.cell_worker_claim('vendor-0') is not None
+        events = list(ContinuationStore(directory / 'controller.jsonl').read())
+        kinds = [event['kind'] for event in events]
+        assert kinds.index('executor_containment_verified') < kinds.index('executor_process_finished')
+        for root in (directory, Path(config['output']), Path(config['worker_directory']), Path(path)):
             for file in root.rglob('*'):
                 if file.is_file() and not file.is_symlink():
                     assert b'fixture-only-secret' not in file.read_bytes(), f'fixture key persisted in {file}'

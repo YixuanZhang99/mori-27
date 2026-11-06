@@ -256,5 +256,9 @@ offline test overrides that gate only for a temporary campaign with intercepted
 transport. Live work remains disabled until pilot readiness is established.
 `reference_live_worker` provides a named trusted host that restores the
 original vendor clock and frozen source/runtime, removes the provider key from
-its environment, and calls the gated reference entry. It still needs whole-cell
-supervision, recovery and the remaining paired-pilot checks before paid use.
+its environment, and calls the gated reference entry. The gated reference
+supervisor gives that host its own one-time campaign claim, separate from the
+inner upstream worker claim, and uses the delegated cgroup and deadline.
+The new reference-host event is understood by the current journal reader but
+not older versions. Interrupted reference-host cleanup, independent paired
+audits and the remaining pilot gates are still required before paid use.

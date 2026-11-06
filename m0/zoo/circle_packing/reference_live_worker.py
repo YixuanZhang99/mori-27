@@ -18,7 +18,7 @@ def _take_credential():
     return key
 
 
-def _prepare(config, *, api_key):
+def _prepare(config, *, api_key, host_ref):
     from core.composition.recovery import ContinuationStore
     from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
     from zoo.circle_packing.frozen_source import verify_frozen_source
@@ -49,6 +49,9 @@ def _prepare(config, *, api_key):
     require_hash_seed_zero()
     clock = CellDeadline.restore(ContinuationStore(clock_path), lifecycle=CellLifecycle(ledger),
         cell_id=f"vendor-{config['seed']}", plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    if ledger.reference_host_claim(clock._record['cell_id']) != {
+            'deadline_ref': clock._record['record_sha256'], 'host_ref': host_ref}:
+        raise ValueError('reference host lacks its original supervisor claim')
     runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'],
                                                 base_python='/usr/bin/python3.12')
     authority = build_reference_authorities(config['output'], ledger=ledger, plan=plan, expected_plan_ref=ref,
@@ -62,7 +65,8 @@ def run(config):
     key = _take_credential()
     from zoo.circle_packing.host_runtime import _require_reference_live_gate, run_reference_cell_live
     _require_reference_live_gate()
-    authority, clock = _prepare(config, api_key=key)
+    host_ref = os.environ.pop('MORI_REFERENCE_HOST_REF', None)
+    authority, clock = _prepare(config, api_key=key, host_ref=host_ref)
     with authority:
         return run_reference_cell_live(authority, clock, config['worker_directory'], config['workspace'],
             snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'],

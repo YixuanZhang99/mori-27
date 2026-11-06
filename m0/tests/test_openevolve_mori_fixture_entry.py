@@ -168,6 +168,14 @@ def test_reference_live_host_discards_environment_key_before_closed_gate(tmp_pat
     assert not (tmp_path / 'reference').exists()
 
 
+def test_reference_live_supervisor_closed_gate_does_not_create_files(tmp_path):
+    from zoo.circle_packing.mori_supervisor import launch_reference_live_controller
+    target = tmp_path / 'reference-supervisor'
+    with pytest.raises(ValueError, match='pilot gate'):
+        launch_reference_live_controller(config(), deadline=None, directory=target, api_key='fixture-only-secret')
+    assert not target.exists()
+
+
 @pytest.mark.linux
 def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypatch):
     from contextlib import nullcontext
