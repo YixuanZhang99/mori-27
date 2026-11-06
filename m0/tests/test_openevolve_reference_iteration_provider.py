@@ -34,3 +34,23 @@ def test_unique_provider_request_is_linked_and_duplicate_prompt_is_ambiguous():
     altered['calls'][0]['outcome']['usage']['total_tokens'] = 8
     with pytest.raises(ValueError, match='provider'):
         audit_reference_iteration_provider(trace, rows, altered, planned_iterations=2)
+
+
+def test_identical_prompts_use_distinct_original_broker_request_ids():
+    digest = 'a' * 64
+    trace = {'iterations': [{'iteration': 1, 'state': 'candidate'}, {'iteration': 2, 'state': 'worker_error'}],
+             'prompt_bindings': [{'iteration': 1, 'request_sha256': digest}, {'iteration': 2, 'request_sha256': digest}],
+             'request_bindings': [{'iteration': 1, 'request_sha256': digest, 'request_id': '1' * 32},
+                                  {'iteration': 2, 'request_sha256': digest, 'request_id': '2' * 32}]}
+    rows, calls = [], []
+    for digit in ('1', '2'):
+        context = {'lane': 'main', 'argument_sha256': digest, 'intent_id': 'host:' + digit * 32}
+        binding, call_id = digit * 64, ('a' if digit == '1' else 'b') * 64
+        rows += [{'kind': 'composed_provider_started', 'payload': {'request_sha256': digest, 'binding': binding,
+                   'invocation': {'external_context': context}}},
+                 {'kind': 'composed_provider_completed', 'payload': {'binding': binding, 'tokens': 7}}]
+        calls.append({'prepared': {'context': context, 'call_id': call_id},
+                      'outcome': {'call_id': call_id, 'usage': {'total_tokens': 7}}})
+    result = audit_reference_iteration_provider(trace, rows, {'calls': calls}, planned_iterations=2)
+    assert [item['state'] for item in result['iterations']] == ['matched', 'matched']
+    assert result['unattributed_provider_bindings'] == []

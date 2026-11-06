@@ -2,7 +2,8 @@
 from concurrent.futures import Future
 from types import SimpleNamespace
 
-from zoo.circle_packing.reference_iteration_trace import capture_reference_iterations, install_prompt_observer
+from zoo.circle_packing.reference_iteration_trace import (capture_reference_iterations, install_prompt_observer,
+                                                            record_iteration_request)
 
 
 def test_capture_preserves_futures_and_reports_failed_and_unresolved_iterations():
@@ -46,4 +47,8 @@ def test_prompt_observer_preserves_messages_and_records_only_request_digest(tmp_
     prompt = json.dumps(argument, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     assert rows == [{'kind': 'reference_iteration_prompt', 'payload': {'iteration': 3,
                       'request_sha256': payload_digest({'args': (prompt,), 'kwargs': {}})}}]
+    record_iteration_request(result, 'a' * 32)
+    request_rows = list(ContinuationStore(tmp_path / 'iteration-requests.jsonl').read())
+    assert request_rows == [{'kind': 'reference_iteration_request', 'payload': {'iteration': 3,
+                            'request_sha256': rows[0]['payload']['request_sha256'], 'request_id': 'a' * 32}}]
     assert 'private system' not in (tmp_path / 'iteration-prompts.jsonl').read_text()

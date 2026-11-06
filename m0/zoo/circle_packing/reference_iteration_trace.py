@@ -24,12 +24,35 @@ def reference_iteration_attempt_limit(planned_iterations):
     return planned_iterations * (1 + islands)
 
 
+_active_prompt = None
+
+
+def record_iteration_request(messages, request_id):
+    """Bind an actual broker request ID to the current observed iteration."""
+    from core.x1.checkpoint import payload_digest
+    from core.x1.store import AppendOnlyStore
+    active = _active_prompt
+    if active is None:
+        return
+    argument = {'host_messages': messages, 'host_prompt_ref': 'sha256:' + payload_digest(messages)}
+    prompt = json.dumps(argument, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    digest = payload_digest({'args': (prompt,), 'kwargs': {}})
+    if digest != active['request_sha256']:
+        return
+    if type(request_id) is not str or re.fullmatch(r'[0-9a-f]{32}', request_id) is None:
+        raise ValueError('reference request identity is invalid')
+    AppendOnlyStore(active['root'] / 'iteration-requests.jsonl').append('reference_iteration_request',
+        {'iteration': active['iteration'], 'request_sha256': digest, 'request_id': request_id})
+
+
 def install_prompt_observer(sampler_class, root):
     """Record an iteration/request digest without changing prompt messages."""
     from core.x1.checkpoint import payload_digest
     from core.x1.store import AppendOnlyStore
     original = sampler_class.build_prompt
     def build(sampler, *args, **kwargs):
+        global _active_prompt
+        _active_prompt = None
         result = original(sampler, *args, **kwargs)
         iteration = kwargs.get('evolution_round')
         if type(iteration) is int and type(result) is dict and \
@@ -37,8 +60,10 @@ def install_prompt_observer(sampler_class, root):
             messages = {'system': result['system'], 'user': result['user']}
             argument = {'host_messages': messages, 'host_prompt_ref': 'sha256:' + payload_digest(messages)}
             prompt = json.dumps(argument, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+            digest = payload_digest({'args': (prompt,), 'kwargs': {}})
+            _active_prompt = {'root': Path(root), 'iteration': iteration, 'request_sha256': digest}
             AppendOnlyStore(Path(root) / 'iteration-prompts.jsonl').append('reference_iteration_prompt',
-                {'iteration': iteration, 'request_sha256': payload_digest({'args': (prompt,), 'kwargs': {}})})
+                {'iteration': iteration, 'request_sha256': digest})
         return result
     sampler_class.build_prompt = build
 
@@ -199,6 +224,16 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
                     type(item['iteration']) is not int or not 1 <= item['iteration'] <= planned_iterations or \
                     type(item['request_sha256']) is not str or re.fullmatch(r'[0-9a-f]{64}', item['request_sha256']) is None:
                 raise ValueError('reference prompt binding is invalid')
+        request_bindings = trace.get('request_bindings')
+        if request_bindings is not None:
+            if type(request_bindings) is not list or len(request_bindings) > reference_iteration_attempt_limit(planned_iterations):
+                raise ValueError('reference request bindings are invalid')
+            for item in request_bindings:
+                if type(item) is not dict or set(item) != {'iteration', 'request_sha256', 'request_id'} or \
+                        type(item['iteration']) is not int or not 1 <= item['iteration'] <= planned_iterations or \
+                        type(item['request_sha256']) is not str or re.fullmatch(r'[0-9a-f]{64}', item['request_sha256']) is None or \
+                        type(item['request_id']) is not str or re.fullmatch(r'[0-9a-f]{32}', item['request_id']) is None:
+                    raise ValueError('reference request binding is invalid')
         starts = [row['payload'] for row in rows if row['kind'] == 'composed_provider_started'
                   and row['payload']['invocation']['external_context']['lane'] == 'main']
         completions = [row['payload'] for row in rows if row['kind'] == 'composed_provider_completed']
@@ -212,12 +247,23 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
             same_iteration = [entry for entry in bindings if entry['iteration'] == item['iteration']]
             submissions = [entry for entry in submitted if entry['iteration'] == item['iteration']
                            and entry['state'] != 'not_submitted']
-            matching_starts = [entry for entry in starts if entry['request_sha256'] == digest]
+            requests = None if request_bindings is None else [entry for entry in request_bindings
+                if entry['iteration'] == item['iteration'] and entry['request_sha256'] == digest]
+            request_id = requests[0]['request_id'] if requests and len(requests) == 1 else None
+            matching_starts = [entry for entry in starts if entry['request_sha256'] == digest and
+                (request_bindings is None or request_id is not None and
+                 entry['invocation']['external_context']['intent_id'] == 'host:' + request_id)]
             result = {'iteration': item['iteration'], 'request_sha256': digest}
-            if len(matching_bindings) != 1 or len(same_iteration) != 1 or len(submissions) > 1 or len(matching_starts) > 1:
+            duplicate_request = request_id is not None and sum(
+                entry['request_id'] == request_id for entry in request_bindings) != 1
+            if (request_bindings is None and len(matching_bindings) != 1) or len(same_iteration) != 1 or \
+                    len(submissions) > 1 or len(matching_starts) > 1 or \
+                    (requests is not None and len(requests) > 1) or duplicate_request:
                 result['state'] = 'ambiguous'
             elif not submissions or submissions[0]['state'] not in ('candidate', 'worker_error', 'no_candidate'):
                 result['state'] = 'unverified_submission'
+            elif requests is not None and not requests:
+                result['state'] = 'unverified_request'
             elif not matching_starts:
                 result['state'] = 'not_observed'
             else:

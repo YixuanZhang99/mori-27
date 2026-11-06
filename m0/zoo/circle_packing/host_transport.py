@@ -65,8 +65,11 @@ class HostBridgeClient:
 
     def _exchange(self, system, user):
         messages = {'system': system, 'user': user}
+        request_id = uuid.uuid4().hex
+        from zoo.circle_packing.reference_iteration_trace import record_iteration_request
+        record_iteration_request(messages, request_id)
         return self._exchange_argument({'host_messages': messages,
-                                        'host_prompt_ref': 'sha256:' + payload_digest(messages)})
+                                        'host_prompt_ref': 'sha256:' + payload_digest(messages)}, request_id=request_id)
 
     def _exchange_argument(self, argument, *, request_id=None):
         if self._halted:
