@@ -73,7 +73,8 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
         summaries = {'mori': {'candidate': mori['candidate'], 'sum_radii': mori['measurement']['sum_radii'],
                               'validity': mori['measurement']['validity'],
                               'settled_upper_bound_micro_cny': mori['settled_upper_bound_micro_cny']},
-                     'reference': {'sum_radii': reference['metrics']['sum_radii'],
+                     'reference': {'selected_program': reference['selected_program'],
+                                   'sum_radii': reference['metrics']['sum_radii'],
                                    'validity': reference['metrics']['validity'],
                                    'settled_upper_bound_micro_cny': reference_currency['settled_upper_bound_micro_cny']}}
         cells = []
@@ -120,6 +121,7 @@ def audit_supervised_pair_snapshot(*, mori_config, reference_config, mori_superv
                 mori_report['final_measurement']['validity'] != result['mori']['validity'] or \
                 reference_report.get('mode') != 'live' or reference_report.get('state') != 'completed' or \
                 reference_report.get('currency_bundle_sha256') != payload_digest(pair_arguments['reference_bundle']) or \
+                payload_digest(reference_report['selected_program']) != payload_digest(result['reference']['selected_program']) or \
                 reference_report['selected_program']['metrics']['sum_radii'] != result['reference']['sum_radii'] or \
                 reference_report['selected_program']['metrics']['validity'] != result['reference']['validity']:
             raise ValueError('supervisor reports differ from the independently audited snapshots')
