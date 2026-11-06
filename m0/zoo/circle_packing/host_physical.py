@@ -272,6 +272,12 @@ class HostStageAdmission:
                 raise ValueError('stage one lacks eligible original timing')
 
     def execute(self, request_id, program, *, stage, prior_id=None, timeout=60):
+        from contextlib import nullcontext
+        owner = getattr(self.control_authority, '_owner_operation', None)
+        with owner() if owner is not None else nullcontext():
+            return self._execute_owned(request_id, program, stage=stage, prior_id=prior_id, timeout=timeout)
+
+    def _execute_owned(self, request_id, program, *, stage, prior_id=None, timeout=60):
         with self._lock:
             self._require_control()
             deadline = self.control_authority.bridge.cell_deadline() if self.control_authority is not None else None

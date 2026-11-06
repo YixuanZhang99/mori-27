@@ -1,7 +1,7 @@
 """Protected zero-provider seed control through the existing invocation lifecycle."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 from pathlib import Path
 import math
@@ -71,7 +71,13 @@ class _SeedOperator:
 
 class HostSeedControl:
     """Execute one frozen control without a provider; fail closed on interruption."""
-    def __init__(self, budget, bridge, run, ready, domain):
+    def __init__(self, budget, bridge, run, ready, domain, *, owner_check=None, owner_operation=None):
+        if owner_check is not None and not callable(owner_check):
+            raise ValueError('control owner check must be callable')
+        if owner_operation is not None and not callable(owner_operation):
+            raise ValueError('control owner operation must be callable')
+        self._owner_check = owner_check
+        self._owner_operation = owner_operation
         if not budget._require_initial_control or not isinstance(budget.store, ContinuationStore) or run.store is not budget.store or \
                 getattr(run.physical_identity_lookup, '__self__', None) is not budget or bridge._run is not run or \
                 ready.physical_plan_ref != run.physical_plan['plan_ref'] or type(domain) is not CirclePackingDomain or \
@@ -314,7 +320,13 @@ class HostSeedControl:
         raise UsageError('measured control evaluation failed; original cost retained')
 
     async def execute(self, slot_id):
+        with self._owner_operation() if self._owner_operation is not None else nullcontext():
+            return await self._execute_owned(slot_id)
+
+    async def _execute_owned(self, slot_id):
         with self.budget._lock:
+            if self._owner_check is not None:
+                self._owner_check()
             _require_campaign_runtime(self.bridge.ledger, self.domain.runner)
             if self._running:
                 raise ValueError('control is already running')

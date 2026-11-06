@@ -4,6 +4,7 @@ This component does not start a controller or implement full run recovery.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import re
@@ -49,7 +50,13 @@ class HostDispatchRouter:
 
 
 class HostDispatchCoordinator:
-    def __init__(self, budget, bridge, run, ready, *, runner=None):
+    def __init__(self, budget, bridge, run, ready, *, runner=None, owner_check=None, owner_operation=None):
+        if owner_check is not None and not callable(owner_check):
+            raise ValueError('dispatch owner check must be callable')
+        if owner_operation is not None and not callable(owner_operation):
+            raise ValueError('dispatch owner operation must be callable')
+        self._owner_check = owner_check
+        self._owner_operation = owner_operation
         if not budget._require_initial_control or run.store is not budget.store or getattr(run.physical_identity_lookup, '__self__', None) is not budget \
                 or bridge._run is not run or ready.physical_plan_ref != run.physical_plan['plan_ref']:
             raise ValueError('host authorities must share the same frozen physical run')
@@ -84,6 +91,8 @@ class HostDispatchCoordinator:
         self.physical = HostPhysicalAdmission(budget, control_authority=self)
 
     def _require_control(self):
+        if self._owner_check is not None:
+            self._owner_check()
         from core.composition.governance_audit import audit_terminals
         from zoo.circle_packing.host_control import _require_campaign_runtime
         _require_campaign_runtime(self.bridge.ledger, self.control_domain.runner)
@@ -118,6 +127,13 @@ class HostDispatchCoordinator:
         return {'physical': physical, 'currency': currency}
 
     def __call__(self, request_id, argument):
+        with self._owner_operation() if self._owner_operation is not None else nullcontext():
+            with self.budget._lock:
+                if self._owner_check is not None:
+                    self._owner_check()
+                return self._invoke(request_id, argument)
+
+    def _invoke(self, request_id, argument):
         if type(argument) is not dict or set(argument) != {'host_messages', 'host_prompt_ref'}:
             raise ValueError('host invocation lacks its message binding')
         messages = argument['host_messages']

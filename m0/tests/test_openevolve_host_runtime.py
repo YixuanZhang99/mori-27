@@ -1,0 +1,330 @@
+"""Reference authorities use the declared pilot limits and one original campaign."""
+import pytest
+
+from core.composition.recovery import ContinuationStore
+from test_governed_cny_provider import local_endpoint
+from test_openevolve_frozen_runtime import fixture
+from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
+from zoo.mle_bench_lite.composed_domain import SandboxRunner
+
+pytestmark = pytest.mark.linux
+
+
+def prepared_reference(tmp_path, local_endpoint):
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    runtime = tmp_path / 'runtime'
+    frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+        base_python='/usr/bin/python3.12', uv_cache=cache)
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='vendor-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
+                                                base_python='/usr/bin/python3.12')
+    return dict(ledger=ledger, plan=plan, expected_plan_ref=ref, expected_campaign_id=campaign_id,
+                deadline=clock, snapshot=snapshot, source_manifest=exported['manifest'], runner=runner,
+                api_key='fixture-only-secret', base_url=local_endpoint.url)
+
+
+def test_reference_authorities_bind_frozen_plan_budget_clock_and_campaign(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    runtime = tmp_path / 'runtime'
+    frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+        base_python='/usr/bin/python3.12', uv_cache=cache)
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='vendor-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
+                                                base_python='/usr/bin/python3.12')
+    before = ledger.snapshot()['settled_upper_bound_micro_cny']
+    authority = build_reference_authorities(tmp_path / 'reference', ledger=ledger, plan=plan,
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, deadline=clock,
+        snapshot=snapshot, source_manifest=exported['manifest'], runner=runner,
+        api_key='fixture-only-secret', base_url=local_endpoint.url)
+    assert authority.bridge.cell_deadline() is clock
+    assert authority.control.domain.runner.manifest_binding['runtime_ref'] == frozen['runtime_ref']
+    assert authority.stages.runner.manifest_binding['runtime_ref'] == frozen['runtime_ref']
+    assert authority.budget.options['limits']['global'] == {
+        key: plan['limits'][key] for key in ('token', 'node', 'eval_count')}
+    assert authority.run.main_provider_binding['call_bound']['units']['token'] == (
+        ledger.manifest_binding()['context_tokens'] + plan['max_completion_tokens'])
+    assert ledger.snapshot()['settled_upper_bound_micro_cny'] == before
+    assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
+
+
+def test_reference_authorities_reject_mismatched_cell_before_protection(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    runtime = tmp_path / 'runtime'
+    frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+        base_python='/usr/bin/python3.12', uv_cache=cache)
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
+                                                base_python='/usr/bin/python3.12')
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='vendor'):
+        build_reference_authorities(tmp_path / 'reference', ledger=ledger, plan=plan,
+            expected_plan_ref=ref, expected_campaign_id=campaign_id, deadline=clock,
+            snapshot=snapshot, source_manifest=exported['manifest'], runner=runner,
+            api_key='fixture-only-secret', base_url=local_endpoint.url)
+    assert ledger.snapshot() == before and not local_endpoint.requests
+
+
+def test_reference_setup_recovers_interruption_after_protection(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    options = prepared_reference(tmp_path, local_endpoint)
+    original = CNYInvocationBridge.bind_cell_deadline
+    def interrupted(*args, **kwargs):
+        raise RuntimeError('fixture crash after currency protection')
+    monkeypatch.setattr(CNYInvocationBridge, 'bind_cell_deadline', interrupted)
+    with pytest.raises(RuntimeError, match='fixture crash'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    after_crash = options['ledger'].snapshot()
+    assert after_crash['protected_micro_cny'] > 0 and not after_crash['pending_calls']
+    monkeypatch.setattr(CNYInvocationBridge, 'bind_cell_deadline', original)
+    resumed = build_reference_authorities(tmp_path / 'reference', **options)
+    assert resumed.bridge.cell_deadline() is options['deadline']
+    assert options['ledger'].snapshot()['protected_micro_cny'] == after_crash['protected_micro_cny']
+    assert not local_endpoint.requests
+
+
+def test_reference_setup_recovers_interruption_before_authority_claim(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    ledger = options['ledger']
+    original = ledger.claim_reference_authority
+    def interrupted(*args, **kwargs):
+        raise RuntimeError('fixture crash before authority claim')
+    monkeypatch.setattr(ledger, 'claim_reference_authority', interrupted)
+    with pytest.raises(RuntimeError, match='fixture crash'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    assert ledger.reference_authority_claim('vendor-0') is None
+    monkeypatch.setattr(ledger, 'claim_reference_authority', original)
+    resumed = build_reference_authorities(tmp_path / 'reference', **options)
+    resumed.close()
+    assert not local_endpoint.requests
+
+
+def test_reference_setup_recovers_interruption_after_authority_claim(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    options = prepared_reference(tmp_path, local_endpoint)
+    original = CNYInvocationBridge.bind_run
+    def interrupted(*args, **kwargs):
+        raise RuntimeError('fixture crash after authority claim')
+    monkeypatch.setattr(CNYInvocationBridge, 'bind_run', interrupted)
+    with pytest.raises(RuntimeError, match='fixture crash'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    assert options['ledger'].reference_authority_claim('vendor-0') is not None
+    monkeypatch.setattr(CNYInvocationBridge, 'bind_run', original)
+    resumed = build_reference_authorities(tmp_path / 'reference', **options)
+    resumed.close()
+    assert not local_endpoint.requests
+
+
+def test_reference_setup_recovers_before_first_physical_protection(tmp_path, local_endpoint, monkeypatch):
+    from core.composition.budget import HierarchicalBudget
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    original = HierarchicalBudget.protect_controls
+    def interrupted(*args, **kwargs):
+        raise RuntimeError('fixture crash before physical protection')
+    monkeypatch.setattr(HierarchicalBudget, 'protect_controls', interrupted)
+    with pytest.raises(RuntimeError, match='fixture crash'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    assert options['ledger'].reference_authority_claim('vendor-0') is None
+    monkeypatch.setattr(HierarchicalBudget, 'protect_controls', original)
+    resumed = build_reference_authorities(tmp_path / 'reference', **options)
+    resumed.close()
+    assert not local_endpoint.requests
+
+
+def test_reference_cell_cannot_claim_another_authority(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    ledger = options['ledger']
+    build_reference_authorities(tmp_path / 'reference', **options)
+    with pytest.raises(ValueError, match='cell.*authority'):
+        build_reference_authorities(tmp_path / 'other-reference', **options)
+    assert not local_endpoint.requests
+
+
+def test_reference_factory_refuses_nonlocal_provider_without_mutating_ledger(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    ledger = options['ledger']
+    before = ledger.snapshot()
+    options['base_url'] = ledger.manifest_binding()['provider_base_url']
+    with pytest.raises(ValueError, match='loopback'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    assert ledger.snapshot() == before
+
+
+def test_reference_syncs_directories_before_campaign_claim(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing import host_runtime
+    options = prepared_reference(tmp_path, local_endpoint)
+    output, ledger = tmp_path / 'reference', options['ledger']
+    synced = []
+    original_sync, original_claim = host_runtime._sync_directory, ledger.claim_reference_authority
+    def sync(path):
+        synced.append(Path(path))
+        return original_sync(path)
+    def claim(*args, **kwargs):
+        assert output.parent in synced and output in synced
+        return original_claim(*args, **kwargs)
+    from pathlib import Path
+    monkeypatch.setattr(host_runtime, '_sync_directory', sync)
+    monkeypatch.setattr(ledger, 'claim_reference_authority', claim)
+    authority = host_runtime.build_reference_authorities(output, **options)
+    authority.close()
+
+
+def test_reference_same_run_has_one_live_owner_and_closed_owner_cannot_work(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    import asyncio
+    options = prepared_reference(tmp_path, local_endpoint)
+    first = build_reference_authorities(tmp_path / 'reference', **options)
+    with pytest.raises(RuntimeError, match='owner'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    first.close()
+    with pytest.raises(RuntimeError, match='closed'):
+        asyncio.run(first.control.execute('control-0000'))
+    second = build_reference_authorities(tmp_path / 'reference', **options)
+    second.close()
+    assert not local_endpoint.requests
+
+
+def test_reference_owner_cannot_close_during_control_execution(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    import asyncio
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+
+    async def active_control(slot):
+        with pytest.raises(RuntimeError, match='active'):
+            authority.close()
+        return {'slot': slot}
+
+    monkeypatch.setattr(authority.control, '_execute', active_control)
+    assert asyncio.run(authority.control.execute('control-0000')) == {'slot': 'control-0000'}
+    authority.close()
+
+
+def test_reference_close_rejects_work_active_on_another_thread(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    import asyncio
+    import threading
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    entered, release = threading.Event(), threading.Event()
+
+    async def active_control(slot):
+        entered.set()
+        await asyncio.to_thread(release.wait, 5)
+        return {'slot': slot}
+
+    monkeypatch.setattr(authority.control, '_execute', active_control)
+    thread = threading.Thread(target=lambda: asyncio.run(authority.control.execute('control-0000')))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        with pytest.raises(RuntimeError, match='active'):
+            authority.close()
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    authority.close()
+
+
+def test_reference_cell_rejects_another_currency_run_binding(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    ledger, clock = options['ledger'], options['deadline']
+    other_run = 'a' * 64
+    ledger.protect_run(other_run, authority.run.physical_plan['plan_ref'],
+                       authority.bridge._preparation['obligations'])
+    with pytest.raises(ValueError, match='reference.*authority'):
+        ledger.bind_run_deadline(other_run, 'vendor-0', options['expected_plan_ref'],
+                                 clock._record['record_sha256'])
+    authority.close()
+    assert not local_endpoint.requests
+
+
+def test_reference_cannot_recreate_deleted_physical_journal(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    output = tmp_path / 'reference'
+    authority = build_reference_authorities(output, **options)
+    authority.close()
+    (output / 'events.jsonl').unlink()
+    with pytest.raises(ValueError, match='lost its original physical journal'):
+        build_reference_authorities(output, **options)
+    assert not local_endpoint.requests
+
+
+def test_reference_started_work_cannot_reopen_as_fresh_after_journal_loss(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    import asyncio
+    options = prepared_reference(tmp_path, local_endpoint)
+    output = tmp_path / 'reference'
+    authority = build_reference_authorities(output, **options)
+    async def measured_boundary(slot):
+        return {'slot': slot}
+    monkeypatch.setattr(authority.control, '_execute', measured_boundary)
+    asyncio.run(authority.control.execute('control-0000'))
+    authority.close()
+    (output / 'events.jsonl').unlink()
+    with pytest.raises(ValueError, match='started.*recovery'):
+        build_reference_authorities(output, **options)
+    assert not local_endpoint.requests
+
+
+def test_reference_rechecks_started_state_after_acquiring_owner_lock(tmp_path, local_endpoint, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    import asyncio
+    import threading
+    options = prepared_reference(tmp_path, local_endpoint)
+    output, ledger = tmp_path / 'reference', options['ledger']
+    first = build_reference_authorities(output, **options)
+    seen, resume = threading.Event(), threading.Event()
+    original = ledger.reference_authority_claim
+
+    def delayed_claim(cell):
+        result = original(cell)
+        if not seen.is_set():
+            seen.set()
+            assert resume.wait(5)
+        return result
+
+    monkeypatch.setattr(ledger, 'reference_authority_claim', delayed_claim)
+    outcomes = []
+    def reopen():
+        try:
+            value = build_reference_authorities(output, **options)
+        except Exception as error:
+            outcomes.append(error)
+        else:
+            value.close()
+            outcomes.append(None)
+    thread = threading.Thread(target=reopen)
+    thread.start()
+    try:
+        assert seen.wait(5)
+        async def measured_boundary(slot):
+            return {'slot': slot}
+        monkeypatch.setattr(first.control, '_execute', measured_boundary)
+        asyncio.run(first.control.execute('control-0000'))
+        first.close()
+    finally:
+        resume.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert len(outcomes) == 1 and isinstance(outcomes[0], ValueError)
+    assert 'started' in str(outcomes[0]) and 'recovery' in str(outcomes[0])
+    assert not local_endpoint.requests

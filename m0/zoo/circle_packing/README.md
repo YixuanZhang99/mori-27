@@ -65,6 +65,27 @@ It records the proposed common numeric caps, but labels the result
 `draft_not_executable`: reference-side enforcement and final source freezing
 must be completed before it can authorize any call.
 
+`host_runtime.build_reference_authorities` composes the existing reference
+control, physical budget, currency bridge and stage router for one frozen cell.
+It currently accepts only an explicit loopback provider and is an offline
+fixture interface, not a live entry point. Its original campaign records one
+authority per cell, binds the initial physical journal and records when work
+starts. Initialization can resume before work starts; once work starts, the
+factory refuses to reconstruct the authority until complete work recovery is
+implemented. Use the returned context manager or call `close()` after work ends.
+The new authority events use the existing campaign v2 journal; older readers
+cannot read a campaign containing them. They have only been used in temporary
+test campaigns. Full supervisor recovery and the paired pilot remain unfinished.
+
+The optional reference-cell integration uses a local HTTP fixture and an
+explicitly populated uv cache; it is separate from the default pytest suite:
+
+```bash
+cd m0
+MORI_TEST_OFFLINE_CACHE=/path/to/uv-cache PYTHONHASHSEED=0 PYTHONPATH=.:tests \
+  python -m pytest -q verification/test_reference_cell_locked.py
+```
+
 The internal `reference_worker.run_reference_fixture` entry runs the upstream
 fixture from a campaign-bound source snapshot through a local broker. It checks
 a disposable broker capability with a no-dispatch handshake before consuming

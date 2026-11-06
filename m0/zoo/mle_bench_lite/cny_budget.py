@@ -320,6 +320,33 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                 any(key[0] == run_id for key in governance['cycle_eligibility']):
             raise ValueError('empty terminal requires an original run without candidate cycles')
         governance['empty_terminals'][run_id] = {'cell_id': cell_id, 'transcript_sha256': digest}
+    elif kind == 'claim_reference_authority':
+        if set(event) != {'kind', 'schema_version', 'cell_id', 'deadline_ref', 'authority_ref',
+                          'currency_run_id', 'initial_budget_ref'}:
+            raise ValueError('reference authority claim has invalid fields')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        if re.fullmatch(r'vendor-[012]', cell_id) is None:
+            raise ValueError('reference authority requires a vendor cell')
+        deadline_ref, authority_ref = _sha(event['deadline_ref']), _sha(event['authority_ref'])
+        currency_run_id = _sha(event['currency_run_id'])
+        initial_budget_ref = _plan_ref(event['initial_budget_ref'])
+        clock = governance['cell_claims'].get(cell_id)
+        if clock is None or clock['record_sha256'] != deadline_ref or \
+                cell_id in governance['reference_authority_claims'] or any(
+                    value['cell_id'] == cell_id for value in governance['deadline_bindings'].values()):
+            raise ValueError('reference cell already has an authority or lacks its original deadline')
+        governance['reference_authority_claims'][cell_id] = {
+            'deadline_ref': deadline_ref, 'authority_ref': authority_ref, 'currency_run_id': currency_run_id,
+            'initial_budget_ref': initial_budget_ref, 'work_started': False}
+    elif kind == 'start_reference_authority_work':
+        if set(event) != {'kind', 'schema_version', 'cell_id', 'authority_ref'}:
+            raise ValueError('reference work start has invalid fields')
+        cell_id = _identifier(event['cell_id'], 'cell identity')
+        authority_ref = _sha(event['authority_ref'])
+        claim = governance['reference_authority_claims'].get(cell_id)
+        if claim is None or claim['authority_ref'] != authority_ref or claim['work_started']:
+            raise ValueError('reference work start differs from its original authority')
+        claim['work_started'] = True
     elif kind == "claim_cell_worker":
         if set(event) != {"kind", "schema_version", "cell_id", "deadline_ref", "worker_ref"}:
             raise ValueError("cell worker claim has invalid fields")
@@ -340,6 +367,9 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         claim = governance["cell_claims"].get(cell_id)
         value = {"cell_id": cell_id, "plan_ref": _plan_ref(event["plan_ref"]),
                  "deadline_ref": _sha(event["deadline_ref"])}
+        reference = governance['reference_authority_claims'].get(cell_id)
+        if reference is not None and reference['currency_run_id'] != run_id:
+            raise ValueError('reference cell is bound to another currency authority')
         if claim is None or claim["plan_ref"] != value["plan_ref"] or \
                 claim["record_sha256"] != value["deadline_ref"] or \
                 run_id in governance["deadline_bindings"] or \
@@ -460,7 +490,7 @@ def _reduce_history(policies, events, heads):
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
-                  "cycle_eligibility": {}, "empty_terminals": {}}
+                  "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {}}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -825,6 +855,41 @@ class CampaignBudget:
         with self._transaction() as (_db, _policy, state):
             value = state['governance']['empty_terminals'].get(run_id)
             return dict(value) if value is not None else None
+
+    def claim_reference_authority(self, cell_id, deadline_ref, authority_ref, currency_run_id, initial_budget_ref):
+        _identifier(cell_id, 'cell identity')
+        _sha(deadline_ref)
+        _sha(authority_ref)
+        _sha(currency_run_id)
+        _plan_ref(initial_budget_ref)
+        value = {'deadline_ref': deadline_ref, 'authority_ref': authority_ref, 'currency_run_id': currency_run_id,
+                 'initial_budget_ref': initial_budget_ref}
+        with self._transaction() as (db, _policy, state):
+            existing = state['governance']['reference_authority_claims'].get(cell_id)
+            if existing is not None:
+                if any(existing.get(key) != item for key, item in value.items()):
+                    raise ValueError('reference cell already has a different authority')
+                return
+            self._append(db, state, {'kind': 'claim_reference_authority', 'schema_version': 2,
+                                    'cell_id': cell_id, **value})
+
+    def reference_authority_claim(self, cell_id):
+        _identifier(cell_id, 'cell identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['reference_authority_claims'].get(cell_id)
+            return dict(value) if value is not None else None
+
+    def start_reference_authority_work(self, cell_id, authority_ref):
+        _identifier(cell_id, 'cell identity')
+        _sha(authority_ref)
+        with self._transaction() as (db, _policy, state):
+            claim = state['governance']['reference_authority_claims'].get(cell_id)
+            if claim is None or claim['authority_ref'] != authority_ref:
+                raise ValueError('reference work lacks its original authority')
+            if claim['work_started']:
+                return
+            self._append(db, state, {'kind': 'start_reference_authority_work', 'schema_version': 2,
+                                    'cell_id': cell_id, 'authority_ref': authority_ref})
 
     def claim_cell_worker(self, cell_id, deadline_ref, worker_ref):
         """Consume the one worker start for a cell in the original ledger."""
