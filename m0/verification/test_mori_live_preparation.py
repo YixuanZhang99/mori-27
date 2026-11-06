@@ -741,6 +741,17 @@ else: raise AssertionError('audit for a different plan accepted')
 try: ledger._record_first_pair_audit(proof, expected_head=p['head'])
 except ValueError: pass
 else: raise AssertionError('duplicate or stale pair audit accepted')
+current=ledger.snapshot()['journal_head']
+updated=copy.deepcopy(proof)
+updated['result']['journal_head']=current
+ledger._record_first_pair_audit(updated,expected_head=current)
+assert ledger.first_pair_audit()==updated and ledger.snapshot()['journal_head']['seq']==current['seq']+1
+bad_identity=copy.deepcopy(updated); bad_identity['mori_rows_sha256']='0'*64
+current=ledger.snapshot()['journal_head']; bad_identity['result']['journal_head']=current
+try: ledger._record_first_pair_audit(bad_identity,expected_head=current)
+except ValueError: pass
+else: raise AssertionError('superseding audit changed original evidence identity')
+assert ledger.snapshot()['journal_head']==current
 '''
         env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
                'PYTHONDONTWRITEBYTECODE': '1'}

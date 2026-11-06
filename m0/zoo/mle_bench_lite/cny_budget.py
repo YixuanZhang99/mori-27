@@ -228,7 +228,12 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         for key in ('mori_rows_sha256', 'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256'):
             _sha(proof[key])
         pilot = governance['circle_pilot']
-        if pilot is None or pilot['plan_ref'] != plan_ref or governance['first_pair_audit'] is not None or \
+        prior = governance['first_pair_audit']
+        identity_fields = ('plan_ref', 'mori_run_id', 'reference_run_id', 'mori_rows_sha256',
+                           'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256')
+        if prior is not None and any(prior[key] != proof[key] for key in identity_fields):
+            raise ValueError('superseding first pair audit changes original evidence identity')
+        if pilot is None or pilot['plan_ref'] != plan_ref or \
                 set(governance['cell_claims']) != {'mori-0', 'vendor-0'} or pending is not None or \
                 _outstanding(governance) or governance['breaches']:
             raise ValueError('first pair audit requires a quiescent original pilot')
@@ -916,7 +921,7 @@ class CampaignBudget:
                 'previous_head': dict(expected_head), 'proof': proof})
 
     def first_pair_audit(self):
-        """Read the recorded trusted audit, if any, without granting admission."""
+        """Read the latest trusted audit; previous audit events remain in the journal."""
         with self._transaction() as (_db, _policy, state):
             return json.loads(_json(state['governance']['first_pair_audit']))
 
