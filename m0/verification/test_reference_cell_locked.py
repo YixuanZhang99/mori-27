@@ -219,6 +219,8 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert snapshot_anchor['worker_proof_sha256'] == payload_digest(worker_proof)
     from zoo.circle_packing.host_runtime import _read_verified_worker_result
     process_output = _read_verified_worker_result(tmp_path / 'worker', worker_proof['started'])
+    assert json.loads(process_output['stdout'])['model_config'] == {
+        'model': plan['model'], 'max_completion_tokens': plan['max_completion_tokens']}
     verified_worker = audit_anchored_reference_worker(view, recorded_clock, run_id, worker_proof,
         stdout=process_output['stdout'], stderr=process_output['stderr'], selected=result['selected_program'])
     assert verified_worker['worker_ref'] == snapshot_anchor['worker_ref']
@@ -352,6 +354,7 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
     assert process_result['wrapper_error'] is None
     mori = json.loads(process_result['stdout'])
     assert mori['mode'] == 'fixture' and mori['performance_claim'] is False
+    assert mori['model_config'] == json.loads(process_output['stdout'])['model_config']
     assert mori['limits'] == reference_limits
     assert mori['candidate'] is not None and mori['final_state'] == 'completed' and mori['replay_passed']
     assert Path(mori['source']).resolve() == (source / 'm0' / 'core' / 'loop.py').resolve()

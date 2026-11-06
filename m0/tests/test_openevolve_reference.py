@@ -282,3 +282,15 @@ def test_reference_fixture_restores_its_process_root_on_failure(monkeypatch):
     with pytest.raises(RuntimeError, match='fixture failure'):
         host_reference.run_fixture('/fake/output')
     assert 'MORI_CIRCLE_REFERENCE_ROOT' not in os.environ
+
+
+def test_reference_model_uses_frozen_alias_and_output_allowance():
+    from zoo.circle_packing.host_reference import reference_model
+    model = reference_model('deepseek-flash', 16384, fixture_broker=True)
+    assert model.name == 'deepseek-flash'
+    assert model.max_tokens == 16384
+    assert model.api_key is None
+    assert model.retries == 0
+    for name, limit in [('', 16384), ('deepseek-flash', True), ('deepseek-flash', 0)]:
+        with pytest.raises(ValueError):
+            reference_model(name, limit, fixture_broker=True)

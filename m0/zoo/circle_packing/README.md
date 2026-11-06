@@ -171,3 +171,8 @@ implementation cannot be reopened; recreate those fixtures. This does not
 change existing unmarked campaign ledgers. The bridge's loopback restriction
 alone does not prevent a caller from supplying a real key to a local service;
 the named worker itself always supplies the fixed fake credential.
+
+In the frozen paired fixture, the named reference worker receives the model
+alias and maximum output allowance from the validated campaign plan. Both
+worker reports expose those settings so the integration checks their equality.
+This does not make the fixture a live entry point or establish score parity.

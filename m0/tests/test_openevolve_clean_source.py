@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import select
 import subprocess
 import sys
 
@@ -107,14 +108,24 @@ def test_snapshot_verification_rejects_fifo_without_blocking(tmp_path):
     os.mkfifo(path)
     script = """import json,sys
 from zoo.circle_packing.clean_source import verify_clean_source
+print('ready', flush=True)
 try:
     verify_clean_source(sys.argv[1], json.loads(sys.argv[2]), expected_tree_ref=sys.argv[3])
 except ValueError:
     sys.exit(0)
 sys.exit(1)
 """
-    result = subprocess.run([sys.executable, '-c', script, str(destination), json.dumps(result['manifest']),
-                             result['tree_ref']], env={'PATH': os.defpath,
-                             'PYTHONPATH': str(Path(__file__).resolve().parents[1])},
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-    assert result.returncode == 0
+    process = subprocess.Popen([sys.executable, '-c', script, str(destination), json.dumps(result['manifest']),
+                                result['tree_ref']], env={'PATH': os.defpath,
+                                'PYTHONPATH': str(Path(__file__).resolve().parents[1]),
+                                'PYTHONDONTWRITEBYTECODE': '1'},
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        ready, _, _ = select.select([process.stdout], [], [], 30)
+        assert ready and process.stdout.readline() == b'ready\n', 'source verifier did not start'
+        assert process.wait(timeout=2) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        process.stdout.close()

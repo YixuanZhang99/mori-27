@@ -93,6 +93,8 @@ def run(config):
     from zoo.circle_packing import governed
     return {'mode': 'fixture', 'performance_claim': False,
             'limits': profile['budget']['options']['limits']['global'],
+            'model_config': {'model': provider.manifest_binding()['requested_model'],
+                             'max_completion_tokens': provider.manifest_binding()['max_completion_tokens']},
             'candidate': outcome['best_candidate_id'], 'final_state': outcome['reporting']['final_audit']['state'],
             'replay_passed': certificate['passed'], 'source': core.loop.__file__,
             'governed_source': governed.__file__, 'vendor_source': openevolve.__file__, 'executable': sys.executable}

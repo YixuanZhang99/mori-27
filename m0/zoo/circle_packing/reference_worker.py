@@ -76,9 +76,14 @@ def run_reference_fixture(deadline, directory, workspace, *, snapshot, source_ma
         runtime_root = Path(sys.prefix)
         python = Path(sys.executable)
     probe_broker(socket, capability)
+    from zoo.circle_packing.pilot_plan import validate_draft_cell
+    validate_draft_cell(deadline._lifecycle.ledger, frozen_plan, cell_id, expected_plan_ref=expected_plan_ref)
+    if iterations > frozen_plan['iterations']:
+        raise ValueError('reference iterations exceed frozen plan')
     command = ['/usr/bin/env', 'PYTHONHASHSEED=0', str(python), '-c', _BOOTSTRAP, str(source),
                '--socket', str(socket), '--token-file', str(token), '--output', str(output),
-               '--seed', cell_id.split('-')[1], '--iterations', str(iterations)]
+               '--seed', cell_id.split('-')[1], '--iterations', str(iterations),
+               '--model', frozen_plan['model'], '--max-completion-tokens', str(frozen_plan['max_completion_tokens'])]
     return run_cell_worker(deadline, directory, workspace, command, readonly_source=source,
         readonly_runtime=runtime_root, frozen_plan=frozen_plan, snapshot=snapshot,
         source_manifest=source_manifest, expected_plan_ref=expected_plan_ref,
@@ -92,6 +97,8 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--seed', required=True, type=int, choices=(0, 1, 2))
     parser.add_argument('--iterations', required=True, type=int, choices=range(1, 7))
+    parser.add_argument('--model', required=True)
+    parser.add_argument('--max-completion-tokens', required=True, type=int)
     args = parser.parse_args()
     from zoo.circle_packing.host_reference import run_fixture, _ALLOWED_ENV, _BROKER_ENV
     os.environ['MORI_CIRCLE_BROKER_SOCKET'] = args.socket
@@ -101,7 +108,8 @@ def main():
     for name in set(os.environ) - allowed:
         del os.environ[name]
     result = run_fixture(args.output, seed=args.seed, iterations=args.iterations,
-                         fixture_broker=True, fixture_stage_broker=True)
+                         fixture_broker=True, fixture_stage_broker=True, model_name=args.model,
+                         max_completion_tokens=args.max_completion_tokens)
     print(json.dumps(result, sort_keys=True))
 
 
