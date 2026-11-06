@@ -240,6 +240,36 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             worker_directory=tmp_path / 'worker', options=authority.budget.options,
             stamp=asdict(authority.budget.stamp), governance=authority.budget._governed.config, rows=rows)
         assert recovered == final
+        recovery_input = tmp_path / 'reference-recovery-input.json'
+        recovery_input.write_text(json.dumps({'evidence': evidence, 'head': ledger.snapshot()['journal_head'],
+            'run_id': run_id, 'clock': clock.export_evidence(), 'plan': plan, 'ref': ref,
+            'worker': str(tmp_path / 'worker'), 'options': authority.budget.options,
+            'stamp': asdict(authority.budget.stamp), 'governance': authority.budget._governed.config,
+            'rows': rows}))
+        recovery_script = r'''
+import json, sys
+from pathlib import Path
+from zoo.circle_packing.cell_deadline import RecordedCellClock
+from zoo.circle_packing.reference_recovery import recover_reference_snapshot
+from zoo.circle_packing.domain import CirclePackingDomain
+from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+value = json.loads(Path(sys.argv[1]).read_text())
+def forbidden(*args, **kwargs): raise AssertionError('recovery performed external work')
+GovernedCNYProvider.perform_request = forbidden
+CirclePackingDomain.evaluate = forbidden
+from zoo.circle_packing import host_physical
+host_physical.run_stage = forbidden
+from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+view = RecordedCurrencyView(value['evidence'], expected_run_id=value['run_id'], expected_head=value['head'])
+clock = RecordedCellClock(value['clock'], view.cell_deadline_claim('vendor-0'))
+print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=value['plan'],
+    expected_plan_ref=value['ref'], worker_directory=value['worker'], options=value['options'],
+    stamp=value['stamp'], governance=value['governance'], rows=value['rows']), sort_keys=True))
+'''
+        child = subprocess.run([sys.executable, '-c', recovery_script, str(recovery_input)], check=True,
+            text=True, capture_output=True, timeout=60,
+            env={'PATH': os.defpath, 'PYTHONPATH': str(repository / 'm0'), 'PYTHONDONTWRITEBYTECODE': '1'})
+        assert json.loads(child.stdout) == final
         journal = tmp_path / 'worker' / 'worker.jsonl'
         saved_journal = journal.read_bytes()
         try:
