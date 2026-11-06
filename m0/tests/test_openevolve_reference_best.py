@@ -110,7 +110,9 @@ def test_capture_observes_actual_seed_child_and_migration():
     assert [event['kind'] for event in events] == ['seed', 'candidate', 'migrant']
     assert events[1]['iteration'] == 1 and events[1]['target_island'] == 0
     assert events[2]['iteration'] is None and events[2]['target_island'] == 1
-    assert audit_reference_best(events, evaluated=measured, selected_id='child')['fitness'] == 2.0
+    report = audit_reference_best(events, evaluated=measured, selected_id='child')
+    assert report['fitness'] == 2.0
+    assert report['host_observed_migrations'] == [{'id': events[2]['id'], 'parent_id': 'child', 'target_island': 1}]
 
 
 def test_best_reconstruction_uses_original_stage_geometry_and_candidate_identity():
@@ -146,6 +148,7 @@ def test_best_reconstruction_uses_original_stage_geometry_and_candidate_identity
     result = audit_reference_best_from_physical(events, trace=trace, rows=rows, accounting=accounting,
                                                 seed_sha256='1' * 64, selected_id='child')
     assert result['selected_id'] == 'child' and result['complete_run_certified'] is False
+    assert result['candidate_iteration_and_island_verified'] is False
     forged = deepcopy(rows)
     forged[-1]['payload']['result']['metrics']['combined_score'] = 100.0
     with pytest.raises(ValueError):

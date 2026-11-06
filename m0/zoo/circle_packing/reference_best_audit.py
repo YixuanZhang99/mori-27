@@ -81,8 +81,12 @@ def audit_reference_best(events, *, evaluated, selected_id):
         kinds[ident] = kind
     if observed != set(evaluated) or best != selected_id:
         raise ValueError('reference admission coverage or selected best differs')
+    migrations = [{'id': event['id'], 'parent_id': event['parent_id'],
+                   'target_island': event.get('target_island')}
+                  for event in events if event['kind'] == 'migrant']
     return {'scope': 'caller_supplied_reference_admissions', 'selected_id': best,
-            'fitness': best_fitness, 'complete_run_certified': False}
+            'fitness': best_fitness, 'host_observed_migrations': migrations,
+            'complete_run_certified': False}
 
 
 def audit_reference_best_from_physical(events, *, trace, rows, accounting, seed_sha256, selected_id):
