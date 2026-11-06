@@ -591,6 +591,17 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert mori_audit['measurement'] == mori_report['final_measurement'] and mori_report['replay_passed']
         assert vendor_audit['metrics'] == vendor_report['selected_program']['metrics']
         assert vendor_audit['selection_frozen'] and vendor_audit['performance_claim'] is False
+        admissions = vendor_audit['admission_trace']
+        assert admissions['scope'] == 'host_observed_reference_admissions'
+        assert admissions['events'][0]['kind'] == 'seed'
+        from zoo.circle_packing.reference_best_audit import audit_reference_best
+        # This tests the algorithm against host observations only. Independent
+        # evidence binding and full-run certification are separate work.
+        host_measurements = {row['id']: {'program_ref': row['program_ref'], 'metrics': row['metrics']}
+                             for row in admissions['events'] if row['kind'] != 'migrant'}
+        best = audit_reference_best(admissions['events'], evaluated=host_measurements,
+                                    selected_id=vendor_report['selected_program']['id'])
+        assert best['complete_run_certified'] is False
         trace = vendor_audit['iteration_trace']
         assert trace['scope'] == 'reference_submitted_future_outcomes' and len(trace['iterations']) == 6
         assert trace['controller_run']['stop_reason'] == 'iteration_limit'
