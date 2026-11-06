@@ -139,6 +139,15 @@ def test_real_reference_authorities_prepare_but_cannot_start_without_live_gate(t
                 assert b'fixture-only-secret' not in path.read_bytes(), f'fixture credential persisted in {path}'
     finally:
         authority.close()
+    protected = ledger.snapshot()['protected_micro_cny']
+    resumed = build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    try:
+        assert ledger.snapshot()['protected_micro_cny'] == protected
+        assert ledger.reference_authority_claim('vendor-0')['work_started'] is False
+        with pytest.raises(ValueError, match='live.*gate'):
+            asyncio.run(resumed.control.execute('control-0000'))
+    finally:
+        resumed.close()
 
 
 def test_live_reference_preparation_rejects_fixture_campaign(tmp_path, local_endpoint):
