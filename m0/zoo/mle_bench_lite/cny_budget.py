@@ -571,6 +571,8 @@ def _reduce_history(policies, events, heads):
                 raise ValueError("campaign reservation shape is invalid")
             if event["run_id"] is not None:
                 _sha(event["run_id"])
+                if event['run_id'] in governance['reference_selections']:
+                    raise ValueError('reference selection is sealed against new calls')
             allowance = _integer(event["output_allowance"], "output allowance", 1)
             reserve = policy["context_tokens"] * 2 + allowance * 8
             if (allowance > policy["max_output_tokens"] or event["reserved_micro_cny"] != reserve

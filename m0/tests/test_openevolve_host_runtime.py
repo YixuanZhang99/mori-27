@@ -630,6 +630,8 @@ def test_frozen_reference_selection_forbids_later_stage_and_provider_work(tmp_pa
         with pytest.raises(ValueError, match='sealed'):
             ledger.admit_call(run_id, 'main', None,
                 {'call_id': 'after-selection', 'request_sha256': '1' * 64, 'phase': 'operator', 'ordinal': 0}, bound)
+        with pytest.raises(ValueError, match='sealed'):
+            ledger.reserve('legacy-after-selection', '2' * 64, 1, run_id=run_id)
         def extra_stage(observation):
             value = observation['observation']
             ledger.anchor_stage_eligibility(run_id, '9' * 32, 'vendor-0', value['sequence'],

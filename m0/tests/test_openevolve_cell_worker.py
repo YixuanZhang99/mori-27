@@ -116,7 +116,11 @@ run_cell_worker(deadline, directory, workspace, ['/usr/bin/python3', '-c',
         until = time.monotonic() + 10
         while time.monotonic() < until and not (workspace / 'ready').exists():
             if process.poll() is not None:
-                raise AssertionError(process.stderr.read().decode())
+                stderr_files = sorted((tmp_path / 'worker' / 'executor-processes').glob('*/stderr.txt'))
+                worker_errors = [path.read_text(errors='replace')[-4000:] for path in stderr_files]
+                raise AssertionError(f'coordinator returncode={process.returncode}; '
+                                     f'coordinator stderr={process.stderr.read().decode(errors="replace")[-4000:]}; '
+                                     f'worker stderr={worker_errors}')
             time.sleep(0.02)
         assert (workspace / 'ready').exists()
         process.kill()

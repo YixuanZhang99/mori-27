@@ -86,7 +86,11 @@ def test_coordinator_deadline_stops_its_active_candidate_sandbox(tmp_path, paren
         absolute_deadline={'boot_id': record['boot_id'],
                            'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})
     result = journal.wait(process, execution)
-    assert (workspace / 'ready').exists(), result['stderr']
+    sandbox_stderr = workspace / 'stderr.log'
+    assert (workspace / 'ready').exists(), {
+        'coordinator': result,
+        'sandbox_stderr': sandbox_stderr.read_text(errors='replace')[-4000:] if sandbox_stderr.exists() else None,
+    }
     assert result['timeout'], result
     # Allow the full candidate delay after the ready marker was observed,
     # including when startup consumed most of the coordinator deadline.
