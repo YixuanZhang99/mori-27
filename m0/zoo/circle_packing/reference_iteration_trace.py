@@ -88,16 +88,22 @@ def audit_reference_iteration_receipts(trace, rows, *, planned_iterations):
             type(rows) is not list or type(planned_iterations) is not int or planned_iterations < 1:
         raise ValueError('reference receipt audit requires recorded iteration and stage evidence')
     try:
-        outcomes, seen_iterations, seen_receipts = [], set(), set()
+        outcomes, submitted, attempts, previous_states, seen_receipts = [], set(), {}, {}, set()
         for item in trace['iterations']:
             iteration = item['iteration']
-            if type(iteration) is not int or not 1 <= iteration <= planned_iterations or iteration in seen_iterations:
+            if type(iteration) is not int or not 1 <= iteration <= planned_iterations or \
+                    (iteration in previous_states and previous_states[iteration] != 'not_submitted'):
                 raise ValueError('reference iteration identity is repeated or outside the plan')
-            seen_iterations.add(iteration)
             state = item['state']
             if state not in ('candidate', 'worker_error', 'no_candidate', 'unresolved', 'not_submitted',
                              'cancelled', 'future_error', 'invalid_result'):
                 raise ValueError('reference iteration has an invalid outcome')
+            previous_states[iteration] = state
+            attempts[iteration] = attempts.get(iteration, 0) + 1
+            if state != 'not_submitted':
+                submitted.add(iteration)
+            if item.get('stage_receipt_invalid') is not None:
+                raise ValueError('reference iteration has an invalid stage receipt')
             receipt = item.get('stage_request_id')
             receipt_state = 'not_available'
             if receipt is not None:
@@ -111,8 +117,11 @@ def audit_reference_iteration_receipts(trace, rows, *, planned_iterations):
                     raise ValueError('reference iteration differs from its original physical stage')
                 seen_receipts.add(receipt)
                 receipt_state = 'matched'
-            outcomes.append({'iteration': iteration, 'state': state, 'receipt_state': receipt_state})
+            outcomes.append({'iteration': iteration, 'attempt': attempts[iteration],
+                             'state': state, 'receipt_state': receipt_state})
         return {'schema_version': 1, 'scope': 'caller_pinned_reference_iteration_receipts',
-                'performance_claim': False, 'iterations': outcomes}
+                'performance_claim': False, 'iterations': outcomes,
+                'missing_iterations': [number for number in range(1, planned_iterations + 1)
+                                       if number not in submitted]}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid reference iteration receipt evidence') from error
