@@ -165,3 +165,24 @@ def audit_replayed_supervised_pair(*, replay_input, ledger, runner, replay_outpu
         return {**result, 'scope': 'paired_supervised_snapshots_with_independent_replay', 'replay': replay}
     except (KeyError, TypeError, AttributeError, StopIteration) as error:
         raise ValueError('invalid paired replay evidence') from error
+
+
+def record_first_pair_audit(*, replay_input, ledger, runner, replay_output, **pair_arguments):
+    """Rerun the independent audit, then atomically record it at its original head.
+
+    The event records a trusted verifier's assertion; it does not authorize a
+    live pilot or replace verification of the retained original evidence.
+    """
+    from core.x1.checkpoint import payload_digest
+    if type(pair_arguments.get('seed')) is not int or pair_arguments['seed'] != 0:
+        raise ValueError('only the original first pair can be recorded')
+    result = audit_replayed_supervised_pair(replay_input=replay_input, ledger=ledger, runner=runner,
+                                            replay_output=replay_output, **pair_arguments)
+    proof = {'schema_version': 1, 'plan_ref': pair_arguments['expected_plan_ref'],
+             'mori_run_id': pair_arguments['mori_run_id'], 'reference_run_id': pair_arguments['reference_run_id'],
+             'mori_rows_sha256': payload_digest(pair_arguments['mori_rows']),
+             'reference_rows_sha256': payload_digest(pair_arguments['reference_rows']),
+             'reference_bundle_sha256': payload_digest(pair_arguments['reference_bundle']),
+             'replay_input_sha256': payload_digest(replay_input), 'result': result}
+    ledger._record_first_pair_audit(proof, expected_head=result['journal_head'])
+    return proof

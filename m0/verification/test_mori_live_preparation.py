@@ -457,7 +457,7 @@ from pathlib import Path
 from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import RecordedCellClock
 from zoo.circle_packing.domain import CirclePackingDomain
-from zoo.circle_packing.pair_audit import audit_replayed_supervised_pair
+from zoo.circle_packing.pair_audit import record_first_pair_audit
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
@@ -480,16 +480,22 @@ args=dict(mori_config=c,reference_config=v,mori_supervisor_directory=p['mori_dir
  reference_run_id=p['reference_run'],reference_worker_directory=v['worker_directory'],reference_bundle=p['reference_bundle'])
 bad=copy.deepcopy(p['replay_input']); bad['rows'].pop()
 try:
- audit_replayed_supervised_pair(replay_input=bad,ledger=ledger,runner=runner,replay_output=Path(sys.argv[2]+'-bad'),**args)
+ record_first_pair_audit(replay_input=bad,ledger=ledger,runner=runner,replay_output=Path(sys.argv[2]+'-bad'),**args)
 except ValueError: pass
 else: raise AssertionError('altered replay accepted')
 assert not Path(sys.argv[2]+'-bad').exists()
-result=audit_replayed_supervised_pair(replay_input=p['replay_input'],ledger=ledger,runner=runner,
+assert ledger.snapshot()['journal_head']==p['head'] and ledger.first_pair_audit() is None
+proof=record_first_pair_audit(replay_input=p['replay_input'],ledger=ledger,runner=runner,
  replay_output=Path(sys.argv[2]),**args)
+result=proof['result']
 assert result['scope']=='paired_supervised_snapshots_with_independent_replay'
 assert result['replay']['passed'] and result['replay']['external_calls']==0
 assert result['replay']['candidate']==result['mori']['candidate']
-assert result['performance_claim'] is False and ledger.snapshot()['journal_head']==p['head']
+assert result['performance_claim'] is False and ledger.first_pair_audit()==proof
+assert ledger.snapshot()['journal_head']['seq']==p['head']['seq']+1
+try: ledger._record_first_pair_audit(proof, expected_head=p['head'])
+except ValueError: pass
+else: raise AssertionError('duplicate or stale pair audit accepted')
 '''
         env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'PYTHONHASHSEED': '0',
                'PYTHONDONTWRITEBYTECODE': '1'}

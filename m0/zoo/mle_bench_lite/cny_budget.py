@@ -213,6 +213,53 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                 governance["circle_runtime"] is not None or governance["cell_claims"] or pending is not None:
             raise ValueError("circle runtime must freeze once before any cell or unresolved call")
         governance["circle_runtime"] = value
+    elif kind == 'record_first_pair_audit':
+        if set(event) != {'kind', 'schema_version', 'previous_head', 'proof'} or \
+                _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
+            raise ValueError('first pair audit requires its exact original head')
+        proof = event['proof']
+        fields = {'schema_version', 'plan_ref', 'mori_run_id', 'reference_run_id', 'mori_rows_sha256',
+                  'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256', 'result'}
+        if type(proof) is not dict or set(proof) != fields or type(proof['schema_version']) is not int or \
+                proof['schema_version'] != 1:
+            raise ValueError('first pair audit proof has invalid fields')
+        plan_ref = _plan_ref(proof['plan_ref'])
+        mori_run, vendor_run = _sha(proof['mori_run_id']), _sha(proof['reference_run_id'])
+        for key in ('mori_rows_sha256', 'reference_rows_sha256', 'reference_bundle_sha256', 'replay_input_sha256'):
+            _sha(proof[key])
+        pilot = governance['circle_pilot']
+        if pilot is None or pilot['plan_ref'] != plan_ref or governance['first_pair_audit'] is not None or \
+                set(governance['cell_claims']) != {'mori-0', 'vendor-0'} or pending is not None or \
+                _outstanding(governance) or governance['breaches']:
+            raise ValueError('first pair audit requires a quiescent original pilot')
+        for run_id, cell in ((mori_run, 'mori-0'), (vendor_run, 'vendor-0')):
+            binding = governance['deadline_bindings'].get(run_id)
+            claim = governance['cell_claims'][cell]
+            if binding != {'cell_id': cell, 'plan_ref': plan_ref, 'deadline_ref': claim['record_sha256']}:
+                raise ValueError('first pair audit differs from its original cell runs')
+        authority = governance['reference_authority_claims'].get('vendor-0')
+        selection = governance['reference_selections'].get(vendor_run)
+        if 'mori-0' not in governance['worker_claims'] or 'vendor-0' not in governance['reference_host_claims'] or \
+                'vendor-0' not in governance['worker_claims'] or authority is None or \
+                authority['currency_run_id'] != vendor_run or not authority['work_started'] or \
+                selection is None or not any(key[0] == mori_run for key in governance['evaluation_eligibility']):
+            raise ValueError('first pair audit lacks original worker or selection anchors')
+        result = proof['result']
+        if type(result) is not dict or result.get('scope') != 'paired_supervised_snapshots_with_independent_replay' or \
+                result.get('performance_claim') is not False or result.get('seed') != 0 or \
+                result.get('plan_ref') != plan_ref or result.get('journal_head') != event['previous_head'] or \
+                type(result.get('replay')) is not dict or result['replay'].get('passed') is not True or \
+                type(result['replay'].get('external_calls')) is not int or result['replay']['external_calls'] != 0 or \
+                type(result.get('mori')) is not dict or type(result.get('reference')) is not dict or \
+                result['replay'].get('candidate') != result['mori'].get('candidate'):
+            raise ValueError('first pair audit has an invalid recorded result')
+        for run_id, arm in ((mori_run, 'mori'), (vendor_run, 'reference')):
+            total = sum(value['upper_bound_micro_cny'] for value in operations.values()
+                        if value.get('run_id') == run_id and 'usage' in value)
+            if type(result[arm].get('settled_upper_bound_micro_cny')) is not int or \
+                    result[arm]['settled_upper_bound_micro_cny'] != total:
+                raise ValueError('first pair audit cost differs from original ledger receipts')
+        governance['first_pair_audit'] = json.loads(_json(proof))
     elif kind == "claim_cell_deadline":
         fields = {"kind", "schema_version", "cell_id", "plan_ref", "record_sha256"}
         pilot = governance["circle_pilot"]
@@ -567,7 +614,8 @@ def _reduce_history(policies, events, heads):
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
                   "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
                   "reference_host_claims": {},
-                  "reference_physical_snapshots": {}, "reference_selections": {}, "fixture_campaign": False}
+                  "reference_physical_snapshots": {}, "reference_selections": {}, "fixture_campaign": False,
+                  "first_pair_audit": None}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -857,6 +905,20 @@ class CampaignBudget:
         with self._transaction() as (_db, _policy, state):
             value = state["governance"]["circle_pilot"]
             return dict(value) if value is not None else None
+
+    def _record_first_pair_audit(self, proof, *, expected_head):
+        """Atomically anchor a trusted offline audit; this does not enable live work."""
+        _head_anchor(expected_head)
+        with self._transaction() as (db, _policy, state):
+            if expected_head != {'seq': state['seq'], 'sha256': state['hash']}:
+                raise ValueError('campaign head changed before first pair audit was recorded')
+            self._append(db, state, {'kind': 'record_first_pair_audit', 'schema_version': 2,
+                'previous_head': dict(expected_head), 'proof': proof})
+
+    def first_pair_audit(self):
+        """Read the recorded trusted audit, if any, without granting admission."""
+        with self._transaction() as (_db, _policy, state):
+            return json.loads(_json(state['governance']['first_pair_audit']))
 
     def circle_claim_inventory(self, *, expected_head):
         """Read pilot and cell claims together at a caller-pinned journal head."""
