@@ -12,6 +12,6 @@
 - Exact original deadline, plan, source, runtime and campaign identity; no restart of a paid worker.
 - Record six search attempts and shared-ledger settlement, with process paths proving frozen source/runtime.
 - This standalone process is not the whole-cell supervised live path, a recovery test or a benchmark.
-- [ ] Test fixture authority preparation and altered identities, then implement worker.
-- [ ] Run frozen-source subprocess with real offline runtime and fake provider; verify accounting and replay.
-- [ ] Regress legacy fixture entry, review, document limits and push.
+- [x] Test fixture authority preparation and altered identities, then implement worker.
+- [x] Run frozen-source subprocess with real offline runtime and fake provider; verify accounting and replay.
+- [x] Regress legacy fixture entry, review, document limits and push.
