@@ -89,7 +89,7 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
             from zoo.circle_packing.reference_iteration_trace import reference_iteration_attempt_limit
             required = {'schema_version', 'scope', 'performance_claim', 'iterations'}
             if type(trace) is not dict or not required <= set(trace) or \
-                    set(trace) - required - {'prompt_bindings', 'request_bindings', 'stage_bindings'} or \
+                    set(trace) - required - {'prompt_bindings', 'request_bindings', 'stage_bindings', 'controller_run'} or \
                     type(trace['schema_version']) is not int or trace['schema_version'] != 1 or \
                     trace['scope'] != 'reference_submitted_future_outcomes' or trace['performance_claim'] is not False or \
                     type(trace['iterations']) is not list or \

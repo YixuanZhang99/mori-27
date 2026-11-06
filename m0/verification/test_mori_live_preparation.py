@@ -593,6 +593,8 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert vendor_audit['selection_frozen'] and vendor_audit['performance_claim'] is False
         trace = vendor_audit['iteration_trace']
         assert trace['scope'] == 'reference_submitted_future_outcomes' and len(trace['iterations']) == 6
+        assert trace['controller_run']['stop_reason'] == 'iteration_limit'
+        assert trace['controller_run']['reported_completed_iterations'] == 6
         assert len({item['iteration'] for item in trace['iterations']}) == 6
         assert all(item['state'] not in ('unresolved', 'not_submitted') for item in trace['iterations'])
         prompt_bindings = trace['prompt_bindings']
@@ -627,6 +629,10 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert len(provider_links) == 6 and all(item['state'] == 'matched' for item in provider_links)
         assert pair['reference_iteration_provider']['unattributed_provider_bindings'] == []
         assert any(item['state'] == 'matched' for item in pair['reference_iteration_stages']['stages'])
+        coverage = pair['reference_run_coverage']
+        assert coverage['controller_stop_reason'] == 'iteration_limit' and len(coverage['iterations']) == 6
+        assert coverage['complete_run_certified'] is False
+        assert any(item['submission_state'] == 'worker_error' for item in coverage['iterations'])
         supervised = audit_supervised_pair_snapshot(mori_config=config, reference_config=vendor_config,
             mori_supervisor_directory=tmp_path / 'mori-supervisor',
             reference_supervisor_directory=tmp_path / 'reference-supervisor', seed=0,

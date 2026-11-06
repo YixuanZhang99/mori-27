@@ -101,6 +101,7 @@ def _traced_worker_initializer(*args):
 class _Capture:
     def __init__(self):
         self._submitted = []
+        self._controller_run = None
 
     def snapshot(self):
         rows = []
@@ -143,8 +144,11 @@ class _Capture:
                 except Exception as error:
                     row.update(state='future_error', error_type=type(error).__name__)
             rows.append(row)
-        return {'schema_version': 1, 'scope': 'reference_submitted_future_outcomes',
-                'performance_claim': False, 'iterations': rows}
+        report = {'schema_version': 1, 'scope': 'reference_submitted_future_outcomes',
+                  'performance_claim': False, 'iterations': rows}
+        if self._controller_run is not None:
+            report['controller_run'] = dict(self._controller_run)
+        return report
 
 
 @contextmanager
@@ -152,6 +156,7 @@ def capture_reference_iterations(controller_class, *, parallel_module=None):
     """Wrap submissions temporarily, returning the exact unmodified futures."""
     capture = _Capture()
     original = controller_class._submit_iteration
+    original_run = getattr(controller_class, 'run_evolution', None)
     global _original_worker_initializer
     previous_initializer = parallel_module._worker_init if parallel_module is not None else None
     if parallel_module is not None:
@@ -162,10 +167,30 @@ def capture_reference_iterations(controller_class, *, parallel_module=None):
         capture._submitted.append((iteration, island_id, future))
         return future
     controller_class._submit_iteration = submit
+    if original_run is not None:
+        async def run(controller, start_iteration, max_iterations, *args, **kwargs):
+            try:
+                result = await original_run(controller, start_iteration, max_iterations, *args, **kwargs)
+            except BaseException as error:
+                capture._controller_run = {'start_iteration': start_iteration, 'max_iterations': max_iterations,
+                                           'stop_reason': 'exception', 'exception_type': type(error).__name__}
+                raise
+            completed = getattr(controller, 'completed_iterations', None)
+            early = getattr(controller, 'early_stopping_triggered', None)
+            shutdown = controller.shutdown_event.is_set()
+            reason = ('early_stopping' if early is True else 'shutdown' if shutdown else
+                      'iteration_limit' if type(completed) is int and completed == max_iterations else
+                      'incomplete_unspecified')
+            capture._controller_run = {'start_iteration': start_iteration, 'max_iterations': max_iterations,
+                'reported_completed_iterations': completed, 'stop_reason': reason}
+            return result
+        controller_class.run_evolution = run
     try:
         yield capture
     finally:
         controller_class._submit_iteration = original
+        if original_run is not None:
+            controller_class.run_evolution = original_run
         if parallel_module is not None:
             parallel_module._worker_init = previous_initializer
             _original_worker_initializer = None
@@ -371,3 +396,50 @@ def audit_reference_iteration_stages(trace, rows, *, planned_iterations):
                 'unattributed_stage_ids': [row['request_id'] for row in starts if row['request_id'] not in attributed]}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid reference iteration stage evidence') from error
+
+
+def summarize_reference_run_coverage(trace, receipts, provider, stages, *, planned_iterations):
+    """Report observed per-iteration coverage and the controller's stop assertion.
+
+    This combines already checked partial reports. It does not certify complete
+    physical or cost coverage, or authorize another paid cell.
+    """
+    if any(type(value) is not dict for value in (trace, receipts, provider, stages)) or \
+            type(planned_iterations) is not int or not 1 <= planned_iterations <= 6:
+        raise ValueError('reference run summary requires bounded recorded reports')
+    try:
+        controller = trace.get('controller_run')
+        if controller is None:
+            reason, completed = 'not_recorded', None
+        else:
+            reason = controller['stop_reason']
+            completed = controller.get('reported_completed_iterations')
+            if controller['start_iteration'] != 1 or controller['max_iterations'] != planned_iterations or \
+                    reason not in ('iteration_limit', 'early_stopping', 'shutdown', 'incomplete_unspecified', 'exception') or \
+                    (completed is not None and (type(completed) is not int or not 0 <= completed <= planned_iterations)) or \
+                    (reason == 'iteration_limit' and completed != planned_iterations):
+                raise ValueError('reference controller stop metadata differs from the plan')
+        attempts = receipts['iterations']
+        providers = provider.get('iterations', [])
+        stage_rows = stages.get('stages', [])
+        if any(type(value) is not list for value in (attempts, providers, stage_rows)):
+            raise ValueError('reference run summary requires iteration lists')
+        outcomes = []
+        for iteration in range(1, planned_iterations + 1):
+            own = [item for item in attempts if item['iteration'] == iteration]
+            actual = [item for item in own if item['state'] != 'not_submitted']
+            links = [item['state'] for item in providers if item['iteration'] == iteration]
+            physical = [{'state': item['state'], 'stage_status': item.get('stage_status')}
+                        for item in stage_rows if item['iteration'] == iteration]
+            outcomes.append({'iteration': iteration,
+                'submission_state': actual[0]['state'] if len(actual) == 1 else
+                                    'not_submitted' if not actual else 'ambiguous',
+                'submission_attempts': len(own), 'provider_states': links, 'stages': physical})
+        return {'schema_version': 1, 'scope': 'reference_run_partial_coverage', 'performance_claim': False,
+                'complete_run_certified': False, 'controller_stop_reason': reason,
+                'controller_reported_completed_iterations': completed, 'iterations': outcomes,
+                'missing_prompt_iterations': provider.get('missing_prompt_iterations'),
+                'unattributed_provider_bindings': provider.get('unattributed_provider_bindings'),
+                'unattributed_stage_ids': stages.get('unattributed_stage_ids')}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid reference run coverage evidence') from error

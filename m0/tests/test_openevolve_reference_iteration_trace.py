@@ -58,3 +58,24 @@ def test_prompt_observer_preserves_messages_and_records_only_request_digest(tmp_
     assert stage_rows == [{'kind': 'reference_iteration_stage', 'payload': {'iteration': 3,
                           'request_id': 'b' * 32, 'program_ref': 'sha256:' + 'c' * 64, 'stage': 1, 'prior_id': None}}]
     assert 'private system' not in (tmp_path / 'iteration-prompts.jsonl').read_text()
+
+
+def test_controller_stop_metadata_distinguishes_completed_and_early_stop():
+    import asyncio
+    import threading
+    class Controller:
+        def __init__(self, *, early=False):
+            self.early_stopping_triggered = early
+            self.shutdown_event = threading.Event()
+            self.completed_iterations = 2 if early else 6
+        def _submit_iteration(self, iteration, island=None):
+            return None
+        async def run_evolution(self, start_iteration, max_iterations, **kwargs):
+            return 'unchanged'
+    for early, expected in ((False, 'iteration_limit'), (True, 'early_stopping')):
+        controller = Controller(early=early)
+        with capture_reference_iterations(Controller) as capture:
+            assert asyncio.run(controller.run_evolution(1, 6)) == 'unchanged'
+            result = capture.snapshot()
+        assert result['controller_run']['stop_reason'] == expected
+        assert result['controller_run']['reported_completed_iterations'] == (2 if early else 6)
