@@ -44,8 +44,8 @@ def launch_live_controller(config, *, deadline, directory, api_key):
     if type(api_key) is not str or not api_key.strip():
         raise ValueError('live controller requires an in-memory credential')
     from zoo.circle_packing.pilot_plan import require_first_pair_audit
-    require_first_pair_audit(config['seed'])
     ledger = CampaignBudget(config['ledger'])
+    require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
     if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
         raise ValueError('live controller requires its original non-fixture provider')
     from zoo.circle_packing.cell_containment import delegated_cell_group
@@ -68,8 +68,8 @@ def launch_reference_live_controller(config, *, deadline, directory, api_key):
     if type(api_key) is not str or not api_key.strip():
         raise ValueError('reference supervisor requires an in-memory credential')
     from zoo.circle_packing.pilot_plan import require_first_pair_audit
-    require_first_pair_audit(config['seed'])
     ledger = CampaignBudget(config['ledger'])
+    require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
     if ledger.is_fixture_campaign() or config['base_url'] != ledger.manifest_binding()['provider_base_url']:
         raise ValueError('reference supervisor requires its original non-fixture provider')
     from zoo.circle_packing.cell_containment import delegated_cell_group
@@ -93,9 +93,30 @@ def preflight_live_controller(config, *, ledger, directory, reference):
             stat.S_IMODE(info.st_mode) & 0o077 or requested.exists() or requested.is_symlink():
         raise ValueError('fixture supervisor requires a fresh private directory')
     root = parent / requested.name
-    protected = (source, runtime, ledger.path.resolve(), Path(config['clock']).resolve(), Path(config['output']).resolve())
+    protected = (source.parent, runtime, ledger.path.resolve(), Path(config['clock']).resolve(), Path(config['output']).resolve())
     if reference:
-        protected += (Path(config['workspace']).resolve(), Path(config['worker_directory']).resolve())
+        try:
+            workspace_path, worker_path = Path(config['workspace']), Path(config['worker_directory'])
+            if workspace_path.is_symlink() or worker_path.is_symlink():
+                raise ValueError('reference workspace and worker paths must not be symlinks')
+            workspace = workspace_path.resolve(strict=True)
+            worker_parent = worker_path.parent.resolve(strict=True)
+            worker = worker_parent / worker_path.name
+            info = workspace.stat()
+            if (not workspace.is_dir() or info.st_uid != os.getuid() or
+                    stat.S_IMODE(info.st_mode) != 0o700 or any(workspace.iterdir()) or
+                    worker.exists() or not worker_parent.is_dir() or
+                    not os.access(worker_parent, os.W_OK | os.X_OK) or
+                    len(os.fsencode(workspace / 'broker.sock')) >= 104):
+                raise ValueError('reference workspace or worker location is invalid')
+            def overlaps(left, right):
+                return left == right or left in right.parents or right in left.parents
+            if overlaps(workspace, worker) or any(overlaps(path, item)
+                    for path in (workspace, worker) for item in protected):
+                raise ValueError('reference workspace or worker overlaps protected paths')
+            protected += (workspace, worker)
+        except (OSError, RuntimeError) as error:
+            raise ValueError('reference workspace or worker location cannot be inspected') from error
     if any(root == path or root in path.parents or path in root.parents for path in protected):
         raise ValueError('fixture supervisor directory overlaps protected paths')
     return root, source, runtime

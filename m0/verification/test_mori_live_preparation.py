@@ -234,6 +234,102 @@ def prepared_cell(tmp_path, request, monkeypatch):
 
 
 @pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori'], indirect=True)
+def test_prepare_six_credential_free_configs_from_original_frozen_authorities(prepared_cell, tmp_path):
+    from zoo.circle_packing.pilot_prepare import prepare_cell_configs
+    config, ledger, _, _ = prepared_cell
+    root = tmp_path.parent / 'operator-configs'
+    root.mkdir(mode=0o700)
+    before = ledger.snapshot()['journal_head']
+    configs = prepare_cell_configs(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+        source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+        runtime=config['runtime'], runtime_manifest=config['runtime_manifest'], directory=root)
+    assert ledger.snapshot()['journal_head'] == before
+    assert len(configs) == 6 and {entry['cell_id'] for entry in configs} == {
+        f'{arm}-{seed}' for seed in range(3) for arm in ('mori', 'vendor')}
+    for entry in configs:
+        path = Path(entry['config_path'])
+        assert path.stat().st_mode & 0o777 == 0o600
+        value = json.loads(path.read_text())
+        assert value['plan'] == config['plan'] and value['ref'] == config['ref']
+        assert value['base_url'] == ledger.manifest_binding()['provider_base_url']
+        assert 'api_key' not in value and not Path(value['clock']).exists()
+        assert not Path(value['output']).exists() and not Path(entry['supervisor_directory']).exists()
+        if entry['cell_id'].startswith('vendor-'):
+            workspace = Path(value['workspace'])
+            assert workspace.is_dir() and workspace.stat().st_mode & 0o777 == 0o700
+            assert not list(workspace.iterdir())
+            assert len(os.fsencode(workspace / 'broker.sock')) < 104
+            if entry['cell_id'] == 'vendor-0':
+                from zoo.circle_packing.mori_supervisor import preflight_live_controller
+                vendor_value, supervisor_path = value, entry['supervisor_directory']
+                preflight_live_controller(value, ledger=ledger, directory=entry['supervisor_directory'], reference=True)
+                invalid = {**value, 'workspace': str(root / 'missing-workspace')}
+                with pytest.raises(ValueError, match='workspace'):
+                    preflight_live_controller(invalid, ledger=ledger, directory=entry['supervisor_directory'], reference=True)
+                invalid_worker = {**value, 'worker_directory': str(Path(config['source']).parent / 'fresh-worker')}
+                with pytest.raises(ValueError, match='overlap'):
+                    preflight_live_controller(invalid_worker, ledger=ledger, directory=entry['supervisor_directory'], reference=True)
+                assert ledger.snapshot()['journal_head'] == before
+    with pytest.raises(ValueError):
+        prepare_cell_configs(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+            source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+            runtime=config['runtime'], runtime_manifest=config['runtime_manifest'], directory=root)
+    long_root = tmp_path / ('x' * 90)
+    long_root.mkdir(mode=0o700)
+    with pytest.raises(ValueError, match='socket'):
+        prepare_cell_configs(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
+            source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
+            runtime=config['runtime'], runtime_manifest=config['runtime_manifest'], directory=long_root)
+    assert not list(long_root.iterdir())
+    long_workspace = long_root / 'workspace'
+    long_workspace.mkdir(mode=0o700)
+    with pytest.raises(ValueError, match='workspace'):
+        preflight_live_controller({**vendor_value, 'workspace': str(long_workspace)}, ledger=ledger,
+                                  directory=supervisor_path, reference=True)
+    assert ledger.snapshot()['journal_head'] == before
+    cli_root = tmp_path.parent / 'cli-configs'
+    cli_root.mkdir(mode=0o700)
+    files = {}
+    for name, value in (('plan', config['plan']), ('source-manifest', config['source_manifest']),
+                        ('runtime-manifest', config['runtime_manifest'])):
+        files[name] = tmp_path / (name + '.json')
+        files[name].write_text(json.dumps(value))
+    command = [sys.executable, '-m', 'zoo.circle_packing.pilot_prepare', '--ledger', str(ledger.path),
+               '--plan', str(files['plan']), '--expected-plan-ref', config['ref'],
+               '--source-root', str(Path(config['source']).parent), '--source-manifest', str(files['source-manifest']),
+               '--runtime', config['runtime'], '--runtime-manifest', str(files['runtime-manifest']),
+               '--directory', str(cli_root)]
+    result = subprocess.run(command, env={'PATH': os.defpath, 'PYTHONPATH': str(Path(__file__).resolve().parents[1])},
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    assert len(json.loads(result.stdout)['cells']) == 6 and ledger.snapshot()['journal_head'] == before
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('arm', ['mori', 'vendor'])
+@pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori'], indirect=True)
+def test_supervisor_passes_original_ledger_to_later_seed_gate(prepared_cell, tmp_path, monkeypatch, arm):
+    from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
+    config, ledger, _, _ = prepared_cell
+    config = {**config, 'seed': 1}
+    if arm == 'vendor':
+        config.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda *_: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    captured = {}
+    def gate(seed, **kwargs):
+        captured.update(seed=seed, **kwargs)
+        raise RuntimeError('gate inspected')
+    monkeypatch.setattr('zoo.circle_packing.pilot_plan.require_first_pair_audit', gate)
+    launch = launch_live_controller if arm == 'mori' else launch_reference_live_controller
+    with pytest.raises(RuntimeError, match='gate inspected'):
+        launch(config, deadline=None, directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
+    assert captured['seed'] == 1 and captured['ledger'].path == ledger.path
+    assert captured['expected_plan_ref'] == config['ref']
+
+
+@pytest.mark.linux
 @pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori', 'coordinator_fake_vendor'], indirect=True)
 def test_live_cell_coordinator_starts_one_clock_and_runs_frozen_host(prepared_cell, tmp_path, request, monkeypatch):
     from zoo.circle_packing.live_cell import start_live_cell

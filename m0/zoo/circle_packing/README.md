@@ -313,6 +313,26 @@ clock before launching that arm's supervisor. Its CLI accepts an arm, a
 credential-free JSON configuration and supervisor directory; the provider key
 is taken from the environment and is not written to the configuration. The
 entry does not open either live gate or authorize the six-cell matrix.
+After freezing the plan, source and runtime against the original campaign,
+prepare the six configurations under a fresh, private directory with a short
+absolute path. The plan and manifest files are the original JSON outputs of
+those freezing steps, and the reference must be the independently pinned plan
+digest. The command verifies the existing bindings, does not modify the
+campaign, and does not require or read a provider key:
+
+```sh
+PYTHONPATH="$FROZEN_SOURCE/m0" "$FROZEN_RUNTIME/bin/python" -m zoo.circle_packing.pilot_prepare \
+  --ledger "$CAMPAIGN_LEDGER" --plan "$PLAN_JSON" --expected-plan-ref "$PLAN_REF" \
+  --source-root "$FROZEN_SOURCE" --source-manifest "$SOURCE_MANIFEST_JSON" \
+  --runtime "$FROZEN_RUNTIME" --runtime-manifest "$RUNTIME_MANIFEST_JSON" \
+  --directory "$PRIVATE_CONFIG_DIRECTORY"
+```
+
+The output lists one private `config.json` and a fresh supervisor path per
+cell. Reference workspaces are created empty with mode `0700`; socket length
+and workspace conditions are checked before a clock can be claimed. Existing
+cell directories are never overwritten. The prepared files contain no
+credentials and do not bypass the still-closed live gate.
 For a cell interrupted before any worker or reference host claim, the same
 entry accepts `--resume-unstarted` after the supervisor directory. It restores
 the original clock and may reconcile its one durable, unanchored observation;
