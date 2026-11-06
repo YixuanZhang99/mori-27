@@ -10,11 +10,10 @@ from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle, Record
 from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
 
 
-def evidence(tmp_path, setup, *, returncode, timeout):
+def evidence(tmp_path, setup, *, returncode, timeout, ref='sha256:' + 'a' * 64, seconds=30):
     ledger, _bridge, run, context, _providers, _calls, _store, _physical = setup
-    ref = 'sha256:' + 'a' * 64
     clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
-                               cell_id='mori-0', plan_ref=ref, seconds=30)
+                               cell_id='mori-0', plan_ref=ref, seconds=seconds)
     root = tmp_path / 'supervisor'
     root.mkdir(mode=0o700)
     config = {'seed': 0, 'ref': ref}

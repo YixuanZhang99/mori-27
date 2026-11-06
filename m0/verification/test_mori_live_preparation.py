@@ -855,6 +855,20 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert [row['state'] for row in pair['cells']].count('not_claimed') == 4
         assert pair['mori']['sum_radii'] == mori_report['final_measurement']['sum_radii']
         assert pair['reference']['sum_radii'] == vendor_report['selected_program']['metrics']['sum_radii']
+        from zoo.circle_packing.pilot_matrix import report_matrix
+        evidence = {'mori-0': {'config': config, 'directory': tmp_path / 'mori-supervisor',
+                               'view': mori_view, 'clock': recorded_mori},
+                    'vendor-0': {'config': vendor_config, 'directory': tmp_path / 'reference-supervisor',
+                                 'view': vendor_view, 'clock': recorded_vendor}}
+        with tempfile.TemporaryDirectory(prefix='mori-report-', dir='/tmp') as report_dir:
+            reduced = report_matrix(ledger, config['plan'], expected_plan_ref=config['ref'], expected_head=head,
+                cell_evidence=evidence, pair_evidence={0: {'replay_output': Path(report_dir) / 'replay'}})
+        by_name = {cell['cell_id']: cell for cell in reduced['cells']}
+        assert by_name['mori-0']['score'] == pair['mori']['sum_radii']
+        assert by_name['vendor-0']['score'] == pair['reference']['sum_radii']
+        assert reduced['pairs'][0]['difference'] == pair['sum_radii_difference']
+        assert all(by_name[f'{arm}-{seed}']['score'] is None for seed in (1, 2) for arm in ('mori', 'vendor'))
+        assert reduced['performance_claim'] is False and ledger.snapshot()['journal_head'] == head
         assert any(item['receipt_state'] == 'matched' for item in pair['reference_iteration_receipts']['iterations'])
         provider_links = pair['reference_iteration_provider']['iterations']
         assert len(provider_links) == 6 and all(item['state'] == 'matched' for item in provider_links)
