@@ -127,6 +127,7 @@ def audit_pair_snapshot(*, seed, plan, expected_plan_ref, mori_rows, mori_rows_s
                 'reference_run_coverage': reference_coverage,
                 'reference_accounting_coverage': accounting_coverage,
                 'reference_iteration_trace': reference_trace,
+                'reference_admission_trace': reference.get('admission_trace'),
                 'reference_physical_coverage': reference['physical_coverage'],
                 'sum_radii_difference': summaries['mori']['sum_radii'] - summaries['reference']['sum_radii'],
                 'invoice_verified': False}
@@ -176,6 +177,14 @@ def audit_supervised_pair_snapshot(*, mori_config, reference_config, mori_superv
                     result['reference_run_coverage'], result['reference_iteration_provider'],
                     result['reference_iteration_stages'], rows=pair_arguments['reference_rows'],
                     plan=pair_arguments['plan'], physical_coverage=result['reference_physical_coverage'], patches=patches)
+            admissions = result.get('reference_admission_trace')
+            if admissions is not None and result['reference_accounting_coverage']['iteration_accounting_complete']:
+                from zoo.circle_packing.reference_best_audit import audit_reference_best_from_physical
+                result['reference_best_coverage'] = audit_reference_best_from_physical(
+                    admissions['events'], trace=trace, rows=pair_arguments['reference_rows'],
+                    accounting=result['reference_accounting_coverage'],
+                    seed_sha256=pair_arguments['plan']['seed_sha256'],
+                    selected_id=result['reference']['selected_program']['id'])
         return {**result, 'scope': 'paired_supervised_anchored_final_snapshots'}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid supervised pair evidence') from error

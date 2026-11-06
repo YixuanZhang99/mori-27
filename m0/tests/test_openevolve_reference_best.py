@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from zoo.circle_packing.reference_best_audit import audit_reference_best
+from zoo.circle_packing.reference_best_audit import audit_reference_best, audit_reference_best_from_physical
 from zoo.circle_packing.reference_best_capture import capture_reference_admissions
 
 
@@ -109,3 +109,43 @@ def test_capture_observes_actual_seed_child_and_migration():
                 for event in events if event['kind'] != 'migrant'}
     assert [event['kind'] for event in events] == ['seed', 'candidate', 'migrant']
     assert audit_reference_best(events, evaluated=measured, selected_id='child')['fitness'] == 2.0
+
+
+def test_best_reconstruction_uses_original_stage_geometry_and_candidate_identity():
+    import json
+    from zoo.circle_packing.geometry import validate_geometry
+    from zoo.circle_packing.stage import EVALUATOR_SHA256
+
+    seed_ref, child_ref = 'sha256:' + '1' * 64, 'sha256:' + '2' * 64
+    rows = []
+    def stage(request, program_ref, radius, number, prior):
+        geometry = {'centers': [[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)],
+                    'radii': [radius] * 26}
+        encoded = json.dumps(geometry, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
+        result = {'stage': number, 'program_ref': program_ref, 'evaluator_ref': 'sha256:' + EVALUATOR_SHA256,
+                  'status': 'ok', 'wall_seconds': 1.0, 'metrics': validate_geometry(geometry),
+                  'geometry': geometry, 'geometry_ref': 'sha256:' + hashlib.sha256(encoded).hexdigest()}
+        rows.extend([{'kind': 'host_stage_started', 'payload': {'request_id': request, 'program_ref': program_ref,
+                      'stage': number, 'prior_id': prior}},
+                     {'kind': 'host_stage_completed', 'payload': {'request_id': request, 'result': result}}])
+        return result['metrics']
+    seed_first, seed_second, child_first, child_second = [str(i) * 32 for i in range(1, 5)]
+    stage(seed_first, seed_ref, .06, 1, None)
+    seed_metrics = stage(seed_second, seed_ref, .06, 2, seed_first)
+    stage(child_first, child_ref, .07, 1, None)
+    child_metrics = stage(child_second, child_ref, .07, 2, child_first)
+    events = [record('seed', 'seed', seed_ref, seed_metrics, None, 'seed'),
+              record('candidate', 'child', child_ref, child_metrics, 'seed', 'child', parent='seed')]
+    trace = {'iterations': [{'iteration': 1, 'state': 'candidate', 'child_id': 'child',
+                             'program_sha256': '2' * 64}],
+             'stage_bindings': [{'iteration': 1, 'request_id': child_first},
+                                {'iteration': 1, 'request_id': child_second}]}
+    accounting = {'iteration_accounting_complete': True, 'seed_stage_ids': [seed_first, seed_second]}
+    result = audit_reference_best_from_physical(events, trace=trace, rows=rows, accounting=accounting,
+                                                seed_sha256='1' * 64, selected_id='child')
+    assert result['selected_id'] == 'child' and result['complete_run_certified'] is False
+    forged = deepcopy(rows)
+    forged[-1]['payload']['result']['metrics']['combined_score'] = 100.0
+    with pytest.raises(ValueError):
+        audit_reference_best_from_physical(events, trace=trace, rows=forged, accounting=accounting,
+                                           seed_sha256='1' * 64, selected_id='child')
