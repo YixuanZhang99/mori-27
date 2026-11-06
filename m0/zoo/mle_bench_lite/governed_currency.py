@@ -75,6 +75,48 @@ def _verify_failed_construction_cycle(rows, event, logical_run_id):
                 candidate['created_cycle'] != cycle or proposal['artifact'] != '':
             raise ValueError('failed construction differs from its original identity')
         failure = decode_construction_outcome(terminal, identity)
+        operation = identity['operation']
+        intent_id, fingerprint = operation['intent_id'], operation['fingerprint']
+        if type(intent_id) is not str or not intent_id or type(fingerprint) is not str or not fingerprint:
+            raise ValueError('failed construction lacks its physical operation identity')
+        def budget_events(kind):
+            return [(index, row['payload']['data']) for index, row in enumerate(rows)
+                    if row['kind'] == 'hierarchical_budget' and row['payload'].get('event') == kind and
+                    (row['payload'].get('data', {}).get('intent', {}).get('intent_id') if kind == 'reserve'
+                     else row['payload'].get('data', {}).get('intent_id')) == intent_id]
+        reserves, launches, settlements = (budget_events(kind) for kind in ('reserve', 'start', 'settle'))
+        if len(reserves) != 1 or len(launches) != 1 or len(settlements) != 1:
+            raise ValueError('failed construction lacks its original physical settlement')
+        reserve_i, reserve = reserves[0]
+        launch_i, launch = launches[0]
+        settled_i, settled = settlements[0]
+        intent = reserve['intent']
+        if not reserve_i < launch_i < plan_index < starts[0] < terminal_index < settled_i or \
+                any(item['fingerprint'] != fingerprint for item in (reserve, launch, settled)) or \
+                intent['candidate']['id'] != candidate_id or intent['operation'] != 'operator' or \
+                intent['lane'] != 'main' or intent['control_slot'] is not None:
+            raise ValueError('failed construction differs from physical operation identity')
+        provider_starts = [(index, row['payload']) for index, row in enumerate(rows)
+                           if row['kind'] == 'composed_provider_started' and
+                           row['payload'].get('invocation', {}).get('intent_id') == intent_id]
+        total = 0
+        for ordinal, (index, started) in enumerate(provider_starts):
+            completions = [(j, row['payload']) for j, row in enumerate(rows)
+                           if row['kind'] == 'composed_provider_completed' and
+                           row['payload'].get('binding') == started['binding']]
+            if len(completions) != 1 or started['invocation'].get('ordinal') != ordinal:
+                raise ValueError('failed construction lacks unique provider receipts')
+            completed_i, completed = completions[0]
+            tokens = completed['tokens']
+            if not starts[0] < index < completed_i < terminal_index or type(tokens) is not int or tokens < 0:
+                raise ValueError('failed construction provider receipt is not measured')
+            total += tokens
+        if len(provider_starts) > 2 or total != failure.cost.tokens_in or \
+                payload_digest(settled['actual_costs']) != payload_digest({
+                    'token': failure.cost.tokens_in + failure.cost.tokens_out,
+                    'node': failure.cost.node_count, 'eval_count': failure.cost.eval_count}) or \
+                not {'token', 'node', 'eval_count'} <= set(settled['measured_units']):
+            raise ValueError('failed construction settlement differs from provider usage')
         result = evidence['eval_result']
         if type(failure) is not OperatorFailure or payload_digest(asdict(failure.cost)) != payload_digest(proposal['cost']) or \
                 list(failure.measured_cost_units) != proposal['measured_cost_units'] or \
