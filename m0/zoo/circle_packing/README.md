@@ -128,3 +128,10 @@ head; `claimed_outcome_unverified` does not say whether a cell completed,
 failed, or is still running. Scores remain null until a separate terminal
 result and its accounting and geometry evidence can be independently verified.
 This read-only inventory does not authorize or start a run.
+
+`recalculate_reference_snapshot` joins a pinned campaign, recorded worker,
+physical stages and the original plan, then independently recalculates the
+selected stage's geometry and the predeclared public-range condition without
+running the candidate or calling a provider. Its result is explicitly a
+host-attested snapshot, not proof that the run ended or that the selection is
+the final winner; fixture output is not a benchmark score.

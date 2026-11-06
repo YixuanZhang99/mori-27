@@ -230,6 +230,16 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             stdout=process_output['stdout'], stderr=process_output['stderr'], selected=result['selected_program'],
             options=authority.budget.options, stamp=asdict(authority.budget.stamp),
             governance=authority.budget._governed.config, rows=rows, request_ids=ids)
+        from zoo.circle_packing.reference_final import recalculate_reference_snapshot
+        final = recalculate_reference_snapshot(view, recorded_clock, run_id, plan=plan, expected_plan_ref=ref,
+            worker_proof=worker_proof, stdout=process_output['stdout'], stderr=process_output['stderr'],
+            selected=result['selected_program'], options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+            governance=authority.budget._governed.config, rows=rows, request_ids=ids)
+    assert final['scope'] == 'host_attested_reference_snapshot' and not final['performance_claim']
+    assert final['metrics'] == result['selected_program']['metrics']
+    assert final['stage_request_id'] == request_id and final['geometry_ref'] == joined['stage']['geometry_ref']
+    assert final['public_range_threshold'] == plan['public_range_sum_radii']
+    assert final['public_range_condition_met'] is False
     assert joined['scope'] == 'host_attested_reference_snapshot' and not joined['performance_claim']
     assert joined['stage']['evidence_ref'] == result['stage_evidence_ref']
     assert joined['stage']['all_stage_count'] == authority.stages.audit()['stage_calls']
