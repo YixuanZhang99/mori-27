@@ -25,6 +25,20 @@ def test_fixture_rejects_extra_fields_and_invalid_seed():
     assert validate_config(config())['seed'] == 0
 
 
+def test_shared_controller_rejects_empty_credential_before_setup(tmp_path):
+    from zoo.circle_packing.mori_controller import build_controller
+    with pytest.raises(ValueError, match='credential'):
+        build_controller(config(), ledger=None, clock=None, runner=None, api_key='')
+    assert not list(tmp_path.iterdir())
+
+
+def test_shared_controller_rejects_credentials_in_persisted_config():
+    from zoo.circle_packing.mori_controller import build_controller
+    with pytest.raises(ValueError, match='configuration'):
+        build_controller({**config(), 'api_key': 'fixture-only-secret'},
+                         ledger=None, clock=None, runner=None, api_key='fixture-only-secret')
+
+
 def test_final_measurement_only_exposes_completed_bound_metrics():
     from zoo.circle_packing.mori_fixture_worker import final_measurement
     metrics = {'test/score': 1.82 / 2.635, 'test/sum_radii': 1.82, 'test/validity': 1.0}

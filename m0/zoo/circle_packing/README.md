@@ -193,3 +193,7 @@ frozen plan, source and runtime. Its process journal and deadline guard retain
 execution evidence. It claims the cell before process launch; a duplicate or
 interrupted claim cannot silently start the controller again. It does not
 certify all descendants or authorize live use.
+`mori_controller.build_controller` shares the governed Framework composition
+between the fixture and a future live supervisor. It takes the credential in
+memory, not in the frozen configuration, and does not itself start a search
+or authorize a live pilot.

@@ -13,12 +13,11 @@ import sys
 from urllib.parse import urlsplit
 
 
-_FIELDS = {'plan', 'ref', 'runtime_manifest', 'source_manifest', 'source', 'runtime', 'ledger',
-           'clock', 'output', 'base_url', 'campaign_id', 'seed'}
+from zoo.circle_packing.mori_controller import CONFIG_FIELDS
 
 
 def validate_config(value):
-    if type(value) is not dict or set(value) != _FIELDS or type(value['seed']) is not int or value['seed'] not in (0, 1, 2):
+    if type(value) is not dict or set(value) != CONFIG_FIELDS or type(value['seed']) is not int or value['seed'] not in (0, 1, 2):
         raise ValueError('fixture requires its exact configuration and declared seed')
     try:
         url = urlsplit(value['base_url'])
@@ -59,12 +58,11 @@ def final_measurement(final, candidate, threshold):
 
 def run(config):
     config = validate_config(config)
-    from core.loop import Framework, LoopConfig
     from core.composition.recovery import ContinuationStore
     from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
     from zoo.circle_packing.domain import CirclePackingDomain
     from zoo.circle_packing.frozen_source import verify_frozen_source
-    from zoo.circle_packing.governed import governed_setup
+    from zoo.circle_packing.mori_controller import build_controller
     from zoo.circle_packing.reproducibility import require_hash_seed_zero
     from zoo.circle_packing.runner import TASK
     from zoo.mle_bench_lite.cny_budget import CampaignBudget
@@ -89,21 +87,9 @@ def run(config):
         cell_id=f'mori-{seed}', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
     runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'],
                                                 base_python='/usr/bin/python3.12')
-    root = Path(config['output'])
-    options = dict(ledger=ledger, api_key='fixture-only-secret', seed=seed, iterations=plan['iterations'],
-        base_url=config['base_url'], max_completion_tokens=plan['max_completion_tokens'],
-        total_token_ceiling=plan['limits']['token'], cell_deadline=clock,
-        draft_plan=plan, expected_plan_ref=ref, runner=runner)
-    profile, registry, provider = governed_setup(root, **options)
-    cfg = LoopConfig(max_generations=plan['iterations'], total_budget=plan['limits']['token'],
-                     reeval_floor=0, baseline_every=100)
-    domain = CirclePackingDomain(root / 'domain', runner=runner.independent_runner())
-    framework = Framework.from_profile(profile, provider, domain, cfg, str(root / 'framework'),
-                                       component_registry=registry)
+    framework, provider, profile, adapters = build_controller(
+        config, ledger=ledger, clock=clock, runner=runner, api_key='fixture-only-secret')
     outcome = framework.evolve(TASK)
-    def adapters(path, store):
-        _, _, replay_provider = governed_setup(root, **options)
-        return replay_provider, CirclePackingDomain(root / 'replay-domain', runner=runner.independent_runner())
     def forbidden(*args, **kwargs):
         raise AssertionError('fixture replay attempted external work')
     original_provider, original_evaluate = GovernedCNYProvider.perform_request, CirclePackingDomain.evaluate

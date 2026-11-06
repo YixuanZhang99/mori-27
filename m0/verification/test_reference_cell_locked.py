@@ -369,4 +369,8 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
         'validity': final_metrics['test/validity'], 'sum_radii': final_metrics['test/sum_radii'],
         'normalized_score': final_metrics['test/score'], 'public_range_threshold': plan['public_range_sum_radii'],
         'public_range_condition_met': final_metrics['test/sum_radii'] >= plan['public_range_sum_radii']}
+    for root in (tmp_path / 'mori-controller', mori_output):
+        for path in root.rglob('*'):
+            if path.is_file() and not path.is_symlink():
+                assert b'fixture-only-secret' not in path.read_bytes(), f'fixture credential persisted in {path}'
     assert not ledger.snapshot()['pending_calls']
