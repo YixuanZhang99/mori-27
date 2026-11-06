@@ -166,3 +166,8 @@ Its irreversible marker is written during creation, and an existing ledger
 cannot be converted. Use this only for temporary test ledgers.
 The governed currency bridge restricts marked campaigns to loopback providers;
 older ledger readers do not understand the fixture marker event.
+Temporary ledgers produced by the earlier experimental marker-after-governance
+implementation cannot be reopened; recreate those fixtures. This does not
+change existing unmarked campaign ledgers. The bridge's loopback restriction
+alone does not prevent a caller from supplying a real key to a local service;
+the named worker itself always supplies the fixed fake credential.
