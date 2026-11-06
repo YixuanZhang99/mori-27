@@ -13,6 +13,16 @@
 
 应用 Goal 控件：用户已于 2026-11-05 将目标更新为“按 docs/CURRENT_GOAL.md 收敛分支，并从 GEPA 开始逐项完成 spec、实现、实测和合入”，并点击继续；工具查询已确认状态为 active。此前 paused 和无法由工具恢复的限制已由此次用户操作解除。后续按本页顺序持续推进，单个方法交付不代表整个 Goal 完成。
 
+## 当前交付状态（2026-11-06）
+
+- GEPA、FunSearch、AIDE、Arbor 已分别合入 main；真实试跑的结果和局限见下方对应记录。
+- OpenEvolve 正在 `codex/classic-openevolve` 开发，尚未合入，也尚无真实 benchmark 成绩。`f5ceaab` 已以隔离的测试源码、假凭据和禁用的网络跑通 Mori 监督器、六轮搜索、最终几何校验和录制回放；这是离线工程证据，不是付费试跑。
+- 付费试跑前的关键工作：完成参考侧正式入口与两臂共同的全程截止时间和所有子进程终止确认；覆盖 spec 指定的到期和中断情形；完成配对结果及费用、几何、回放的独立核验。真实门禁目前关闭。先做 seed 0 双臂，核验通过后再运行其他 seed；保留失败、未决和未运行单元。
+- 最终合入须有当前提交的全量检查和整体审查。较早提交上的检查或局部测试不能替代最终检查。之后按计划依次推进 AIRA、LoongFlow、R&D-Agent；不要把 OpenEvolve 单项交付当成整个 Goal 完成。
+- 沿用原累计 ¥200 campaign，不重置预算或复制密钥。上次归档的余额为 ¥161.388430；正式调用前须重新读取原账本并核验当前价格与未决状态。
+
+以下为时间顺序记录，较早的“尚未完成”描述可能已由后续条目更新；以本节和实际源码、检查结果为准。
+
 执行进度：分支收敛已完成，GEPA 的 [PR #5](https://github.com/YixuanZhang99/mori-27/pull/5) 已于 2026-11-05 合入 main `b16b4c6`，两组最终候选 Mac/Linux/MLE 检查全部通过，合并树与候选相同。GEPA 远端方法分支已归档退役；真实结果及失败见 [GSM8K 交付记录](../research/experiments/2026-11-05-gepa-gsm8k/README.md)，尚无优化收益或论文复现结论。
 
 C02 FunSearch 已通过 [PR #6](https://github.com/YixuanZhang99/mori-27/pull/6) 合入 main `da4e06c`。最终候选 `5196db9` 的 push/PR 两组 Mac/Linux/MLE 均通过，合并树与候选相同；方法分支已归档为 `archive/classic-funsearch-20261105` 并退役。本地完整检查、11-cycle 离线试跑和记录回放通过。真实 v1 seed 0 暴露函数输出要求与 JSON 外层格式的冲突：11次构造均失败（7格式错误、4输出截断），无有效程序或留出成绩；费用上界 ¥0.971870 已全部结算，原 campaign 累计 ¥18.695960。其余两个 v1 seed 在调用前停止，完整记录保留于 [失败档案](../research/experiments/2026-11-05-funsearch-or3/format-conflict-v1/README.md)。
