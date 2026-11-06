@@ -86,6 +86,7 @@ class RecordedCurrencyView:
         self._evidence = _json(evidence)
         self._policy = _json(policy)
         self._audit = _json(audit)
+        self._pinned_head = expected_head is not None
 
     def manifest_binding(self):
         policy = json.loads(self._policy)
@@ -141,6 +142,14 @@ class RecordedCurrencyView:
         _sha(intent_id)
         self.run_deadline_binding(run_id)
         value = self._governance()['evaluation_eligibility'].get((run_id, intent_id))
+        return dict(value) if value is not None else None
+
+    def stage_eligibility(self, run_id, request_id):
+        """Read a reference-stage anchor from this verified campaign prefix."""
+        from .cny_budget import _identifier
+        _identifier(request_id, 'stage request identity')
+        self.run_deadline_binding(run_id)
+        value = self._governance()['stage_eligibility'].get((run_id, request_id))
         return dict(value) if value is not None else None
 
     def cycle_eligibility(self, run_id, cycle_key):

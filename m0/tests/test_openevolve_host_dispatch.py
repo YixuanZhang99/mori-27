@@ -292,6 +292,98 @@ def test_host_stage_anchors_ontime_eligibility_to_original_result(timed_authorit
     assert stages.audit()['ontime_stage_observations'] == 1
 
 
+def test_detached_currency_view_reads_original_host_stage_anchor(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    anchor = ledger.stage_eligibility(run_id, 'a' * 32)
+    assert view.stage_eligibility(run_id, 'a' * 32) == anchor
+    assert view.stage_eligibility(run_id, 'b' * 32) is None
+    with pytest.raises(ValueError):
+        view.stage_eligibility('f' * 64, 'a' * 32)
+    anchor['cell_id'] = 'tampered'
+    assert view.stage_eligibility(run_id, 'a' * 32)['cell_id'] != 'tampered'
+
+
+def test_detached_reference_stage_audit_recomputes_original_eligible_geometry(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_stage
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                        lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    stages.execute('a' * 32, 'program', stage=1)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    start = list(budget.store.read('host_stage_started'))[0]['payload']
+    terminal = list(budget.store.read('host_stage_completed'))[0]['payload']
+    proof = list(budget.store.read('host_stage_eligibility'))[0]['payload']
+    result = audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof)
+    assert result['metrics'] == terminal['result']['metrics']
+    assert result['geometry_ref'] == terminal['result']['geometry_ref']
+    altered = dict(terminal, evidence_ref='sha256:' + 'f' * 64)
+    with pytest.raises(ValueError):
+        audit_recorded_reference_stage(view, clock, run_id, start, altered, proof)
+    altered_proof = dict(proof, fingerprint='sha256:' + 'f' * 64)
+    with pytest.raises(ValueError):
+        audit_recorded_reference_stage(view, clock, run_id, start, terminal, altered_proof)
+    unpinned = RecordedCurrencyView(evidence, expected_run_id=run_id)
+    with pytest.raises(ValueError, match='pinned'):
+        audit_recorded_reference_stage(unpinned, clock, run_id, start, terminal, proof)
+
+
+def test_detached_reference_stage_audit_rejects_late_measured_result(timed_authority, tmp_path, monkeypatch):
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_stage
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    ledger, budget, bridge, run, ready, main, current = timed_authority
+    def late(program, *, stage, **kwargs):
+        result = fake_result(program, stage, score=.4)
+        current['ns'] += 2700 * 1_000_000_000
+        return result
+    monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage', late)
+    authority = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'host-stage',
+                                control_authority=authority)
+    with pytest.raises(TimeoutError):
+        stages.execute('a' * 32, 'program', stage=1)
+    run_id = ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    clock = RecordedCellClock(bridge.cell_deadline().export_evidence(), view.cell_deadline_claim('vendor-0'))
+    start = list(budget.store.read('host_stage_started'))[0]['payload']
+    terminal = list(budget.store.read('host_stage_completed'))[0]['payload']
+    proof = list(budget.store.read('host_stage_eligibility'))[0]['payload']
+    assert proof['observation']['eligible'] is False
+    with pytest.raises(ValueError, match='eligibility'):
+        audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof)
+
+
 def test_host_stage_audit_rejects_changed_eligibility(timed_authority, tmp_path, monkeypatch):
     import copy
     from test_openevolve_host_stage_budget import fake_result

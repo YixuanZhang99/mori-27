@@ -9,7 +9,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
+
+from core.x1.checkpoint import payload_digest
 
 
 def _unique(pairs):
@@ -74,3 +77,56 @@ def read_reference_selection(workspace, selected):
     finally:
         for fd in reversed(directories):
             os.close(fd)
+
+
+def audit_recorded_reference_stage(view, clock, run_id, start, terminal, proof):
+    """Recompute one anchored stage; this is not a full physical-run audit."""
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_physical import _validate_stage_result
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    if type(view) is not RecordedCurrencyView or type(clock) is not RecordedCellClock or \
+            type(start) is not dict or set(start) != {'request_id', 'stage', 'prior_id', 'program_ref',
+                                                     'intent_id', 'fingerprint'} or \
+            type(terminal) is not dict or set(terminal) != {'request_id', 'fingerprint', 'result',
+                                                            'result_ref', 'evidence_ref'} or \
+            type(proof) is not dict or set(proof) != {'request_id', 'intent_id', 'fingerprint',
+                                                     'evidence_ref', 'observation'}:
+        raise ValueError('invalid recorded reference stage')
+    if not view._pinned_head:
+        raise ValueError('recorded reference stage requires an independently pinned campaign head')
+    request_id = start['request_id']
+    if type(request_id) is not str or not re.fullmatch(r'[0-9a-f]{32}', request_id) or \
+            type(start['stage']) is not int or start['stage'] not in (1, 2) or \
+            type(start['program_ref']) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', start['program_ref']) or \
+            type(start['fingerprint']) is not str or not start['fingerprint'] or \
+            (start['stage'] == 1 and start['prior_id'] is not None) or \
+            (start['stage'] == 2 and (type(start['prior_id']) is not str or
+                                      not re.fullmatch(r'[0-9a-f]{32}', start['prior_id']))) or \
+            start['intent_id'] != 'host-stage:' + request_id or \
+            terminal['request_id'] != request_id or proof['request_id'] != request_id or \
+            terminal['fingerprint'] != start['fingerprint'] or proof['fingerprint'] != start['fingerprint'] or \
+            proof['intent_id'] != start['intent_id'] or proof['evidence_ref'] != terminal['evidence_ref']:
+        raise ValueError('recorded reference stage identity differs')
+    result = terminal['result']
+    if terminal['result_ref'] != 'sha256:' + payload_digest(result) or \
+            terminal['evidence_ref'] != 'sha256:' + payload_digest({'start': start, 'result': result}):
+        raise ValueError('recorded reference stage evidence differs')
+    _validate_stage_result(result, stage=start['stage'], program_ref=start['program_ref'])
+    if result['status'] != 'ok':
+        raise ValueError('recorded reference stage did not succeed')
+    binding = view.run_deadline_binding(run_id)
+    record = clock._record
+    RecordedCellClock(clock._evidence, view.cell_deadline_claim(record['cell_id']))
+    if binding is None or binding['cell_id'] != record['cell_id'] or \
+            binding['plan_ref'] != record['plan_ref'] or binding['deadline_ref'] != record['record_sha256']:
+        raise ValueError('recorded stage belongs to another cell clock')
+    clock.verify_observation(proof['observation'])
+    observation = proof['observation']['observation']
+    anchor = view.stage_eligibility(run_id, request_id)
+    if not proof['observation']['eligible'] or anchor != {
+            'cell_id': record['cell_id'], 'sequence': observation['sequence'],
+            'observation_sha256': observation['sha256'], 'proof_sha256': payload_digest(proof)}:
+        raise ValueError('recorded reference stage eligibility differs from its campaign anchor')
+    return {'program_ref': start['program_ref'], 'stage': start['stage'],
+            'evidence_ref': terminal['evidence_ref'], 'geometry_ref': result['geometry_ref'],
+            'metrics': dict(result['metrics'])}

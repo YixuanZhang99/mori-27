@@ -107,6 +107,22 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert authority.dispatch.audit()['currency']['protection_valid']
     assert authority.stages.audit()['stage_calls'] == 3
     assert authority.budget.audit_governance()['physical_totals']['token'] == 7
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.reference_selection import audit_recorded_reference_stage
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+    evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
+    view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+    recorded_clock = RecordedCellClock(clock.export_evidence(), view.cell_deadline_claim('vendor-0'))
+    request_id = result['stage_request_id']
+    def stage_row(kind):
+        return next(row['payload'] for row in authority.budget.store.read(kind)
+                    if row['payload']['request_id'] == request_id)
+    audited = audit_recorded_reference_stage(view, recorded_clock, run_id,
+        stage_row('host_stage_started'), stage_row('host_stage_completed'), stage_row('host_stage_eligibility'))
+    assert audited['metrics'] == result['selected_program']['metrics']
+    assert audited['evidence_ref'] == result['stage_evidence_ref']
+    assert len(local_endpoint.requests) == 1
     reference_limits = authority.budget.options['limits']['global']
     authority.close()
     # Mori starts in the same frozen source and Python runtime as the vendor
