@@ -502,3 +502,29 @@ def owner_main(root, mode, delay, pause, sandbox):
 
 if __name__ == "__main__" and sys.argv[1] == "--owner":
     owner_main(Path(sys.argv[2]), sys.argv[3], float(sys.argv[4]), sys.argv[5], sys.argv[6])
+
+
+def test_completed_result_published_between_poll_and_owner_exit_is_adopted(tmp_path, monkeypatch):
+    from pathlib import Path
+    import core.composition.worktree as module
+    setup(tmp_path)
+    executor, domain, store = components(tmp_path)
+    real_exists, real_alive = Path.exists, module.process_alive
+    raced = {'hidden': False, 'observed': False}
+    def exists(path):
+        present = real_exists(path)
+        if path.name == 'process-result.json' and present and not raced['observed']:
+            raced.update(hidden=True, observed=True)
+            return False
+        return present
+    def alive(pid, ticks):
+        if raced['hidden']:
+            raced['hidden'] = False
+            return False
+        return real_alive(pid, ticks)
+    monkeypatch.setattr(Path, 'exists', exists)
+    monkeypatch.setattr(module, 'process_alive', alive)
+    result = execute(executor, domain)
+    assert raced['observed']
+    assert result.eval_result.metrics == {'quality': .75}
+    assert len(list(store.read('worktree_evidence'))) == 1
