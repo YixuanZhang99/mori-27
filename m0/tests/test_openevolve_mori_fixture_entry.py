@@ -176,6 +176,16 @@ def test_reference_live_supervisor_closed_gate_does_not_create_files(tmp_path):
     assert not target.exists()
 
 
+@pytest.mark.parametrize('arm', ['mori', 'vendor'])
+def test_live_cell_coordinator_closed_gate_does_not_start_clock(tmp_path, monkeypatch, arm):
+    from zoo.circle_packing.live_cell import start_live_cell
+    monkeypatch.setattr('zoo.circle_packing.cell_deadline.CellDeadline.start',
+                        lambda *args, **kwargs: pytest.fail('closed gate started a cell'))
+    with pytest.raises(ValueError, match='pilot gate'):
+        start_live_cell(arm, config(), directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
+    assert not (tmp_path / 'supervisor').exists()
+
+
 @pytest.mark.linux
 def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypatch):
     from contextlib import nullcontext

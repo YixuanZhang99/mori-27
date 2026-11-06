@@ -37,7 +37,8 @@ def prepared_cell(tmp_path, request, monkeypatch):
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
     if getattr(request, 'param', None) in ('reference_fake_live', 'reference_fake_live_stall',
-                                           'reference_fake_live_inflight', 'reference_fake_live_timeout', 'paired_fake_live'):
+                                           'reference_fake_live_inflight', 'reference_fake_live_timeout',
+                                           'coordinator_fake_vendor', 'paired_fake_live'):
         host = checkout / 'm0/zoo/circle_packing/host_runtime.py'
         worker = checkout / 'm0/zoo/circle_packing/reference_live_worker.py'
         code = host.read_text()
@@ -89,7 +90,8 @@ def prepared_cell(tmp_path, request, monkeypatch):
                         '-m', 'offline reference live host test'], check=True)
         commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall',
-                                           'supervised_fake_live_inflight', 'supervised_fake_live_timeout', 'paired_fake_live'):
+                                           'supervised_fake_live_inflight', 'supervised_fake_live_timeout',
+                                           'coordinator_fake_mori', 'paired_fake_live'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
         gate = "    raise ValueError('live pilot gate is not complete')"
@@ -169,17 +171,46 @@ def prepared_cell(tmp_path, request, monkeypatch):
     frozen = prepare_frozen_runtime(ledger, plan, snapshot=source, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
         base_python='/usr/bin/python3.12', uv_cache=cache)
-    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
-        cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+    clock_path = tmp_path / 'clock.jsonl'
+    clock = None if getattr(request, 'param', None) in ('coordinator_fake_mori', 'coordinator_fake_vendor') else \
+        CellDeadline.start(ContinuationStore(clock_path), lifecycle=CellLifecycle(ledger),
+            cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
     runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
                                                 base_python='/usr/bin/python3.12')
     output = tmp_path / 'mori'
     config = {'plan': plan, 'ref': ref, 'runtime_manifest': frozen['manifest'],
         'source_manifest': exported['manifest'], 'campaign_id': campaign_id, 'seed': 0,
         'source': str(source / 'm0'), 'runtime': str(runtime), 'ledger': str(ledger.path),
-        'clock': str(clock._store.path), 'output': str(output),
+        'clock': str(clock_path), 'output': str(output),
         'base_url': ledger.manifest_binding()['provider_base_url']}
     return config, ledger, clock, runner
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori', 'coordinator_fake_vendor'], indirect=True)
+def test_live_cell_coordinator_starts_one_clock_and_runs_frozen_host(prepared_cell, tmp_path, request, monkeypatch):
+    from zoo.circle_packing.live_cell import start_live_cell
+    config, ledger, clock, _runner = prepared_cell
+    assert clock is None
+    reference = request.node.callspec.params['prepared_cell'] == 'coordinator_fake_vendor'
+    arm = 'vendor' if reference else 'mori'
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    with tempfile.TemporaryDirectory(prefix='mori-cell-', dir='/tmp') as workspace:
+        if reference:
+            config = {**config, 'output': str(tmp_path / 'reference-host'),
+                      'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
+        directory = tmp_path / 'coordinator-supervisor'
+        result = start_live_cell(arm, config, directory=directory, api_key='fixture-only-secret')
+        assert result['returncode'] == 0 and not result['timeout'] and not result['wrapper_error'], result['stderr']
+        report = json.loads(result['stdout'])
+        assert report['mode'] == 'live' and report['performance_claim'] is False
+        claim = ledger.cell_deadline_claim(f'{arm}-0')
+        assert claim is not None and claim['plan_ref'] == config['ref']
+        before = ledger.snapshot()['journal_head']
+        with pytest.raises(ValueError):
+            start_live_cell(arm, config, directory=tmp_path / 'retry', api_key='fixture-only-secret')
+        assert ledger.snapshot()['journal_head'] == before
 
 
 @pytest.mark.linux

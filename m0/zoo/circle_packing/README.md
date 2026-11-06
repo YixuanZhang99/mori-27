@@ -290,3 +290,9 @@ snapshots and currency upper bounds from views pinned to the same campaign
 head, checks their declared seed and plan, and reports all six claim states.
 Its two audited cells are final snapshots, not proof of complete-run coverage,
 certified replay, real benchmark performance, or invoice amounts.
+`live_cell.start_live_cell` is the common named entry for a single declared
+arm: after the closed gate and campaign preflight it starts the original cell
+clock before launching that arm's supervisor. Its CLI accepts an arm, a
+credential-free JSON configuration and supervisor directory; the provider key
+is taken from the environment and is not written to the configuration. The
+entry does not open either live gate or authorize the six-cell matrix.
