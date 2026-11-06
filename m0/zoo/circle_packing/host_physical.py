@@ -104,6 +104,78 @@ class HostStageAdmission:
         self.budget, self.runner, self.workspace = budget, runner, Path(workspace)
         self._lock = budget._lock
 
+    def audit(self):
+        """Join original stage records to the physical journal and geometry."""
+        from core.composition.budget import JOURNAL_KIND
+        with self._lock:
+            operations = self.budget._rebuild()[0]['operations']
+            provider_records = invocation_records(self.budget.store)
+            rows = list(self.budget.store.read())
+            starts, completed, positions = {}, {}, {}
+            for index, row in enumerate(rows):
+                payload = row['payload']
+                if row['kind'] == JOURNAL_KIND and payload.get('event') in {'start', 'settle'}:
+                    key = (payload['event'], payload['data']['intent_id'])
+                    if key in positions:
+                        raise ValueError('duplicate physical stage transition')
+                    positions[key] = index
+                elif row['kind'] == 'host_stage_started':
+                    request_id = payload.get('request_id')
+                    if request_id in starts or set(payload) != {'request_id', 'stage', 'prior_id', 'program_ref',
+                                                                  'intent_id', 'fingerprint'}:
+                        raise ValueError('duplicate or invalid stage start')
+                    starts[request_id] = (index, payload)
+                elif row['kind'] == 'host_stage_completed':
+                    request_id = payload.get('request_id')
+                    if request_id in completed or set(payload) != {'request_id', 'fingerprint', 'result', 'result_ref'}:
+                        raise ValueError('duplicate or invalid stage terminal')
+                    completed[request_id] = (index, payload)
+            if set(starts) != set(completed):
+                raise ValueError('stage evidence has an unresolved operation')
+            physical_ids = {key for key in operations if key.startswith('host-stage:')}
+            if physical_ids != {'host-stage:' + key for key in starts}:
+                raise ValueError('physical stage and evidence coverage differ')
+            used = set()
+            for key, (start_index, start) in starts.items():
+                terminal_index, terminal = completed[key]
+                result, intent_id = terminal['result'], start['intent_id']
+                operation = operations.get(intent_id)
+                if type(key) is not str or not re.fullmatch(r'[0-9a-f]{32}', key) or \
+                        type(start['stage']) is not int or start['stage'] not in (1, 2) or \
+                        type(start['program_ref']) is not str or \
+                        not re.fullmatch(r'sha256:[0-9a-f]{64}', start['program_ref']) or \
+                        intent_id != 'host-stage:' + key or operation is None or operation['status'] != 'settled' or \
+                        operation['fingerprint'] != start['fingerprint'] or terminal['fingerprint'] != start['fingerprint'] or \
+                        operation['intent']['candidate']['id'] != 'host-stage-' + key or \
+                        operation['intent']['operation'] != 'dev' or operation['intent']['lane'] != 'main' or \
+                        operation['intent']['amounts'] != {'token': 0, 'node': 0, 'eval_count': 1} or \
+                        operation['actual_costs'] != {'token': 0, 'node': 0, 'eval_count': 1} or \
+                        operation['provider_evidence_ref'] != 'sha256:' + payload_digest([]) or \
+                        provider_records.get(intent_id) or \
+                        terminal['result_ref'] != 'sha256:' + payload_digest(result) or \
+                        not positions.get(('start', intent_id), len(rows)) < start_index < terminal_index < \
+                            positions.get(('settle', intent_id), -1):
+                    raise ValueError('stage evidence differs from its physical operation')
+                _validate_stage_result(result, stage=start['stage'], program_ref=start['program_ref'])
+                prior = start['prior_id']
+                if start['stage'] == 1:
+                    if prior is not None:
+                        raise ValueError('first stage has a predecessor')
+                elif start['stage'] == 2:
+                    if prior not in completed or prior in used or completed[prior][0] >= start_index:
+                        raise ValueError('second stage lacks a unique earlier first stage')
+                    previous = completed[prior][1]['result']
+                    previous_start = starts[prior][1]
+                    if previous_start['stage'] != 1 or previous_start['program_ref'] != start['program_ref'] or \
+                            previous['status'] != 'ok' or previous['metrics']['combined_score'] < .5:
+                        raise ValueError('second stage differs from qualifying first stage')
+                    used.add(prior)
+                else:
+                    raise ValueError('unsupported recorded stage')
+            return {'schema_version': 1, 'stage_calls': len(starts),
+                    'stage_one_calls': sum(value[1]['stage'] == 1 for value in starts.values()),
+                    'stage_two_calls': sum(value[1]['stage'] == 2 for value in starts.values())}
+
     def _prior(self, prior_id, program_ref):
         starts = [row['payload'] for row in self.budget.store.read('host_stage_started')]
         if any(row['stage'] == 2 and row['prior_id'] == prior_id for row in starts):

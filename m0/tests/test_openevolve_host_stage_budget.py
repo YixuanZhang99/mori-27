@@ -40,6 +40,7 @@ def test_stage_two_requires_qualifying_original_stage_and_charges_both(tmp_path,
     stage.execute('a' * 32, 'program', stage=1)
     result = stage.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
     assert result['status'] == 'ok' and budget.audit_governance()['physical_totals']['eval_count'] == 2
+    assert stage.audit()['stage_calls'] == 2
     with pytest.raises(ValueError):
         stage.execute('c' * 32, 'program', stage=2, prior_id='a' * 32)
 
@@ -69,14 +70,17 @@ def test_rehashed_forged_score_cannot_authorize_stage_two(tmp_path, monkeypatch)
     original = budget.store.read
     def forged(kind=None):
         rows = copy.deepcopy(list(original(kind)))
-        if kind == 'host_stage_completed':
-            result = rows[0]['payload']['result']
-            result['metrics']['combined_score'] = .8
-            rows[0]['payload']['result_ref'] = 'sha256:' + payload_digest(result)
+        for row in rows:
+            if row['kind'] == 'host_stage_completed':
+                result = row['payload']['result']
+                result['metrics']['combined_score'] = .8
+                row['payload']['result_ref'] = 'sha256:' + payload_digest(result)
         return iter(rows)
     monkeypatch.setattr(budget.store, 'read', forged)
     with pytest.raises(ValueError):
         host.execute('b' * 32, 'program', stage=2, prior_id='a' * 32)
+    with pytest.raises(ValueError):
+        host.audit()
 
 
 def test_underreserved_stage_is_refused_before_execution(tmp_path, monkeypatch):

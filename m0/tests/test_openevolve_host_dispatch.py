@@ -142,6 +142,42 @@ def test_actual_host_worker_uses_both_real_budget_authorities(authority, local_e
             assert b'fixture-only-secret' not in item.read_bytes()
 
 
+def test_actual_host_routes_provider_and_cascade_through_common_budget(authority, local_endpoint, tmp_path):
+    import os
+    import subprocess
+    import sys
+    import threading
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
+    from zoo.circle_packing.host_physical import HostStageAdmission
+    from zoo.circle_packing.host_transport import HostBroker
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, budget, bridge, run, ready, main = authority
+    diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
+            '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
+            '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
+    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
+    path = tmp_path / 'all-operations.sock'
+    env = {key: value for key, value in os.environ.items() if 'API_KEY' not in key}
+    env.update(PYTHONHASHSEED='0', PYTHONPATH=os.pathsep.join(sys.path),
+               MORI_CIRCLE_BROKER_SOCKET=str(path), MORI_CIRCLE_BROKER_TOKEN='a' * 64,
+               OPENAI_API_KEY='fixture-only-secret')
+    provider = HostDispatchCoordinator(budget, bridge, run, ready)
+    stages = HostStageAdmission(budget, runner=SandboxRunner(), workspace=tmp_path / 'stage-work')
+    with HostBroker(path, 'a' * 64, HostDispatchRouter(provider, stages)) as broker:
+        thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(4)], daemon=True)
+        thread.start()
+        completed = subprocess.run([sys.executable, '-m', 'zoo.circle_packing.host_reference',
+            '--output', str(tmp_path / 'host-run'), '--iterations', '1', '--fixture-broker',
+            '--fixture-stage-broker'], env=env, capture_output=True, text=True, timeout=120, check=True)
+        thread.join(timeout=5)
+    assert json.loads(completed.stdout)['stage_calls'] == 3
+    assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+    totals = budget.audit_governance()['physical_totals']
+    assert totals['token'] == 7 and totals['eval_count'] == 3
+    assert provider.audit()['currency']['protection_valid']
+    assert stages.audit() == {'schema_version': 1, 'stage_calls': 3, 'stage_one_calls': 2, 'stage_two_calls': 1}
+
+
 def test_crash_after_currency_admission_blocks_new_work_after_budget_restore(authority, monkeypatch):
     from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
     from zoo.circle_packing.host_physical import HostPhysicalAdmission

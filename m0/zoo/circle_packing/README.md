@@ -47,9 +47,11 @@ only settles against an original completed provider receipt. The experimental
 `HostDispatchCoordinator` joins it to the CNY bridge and checks both authorities;
 loopback tests include a spawned upstream worker and crash after admission.
 `HostStageAdmission` separately charges each sandbox stage and checks the first
-stage's geometry before authorizing the second. These components are not yet
-wired into a complete live reference runner: evaluator routing, wall-clock limits,
-control execution, full run recovery and end-to-end result export are pending.
+stage's geometry before authorizing the second. A local fixture routes the real
+upstream worker's provider and cascade requests through both budget authorities
+and audits their recorded stages. These components are not a complete live
+reference runner: wall-clock limits, control execution, full run recovery and
+end-to-end result export are pending.
 
 `governed_setup` is an internal composition factory for the existing CNY
 bridge and a fresh circle control. Its loopback tests cover role-bound requests,

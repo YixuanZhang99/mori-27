@@ -48,12 +48,17 @@ def fixture_broker_client(model):
     return HostBridgeClient(model)
 
 
-def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False):
+def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_stage_broker=False):
     if type(seed) is not int or seed < 0 or type(iterations) is not int or not 1 <= iterations <= 6:
         raise ValueError('fixture requires nonnegative seed and one to six iterations')
     if os.environ.get('PYTHONHASHSEED') != '0':
         raise ValueError('fixture requires PYTHONHASHSEED=0 at process start')
-    allowed = set(_ALLOWED_ENV) | (set(_BROKER_ENV) if fixture_broker else set())
+    if fixture_stage_broker and not fixture_broker:
+        raise ValueError('fixture stage broker requires the fixture transport')
+    if fixture_stage_broker and os.environ.get('MORI_CIRCLE_STAGE_BROKER') != '1':
+        raise ValueError('fixture stage broker must be explicitly enabled')
+    allowed = set(_ALLOWED_ENV) | (set(_BROKER_ENV) if fixture_broker else set()) | \
+              ({'MORI_CIRCLE_STAGE_BROKER'} if fixture_stage_broker else set())
     if set(os.environ) - allowed:
         raise ValueError('host fixture worker requires a sanitized environment')
     _verify_sources()
@@ -100,7 +105,7 @@ def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False):
         raise RuntimeError('pinned host returned no evaluated program')
     return {'schema_version': 1, 'mode': 'fixture', 'performance_claim': False,
             'controller': 'pinned_openevolve', 'provider_calls': calls, 'stage_calls': stages,
-            'fixture_broker': fixture_broker}
+            'fixture_broker': fixture_broker, 'fixture_stage_broker': fixture_stage_broker}
 
 
 def main():
@@ -109,15 +114,19 @@ def main():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--iterations', type=int, default=1)
     parser.add_argument('--fixture-broker', action='store_true')
+    parser.add_argument('--fixture-stage-broker', action='store_true')
     args = parser.parse_args()
     # The vendored worker serializes its environment: start with a small
     # allowlist so no model credentials are copied to that worker.
     allowed = _ALLOWED_ENV + (_BROKER_ENV if args.fixture_broker else ())
     clean = {key: os.environ[key] for key in allowed if key in os.environ}
+    if args.fixture_stage_broker:
+        clean['MORI_CIRCLE_STAGE_BROKER'] = '1'
     os.environ.clear()
     os.environ.update(clean)
     print(json.dumps(run_fixture(args.output, seed=args.seed, iterations=args.iterations,
-                                 fixture_broker=args.fixture_broker), sort_keys=True))
+                                 fixture_broker=args.fixture_broker,
+                                 fixture_stage_broker=args.fixture_stage_broker), sort_keys=True))
 
 
 if __name__ == '__main__':

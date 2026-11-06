@@ -6,6 +6,7 @@ create a broker, grant budget, dispatch provider HTTP, or enable live runs.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -32,12 +33,15 @@ class HostBridgeClient:
             raise ValueError('host broker requires a local path and private session token')
 
     def _exchange(self, system, user):
+        messages = {'system': system, 'user': user}
+        return self._exchange_argument({'host_messages': messages,
+                                        'host_prompt_ref': 'sha256:' + payload_digest(messages)})
+
+    def _exchange_argument(self, argument, *, request_id=None):
         if self._halted:
             raise UsageError('host transport stopped after an unresolved operation')
-        messages = {'system': system, 'user': user}
-        request = {'schema_version': 1, 'request_id': uuid.uuid4().hex, 'token': self._token,
-                   'argument': {'host_messages': messages,
-                                'host_prompt_ref': 'sha256:' + payload_digest(messages)}}
+        request = {'schema_version': 1, 'request_id': request_id or uuid.uuid4().hex,
+                   'token': self._token, 'argument': argument}
         encoded = json.dumps(request, sort_keys=True, separators=(',', ':'), allow_nan=False).encode() + b'\n'
         if len(encoded) > _MAX_FRAME:
             raise ValueError('host request exceeds local transport bound')
@@ -74,6 +78,44 @@ class HostBridgeClient:
 
     async def generate(self, prompt, **kwargs):
         raise ValueError('host transport requires explicit upstream system and user messages')
+
+
+class HostEvaluationClient(HostBridgeClient):
+    def evaluate(self, program, *, stage, prior_id=None):
+        from zoo.circle_packing.host_physical import _validate_stage_result
+        request_id = uuid.uuid4().hex
+        if type(program) is not str:
+            raise ValueError('stage program must be text')
+        program_ref = 'sha256:' + hashlib.sha256(program.encode()).hexdigest()
+        argument = {'stage': stage, 'program': program, 'program_ref': program_ref, 'prior_id': prior_id}
+        try:
+            result = json.loads(self._exchange_argument(argument, request_id=request_id))
+            _validate_stage_result(result, stage=stage, program_ref=program_ref)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            self._halted = True
+            raise UsageError('stage broker response is invalid') from None
+        return request_id, result
+
+
+def _validate_argument(argument):
+    if type(argument) is not dict:
+        raise ValueError('invalid host invocation')
+    if set(argument) == {'host_messages', 'host_prompt_ref'}:
+        messages = argument['host_messages']
+        if type(messages) is not dict or set(messages) != {'system', 'user'} or \
+                any(type(messages[k]) is not str or not messages[k].strip() for k in messages) or \
+                argument['host_prompt_ref'] != 'sha256:' + payload_digest(messages):
+            raise ValueError('host invocation binding differs')
+    elif set(argument) == {'stage', 'program', 'program_ref', 'prior_id'}:
+        stage, program, prior = argument['stage'], argument['program'], argument['prior_id']
+        if type(stage) is not int or stage not in (1, 2) or type(program) is not str or not program.strip() or \
+                len(program.encode()) > 1024 * 1024 or \
+                argument['program_ref'] != 'sha256:' + hashlib.sha256(program.encode()).hexdigest() or \
+                stage == 1 and prior is not None or stage == 2 and (
+                    type(prior) is not str or not re.fullmatch(r'[0-9a-f]{32}', prior)):
+            raise ValueError('stage invocation binding differs')
+    else:
+        raise ValueError('unsupported host invocation')
 
 
 class HostBroker:
@@ -143,13 +185,7 @@ class HostBroker:
                         or self._halted or request['request_id'] in self._seen:
                     raise ValueError('invalid or unauthorized broker request')
                 argument = request['argument']
-                if type(argument) is not dict or set(argument) != {'host_messages', 'host_prompt_ref'}:
-                    raise ValueError('invalid host invocation')
-                messages = argument['host_messages']
-                if type(messages) is not dict or set(messages) != {'system', 'user'} or \
-                        any(type(messages[k]) is not str or not messages[k].strip() for k in messages) or \
-                        argument['host_prompt_ref'] != 'sha256:' + payload_digest(messages):
-                    raise ValueError('host invocation binding differs')
+                _validate_argument(argument)
                 self._seen.add(request['request_id'])
                 try:
                     response = self._dispatch(request['request_id'], argument)

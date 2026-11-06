@@ -13,6 +13,24 @@ from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.host_physical import HostPhysicalAdmission
 
 
+class HostDispatchRouter:
+    """Route authenticated fixture requests to existing authorities."""
+    def __init__(self, provider, stages):
+        self.provider, self.stages = provider, stages
+
+    def __call__(self, request_id, argument):
+        from zoo.circle_packing.host_transport import _validate_argument
+        _validate_argument(argument)
+        if type(argument) is dict and set(argument) == {'host_messages', 'host_prompt_ref'} and self.provider:
+            return self.provider(request_id, argument)
+        if type(argument) is dict and set(argument) == {'stage', 'program', 'program_ref', 'prior_id'} and self.stages:
+            result = self.stages.execute(request_id, argument['program'], stage=argument['stage'],
+                                         prior_id=argument['prior_id'])
+            return {'state': 'ok', 'result': json.dumps(result, sort_keys=True, separators=(',', ':'), allow_nan=False),
+                    'usage': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}}
+        raise ValueError('host route is not available')
+
+
 class HostDispatchCoordinator:
     def __init__(self, budget, bridge, run, ready):
         if run.store is not budget.store or getattr(run.physical_identity_lookup, '__self__', None) is not budget \

@@ -60,6 +60,7 @@ LINUX_FUNCTIONS = {
     },
     "test_openevolve_host_dispatch.py": {
         "test_actual_host_worker_uses_both_real_budget_authorities",
+        "test_actual_host_routes_provider_and_cascade_through_common_budget",
     },
     "test_governed_cny_bridge.py": {
         "test_actual_host_worker_routes_to_currency_bridge_over_loopback",
