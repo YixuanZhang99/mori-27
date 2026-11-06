@@ -444,9 +444,11 @@ def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace
                 matches.append((final_id, final['evidence_ref']))
         if len(matches) != 1:
             raise ValueError('reference fixture selection lacks a unique eligible stage result')
+        from zoo.circle_packing.reference_selection import read_reference_selection
+        saved = read_reference_selection(workspace, selected)
         deadline.check()
         return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
                 'selected_program': selected, 'stage_request_id': matches[0][0],
-                'stage_evidence_ref': matches[0][1]}
+                'stage_evidence_ref': matches[0][1], 'saved_program_ref': saved['saved_program_ref']}
     finally:
         token_path.unlink(missing_ok=True)

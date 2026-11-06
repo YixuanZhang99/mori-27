@@ -30,7 +30,7 @@ def short_workspace():
         yield Path(directory).resolve()
 
 
-@pytest.mark.parametrize('tamper_selection', [False, True])
+@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact'])
 def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
                                                                                 monkeypatch, tamper_selection,
                                                                                 short_workspace):
@@ -64,6 +64,21 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
     workspace = short_workspace
     from zoo.circle_packing.host_runtime import run_reference_cell_fixture
+    if tamper_selection == 'artifact':
+        from zoo.circle_packing import reference_selection
+        original = reference_selection.read_reference_selection
+        def change_artifact(path, selected):
+            (path / 'host-run' / 'host' / 'best' / 'best_program.py').write_text('changed')
+            return original(path, selected)
+        monkeypatch.setattr(reference_selection, 'read_reference_selection', change_artifact)
+        with pytest.raises(ValueError, match='differs from saved'):
+            run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
+                source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
+                expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
+                base_python='/usr/bin/python3.12', iterations=1)
+        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+        authority.close()
+        return
     if tamper_selection:
         original = ProcessJournal.completed_result
         def changed_report(self, record):
@@ -87,6 +102,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert result['state'] == 'completed'
     assert result['mode'] == 'fixture' and result['performance_claim'] is False
     assert result['selected_program']['metrics']['validity'] == 1.0
+    assert result['saved_program_ref'] == result['selected_program']['program_ref']
     assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
     assert authority.dispatch.audit()['currency']['protection_valid']
     assert authority.stages.audit()['stage_calls'] == 3
