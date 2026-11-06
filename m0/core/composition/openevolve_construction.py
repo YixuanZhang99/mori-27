@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict
 
 from core.composition.construction import ConstructionPlan, ConstructionResult, PromptMaterializer, _ref
@@ -14,7 +15,7 @@ from openevolve.utils.code_utils import (
 
 
 class OpenEvolveMaterializer(PromptMaterializer):
-    def __init__(self, roles, *, seed_program, max_attempts=2):
+    def __init__(self, roles, *, seed_program, max_attempts=2, require_bound_prompt=False):
         if max_attempts != 2 or type(max_attempts) is not int:
             raise ValueError('OpenEvolve requires exactly two bounded construction attempts')
         if type(seed_program) is not str or not seed_program.strip():
@@ -22,6 +23,9 @@ class OpenEvolveMaterializer(PromptMaterializer):
         regions = _split_evolve_regions(seed_program)
         if regions is None or not regions[1]:
             raise ValueError('OpenEvolve seed requires well-formed evolve markers')
+        if type(require_bound_prompt) is not bool:
+            raise ValueError('OpenEvolve prompt binding requirement must be boolean')
+        self.require_bound_prompt = require_bound_prompt
         self.seed_program = seed_program
         super().__init__(roles, max_attempts=max_attempts)
 
@@ -32,6 +36,7 @@ class OpenEvolveMaterializer(PromptMaterializer):
         manifest['configuration']['seed_program_ref'] = 'sha256:' + hashlib.sha256(
             self.seed_program.encode('utf-8')).hexdigest()
         manifest['configuration']['wire_format'] = 'search_replace_v1'
+        manifest['configuration']['require_bound_prompt'] = self.require_bound_prompt
         return manifest
 
     def _parent(self, plan_value):
@@ -49,6 +54,22 @@ class OpenEvolveMaterializer(PromptMaterializer):
     def build_request(self, plan_value, *, hypothesis, attempt, feedback):
         self._parent(plan_value)
         request = super().build_request(plan_value, hypothesis=hypothesis, attempt=attempt, feedback=feedback)
+        if self.require_bound_prompt:
+            instructions = plan_value['recipe']['instructions']
+            if type(instructions) is not list or len(instructions) != 1:
+                raise ValueError('OpenEvolve requires its source-bound vendor prompt')
+            try:
+                bound = json.loads(instructions[0])
+            except (TypeError, json.JSONDecodeError) as error:
+                raise ValueError('invalid source-bound vendor prompt') from error
+            if type(bound) is not dict or set(bound) != {'system', 'user', 'input_ref', 'prompt_ref', 'selection_ref'}:
+                raise ValueError('invalid source-bound vendor prompt fields')
+            from core.x1.checkpoint import payload_digest
+            if bound['prompt_ref'] != 'sha256:' + payload_digest({'system': bound['system'], 'user': bound['user']}) \
+                    or self._parent(plan_value) not in bound['user']:
+                raise ValueError('vendor prompt differs from its selected parent')
+            request['vendor_messages'] = {'system': bound['system'], 'user': bound['user']}
+            request['vendor_prompt_ref'] = bound['prompt_ref']
         request['output_contract']['artifact'] = 'SEARCH/REPLACE diff only'
         request['response_instruction'] = ('Return only SEARCH/REPLACE diff blocks. '
             'Use the fixed parent program. Keep all EVOLVE-BLOCK markers unchanged. '

@@ -55,6 +55,14 @@ class CirclePackingDomain:
                 for name in ('domain.py', 'stage.py', 'geometry.py')}
 
     @property
+    def evaluation_context(self):
+        return self.evaluation_contexts['dev']
+
+    @property
+    def openevolve_binding(self):
+        return {'schema_version': 1, 'kind': self.evaluator_version}
+
+    @property
     def manifest_binding(self):
         return {'kind': self.evaluator_version, 'identity': self._base_identity,
                 'evaluator_sha256': EVALUATOR_SHA256, 'stage_timeout': self.stage_timeout,

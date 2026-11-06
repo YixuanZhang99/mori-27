@@ -381,6 +381,8 @@ def default_registry():
         register_construction, register_funsearch_construction)
     register_construction(registry)
     register_funsearch_construction(registry)
+    from core.composition.openevolve_registration import register_openevolve
+    register_openevolve(registry)
     from core.composition.construction_workspace import register_git_construction
     register_git_construction(registry)
     from core.composition.recovery import register_worktree

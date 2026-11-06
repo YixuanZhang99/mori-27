@@ -26,6 +26,9 @@ packages = ["core", "zoo"]
 "config/profiles" = "config/profiles"
 "vendor/openevolve/openevolve" = "vendor/openevolve/openevolve"
 "vendor/openevolve/LICENSE" = "vendor/openevolve/LICENSE"
+"vendor/openevolve/examples/circle_packing/initial_program.py" = "vendor/openevolve/examples/circle_packing/initial_program.py"
+"vendor/openevolve/examples/circle_packing/evaluator.py" = "vendor/openevolve/examples/circle_packing/evaluator.py"
+"vendor/openevolve/examples/circle_packing/config_phase_1.yaml" = "vendor/openevolve/examples/circle_packing/config_phase_1.yaml"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -34,6 +37,9 @@ include = [
     "config/profiles",
     "vendor/openevolve/openevolve",
     "vendor/openevolve/LICENSE",
+    "vendor/openevolve/examples/circle_packing/initial_program.py",
+    "vendor/openevolve/examples/circle_packing/evaluator.py",
+    "vendor/openevolve/examples/circle_packing/config_phase_1.yaml",
     "pyproject.toml",
     "uv.lock",
 ]

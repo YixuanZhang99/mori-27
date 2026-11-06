@@ -19,6 +19,7 @@ TEST_ROOT = Path(__file__).resolve().parent
 
 # Every test in these modules constructs a Linux-dependent execution backend.
 LINUX_MODULES = {
+    "test_openevolve_framework_sandbox.py": "real public Framework sandboxed circle evaluation",
     "test_openevolve_coordinator_sandbox.py": "real sandboxed evidence for OpenEvolve coordination",
     "test_openevolve_prompt_sandbox.py": "real sandboxed evidence for OpenEvolve prompt binding",
     "test_circle_packing_sandbox.py": "real Bubblewrap circle evaluator execution",
