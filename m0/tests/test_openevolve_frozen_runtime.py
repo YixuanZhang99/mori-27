@@ -227,11 +227,14 @@ def test_required_runtime_blocks_cell_until_environment_is_anchored(tmp_path):
         CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
                            cell_id='vendor-0', plan_ref=ref, seconds=2700)
     assert ledger.cell_deadline_claim('vendor-0') is None
+    original = list(ContinuationStore(tmp_path / 'clock.jsonl').read())
+    assert len(original) == 1
     prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=tmp_path / 'runtime',
         base_python='/usr/bin/python3.12', uv_cache=cache)
-    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
-                               cell_id='vendor-0', plan_ref=ref, seconds=2700)
+    clock = CellDeadline.restore(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                                 cell_id='vendor-0', plan_ref=ref, seconds=2700, reconcile_unstarted=True)
+    assert clock._record == original[0]['payload']
     assert clock.remaining() > 0
 
 
