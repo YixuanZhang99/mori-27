@@ -154,6 +154,8 @@ def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_brok
             AppendOnlyStore(root / 'iteration-prompts.jsonl').read('reference_iteration_prompt')]
         iteration_trace['request_bindings'] = [row['payload'] for row in
             AppendOnlyStore(root / 'iteration-requests.jsonl').read('reference_iteration_request')]
+        iteration_trace['stage_bindings'] = [row['payload'] for row in
+            AppendOnlyStore(root / 'iteration-stages.jsonl').read('reference_iteration_stage')]
     calls = None if fixture_broker else len(list(AppendOnlyStore(root / 'fixture-provider.jsonl').read('provider')))
     stages = len(list(AppendOnlyStore(root / 'fixture-stages.jsonl').read('stage')))
     if list(AppendOnlyStore(root / 'fixture-unresolved.jsonl').read('unresolved')):

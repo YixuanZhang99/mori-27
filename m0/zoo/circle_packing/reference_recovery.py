@@ -87,10 +87,9 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
         trace = report.get('iteration_trace')
         if trace is not None:
             from zoo.circle_packing.reference_iteration_trace import reference_iteration_attempt_limit
-            if type(trace) is not dict or set(trace) not in (
-                    {'schema_version', 'scope', 'performance_claim', 'iterations'},
-                    {'schema_version', 'scope', 'performance_claim', 'iterations', 'prompt_bindings'},
-                    {'schema_version', 'scope', 'performance_claim', 'iterations', 'prompt_bindings', 'request_bindings'}) or \
+            required = {'schema_version', 'scope', 'performance_claim', 'iterations'}
+            if type(trace) is not dict or not required <= set(trace) or \
+                    set(trace) - required - {'prompt_bindings', 'request_bindings', 'stage_bindings'} or \
                     type(trace['schema_version']) is not int or trace['schema_version'] != 1 or \
                     trace['scope'] != 'reference_submitted_future_outcomes' or trace['performance_claim'] is not False or \
                     type(trace['iterations']) is not list or \
@@ -102,6 +101,9 @@ def recover_reference_snapshot(view, clock, run_id, *, plan, expected_plan_ref, 
             if 'request_bindings' in trace and (type(trace['request_bindings']) is not list or
                     len(trace['request_bindings']) > reference_iteration_attempt_limit(plan['iterations'])):
                 raise ValueError('reference worker request bindings are invalid')
+            if 'stage_bindings' in trace and (type(trace['stage_bindings']) is not list or
+                    len(trace['stage_bindings']) > 2 * reference_iteration_attempt_limit(plan['iterations'])):
+                raise ValueError('reference worker stage bindings are invalid')
             result['iteration_trace'] = trace
         return result
     except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:

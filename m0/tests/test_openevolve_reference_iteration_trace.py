@@ -3,7 +3,7 @@ from concurrent.futures import Future
 from types import SimpleNamespace
 
 from zoo.circle_packing.reference_iteration_trace import (capture_reference_iterations, install_prompt_observer,
-                                                            record_iteration_request)
+                                                            record_iteration_request, record_iteration_stage)
 
 
 def test_capture_preserves_futures_and_reports_failed_and_unresolved_iterations():
@@ -32,10 +32,12 @@ def test_capture_preserves_futures_and_reports_failed_and_unresolved_iterations(
     assert 'candidate code' not in repr(trace)
 
 
-def test_prompt_observer_preserves_messages_and_records_only_request_digest(tmp_path):
+def test_prompt_observer_preserves_messages_and_records_only_request_digest(tmp_path, monkeypatch):
     from core.composition.recovery import ContinuationStore
     from core.x1.checkpoint import payload_digest
+    from zoo.circle_packing import reference_iteration_trace
     import json
+    monkeypatch.setattr(reference_iteration_trace, '_active_prompt', None)
     class Sampler:
         def build_prompt(self, *, evolution_round):
             return {'system': 'private system', 'user': 'private user'}
@@ -51,4 +53,8 @@ def test_prompt_observer_preserves_messages_and_records_only_request_digest(tmp_
     request_rows = list(ContinuationStore(tmp_path / 'iteration-requests.jsonl').read())
     assert request_rows == [{'kind': 'reference_iteration_request', 'payload': {'iteration': 3,
                             'request_sha256': rows[0]['payload']['request_sha256'], 'request_id': 'a' * 32}}]
+    record_iteration_stage('b' * 32, 'sha256:' + 'c' * 64, stage=1, prior_id=None)
+    stage_rows = list(ContinuationStore(tmp_path / 'iteration-stages.jsonl').read())
+    assert stage_rows == [{'kind': 'reference_iteration_stage', 'payload': {'iteration': 3,
+                          'request_id': 'b' * 32, 'program_ref': 'sha256:' + 'c' * 64, 'stage': 1, 'prior_id': None}}]
     assert 'private system' not in (tmp_path / 'iteration-prompts.jsonl').read_text()

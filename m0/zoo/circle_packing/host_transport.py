@@ -127,6 +127,8 @@ class HostEvaluationClient(HostBridgeClient):
         if type(program) is not str:
             raise ValueError('stage program must be text')
         program_ref = 'sha256:' + hashlib.sha256(program.encode()).hexdigest()
+        from zoo.circle_packing.reference_iteration_trace import record_iteration_stage
+        record_iteration_stage(request_id, program_ref, stage=stage, prior_id=prior_id)
         argument = {'stage': stage, 'program': program, 'program_ref': program_ref, 'prior_id': prior_id}
         try:
             result = json.loads(self._exchange_argument(argument, request_id=request_id))

@@ -45,6 +45,23 @@ def record_iteration_request(messages, request_id):
         {'iteration': active['iteration'], 'request_sha256': digest, 'request_id': request_id})
 
 
+def record_iteration_stage(request_id, program_ref, *, stage, prior_id):
+    """Record a stage request against the active worker iteration, if present."""
+    from core.x1.store import AppendOnlyStore
+    active = _active_prompt
+    if active is None:
+        return
+    if type(request_id) is not str or re.fullmatch(r'[0-9a-f]{32}', request_id) is None or \
+            type(program_ref) is not str or re.fullmatch(r'sha256:[0-9a-f]{64}', program_ref) is None or \
+            type(stage) is not int or stage not in (1, 2) or \
+            (stage == 1 and prior_id is not None) or \
+            (stage == 2 and (type(prior_id) is not str or re.fullmatch(r'[0-9a-f]{32}', prior_id) is None)):
+        raise ValueError('reference stage identity is invalid')
+    AppendOnlyStore(active['root'] / 'iteration-stages.jsonl').append('reference_iteration_stage',
+        {'iteration': active['iteration'], 'request_id': request_id, 'program_ref': program_ref,
+         'stage': stage, 'prior_id': prior_id})
+
+
 def install_prompt_observer(sampler_class, root):
     """Record an iteration/request digest without changing prompt messages."""
     from core.x1.checkpoint import payload_digest
@@ -292,3 +309,65 @@ def audit_reference_iteration_provider(trace, rows, bundle, *, planned_iteration
                                                    if start['binding'] not in attributed]}
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('invalid reference iteration provider evidence') from error
+
+
+def audit_reference_iteration_stages(trace, rows, *, planned_iterations):
+    """Compare worker stage IDs to a caller-pinned physical stage transcript."""
+    if type(trace) is not dict or type(rows) is not list or type(planned_iterations) is not int or \
+            not 1 <= planned_iterations <= 6 or type(trace.get('stage_bindings')) is not list or \
+            type(trace.get('iterations')) is not list:
+        raise ValueError('reference stage audit requires recorded evidence')
+    try:
+        entries = trace['stage_bindings']
+        if len(entries) > 2 * reference_iteration_attempt_limit(planned_iterations):
+            raise ValueError('reference stage trace exceeds its planned bound')
+        starts = [row['payload'] for row in rows if row['kind'] == 'host_stage_started']
+        completions = [row['payload'] for row in rows if row['kind'] == 'host_stage_completed']
+        results, seen, attributed = [], set(), set()
+        for entry in entries:
+            if type(entry) is not dict or set(entry) != {'iteration', 'request_id', 'program_ref', 'stage', 'prior_id'}:
+                raise ValueError('reference stage binding has invalid fields')
+            iteration, request_id, program, stage, prior = (entry[key] for key in
+                ('iteration', 'request_id', 'program_ref', 'stage', 'prior_id'))
+            if type(iteration) is not int or not 1 <= iteration <= planned_iterations or \
+                    type(request_id) is not str or re.fullmatch(r'[0-9a-f]{32}', request_id) is None or \
+                    request_id in seen or type(program) is not str or \
+                    re.fullmatch(r'sha256:[0-9a-f]{64}', program) is None or type(stage) is not int or \
+                    stage not in (1, 2) or (stage == 1 and prior is not None) or \
+                    (stage == 2 and (type(prior) is not str or re.fullmatch(r'[0-9a-f]{32}', prior) is None)):
+                raise ValueError('reference iteration stage identity is invalid')
+            seen.add(request_id)
+            submitted = [row for row in trace['iterations'] if row['iteration'] == iteration
+                         and row['state'] != 'not_submitted']
+            matching = [row for row in starts if row['request_id'] == request_id]
+            output = {'iteration': iteration, 'request_id': request_id, 'stage': stage}
+            if len(submitted) != 1 or submitted[0]['state'] not in ('candidate', 'worker_error', 'no_candidate'):
+                output['state'] = 'unverified_submission'
+            elif len(matching) > 1:
+                raise ValueError('reference stage was started more than once')
+            elif not matching:
+                output['state'] = 'not_observed'
+            else:
+                started = matching[0]
+                if any(started[key] != entry[key] for key in ('program_ref', 'stage', 'prior_id')) or \
+                        (submitted[0]['state'] == 'candidate' and
+                         program != 'sha256:' + submitted[0]['program_sha256']):
+                    raise ValueError('reference stage differs from its original program or request')
+                terminal = [row for row in completions if row['request_id'] == request_id]
+                if len(terminal) > 1:
+                    raise ValueError('reference stage has duplicate terminal evidence')
+                if not terminal:
+                    output['state'] = 'unresolved'
+                else:
+                    status = terminal[0]['result']['status']
+                    if status not in ('ok', 'timeout', 'failed_to_run'):
+                        raise ValueError('reference stage outcome is invalid')
+                    output.update(state='matched', stage_status=status,
+                                  candidate_identity_verified=submitted[0]['state'] == 'candidate')
+                    attributed.add(request_id)
+            results.append(output)
+        return {'schema_version': 1, 'scope': 'caller_pinned_reference_iteration_stages',
+                'performance_claim': False, 'stages': results,
+                'unattributed_stage_ids': [row['request_id'] for row in starts if row['request_id'] not in attributed]}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid reference iteration stage evidence') from error
