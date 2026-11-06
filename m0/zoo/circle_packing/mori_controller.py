@@ -5,11 +5,37 @@ stay in memory and must never be placed in the configuration or evidence.
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from urllib.parse import urlsplit
 
 CONFIG_FIELDS = {'plan', 'ref', 'runtime_manifest', 'source_manifest', 'source', 'runtime', 'ledger',
                  'clock', 'output', 'base_url', 'campaign_id', 'seed'}
+
+
+def final_measurement(final, candidate, threshold):
+    """Expose only a completed final audit's candidate-bound circle metrics."""
+    from zoo.circle_packing.geometry import TARGET
+    if type(final) is not dict or final.get('state') not in {'completed', 'skipped', 'evaluation_failed'}:
+        raise ValueError('invalid final audit state')
+    if final['state'] != 'completed':
+        return None
+    try:
+        evidence = final['evidence']['evidence']
+        result = evidence['eval_result']
+        binding, metrics = result['contract']['binding'], result['metrics']
+        score, total, validity = metrics['test/score'], metrics['test/sum_radii'], metrics['test/validity']
+        if type(candidate) is not str or not candidate or final['candidate_id'] != candidate or \
+                evidence['candidate_id'] != candidate or binding['candidate_id'] != candidate or \
+                binding['split_id'] != 'final_audit' or result['status'] != 'ok' or \
+                any(type(v) not in (int, float) or not math.isfinite(v) for v in (score, total, validity, threshold)) or \
+                total < 0 or threshold <= 0 or validity != 1.0 or \
+                not math.isclose(score, total / TARGET, rel_tol=1e-12, abs_tol=1e-12):
+            raise ValueError('final measurement differs from its audit evidence')
+    except (KeyError, TypeError, OverflowError) as error:
+        raise ValueError('final measurement lacks its audit evidence') from error
+    return {'validity': validity, 'sum_radii': total, 'normalized_score': score,
+            'public_range_threshold': threshold, 'public_range_condition_met': total >= threshold}
 
 
 def build_controller(config, *, ledger, clock, runner, api_key):

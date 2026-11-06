@@ -7,13 +7,12 @@ This entrypoint does not establish whole-cell supervision or live readiness.
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 import sys
 from urllib.parse import urlsplit
 
 
-from zoo.circle_packing.mori_controller import CONFIG_FIELDS
+from zoo.circle_packing.mori_controller import CONFIG_FIELDS, final_measurement
 
 
 def validate_config(value):
@@ -30,30 +29,6 @@ def validate_config(value):
         if type(value[name]) is not str or not Path(value[name]).is_absolute():
             raise ValueError('fixture paths must be absolute')
     return value
-
-
-def final_measurement(final, candidate, threshold):
-    """Expose only a completed final audit's candidate-bound circle metrics."""
-    if type(final) is not dict or final.get('state') not in {'completed', 'skipped', 'evaluation_failed'}:
-        raise ValueError('invalid final audit state')
-    if final['state'] != 'completed':
-        return None
-    try:
-        evidence = final['evidence']['evidence']
-        result = evidence['eval_result']
-        binding, metrics = result['contract']['binding'], result['metrics']
-        score, total, validity = metrics['test/score'], metrics['test/sum_radii'], metrics['test/validity']
-        if type(candidate) is not str or not candidate or final['candidate_id'] != candidate or \
-                evidence['candidate_id'] != candidate or binding['candidate_id'] != candidate or \
-                binding['split_id'] != 'final_audit' or result['status'] != 'ok' or \
-                any(type(v) not in (int, float) or not math.isfinite(v) for v in (score, total, validity, threshold)) or \
-                total < 0 or threshold <= 0 or validity != 1.0 or \
-                not math.isclose(score, total / 2.635, rel_tol=1e-12, abs_tol=1e-12):
-            raise ValueError('final measurement differs from its audit evidence')
-    except (KeyError, TypeError, OverflowError) as error:
-        raise ValueError('final measurement lacks its audit evidence') from error
-    return {'validity': validity, 'sum_radii': total, 'normalized_score': score,
-            'public_range_threshold': threshold, 'public_range_condition_met': total >= threshold}
 
 
 def run(config):

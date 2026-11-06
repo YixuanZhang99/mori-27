@@ -139,6 +139,16 @@ def test_live_host_consumes_key_from_environment_before_preparation(monkeypatch)
     assert 'DEEPSEEK_API_KEY' not in os.environ
 
 
+def test_live_run_fails_closed_before_preparation_when_gate_is_incomplete(monkeypatch):
+    from zoo.circle_packing import mori_live_worker
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'fixture-only-secret')
+    monkeypatch.setattr(mori_live_worker, '_prepare',
+                        lambda *args, **kwargs: pytest.fail('closed gate attempted preparation'))
+    with pytest.raises(ValueError, match='pilot gate'):
+        mori_live_worker.run(config())
+    assert 'DEEPSEEK_API_KEY' not in os.environ
+
+
 def test_shared_controller_rejects_mismatched_ledger_before_setup(tmp_path):
     from test_governed_cny_framework import campaign_fixture
     from zoo.circle_packing.mori_controller import build_controller

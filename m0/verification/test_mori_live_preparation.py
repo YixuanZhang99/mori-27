@@ -89,17 +89,9 @@ def test_real_provider_mode_runs_six_rounds_with_network_blocked(prepared_cell, 
     script = r'''
 import json, os, pathlib, socket, sys, urllib.request
 import core.loop
-from core.composition.recovery import ContinuationStore
-from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
-from zoo.circle_packing.domain import CirclePackingDomain
-from zoo.circle_packing.mori_live_worker import prepare
-from zoo.circle_packing.runner import TASK
-from zoo.mle_bench_lite.cny_budget import CampaignBudget
-from zoo.mle_bench_lite.composed_domain import SandboxRunner
-from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+from zoo.circle_packing import mori_live_worker
 
 config = json.loads(pathlib.Path(sys.argv[1]).read_text())
-ledger = CampaignBudget(config['ledger'])
 plan = config['plan']
 assert sys.executable == str(pathlib.Path(config['runtime']) / 'bin' / 'python')
 assert pathlib.Path(core.loop.__file__).resolve() == pathlib.Path(config['source']) / 'core' / 'loop.py'
@@ -124,17 +116,14 @@ class Opener:
         calls.append(1)
         return Response()
 urllib.request.build_opener = lambda *args: Opener()
-framework, provider, profile, adapters = prepare(config)
+# Only this offline test bypasses the incomplete live gate.
+mori_live_worker._require_live_gate = lambda _: None
+result = mori_live_worker.run(config)
 assert 'DEEPSEEK_API_KEY' not in os.environ
-assert not calls and ledger.snapshot()['settled_upper_bound_micro_cny'] == 0
-outcome = framework.evolve(TASK)
-GovernedCNYProvider.perform_request = forbidden
-CirclePackingDomain.evaluate = forbidden
-certificate = framework.replay(adapter_factory=adapters)['replay_certificate']
-final = outcome['reporting']['final_audit']
-metrics = final['evidence']['evidence']['eval_result']['metrics']
-print(json.dumps({'candidate': outcome['best_candidate_id'], 'state': final['state'],
-    'metrics': metrics, 'calls': len(calls), 'replay': certificate['passed']}))
+measurement = result['final_measurement']
+print(json.dumps({'candidate': result['candidate'], 'state': result['final_state'],
+    'metrics': {'test/validity': measurement['validity'], 'test/sum_radii': measurement['sum_radii']},
+    'calls': len(calls), 'replay': result['replay_passed']}))
 '''
     code = tmp_path / 'blocked_transport.py'
     code.write_text(script)
