@@ -159,10 +159,12 @@ def test_watchdog_clock_regression_stops_worker_and_fails_closed(tmp_path, monke
 def test_worker_cannot_start_when_launch_crosses_cell_deadline(tmp_path, monkeypatch):
     from core.executor.process import ProcessJournal
     from zoo.circle_packing.cell_worker import run_cell_worker
-    deadline, workspace = setup(tmp_path, 2)
+    # Leave preflight enough time on a loaded machine; the delay below is
+    # measured from the original deadline rather than from test setup.
+    deadline, workspace = setup(tmp_path, 10)
     launch = ProcessJournal.launch
     def delayed_launch(self, *args, **kwargs):
-        time.sleep(2.1)
+        time.sleep(max(0, deadline.remaining()) + 0.1)
         result = launch(self, *args, **kwargs)
         time.sleep(0.5)
         return result
