@@ -3,6 +3,8 @@ import copy
 
 import pytest
 
+pytestmark = pytest.mark.linux
+
 from core.composition.recovery import ContinuationStore
 from test_governed_cny_framework import campaign_fixture
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
