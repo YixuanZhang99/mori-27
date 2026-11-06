@@ -32,7 +32,7 @@ def launch_fixture_controller(config, *, deadline, directory):
 
 
 def launch_live_controller(config, *, deadline, directory, api_key):
-    """Supervise a live controller only after the still-closed pilot gate."""
+    """Supervise a live controller allowed by the first-pair gate."""
     from zoo.circle_packing.mori_live_worker import _require_live_gate
     _require_live_gate(config)
     from zoo.circle_packing.mori_controller import CONFIG_FIELDS
@@ -56,9 +56,9 @@ def launch_live_controller(config, *, deadline, directory, api_key):
 
 
 def launch_reference_live_controller(config, *, deadline, directory, api_key):
-    """Supervise the trusted reference host only after the closed pilot gate."""
+    """Supervise the trusted reference host allowed by the first-pair gate."""
     from zoo.circle_packing.host_runtime import _require_reference_live_gate
-    _require_reference_live_gate()
+    _require_reference_live_gate(config.get('seed') if type(config) is dict else None)
     from zoo.circle_packing.reference_live_worker import REFERENCE_CONFIG_FIELDS
     if type(config) is not dict or set(config) != REFERENCE_CONFIG_FIELDS or \
             type(config['seed']) is not int or config['seed'] not in (0, 1, 2) or \

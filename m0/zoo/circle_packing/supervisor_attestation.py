@@ -84,6 +84,11 @@ def require_supervised_process(ledger, deadline):
                 Path(config['ledger']).resolve(strict=True) != ledger.path.resolve(strict=True) or \
                 Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
             raise ValueError('supervisor configuration differs from the original cell')
+        command = Path('/proc/self/cmdline').read_bytes().split(b'\0')
+        expected_command = [os.fsencode(str(Path(config['runtime']) / 'bin' / 'python')),
+                            b'-m', os.fsencode(entry), os.fsencode(str(root / 'config.json')), b'']
+        if command != expected_command:
+            raise ValueError('supervisor target command differs from its frozen entry')
         wrapper = record['wrapper_pid']
         if wrapper != os.getppid() or not process_alive(wrapper, record['wrapper_start_ticks']) or \
                 not process_alive(binding['supervisor_pid'], binding['supervisor_start_ticks']) or \

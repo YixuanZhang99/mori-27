@@ -116,6 +116,9 @@ def test_real_reference_authorities_prepare_but_cannot_start_without_live_gate(t
     # This test isolates the separate live-work gate; supervisor identity is
     # covered by the supervised-process integration and rejection tests.
     monkeypatch.setattr('zoo.circle_packing.supervisor_attestation.require_supervised_process', lambda *_: None)
+    def closed_gate(*_):
+        raise ValueError('live pilot gate is not complete')
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', closed_gate)
     options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
     ledger = options['ledger']
     before = ledger.snapshot()
@@ -185,6 +188,21 @@ def test_live_reference_rejects_unsupervised_process_before_claim(tmp_path, loca
     assert ledger.snapshot() == before and not local_endpoint.requests
 
 
+@pytest.mark.parametrize('seed', [1, 2])
+def test_live_reference_authority_rejects_later_seed_before_claim(tmp_path, local_endpoint, monkeypatch, seed):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
+    ledger = options['ledger']
+    options['deadline'] = CellDeadline.start(ContinuationStore(tmp_path / 'later-clock.jsonl'),
+        lifecycle=CellLifecycle(ledger), cell_id=f'vendor-{seed}', plan_ref=options['expected_plan_ref'],
+        seconds=options['plan']['limits']['wallclock_seconds'])
+    monkeypatch.setattr('zoo.circle_packing.supervisor_attestation.require_supervised_process', lambda *_: None)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='pilot gate'):
+        build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    assert ledger.snapshot() == before and not local_endpoint.requests
+
+
 def test_reference_rechecks_supervision_before_starting_new_work(tmp_path, local_endpoint, monkeypatch):
     import asyncio
     from zoo.circle_packing.host_runtime import build_reference_authorities
@@ -196,7 +214,7 @@ def test_reference_rechecks_supervision_before_starting_new_work(tmp_path, local
         if not alive[0]:
             raise ValueError('supervisor is no longer alive')
     monkeypatch.setattr('zoo.circle_packing.supervisor_attestation.require_supervised_process', attest)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     authority = build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
     try:
         alive[0] = False

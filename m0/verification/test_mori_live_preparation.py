@@ -43,12 +43,7 @@ def prepared_cell(tmp_path, request, monkeypatch):
                                            'reference_fake_live_inflight', 'reference_fake_live_timeout',
                                            'coordinator_fake_vendor', 'paired_fake_live',
                                            'reference_fake_live_sandbox_timeout', 'reference_fake_live_final_timeout'):
-        host = checkout / 'm0/zoo/circle_packing/host_runtime.py'
         worker = checkout / 'm0/zoo/circle_packing/reference_live_worker.py'
-        code = host.read_text()
-        gate = "    raise ValueError('live pilot gate is not complete')"
-        assert code.count(gate) == 1
-        host.write_text(code.replace(gate, '    return None'))
         code = worker.read_text()
         insertion = '    with authority:'
         assert code.count(insertion) == 1
@@ -87,8 +82,7 @@ def prepared_cell(tmp_path, request, monkeypatch):
                      "    (Path(config['output']).parent / 'reference-ready').write_text('ready')\n"
                      "    test_time.sleep(60)\n")
         worker.write_text(code.replace(insertion, fake + insertion))
-        subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/host_runtime.py',
-                        'm0/zoo/circle_packing/reference_live_worker.py'], check=True)
+        subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/reference_live_worker.py'], check=True)
         subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
                         '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
                         '-m', 'offline reference live host test'], check=True)
@@ -99,11 +93,9 @@ def prepared_cell(tmp_path, request, monkeypatch):
                                            'supervised_fake_live_sandbox_timeout', 'supervised_fake_live_final_timeout'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
-        gate = "    raise ValueError('live pilot gate is not complete')"
         insertion = '    outcome = framework.evolve(TASK)'
-        assert code.count(gate) == code.count(insertion) == 1
-        # A separate, disposable source commit opens the gate only for this
-        # fake-transport test. Production source and the user's key are untouched.
+        assert code.count(insertion) == 1
+        # A separate disposable source commit substitutes a fake transport.
         fake = '''    import json as test_json, socket as test_socket, urllib.request as test_request
     assert '/mori-cell-' in open('/proc/self/cgroup').read(), 'worker was not contained before search'
     def no_network(*args, **kwargs):
@@ -136,7 +128,7 @@ def prepared_cell(tmp_path, request, monkeypatch):
             fake += ("    import time as test_time\n"
                      "    (Path(config['output']).parent / 'controller-ready').write_text('ready')\n"
                      "    test_time.sleep(60)\n")
-        worker.write_text(code.replace(gate, '    return None').replace(insertion, fake + insertion))
+        worker.write_text(code.replace(insertion, fake + insertion))
         subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/mori_live_worker.py'], check=True)
         subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
                         '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
@@ -419,7 +411,7 @@ def test_supervisor_passes_original_ledger_to_later_seed_gate(prepared_cell, tmp
     if arm == 'vendor':
         config.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda *_: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     captured = {}
     def gate(seed, **kwargs):
         captured.update(seed=seed, **kwargs)
@@ -442,7 +434,7 @@ def test_generated_pilot_config_runs_the_matching_offline_supervisor(prepared_ce
     reference = request.node.callspec.params['prepared_cell'] == 'coordinator_fake_vendor'
     arm = 'vendor' if reference else 'mori'
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     with tempfile.TemporaryDirectory(prefix='mori-cfg-', dir='/tmp') as root:
         entries = prepare_cell_configs(ledger, plan=config['plan'], expected_plan_ref=config['ref'],
             source_root=Path(config['source']).parent, source_manifest=config['source_manifest'],
@@ -465,7 +457,7 @@ def test_live_cell_coordinator_starts_one_clock_and_runs_frozen_host(prepared_ce
     reference = request.node.callspec.params['prepared_cell'] == 'coordinator_fake_vendor'
     arm = 'vendor' if reference else 'mori'
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     with tempfile.TemporaryDirectory(prefix='mori-cell-', dir='/tmp') as workspace:
         if reference:
             config = {**config, 'output': str(tmp_path / 'reference-host'),
@@ -492,7 +484,7 @@ def test_resume_original_unstarted_cell_runs_under_its_existing_clock(prepared_c
     reference = request.node.callspec.params['prepared_cell'] == 'coordinator_fake_vendor'
     arm = 'vendor' if reference else 'mori'
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     with tempfile.TemporaryDirectory(prefix='mori-resume-', dir='/tmp') as workspace:
         if reference:
             config = {**config, 'output': str(tmp_path / 'reference-host'),
@@ -527,7 +519,7 @@ def test_outer_deadline_during_provider_call_preserves_pending(prepared_cell, tm
         clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
             cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     with tempfile.TemporaryDirectory(prefix='mori-timeout-', dir='/tmp') as workspace:
         if reference:
             config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
@@ -572,7 +564,7 @@ def test_outer_deadline_terminates_active_sandbox(prepared_cell, tmp_path, reque
         clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
             cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     with tempfile.TemporaryDirectory(prefix='mori-sandbox-timeout-', dir='/tmp') as workspace:
         if reference:
             config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
@@ -619,7 +611,7 @@ def test_outer_deadline_before_final_validation_keeps_result_unfinished(prepared
         clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
             cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     with tempfile.TemporaryDirectory(prefix='mori-final-timeout-', dir='/tmp') as workspace:
         if reference:
             config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
@@ -743,7 +735,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
 
     config, ledger, mori_clock, _runner = prepared_cell
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     mori = launch_live_controller(config, deadline=mori_clock, directory=tmp_path / 'mori-supervisor',
                                   api_key='fixture-only-secret')
     assert mori['returncode'] == 0 and not mori['timeout'] and not mori['wrapper_error'], mori['stderr']
@@ -1100,7 +1092,7 @@ def test_reference_supervisor_runs_live_host_with_fake_transport_and_original_au
     with tempfile.TemporaryDirectory(prefix='mori-ref-', dir='/tmp') as path:
         config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
                   'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(path).resolve())}
-        monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+        monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
         directory = tmp_path / 'reference-supervisor'
         process = launch_reference_live_controller(config, deadline=clock, directory=directory,
                                                     api_key='fixture-only-secret')
@@ -1486,7 +1478,7 @@ def test_reference_real_provider_path_with_test_gate_override_and_no_network(pre
         assert not calls and not (tmp_path / 'worker').exists()
         # Only this offline test bypasses the unfinished live gate. It uses a
         # disposable ledger, fake key, intercepted transport and no network.
-        monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+        monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
         with tempfile.TemporaryDirectory(prefix='mori-reference-', dir='/tmp') as path:
             workspace = Path(path).resolve()
             result = run_reference_cell_live(authority, clock, tmp_path / 'worker', workspace,

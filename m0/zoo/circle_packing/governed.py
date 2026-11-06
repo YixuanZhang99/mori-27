@@ -29,6 +29,9 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
     if not recorded_only and pilot is not None and not ledger.is_fixture_campaign() and \
             not pilot.get('require_single_run'):
         raise ValueError('live governed setup requires a single-run pilot')
+    if not recorded_only and pilot is not None and not ledger.is_fixture_campaign():
+        from zoo.circle_packing.mori_live_worker import _require_live_gate
+        _require_live_gate({'seed': seed})
     if pilot is not None and pilot.get('require_runtime') and binding is None:
         raise ValueError('frozen pilot requires a bound runtime before setup')
     if runner is not None and type(runner) is not SandboxRunner:

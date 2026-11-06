@@ -361,8 +361,11 @@ class CNYInvocationBridge:
         if pilot is not None and pilot.get('require_single_run') and self._initial_deadline_binding is None:
             raise ValueError('single-run pilot requires its initial cell deadline')
         if pilot is not None and pilot.get('require_single_run') and not self.ledger.is_fixture_campaign():
+            deadline, _plan, _plan_ref, cell = self._initial_deadline_binding
+            if cell not in ('mori-0', 'vendor-0') or deadline._record.get('cell_id') != cell:
+                raise ValueError('live pilot gate allows only the first paired cells')
             from zoo.circle_packing.supervisor_attestation import require_supervised_process
-            require_supervised_process(self.ledger, self._initial_deadline_binding[0])
+            require_supervised_process(self.ledger, deadline)
         self._authority = self.ledger
         if self.ledger.is_fixture_campaign():
             for provider in context.provider_sessions.values():

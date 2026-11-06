@@ -1,4 +1,4 @@
-"""Start one frozen live cell only after the paired-pilot gate is complete."""
+"""Start one frozen live cell under the first-pair gate."""
 from __future__ import annotations
 
 import json
@@ -16,7 +16,7 @@ def start_live_cell(arm, config, *, directory, api_key, _resume_unstarted=False)
         fields = CONFIG_FIELDS
     elif arm == 'vendor':
         from zoo.circle_packing.host_runtime import _require_reference_live_gate
-        _require_reference_live_gate()
+        _require_reference_live_gate(config.get('seed') if type(config) is dict else None)
         from zoo.circle_packing.reference_live_worker import REFERENCE_CONFIG_FIELDS
         fields = REFERENCE_CONFIG_FIELDS
     else:

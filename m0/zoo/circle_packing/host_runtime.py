@@ -50,8 +50,9 @@ def _sync_directory(path):
         os.close(fd)
 
 
-def _require_reference_live_gate():
-    # Whole-cell termination, recovery, and paired audits are not yet certified.
+def _require_reference_live_gate(seed):
+    if type(seed) is int and seed == 0:
+        return
     raise ValueError('live pilot gate is not complete')
 
 
@@ -274,6 +275,8 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
     cell = deadline._record['cell_id']
     if not re.fullmatch(r'vendor-[012]', cell):
         raise ValueError('reference requires a declared vendor cell')
+    if mode == 'live_preparation' and cell != 'vendor-0':
+        raise ValueError('live pilot gate allows only the first paired cells')
     binding = validate_draft_cell(ledger, plan, cell, expected_plan_ref=expected_plan_ref)
     if ledger.manifest_binding()['campaign_id'] != expected_campaign_id or \
             binding['campaign_id'] != expected_campaign_id or \
@@ -427,7 +430,7 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
                                      currency_run_id, initial_ref)
     def start_work():
         if mode != 'fixture':
-            _require_reference_live_gate()
+            _require_reference_live_gate(int(cell.rsplit('-', 1)[1]))
             from zoo.circle_packing.supervisor_attestation import require_supervised_process
             require_supervised_process(ledger, deadline)
         ledger.start_reference_authority_work(cell, authority_ref)
@@ -470,7 +473,7 @@ def run_reference_cell_live(authority, deadline, worker_directory, workspace, *,
                             frozen_plan, expected_plan_ref, expected_campaign_id, runtime,
                             runtime_manifest, base_python):
     """Run the full frozen reference cell only after the live pilot gate opens."""
-    _require_reference_live_gate()
+    _require_reference_live_gate(int(deadline._record['cell_id'].rsplit('-', 1)[1]))
     if type(authority) is not ReferenceAuthorities or authority.bridge.ledger.is_fixture_campaign() or \
             type(frozen_plan) is not dict or type(frozen_plan.get('iterations')) is not int:
         raise ValueError('live reference requires its original non-fixture authority and plan')

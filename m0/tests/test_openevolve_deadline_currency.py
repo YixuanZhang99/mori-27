@@ -67,6 +67,24 @@ def test_single_run_bridge_rejects_unsupervised_process_before_protection(setup,
     assert ledger.snapshot() == before and not calls
 
 
+@pytest.mark.parametrize('seed', [1, 2])
+def test_live_bridge_rejects_later_seed_before_using_a_supervisor_claim(setup, tmp_path, monkeypatch, seed):
+    from zoo.mle_bench_lite.governed_currency import CNYInvocationBridge
+    ledger, _bridge, run, _context, _providers, calls, _store, _physical = setup
+    ref = 'sha256:' + 'a' * 64
+    ledger.freeze_circle_pilot(ref, 'sha256:' + 'b' * 64, 30, require_single_run=True)
+    cell = f'mori-{seed}'
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id=cell, plan_ref=ref, seconds=30)
+    ledger.claim_cell_worker(cell, clock._record['record_sha256'], 'c' * 64)
+    # Even a forged accepted supervisor proof must not bypass pair ordering.
+    monkeypatch.setattr('zoo.circle_packing.supervisor_attestation.require_supervised_process', lambda *_: None)
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='pilot gate'):
+        CNYInvocationBridge(ledger, cell_deadline_binding=(clock, {}, ref, cell)).bind_run(run)
+    assert ledger.snapshot() == before and not calls
+
+
 def test_cell_clock_events_do_not_change_governed_call_or_recovery(setup, tmp_path):
     ledger, bridge, run, context, providers, calls, store, physical = setup
     lifecycle = CellLifecycle(ledger)

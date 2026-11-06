@@ -1,4 +1,4 @@
-"""Trusted reference host; the paired live pilot gate is still closed."""
+"""Trusted reference host for the first matched live pilot pair."""
 from __future__ import annotations
 
 import json
@@ -64,7 +64,7 @@ def _prepare(config, *, api_key, host_ref):
 def run(config):
     key = _take_credential()
     from zoo.circle_packing.host_runtime import _require_reference_live_gate, run_reference_cell_live
-    _require_reference_live_gate()
+    _require_reference_live_gate(config.get('seed') if type(config) is dict else None)
     host_ref = os.environ.pop('MORI_REFERENCE_HOST_REF', None)
     authority, clock = _prepare(config, api_key=key, host_ref=host_ref)
     with authority:

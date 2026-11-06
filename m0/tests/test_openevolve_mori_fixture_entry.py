@@ -145,7 +145,7 @@ def test_live_run_fails_closed_before_preparation_when_gate_is_incomplete(monkey
     monkeypatch.setattr(mori_live_worker, '_prepare',
                         lambda *args, **kwargs: pytest.fail('closed gate attempted preparation'))
     with pytest.raises(ValueError, match='pilot gate'):
-        mori_live_worker.run(config())
+        mori_live_worker.run({**config(), 'seed': 1})
     assert 'DEEPSEEK_API_KEY' not in os.environ
 
 
@@ -153,7 +153,7 @@ def test_live_supervisor_closed_gate_does_not_claim_or_create_files(tmp_path):
     from zoo.circle_packing.mori_supervisor import launch_live_controller
     target = tmp_path / 'controller'
     with pytest.raises(ValueError, match='pilot gate'):
-        launch_live_controller(config(), deadline=None, directory=target, api_key='fixture-only-secret')
+        launch_live_controller({**config(), 'seed': 1}, deadline=None, directory=target, api_key='fixture-only-secret')
     assert not target.exists()
 
 
@@ -172,7 +172,7 @@ def test_reference_live_supervisor_closed_gate_does_not_create_files(tmp_path):
     from zoo.circle_packing.mori_supervisor import launch_reference_live_controller
     target = tmp_path / 'reference-supervisor'
     with pytest.raises(ValueError, match='pilot gate'):
-        launch_reference_live_controller(config(), deadline=None, directory=target, api_key='fixture-only-secret')
+        launch_reference_live_controller({**config(), 'seed': 1}, deadline=None, directory=target, api_key='fixture-only-secret')
     assert not target.exists()
 
 
@@ -182,7 +182,7 @@ def test_live_cell_coordinator_closed_gate_does_not_start_clock(tmp_path, monkey
     monkeypatch.setattr('zoo.circle_packing.cell_deadline.CellDeadline.start',
                         lambda *args, **kwargs: pytest.fail('closed gate started a cell'))
     with pytest.raises(ValueError, match='pilot gate'):
-        start_live_cell(arm, config(), directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
+        start_live_cell(arm, {**config(), 'seed': 1}, directory=tmp_path / 'supervisor', api_key='fixture-only-secret')
     assert not (tmp_path / 'supervisor').exists()
 
 
@@ -197,7 +197,7 @@ def test_later_seed_refuses_before_first_pair_is_verified(tmp_path, monkeypatch,
     if arm == 'vendor':
         cfg.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
                         lambda *args, **kwargs: {'wallclock_seconds': 30})
     monkeypatch.setattr('zoo.circle_packing.cell_deadline.CellDeadline.start',
@@ -277,7 +277,7 @@ def test_later_seed_supervisor_refuses_before_any_launch(tmp_path, monkeypatch, 
     if arm == 'vendor':
         cfg.update(worker_directory=str(tmp_path / 'worker'), workspace=str(tmp_path / 'workspace'))
     monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
-    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda *_: None)
     launch = launch_reference_live_controller if arm == 'vendor' else launch_live_controller
     with pytest.raises(ValueError, match='first pair'):
         launch(cfg, deadline=None, directory=tmp_path / 'supervisor', api_key='fixture-only-secret')

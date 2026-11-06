@@ -29,7 +29,8 @@ def test_original_contained_target_is_accepted_but_copied_claim_is_not(tmp_path,
                                cell_id='mori-0', plan_ref=ref, seconds=120)
     root = tmp_path / 'worker'
     root.mkdir(mode=0o700)
-    config = {'ledger': str(ledger.path), 'ref': ref, 'clock': str(clock_path), 'seed': 0}
+    config = {'ledger': str(ledger.path), 'ref': ref, 'clock': str(clock_path), 'seed': 0,
+              'runtime': str(Path(sys.executable).parent.parent)}
     (root / 'config.json').write_text(json.dumps(config))
     code = '''import sys,time
 from pathlib import Path
@@ -40,6 +41,15 @@ from zoo.mle_bench_lite.cny_budget import CampaignBudget
 ledger=CampaignBudget(sys.argv[1])
 clock=CellDeadline.restore(ContinuationStore(sys.argv[2]), lifecycle=CellLifecycle(ledger),
                            cell_id='mori-0', plan_ref=sys.argv[3], seconds=120)
+try: require_supervised_process(ledger, clock)
+except ValueError as error: assert 'command' in str(error)
+else: raise AssertionError('custom target command was accepted')
+original_read=Path.read_bytes
+def test_read(path):
+    if str(path)=='/proc/self/cmdline':
+        return (sys.executable+'\\0-m\\0zoo.circle_packing.mori_live_worker\\0'+str(Path(sys.argv[4]).parent/'config.json')+'\\0').encode()
+    return original_read(path)
+Path.read_bytes=test_read
 require_supervised_process(ledger, clock)
 Path(sys.argv[4]).write_text('ready')
 while not Path(sys.argv[5]).exists(): time.sleep(.01)
