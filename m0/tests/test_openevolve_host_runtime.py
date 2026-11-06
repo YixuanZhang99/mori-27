@@ -328,3 +328,149 @@ def test_reference_rechecks_started_state_after_acquiring_owner_lock(tmp_path, l
     assert len(outcomes) == 1 and isinstance(outcomes[0], ValueError)
     assert 'started' in str(outcomes[0]) and 'recovery' in str(outcomes[0])
     assert not local_endpoint.requests
+
+
+def test_reference_cell_rejects_worker_directory_inside_authority_before_control(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    workspace = tmp_path / 'worker-workspace'
+    workspace.mkdir(mode=0o700)
+    runner = options['runner']
+    with pytest.raises(ValueError, match='isolated'):
+        run_reference_cell_fixture(authority, options['deadline'], tmp_path / 'reference' / 'worker', workspace,
+            snapshot=options['snapshot'], source_manifest=options['source_manifest'], frozen_plan=options['plan'],
+            expected_plan_ref=options['expected_plan_ref'], expected_campaign_id=options['expected_campaign_id'],
+            runtime=runner.runtime_root, runtime_manifest=runner._campaign_runtime[1],
+            base_python=runner._campaign_runtime[2])
+    assert not options['ledger'].reference_authority_claim('vendor-0')['work_started']
+    assert not local_endpoint.requests
+    authority.close()
+
+
+def test_reference_cell_rejects_long_socket_path_before_control(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    workspace = tmp_path / ('w' * 90)
+    workspace.mkdir(mode=0o700)
+    runner = options['runner']
+    with pytest.raises(ValueError, match='socket'):
+        run_reference_cell_fixture(authority, options['deadline'], tmp_path / 'worker', workspace,
+            snapshot=options['snapshot'], source_manifest=options['source_manifest'], frozen_plan=options['plan'],
+            expected_plan_ref=options['expected_plan_ref'], expected_campaign_id=options['expected_campaign_id'],
+            runtime=runner.runtime_root, runtime_manifest=runner._campaign_runtime[1],
+            base_python=runner._campaign_runtime[2])
+    assert not options['ledger'].reference_authority_claim('vendor-0')['work_started']
+    assert authority.budget.audit_governance()['physical_totals']['eval_count'] == 0
+    authority.close()
+
+
+def test_reference_cell_keeps_owner_until_worker_returns(tmp_path, local_endpoint, short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    from zoo.circle_packing import reference_worker
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    async def control(slot):
+        return {'status': 'evaluated'}
+    def worker(*args, **kwargs):
+        with pytest.raises(RuntimeError, match='active'):
+            authority.close()
+        raise RuntimeError('fixture worker stopped')
+    monkeypatch.setattr(authority.control, 'execute', control)
+    monkeypatch.setattr(reference_worker, 'run_reference_fixture', worker)
+    runner = options['runner']
+    with pytest.raises(RuntimeError, match='fixture worker stopped'):
+        run_reference_cell_fixture(authority, options['deadline'], tmp_path / 'worker', short_socket_dir,
+            snapshot=options['snapshot'], source_manifest=options['source_manifest'], frozen_plan=options['plan'],
+            expected_plan_ref=options['expected_plan_ref'], expected_campaign_id=options['expected_campaign_id'],
+            runtime=runner.runtime_root, runtime_manifest=runner._campaign_runtime[1],
+            base_python=runner._campaign_runtime[2])
+    authority.close()
+
+
+def test_reference_cell_reports_unresolved_broker_when_worker_raises(tmp_path, local_endpoint, short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    from zoo.circle_packing import reference_worker
+    from zoo.circle_packing.host_transport import HostBroker
+    import threading
+    import time
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    entered, release = threading.Event(), threading.Event()
+    async def control(slot):
+        return {'status': 'evaluated'}
+    def blocked_broker(_broker):
+        with authority._lease.operation():
+            entered.set()
+            release.wait(10)
+    def worker(*args, **kwargs):
+        assert entered.wait(5)
+        raise RuntimeError('fixture worker stopped')
+    monkeypatch.setattr(authority.control, 'execute', control)
+    monkeypatch.setattr(HostBroker, 'serve_one', blocked_broker)
+    monkeypatch.setattr(reference_worker, 'run_reference_fixture', worker)
+    runner = options['runner']
+    try:
+        with pytest.raises(RuntimeError, match='broker has unresolved'):
+            run_reference_cell_fixture(authority, options['deadline'], tmp_path / 'worker', short_socket_dir,
+                snapshot=options['snapshot'], source_manifest=options['source_manifest'], frozen_plan=options['plan'],
+                expected_plan_ref=options['expected_plan_ref'], expected_campaign_id=options['expected_campaign_id'],
+                runtime=runner.runtime_root, runtime_manifest=runner._campaign_runtime[1],
+                base_python=runner._campaign_runtime[2])
+        with pytest.raises(RuntimeError, match='active'):
+            authority.close()
+    finally:
+        release.set()
+        limit = time.monotonic() + 5
+        while authority._lease._active and time.monotonic() < limit:
+            time.sleep(.01)
+        authority.close()
+
+
+def test_reference_cell_closes_broker_connection_waiting_for_frame(tmp_path, local_endpoint, short_socket_dir, monkeypatch):
+    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    from zoo.circle_packing import reference_worker
+    from zoo.circle_packing.host_transport import HostBroker
+    import socket
+    import threading
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    accepted, workers, clients = threading.Event(), [], []
+    original_accept, original_serve = socket.socket.accept, HostBroker.serve_one
+    def accept(sock):
+        result = original_accept(sock)
+        if sock.family == socket.AF_UNIX:
+            accepted.set()
+        return result
+    def serve(broker):
+        workers.append(threading.current_thread())
+        return original_serve(broker)
+    async def control(slot):
+        return {'status': 'evaluated'}
+    def worker(*args, **kwargs):
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        clients.append(client)
+        client.connect(str(kwargs['broker'].path))
+        client.sendall(b'{')
+        assert accepted.wait(5)
+        raise RuntimeError('fixture worker stopped')
+    monkeypatch.setattr(socket.socket, 'accept', accept)
+    monkeypatch.setattr(HostBroker, 'serve_one', serve)
+    monkeypatch.setattr(authority.control, 'execute', control)
+    monkeypatch.setattr(reference_worker, 'run_reference_fixture', worker)
+    runner = options['runner']
+    try:
+        with pytest.raises(RuntimeError, match='fixture worker stopped'):
+            run_reference_cell_fixture(authority, options['deadline'], tmp_path / 'worker', short_socket_dir,
+                snapshot=options['snapshot'], source_manifest=options['source_manifest'], frozen_plan=options['plan'],
+                expected_plan_ref=options['expected_plan_ref'], expected_campaign_id=options['expected_campaign_id'],
+                runtime=runner.runtime_root, runtime_manifest=runner._campaign_runtime[1],
+                base_python=runner._campaign_runtime[2])
+        assert workers and not workers[0].is_alive()
+        authority.close()
+    finally:
+        for client in clients:
+            client.close()
+        if workers:
+            workers[0].join(timeout=5)

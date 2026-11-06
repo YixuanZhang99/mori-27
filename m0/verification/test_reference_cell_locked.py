@@ -3,12 +3,13 @@
 Run with MORI_TEST_OFFLINE_CACHE pointing to a populated uv cache and
 PYTHONPATH=.:tests. This check is not collected by the default pytest suite.
 """
-import asyncio
 import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
-import threading
+
+import pytest
 
 from core.composition.recovery import ContinuationStore
 from test_governed_cny_framework import campaign_fixture
@@ -17,13 +18,13 @@ from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
 from zoo.circle_packing.frozen_source import freeze_source_plan
 from zoo.circle_packing.host_runtime import build_reference_authorities
-from zoo.circle_packing.host_transport import HostBroker
 from zoo.circle_packing.pilot_plan import build_draft_plan
-from zoo.circle_packing.reference_worker import run_reference_fixture
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
 
-def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint):
+@pytest.mark.parametrize('tamper_selection', [False, True])
+def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
+                                                                                monkeypatch, tamper_selection):
     cache = os.environ['MORI_TEST_OFFLINE_CACHE']
     repository = Path(__file__).resolve().parents[2]
     commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
@@ -48,26 +49,37 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
         expected_plan_ref=ref, expected_campaign_id=campaign_id, deadline=clock,
         snapshot=source, source_manifest=exported['manifest'], runner=runner,
         api_key='fixture-only-secret', base_url=local_endpoint.url)
-    assert asyncio.run(authority.control.execute('control-0000'))['status'] == 'evaluated'
     diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
             '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
             '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
     local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
     workspace = tmp_path / 'worker-workspace'
     workspace.mkdir(mode=0o700)
-    socket_path, token_path = workspace / 'broker.sock', workspace / 'token'
-    token_path.write_text('a' * 64)
-    token_path.chmod(0o600)
-    with HostBroker(socket_path, 'a' * 64, authority.router) as broker:
-        thread = threading.Thread(target=lambda: [broker.serve_one() for _ in range(5)], daemon=True)
-        thread.start()
-        result = run_reference_fixture(clock, tmp_path / 'worker', workspace, snapshot=source,
-            source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
-            expected_campaign_id=campaign_id, broker=broker, broker_token_file=token_path,
-            iterations=1, runtime=runtime, runtime_manifest=frozen['manifest'], base_python='/usr/bin/python3.12')
-        thread.join(timeout=5)
-        assert not thread.is_alive()
+    from zoo.circle_packing.host_runtime import run_reference_cell_fixture
+    if tamper_selection:
+        from core.executor.process import ProcessJournal
+        original = ProcessJournal.completed_result
+        def changed_report(self, record):
+            result = original(self, record)
+            report = json.loads(result['stdout'])
+            report['selected_program']['program_ref'] = 'sha256:' + 'f' * 64
+            return {**result, 'stdout': json.dumps(report)}
+        monkeypatch.setattr(ProcessJournal, 'completed_result', changed_report)
+        with pytest.raises(ValueError, match='unique eligible stage'):
+            run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
+                source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
+                expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
+                base_python='/usr/bin/python3.12', iterations=1)
+        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+        authority.close()
+        return
+    result = run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
+        source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
+        expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
+        base_python='/usr/bin/python3.12', iterations=1)
     assert result['state'] == 'completed'
+    assert result['mode'] == 'fixture' and result['performance_claim'] is False
+    assert result['selected_program']['metrics']['validity'] == 1.0
     assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
     assert authority.dispatch.audit()['currency']['protection_valid']
     assert authority.stages.audit()['stage_calls'] == 3

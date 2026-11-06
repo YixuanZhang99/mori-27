@@ -7,10 +7,14 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+import asyncio
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
+import secrets
+import socket
 import stat
 import threading
 import urllib.parse
@@ -21,6 +25,7 @@ from core.composition.contracts import GovernanceConfig
 from core.composition.external_provider import ExternalRunContext, EXTERNAL_RUNTIME
 from core.composition.governance import ControlPlan
 from core.composition.recovery import ContinuationStore
+from core.executor.process import ProcessJournal
 from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import CellDeadline
 from zoo.circle_packing.domain import CirclePackingDomain
@@ -28,6 +33,7 @@ from zoo.circle_packing.frozen_source import verify_frozen_source
 from zoo.circle_packing.host_control import HostSeedControl
 from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
 from zoo.circle_packing.host_physical import HostStageAdmission
+from zoo.circle_packing.host_transport import HostBroker
 from zoo.circle_packing.pilot_plan import validate_draft_cell
 from zoo.circle_packing.runner import TASK
 from zoo.mle_bench_lite.cny_budget import CampaignBudget, usage_run_id
@@ -72,18 +78,23 @@ class _AuthorityLease:
             raise RuntimeError('reference authority owner is closed or belongs to another process')
 
     @contextmanager
-    def operation(self):
+    def session(self):
         with self._mutex:
             self.check()
             self._active += 1
         try:
-            if self._on_start is None:
-                raise RuntimeError('reference owner lacks its work-start authority')
-            self._on_start()
             yield
         finally:
             with self._mutex:
                 self._active -= 1
+
+    @contextmanager
+    def operation(self):
+        with self.session():
+            if self._on_start is None:
+                raise RuntimeError('reference owner lacks its work-start authority')
+            self._on_start()
+            yield
 
     def close(self):
         with self._mutex:
@@ -281,3 +292,161 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
                                 control_authority=dispatch)
     return ReferenceAuthorities(budget, bridge, run, protected, dispatch, stages,
                                 HostDispatchRouter(dispatch, stages), lease)
+
+
+def run_reference_cell_fixture(authority, deadline, worker_directory, workspace, *, snapshot, source_manifest,
+                               frozen_plan, expected_plan_ref, expected_campaign_id, runtime,
+                               runtime_manifest, base_python, iterations=1):
+    """Run one loopback reference fixture; no live or benchmark claim is made.
+
+    The selection is matched to original stage evidence for this invocation,
+    but is not yet anchored as a final result or independently revalidated.
+    """
+    if type(authority) is not ReferenceAuthorities:
+        raise ValueError('reference fixture requires its original bounded cell authority')
+    with authority._lease.session():
+        return _run_reference_cell_fixture(authority, deadline, worker_directory, workspace,
+            snapshot=snapshot, source_manifest=source_manifest, frozen_plan=frozen_plan,
+            expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id,
+            runtime=runtime, runtime_manifest=runtime_manifest, base_python=base_python, iterations=iterations)
+
+
+def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace, *, snapshot, source_manifest,
+                                frozen_plan, expected_plan_ref, expected_campaign_id, runtime,
+                                runtime_manifest, base_python, iterations):
+    if type(deadline) is not CellDeadline or \
+            authority.bridge.cell_deadline() is not deadline or type(iterations) is not int or \
+            not 1 <= iterations <= frozen_plan['iterations']:
+        raise ValueError('reference fixture requires its original bounded cell authority')
+    authority._lease.check()
+    ledger = deadline._lifecycle.ledger
+    if ledger is not authority.bridge.ledger or ledger.manifest_binding()['campaign_id'] != expected_campaign_id:
+        raise ValueError('reference fixture differs from its original campaign')
+    validate_draft_cell(ledger, frozen_plan, deadline._record['cell_id'], expected_plan_ref=expected_plan_ref)
+    verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
+                         expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
+    runner = authority.control.domain.runner
+    frozen_runtime = runner._campaign_runtime
+    if frozen_runtime is None or frozen_runtime[0] is not ledger or \
+            Path(runtime).resolve(strict=True) != runner.runtime_root or runtime_manifest != frozen_runtime[1] or \
+            str(base_python) != frozen_runtime[2]:
+        raise ValueError('reference fixture requires its original campaign runtime')
+    runner._verify_campaign_runtime()
+    if Path(workspace).is_symlink() or Path(worker_directory).is_symlink():
+        raise ValueError('reference fixture requires fresh isolated worker locations')
+    workspace = Path(workspace).resolve(strict=True)
+    worker_directory = Path(worker_directory).resolve()
+    authority_root = Path(authority.run.workdir).resolve(strict=True)
+    source_root = Path(snapshot).resolve(strict=True)
+    runtime_root = Path(runtime).resolve(strict=True)
+    protected = (authority_root, source_root, runtime_root, ledger.path.resolve(), deadline._store.path.resolve())
+    def overlaps(left, right):
+        return left == right or left in right.parents or right in left.parents
+    info = workspace.stat()
+    if not workspace.is_dir() or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700 or \
+            any(workspace.iterdir()) or worker_directory.exists() or not worker_directory.parent.is_dir() or \
+            not os.access(worker_directory.parent, os.W_OK | os.X_OK) or \
+            overlaps(workspace, worker_directory) or any(overlaps(path, protected_path)
+                for path in (workspace, worker_directory) for protected_path in protected):
+        raise ValueError('reference fixture requires fresh isolated worker locations')
+    entry = source_root / 'm0' / 'zoo' / 'circle_packing' / 'reference_worker.py'
+    if entry.is_symlink() or not entry.is_file():
+        raise ValueError('reference fixture requires its named frozen worker')
+    token_path, socket_path = workspace / 'broker-token', workspace / 'broker.sock'
+    if len(os.fsencode(socket_path)) >= 104:
+        raise ValueError('reference fixture socket path is too long')
+    deadline.check()
+    token = secrets.token_hex(32)
+    fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, 'w', encoding='ascii') as stream:
+            stream.write(token)
+        stop, errors = threading.Event(), []
+        with HostBroker(socket_path, token, authority.router) as broker:
+            control = asyncio.run(authority.control.execute('control-0000'))
+            if control['status'] != 'evaluated':
+                raise ValueError('reference fixture requires its independent completed control')
+            broker._socket.settimeout(.25)
+            def serve():
+                with authority._lease.session():
+                    while not stop.is_set():
+                        try:
+                            broker.serve_one()
+                        except socket.timeout:
+                            continue
+                        except Exception as error:
+                            if not stop.is_set():
+                                errors.append(error)
+                            return
+            thread = threading.Thread(target=serve, daemon=True)
+            thread.start()
+            worker_error = None
+            try:
+                from zoo.circle_packing.reference_worker import run_reference_fixture
+                result = run_reference_fixture(deadline, worker_directory, workspace, snapshot=snapshot,
+                    source_manifest=source_manifest, frozen_plan=frozen_plan, expected_plan_ref=expected_plan_ref,
+                    expected_campaign_id=expected_campaign_id, broker=broker, broker_token_file=token_path,
+                    iterations=iterations, runtime=runtime, runtime_manifest=runtime_manifest, base_python=base_python)
+            except BaseException as error:
+                worker_error = error
+            finally:
+                stop.set()
+                broker.cancel_active()
+                thread.join(timeout=5)
+            if thread.is_alive():
+                raise RuntimeError('reference fixture broker has unresolved in-flight work') from worker_error
+            if worker_error is not None:
+                raise worker_error
+            if errors:
+                raise RuntimeError('reference fixture broker failed') from errors[0]
+        if result['state'] != 'completed':
+            return {'state': result['state'], 'mode': 'fixture', 'performance_claim': False}
+        deadline.check()
+        authority.dispatch.audit()
+        authority.stages.audit()
+        store = ContinuationStore(worker_directory / 'worker.jsonl')
+        starts = list(store.read('executor_process_started'))
+        if len(starts) != 1:
+            raise ValueError('reference fixture lacks its original worker process')
+        process = ProcessJournal(store).completed_result(starts[0]['payload'])
+        if process['returncode'] != 0 or process['timeout'] or process['wrapper_error']:
+            raise ValueError('reference fixture worker did not complete')
+        report = json.loads(process['stdout'])
+        selected = report.get('selected_program') if type(report) is dict else None
+        if type(report) is not dict or report.get('mode') != 'fixture' or report.get('performance_claim') is not False or \
+                report.get('controller') != 'pinned_openevolve' or type(selected) is not dict or \
+                set(selected) != {'id', 'program_ref', 'metrics'} or type(selected['id']) is not str or \
+                not selected['id'] or type(selected['metrics']) is not dict:
+            raise ValueError('reference fixture has no valid selected program report')
+        rows = list(authority.budget.store.read())
+        stage_starts = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_started'}
+        stage_ends = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_completed'}
+        eligibility = {r['payload']['request_id']: r['payload'] for r in rows if r['kind'] == 'host_stage_eligibility'}
+        matches = []
+        for request_id, start in stage_starts.items():
+            if start['stage'] != 1 or start['program_ref'] != selected['program_ref']:
+                continue
+            first = stage_ends[request_id]
+            if first['result']['status'] != 'ok' or not authority.stages._verify_stage_eligibility(
+                    eligibility[request_id], start, first, deadline):
+                continue
+            final_id = request_id
+            if first['result']['metrics']['combined_score'] >= .5:
+                second = [key for key, value in stage_starts.items()
+                          if value['stage'] == 2 and value['prior_id'] == request_id]
+                if len(second) != 1:
+                    continue
+                final_id = second[0]
+            final = stage_ends[final_id]
+            if final['result']['status'] == 'ok' and final['result']['metrics'] == selected['metrics'] and \
+                    authority.stages._verify_stage_eligibility(eligibility[final_id], stage_starts[final_id],
+                                                              final, deadline):
+                matches.append((final_id, final['evidence_ref']))
+        if len(matches) != 1:
+            raise ValueError('reference fixture selection lacks a unique eligible stage result')
+        deadline.check()
+        return {'state': 'completed', 'mode': 'fixture', 'performance_claim': False,
+                'selected_program': selected, 'stage_request_id': matches[0][0],
+                'stage_evidence_ref': matches[0][1]}
+    finally:
+        token_path.unlink(missing_ok=True)

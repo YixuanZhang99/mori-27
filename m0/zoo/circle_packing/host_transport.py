@@ -173,6 +173,9 @@ class HostBroker:
         self._halted = False
         self._seen = set()
         self._serve_lock = threading.Lock()
+        self._connection_lock = threading.Lock()
+        self._active_connection = None
+        self._closing = False
         if not self.path.is_absolute() or type(token) is not str or not re.fullmatch(r'[0-9a-f]{64}', token) \
                 or not callable(dispatch):
             raise ValueError('broker requires absolute socket path, session token and trusted dispatcher')
@@ -195,6 +198,7 @@ class HostBroker:
         return self
 
     def __exit__(self, *_args):
+        self.cancel_active()
         self._socket.close()
         try:
             if self.path.lstat().st_ino == self._identity:
@@ -206,8 +210,31 @@ class HostBroker:
         with self._serve_lock:
             self._serve_one()
 
+    def cancel_active(self):
+        """Stop accepting frames and interrupt an active connection's reads."""
+        with self._connection_lock:
+            self._closing = True
+            if self._active_connection is not None:
+                try:
+                    self._active_connection.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+
     def _serve_one(self):
         connection, _ = self._socket.accept()
+        with self._connection_lock:
+            if self._closing:
+                connection.close()
+                return
+            self._active_connection = connection
+        try:
+            self._handle_connection(connection)
+        finally:
+            with self._connection_lock:
+                if self._active_connection is connection:
+                    self._active_connection = None
+
+    def _handle_connection(self, connection):
         with connection:
             connection.settimeout(120)
             response = {'state': 'refused', 'result': None, 'usage': None}

@@ -86,6 +86,12 @@ MORI_TEST_OFFLINE_CACHE=/path/to/uv-cache PYTHONHASHSEED=0 PYTHONPATH=.:tests \
   python -m pytest -q verification/test_reference_cell_locked.py
 ```
 
+`host_runtime.run_reference_cell_fixture` joins those authorities to the named
+offline worker and loopback broker. It checks the worker's reported selection
+against measured, deadline-eligible stage records. Its output remains a fixture:
+it is not an independently anchored final selection or a benchmark result, and
+it does not provide whole-cell hard supervision or live-provider authorization.
+
 The internal `reference_worker.run_reference_fixture` entry runs the upstream
 fixture from a campaign-bound source snapshot through a local broker. It checks
 a disposable broker capability with a no-dispatch handshake before consuming
