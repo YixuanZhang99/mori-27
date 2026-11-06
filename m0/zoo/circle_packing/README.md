@@ -280,3 +280,8 @@ offline pair test uses one temporary campaign and source plan, runs each arm
 for six configured rounds with fake transport, and audits both at the same
 campaign head. The test records the other four cells as unclaimed; it is not a
 fairness, live-readiness or benchmark certification.
+`pair_audit.audit_pair_snapshot` independently reconstructs both final
+snapshots and currency upper bounds from views pinned to the same campaign
+head, checks their declared seed and plan, and reports all six claim states.
+Its two audited cells are final snapshots, not proof of complete-run coverage,
+certified replay, real benchmark performance, or invoice amounts.

@@ -154,6 +154,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
     from zoo.circle_packing.mori_final import audit_anchored_mori_geometry
     from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
     from zoo.circle_packing.pilot_matrix import snapshot_matrix
+    from zoo.circle_packing.pair_audit import audit_pair_snapshot
     from zoo.circle_packing.reference_recovery import recover_reference_snapshot
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
 
@@ -210,6 +211,28 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert len(matrix['cells']) == 6
         assert [row['state'] for row in matrix['cells']].count('claimed_outcome_unverified') == 2
         assert [row['state'] for row in matrix['cells']].count('not_claimed') == 4
+        pair = audit_pair_snapshot(seed=0, plan=config['plan'], expected_plan_ref=config['ref'],
+            mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
+            mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
+            reference_view=vendor_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
+            reference_worker_directory=vendor_config['worker_directory'])
+        assert pair['performance_claim'] is False and len(pair['cells']) == 6
+        assert [row['state'] for row in pair['cells']].count('audited_final_snapshot') == 2
+        assert [row['state'] for row in pair['cells']].count('not_claimed') == 4
+        assert pair['mori']['sum_radii'] == mori_report['final_measurement']['sum_radii']
+        assert pair['reference']['sum_radii'] == vendor_report['selected_program']['metrics']['sum_radii']
+        with pytest.raises(ValueError):
+            audit_pair_snapshot(seed=1, plan=config['plan'], expected_plan_ref=config['ref'],
+                mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
+                mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
+                reference_view=vendor_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
+                reference_worker_directory=vendor_config['worker_directory'])
+        with pytest.raises(ValueError):
+            audit_pair_snapshot(seed=0, plan=config['plan'], expected_plan_ref=config['ref'],
+                mori_rows=mori_rows, mori_rows_sha256=payload_digest(mori_rows), mori_view=mori_view,
+                mori_clock=recorded_mori, mori_run_id=mori_run, reference_rows=vendor_rows,
+                reference_view=mori_view, reference_clock=recorded_vendor, reference_run_id=vendor_run,
+                reference_worker_directory=vendor_config['worker_directory'])
         for root in (tmp_path / 'mori-supervisor', Path(config['output']), tmp_path / 'reference-supervisor',
                      Path(vendor_config['output']), Path(vendor_config['worker_directory']), Path(workspace)):
             for file in root.rglob('*'):

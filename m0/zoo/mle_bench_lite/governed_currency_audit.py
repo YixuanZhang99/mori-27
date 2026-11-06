@@ -123,6 +123,14 @@ class RecordedCurrencyView:
         claim = self._governance()['cell_claims'].get(cell_id)
         return dict(claim) if claim is not None else None
 
+    def reference_authority_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['reference_authority_claims'].get(cell_id)
+        if claim is not None and claim['currency_run_id'] != json.loads(self._audit)['run_id']:
+            raise ValueError('recorded reference authority belongs to another run')
+        return dict(claim) if claim is not None else None
+
     def reference_selection(self, run_id):
         _sha(run_id)
         if run_id != json.loads(self._audit)['run_id']:
