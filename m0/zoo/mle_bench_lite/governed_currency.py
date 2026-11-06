@@ -99,19 +99,38 @@ def _verify_failed_construction_cycle(rows, event, logical_run_id):
         provider_starts = [(index, row['payload']) for index, row in enumerate(rows)
                            if row['kind'] == 'composed_provider_started' and
                            row['payload'].get('invocation', {}).get('intent_id') == intent_id]
-        total = 0
+        from core.composition.construction import _json
+        from core.composition.openevolve_registration import constructor_factory
+        decoder = constructor_factory(None, {})
+        if len(provider_starts) != decoder.max_attempts:
+            raise ValueError('failed patch construction lacks its exhausted attempts')
+        total, feedback, previous_completion, bindings = 0, [], starts[0], set()
         for ordinal, (index, started) in enumerate(provider_starts):
             completions = [(j, row['payload']) for j, row in enumerate(rows)
                            if row['kind'] == 'composed_provider_completed' and
                            row['payload'].get('binding') == started['binding']]
-            if len(completions) != 1 or started['invocation'].get('ordinal') != ordinal:
+            if len(completions) != 1 or started['invocation'].get('ordinal') != ordinal or \
+                    started['binding'] in bindings:
                 raise ValueError('failed construction lacks unique provider receipts')
             completed_i, completed = completions[0]
             tokens = completed['tokens']
-            if not starts[0] < index < completed_i < terminal_index or type(tokens) is not int or tokens < 0:
+            if not previous_completion < index < completed_i < terminal_index or type(tokens) is not int or tokens < 0:
                 raise ValueError('failed construction provider receipt is not measured')
+            request = decoder.build_request(plan['plan'], hypothesis=planned['hypothesis'],
+                                            attempt=ordinal + 1, feedback=feedback)
+            if started.get('request_sha256') != payload_digest({'args': (_json(request),), 'kwargs': {}}):
+                raise ValueError('failed patch request differs from original plan')
+            try:
+                decoder.decode_output(completed['result'], plan['plan'])
+            except (TypeError, ValueError, RecursionError) as error:
+                feedback = [str(error)]
+            else:
+                raise ValueError('successful patch cannot prove failed construction')
             total += tokens
-        if len(provider_starts) > 2 or total != failure.cost.tokens_in or \
+            bindings.add(started['binding'])
+            previous_completion = completed_i
+        if str(failure) != 'construction attempts exhausted: ' + '; '.join(feedback) or \
+                total != failure.cost.tokens_in or \
                 payload_digest(settled['actual_costs']) != payload_digest({
                     'token': failure.cost.tokens_in + failure.cost.tokens_out,
                     'node': failure.cost.node_count, 'eval_count': failure.cost.eval_count}) or \

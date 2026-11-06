@@ -30,10 +30,11 @@ def short_workspace():
         yield Path(directory).resolve()
 
 
-@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race', 'race_dir'])
+@pytest.mark.parametrize('tamper_selection', [False, True, 'artifact', 'process', 'terminal', 'terminal_type', 'path', 'race', 'race_dir', 'six_iterations'])
 def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(tmp_path, local_endpoint,
                                                                                 monkeypatch, tamper_selection,
                                                                                 short_workspace):
+    iterations = 6 if tamper_selection == 'six_iterations' else 1
     cache = os.environ['MORI_TEST_OFFLINE_CACHE']
     repository = Path(__file__).resolve().parents[2]
     commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
@@ -61,7 +62,8 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
             '    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\n'
             '    r = np.full(26, .07)\n    return c, r, float(np.sum(r))\n>>>>>>> REPLACE\n')
-    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
+    local_endpoint.responses.extend(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}])
+                                    for _ in range(iterations))
     workspace = short_workspace
     from zoo.circle_packing.host_runtime import run_reference_cell_fixture
     swapped = []
@@ -90,9 +92,9 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
                 source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
                 expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
-                base_python='/usr/bin/python3.12', iterations=1)
+                base_python='/usr/bin/python3.12', iterations=iterations)
         assert swapped == [True]
-        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+        assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
         authority.close()
         return
     if tamper_selection in ('process', 'terminal', 'terminal_type', 'path'):
@@ -117,8 +119,8 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
                 source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
                 expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
-                base_python='/usr/bin/python3.12', iterations=1)
-        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+                base_python='/usr/bin/python3.12', iterations=iterations)
+        assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
         authority.close()
         return
     if tamper_selection == 'artifact':
@@ -132,8 +134,8 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
                 source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
                 expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
-                base_python='/usr/bin/python3.12', iterations=1)
-        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+                base_python='/usr/bin/python3.12', iterations=iterations)
+        assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
         authority.close()
         return
     if tamper_selection is True:
@@ -149,22 +151,24 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
             run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
                 source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
                 expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
-                base_python='/usr/bin/python3.12', iterations=1)
-        assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+                base_python='/usr/bin/python3.12', iterations=iterations)
+        assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
         authority.close()
         return
     result = run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace, snapshot=source,
         source_manifest=exported['manifest'], frozen_plan=plan, expected_plan_ref=ref,
         expected_campaign_id=campaign_id, runtime=runtime, runtime_manifest=frozen['manifest'],
-        base_python='/usr/bin/python3.12', iterations=1)
+        base_python='/usr/bin/python3.12', iterations=iterations)
     assert result['state'] == 'completed'
     assert result['mode'] == 'fixture' and result['performance_claim'] is False
     assert result['selected_program']['metrics']['validity'] == 1.0
     assert result['saved_program_ref'] == result['selected_program']['program_ref']
-    assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
+    assert len(local_endpoint.requests) == iterations and not ledger.snapshot()['pending_calls']
     assert authority.dispatch.audit()['currency']['protection_valid']
-    assert authority.stages.audit()['stage_calls'] == 3
-    assert authority.budget.audit_governance()['physical_totals']['token'] == 7
+    assert authority.stages.audit()['stage_calls'] >= 3
+    if iterations == 1:
+        assert authority.stages.audit()['stage_calls'] == 3
+    assert authority.budget.audit_governance()['physical_totals']['token'] == 7 * iterations
     from zoo.circle_packing.cell_deadline import RecordedCellClock
     from dataclasses import asdict
     from core.x1.checkpoint import payload_digest
@@ -187,6 +191,9 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     assert audited['metrics'] == result['selected_program']['metrics']
     assert audited['evidence_ref'] == result['stage_evidence_ref']
     rows = list(authority.budget.store.read())
+    if iterations == 6:
+        assert sum(row['kind'] == 'host_stage_started' and row['payload']['stage'] == 1 and
+                   row['payload']['program_ref'] == result['selected_program']['program_ref'] for row in rows) > 1
     snapshot_anchor = view.reference_physical_snapshot(run_id)
     assert snapshot_anchor['rows_sha256'] == payload_digest(rows)
     assert result['physical_snapshot_ref'] == 'sha256:' + snapshot_anchor['rows_sha256']
@@ -232,16 +239,18 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     with pytest.raises(ValueError):
         ledger.anchor_reference_physical_snapshot(run_id, 'vendor-0', snapshot_anchor['rows_sha256'],
             snapshot_anchor['worker_ref'], ids, snapshot_anchor['sequence'], snapshot_anchor['observation_sha256'])
-    assert len(local_endpoint.requests) == 1
+    assert len(local_endpoint.requests) == iterations
     reference_limits = authority.budget.options['limits']['global']
     authority.close()
     # Mori starts in the same frozen source and Python runtime as the vendor
-    # worker. Vendor runs one iteration while Mori is configured for six;
-    # this checks integration, not a fair performance comparison.
+    # worker. The ordinary case uses one reference iteration; the six-iteration
+    # case also exercises repeated code and failed patch construction. Both use
+    # fake responses and make no performance comparison.
     mori_clock = CellDeadline.start(ContinuationStore(tmp_path / 'mori-clock.jsonl'), lifecycle=CellLifecycle(ledger),
                                     cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
     mori_output = tmp_path / 'mori'
-    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}]))
+    local_endpoint.responses.extend(reply(choices=[{'finish_reason': 'stop', 'message': {'content': diff}}])
+                                    for _ in range(2 * iterations))
     setup_path = tmp_path / 'mori-fixture.json'
     setup_path.write_text(json.dumps({'plan': plan, 'ref': ref, 'runtime_manifest': frozen['manifest'],
         'source': str(source / 'm0'), 'runtime': str(runtime), 'ledger': str(ledger.path),
@@ -314,5 +323,10 @@ print(json.dumps({'limits': profile['budget']['options']['limits']['global'],
     verify_frozen_source(ledger, plan, snapshot=source, manifest=exported['manifest'],
                          expected_plan_ref=ref, expected_campaign_id=campaign_id)
     verify_frozen_runtime(ledger, runtime=runtime, manifest=frozen['manifest'], base_python='/usr/bin/python3.12')
-    assert len(local_endpoint.requests) == 2
+    assert iterations + 1 <= len(local_endpoint.requests) <= 3 * iterations
+    if iterations == 1:
+        assert len(local_endpoint.requests) == 2
+    if iterations == 6:
+        rows = [json.loads(line) for line in (mori_output / 'framework' / 'x1.jsonl').read_text().splitlines()]
+        assert len([row for row in rows if row['kind'] == 'composed_evidence']) == 7
     assert not ledger.snapshot()['pending_calls']
