@@ -39,7 +39,7 @@ def prepared_cell(tmp_path, request, monkeypatch):
     if getattr(request, 'param', None) in ('reference_fake_live', 'reference_fake_live_stall',
                                            'reference_fake_live_inflight', 'reference_fake_live_timeout',
                                            'coordinator_fake_vendor', 'paired_fake_live',
-                                           'reference_fake_live_sandbox_timeout'):
+                                           'reference_fake_live_sandbox_timeout', 'reference_fake_live_final_timeout'):
         host = checkout / 'm0/zoo/circle_packing/host_runtime.py'
         worker = checkout / 'm0/zoo/circle_packing/reference_live_worker.py'
         code = host.read_text()
@@ -93,7 +93,7 @@ def prepared_cell(tmp_path, request, monkeypatch):
     if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall',
                                            'supervised_fake_live_inflight', 'supervised_fake_live_timeout',
                                            'coordinator_fake_mori', 'paired_fake_live',
-                                           'supervised_fake_live_sandbox_timeout'):
+                                           'supervised_fake_live_sandbox_timeout', 'supervised_fake_live_final_timeout'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
         gate = "    raise ValueError('live pilot gate is not complete')"
@@ -140,14 +140,21 @@ def prepared_cell(tmp_path, request, monkeypatch):
                         '-m', 'offline supervised live test'], check=True)
         commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     if getattr(request, 'param', None) in ('reference_fake_live_timeout', 'supervised_fake_live_timeout',
-                                           'reference_fake_live_sandbox_timeout', 'supervised_fake_live_sandbox_timeout'):
+                                           'reference_fake_live_sandbox_timeout', 'supervised_fake_live_sandbox_timeout',
+                                           'reference_fake_live_final_timeout', 'supervised_fake_live_final_timeout'):
         # Shorten only this disposable source and plan; production keeps 2700 s.
         from core.x1.checkpoint import payload_digest
         from zoo.circle_packing import pilot_plan
         pilot = checkout / 'm0/zoo/circle_packing/pilot_plan.py'
         source_text = pilot.read_text()
         assert source_text.count("'wallclock_seconds': 2700") == 1
-        pilot.write_text(source_text.replace("'wallclock_seconds': 2700", "'wallclock_seconds': 45"))
+        final_timeout = request.param in ('reference_fake_live_final_timeout', 'supervised_fake_live_final_timeout')
+        seconds = 60 if final_timeout else 45
+        source_text = source_text.replace("'wallclock_seconds': 2700", f"'wallclock_seconds': {seconds}")
+        if final_timeout:
+            assert source_text.count('iterations = 6') == 1
+            source_text = source_text.replace('iterations = 6', 'iterations = 1')
+        pilot.write_text(source_text)
         subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/pilot_plan.py'], check=True)
         subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
                         '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
@@ -156,12 +163,37 @@ def prepared_cell(tmp_path, request, monkeypatch):
         original_plan = pilot_plan.build_draft_plan
         def short_plan(*args, **kwargs):
             value = original_plan(*args, **kwargs)
-            value['limits']['wallclock_seconds'] = 45
+            value['limits']['wallclock_seconds'] = seconds
+            if final_timeout:
+                value['iterations'] = 1
+                value['limits']['token'] = 4 * (1048576 + 16384)
+                value['limits']['eval_count'] = 7
+                value['limits']['node'] = 3
             del value['draft_sha256']
             value['draft_sha256'] = payload_digest(value)
             return value
         monkeypatch.setattr(pilot_plan, 'build_draft_plan', short_plan)
         monkeypatch.setattr(sys.modules[__name__], 'build_draft_plan', short_plan)
+    if getattr(request, 'param', None) in ('reference_fake_live_final_timeout', 'supervised_fake_live_final_timeout'):
+        if request.param == 'reference_fake_live_final_timeout':
+            target = checkout / 'm0/zoo/circle_packing/host_runtime.py'
+            needle = "        deadline.check()\n        authority.dispatch.audit()"
+            injected = ("        Path(worker_directory).parent.joinpath('before-final-marker').write_text('ready')\n"
+                        "        import time as test_time\n        test_time.sleep(90)\n" + needle)
+        else:
+            target = checkout / 'm0/core/composition/final_evaluation.py'
+            needle = "        runtime.store.append('metric_final_frozen', frozen)"
+            injected = (needle + "\n        import time as test_time\n"
+                        "        runtime.workdir.joinpath('before-final-marker').write_text('ready')\n"
+                        "        test_time.sleep(90)")
+        code = target.read_text()
+        assert code.count(needle) == 1
+        target.write_text(code.replace(needle, injected))
+        subprocess.run(['git', '-C', str(checkout), 'add', str(target.relative_to(checkout))], check=True)
+        subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                        '-m', 'offline before-final deadline test'], check=True)
+        commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     if getattr(request, 'param', None) in ('reference_fake_live_sandbox_timeout', 'supervised_fake_live_sandbox_timeout'):
         stage = checkout / 'm0/zoo/circle_packing/stage.py'
         code = stage.read_text()
@@ -317,6 +349,57 @@ def test_outer_deadline_terminates_active_sandbox(prepared_cell, tmp_path, reque
         assert not Path(start['containment_binding']['containment_group']).exists()
         assert not (Path(config['output']) / 'replay-input.json').exists()
         assert not (Path(config['output']) / 'reference-currency.json').exists()
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['supervised_fake_live_final_timeout',
+                                           'reference_fake_live_final_timeout'], indirect=True)
+def test_outer_deadline_before_final_validation_keeps_result_unfinished(prepared_cell, tmp_path, request, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
+    config, ledger, clock, _runner = prepared_cell
+    reference = request.node.callspec.params['prepared_cell'] == 'reference_fake_live_final_timeout'
+    if reference:
+        clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+            cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    with tempfile.TemporaryDirectory(prefix='mori-final-timeout-', dir='/tmp') as workspace:
+        if reference:
+            config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
+                      'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
+        launch = launch_reference_live_controller if reference else launch_live_controller
+        directory = tmp_path / 'final-timeout-supervisor'
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(launch, config, deadline=clock, directory=directory, api_key='fixture-only-secret')
+            end = time.monotonic() + 50
+            markers = []
+            while time.monotonic() < end:
+                markers = list(tmp_path.rglob('before-final-marker'))
+                if markers:
+                    break
+                if future.done():
+                    raise AssertionError(f'supervisor exited before final boundary: {future.result()}')
+                time.sleep(.05)
+            assert markers and markers[0].read_text() == 'ready'
+            before = ledger.snapshot()
+            result = future.result(timeout=75)
+        assert result['timeout'] is True
+        after = ledger.snapshot()
+        assert after['pending_calls'] == before['pending_calls']
+        assert after['settled_upper_bound_micro_cny'] == before['settled_upper_bound_micro_cny']
+        if reference:
+            run = ledger.reference_authority_claim('vendor-0')['currency_run_id']
+            assert ledger.reference_selection(run) is None
+        else:
+            events = list(ContinuationStore(Path(config['output']) / 'framework' / 'x1.jsonl').read())
+            assert len([row for row in events if row['kind'] == 'metric_final_frozen']) == 1
+            assert not [row for row in events if row['kind'] == 'metric_final_completed']
+        events = list(ContinuationStore(directory / 'controller.jsonl').read())
+        kinds = [row['kind'] for row in events]
+        assert kinds.index('executor_containment_verified') < kinds.index('executor_process_finished')
+        start = next(row['payload'] for row in events if row['kind'] == 'executor_process_started')
+        assert not Path(start['containment_binding']['containment_group']).exists()
 
 
 @pytest.mark.linux
