@@ -1,0 +1,13 @@
+{
+  "source_commit": "4351a0298e5d97ffada7ea0770ae0cac7a2d1bac",
+  "run_id": 41840205319,
+  "url": "https://github.com/YixuanZhang99/mori-27/actions/runs/41840205319",
+  "origin": "GitHub Actions push",
+  "elapsed_seconds": 1291.168,
+  "files": {
+    "LAST_RUN.json": "ee8fc7536089c75e01f24f6a8a7b4499d9fd3edaa80b9f04c158f3b9e8c1d5f5",
+    "new-runs.jsonl": "60186ac96a8986633eb391482f7ca0a3a2c63ffea31192ce5ffb6cd03a1e5704"
+  },
+  "external_provider_requests": 0,
+  "source_identity_limit": "v73 metadata binds the push head SHA; v74 additionally binds exact committed/executed source manifests"
+}

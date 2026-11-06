@@ -2,14 +2,14 @@ UV ?= uv
 PYTHON ?= 3.12
 export PYTHONDONTWRITEBYTECODE := 1
 
-.PHONY: accept-linux-v73 accept-linux-v74 help setup test test-linux axioms examples tooling check accept-linux build verify-import
+.PHONY: accept-linux-v73 accept-linux-v74 accept-linux-v75 help setup test test-linux axioms examples tooling check accept-linux build verify-import
 
 help:
 	@echo 'make setup        Install the locked Python 3.12 development environment'
 	@echo 'make check        Run axioms, portable tests, examples and workflow tests'
 	@echo 'make test         Run portable tests (Linux cases explicitly deselected)'
 	@echo 'make test-linux   Run every test; any skip fails (Linux x86_64 required)'
-	@echo 'make accept-linux Run the full v73 acceptance in a disposable copy'
+	@echo 'make accept-linux Run the full v76 acceptance in a disposable copy'
 	@echo 'make build        Build wheel and sdist into artifacts/dist'
 	@echo 'make verify-import Verify the immutable imported Git baseline'
 
@@ -43,6 +43,10 @@ tooling:
 check: axioms test examples tooling
 
 accept-linux:
+	$(UV) run --project m0 --locked python scripts/check_linux.py
+	$(UV) run --project m0 --locked python scripts/run_acceptance_v76.py --timeout 3000
+
+accept-linux-v75:
 	$(UV) run --project m0 --locked python scripts/check_linux.py
 	$(UV) run --project m0 --locked python scripts/run_acceptance_v75.py --timeout 2100
 
