@@ -637,6 +637,7 @@ from zoo.circle_packing.cell_deadline import RecordedCellClock
 from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.circle_packing.pair_audit import record_first_pair_audit
 from zoo.circle_packing import pair_recorded
+from zoo.circle_packing.mori_cycle_audit import audit_completed_mori_cycles
 from zoo.circle_packing.pilot_plan import require_first_pair_audit
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
@@ -658,6 +659,18 @@ args=dict(mori_config=c,reference_config=v,mori_supervisor_directory=p['mori_dir
  mori_rows=p['mori_rows'],mori_rows_sha256=payload_digest(p['mori_rows']),mori_view=mv,mori_clock=mc,
  mori_run_id=p['mori_run'],reference_rows=p['reference_rows'],reference_view=rv,reference_clock=rc,
  reference_run_id=p['reference_run'],reference_worker_directory=v['worker_directory'],reference_bundle=p['reference_bundle'])
+cycles=audit_completed_mori_cycles(p['replay_input'],expected_input_sha256=payload_digest(p['replay_input']),
+ view=mv,clock=mc,run_id=p['mori_run'],plan=c['plan'],expected_plan_ref=c['ref'])
+assert cycles['scope']=='caller_pinned_complete_mori_cycles' and len(cycles['cycles'])==7
+assert [row['cycle'] for row in cycles['cycles']]==list(range(7))
+assert any(row['evaluation_status']!='ok' for row in cycles['cycles'])
+missing=copy.deepcopy(p['replay_input'])
+missing['rows']=[row for row in missing['rows'] if not (row['kind']=='composed_cycle_started' and row['payload']['cycle']==3)]
+try:
+ audit_completed_mori_cycles(missing,expected_input_sha256=payload_digest(missing),view=mv,clock=mc,
+                             run_id=p['mori_run'],plan=c['plan'],expected_plan_ref=c['ref'])
+except ValueError: pass
+else: raise AssertionError('missing original cycle accepted')
 bad=copy.deepcopy(p['replay_input']); bad['rows'].pop()
 try:
  record_first_pair_audit(replay_input=bad,ledger=ledger,runner=runner,replay_output=Path(sys.argv[2]+'-bad'),**args)
@@ -675,6 +688,7 @@ assert 'DEEPSEEK_API_KEY' not in os.environ
 proof=ledger.first_pair_audit()
 result=proof['result']
 assert result['scope']=='paired_supervised_snapshots_with_independent_replay'
+assert result['mori_cycle_coverage']==cycles
 assert result['replay']['passed'] and result['replay']['external_calls']==0
 assert result['replay']['candidate']==result['mori']['candidate']
 assert result['performance_claim'] is False and ledger.first_pair_audit()==proof

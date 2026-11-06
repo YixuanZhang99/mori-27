@@ -164,7 +164,18 @@ def audit_replayed_supervised_pair(*, replay_input, ledger, runner, replay_outpu
                 replay.get('candidate') != result['mori']['candidate'] or \
                 ledger.snapshot()['journal_head'] != result['journal_head']:
             raise ValueError('independent replay differs from the paired result or campaign head')
-        return {**result, 'scope': 'paired_supervised_snapshots_with_independent_replay', 'replay': replay}
+        checkpoint = replay_input['checkpoint']['payload']
+        if checkpoint['next_cycle'] == pair_arguments['plan']['iterations'] + 1 and checkpoint['halted_reason'] is None:
+            from zoo.circle_packing.mori_cycle_audit import audit_completed_mori_cycles
+            cycles = audit_completed_mori_cycles(replay_input, expected_input_sha256=report['replay_input_sha256'],
+                view=pair_arguments['mori_view'], clock=pair_arguments['mori_clock'],
+                run_id=pair_arguments['mori_run_id'], plan=pair_arguments['plan'],
+                expected_plan_ref=pair_arguments['expected_plan_ref'])
+        else:
+            cycles = {'schema_version': 1, 'scope': 'mori_cycle_coverage_unverified', 'performance_claim': False,
+                      'next_cycle': checkpoint['next_cycle'], 'stop_reason': checkpoint['halted_reason']}
+        return {**result, 'scope': 'paired_supervised_snapshots_with_independent_replay',
+                'replay': replay, 'mori_cycle_coverage': cycles}
     except (KeyError, TypeError, AttributeError, StopIteration) as error:
         raise ValueError('invalid paired replay evidence') from error
 
