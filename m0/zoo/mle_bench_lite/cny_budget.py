@@ -183,6 +183,13 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                 'anchor_evaluation_eligibility', 'anchor_cycle_eligibility'} and \
             event.get('run_id') in governance['reference_selections']:
         raise ValueError('reference selection is sealed against new work evidence')
+    if kind == 'mark_fixture_campaign':
+        if set(event) != {'kind', 'schema_version'} or governance['fixture_campaign'] or \
+                pending is not None or spent != 0 or operations or governance['runs'] or \
+                governance['circle_pilot'] is not None or governance['cell_claims']:
+            raise ValueError('fixture campaign marker requires an unused campaign')
+        governance['fixture_campaign'] = True
+        return pending, spent
     if kind == "freeze_circle_pilot":
         fields = {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}
         if set(event) not in (fields, fields | {"require_runtime"}) or \
@@ -550,7 +557,7 @@ def _reduce_history(policies, events, heads):
                   "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None, "circle_runtime": None,
                   "response_eligibility": {}, "stage_eligibility": {}, "evaluation_eligibility": {},
                   "cycle_eligibility": {}, "empty_terminals": {}, "reference_authority_claims": {},
-                  "reference_physical_snapshots": {}, "reference_selections": {}}
+                  "reference_physical_snapshots": {}, "reference_selections": {}, "fixture_campaign": False}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -805,6 +812,15 @@ class CampaignBudget:
             if state["governance"]["circle_pilot"] is not None:
                 event["seconds"] = seconds
             self._append(db, state, event)
+
+    def mark_fixture_campaign(self):
+        """Irreversibly identify an unused temporary campaign as fixture-only."""
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {'kind': 'mark_fixture_campaign', 'schema_version': 2})
+
+    def is_fixture_campaign(self):
+        with self._transaction() as (_db, _policy, state):
+            return state['governance']['fixture_campaign']
 
     def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds, *, require_runtime=False):
         """Anchor one draft and source tree before any cell starts."""

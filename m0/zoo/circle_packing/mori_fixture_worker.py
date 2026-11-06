@@ -46,6 +46,9 @@ def run(config):
     from zoo.mle_bench_lite.composed_domain import SandboxRunner
     from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
+    ledger = CampaignBudget(config['ledger'])
+    if not ledger.is_fixture_campaign():
+        raise ValueError('fixture controller requires a marked unused fixture campaign')
     require_hash_seed_zero()
     source, runtime = Path(config['source']), Path(config['runtime'])
     if source.resolve(strict=True) != Path(__file__).resolve().parents[2] or \
@@ -54,7 +57,6 @@ def run(config):
     clock_path = Path(config['clock'])
     if clock_path.is_symlink() or not clock_path.is_file():
         raise ValueError('fixture requires its original cell clock')
-    ledger = CampaignBudget(config['ledger'])
     plan, ref, seed = config['plan'], config['ref'], config['seed']
     verify_frozen_source(ledger, plan, snapshot=source.parent, manifest=config['source_manifest'],
                          expected_plan_ref=ref, expected_campaign_id=config['campaign_id'])

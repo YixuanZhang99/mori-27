@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import stat
 import threading
+import urllib.parse
 import uuid
 
 from core.composition.external_provider import (
@@ -346,6 +347,15 @@ class CNYInvocationBridge:
         if self.ledger is None:
             raise ValueError('live currency bridge requires an existing authority')
         self._authority = self.ledger
+        if self.ledger.is_fixture_campaign():
+            for provider in context.provider_sessions.values():
+                try:
+                    url = urllib.parse.urlsplit(provider.manifest_binding()['base_url'])
+                    if url.scheme != 'http' or url.hostname not in {'127.0.0.1', '::1'} or \
+                            not url.port or url.username or url.password or url.query or url.fragment:
+                        raise ValueError('fixture campaign requires a loopback provider')
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ValueError('fixture campaign requires a loopback provider') from error
         if len({id(raw) for raw in context.provider_sessions.values()}) != len(context.provider_sessions):
             raise ValueError('currency provider sessions must be distinct fresh objects')
         self._spool = Path(self._spool_dir or Path(context.workdir) / '.governed-cny').absolute()

@@ -43,6 +43,7 @@ def test_reference_cell_uses_production_authorities_with_shared_frozen_runtime(t
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
     ledger = campaign_fixture(tmp_path)
+    ledger.mark_fixture_campaign()
     lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
     plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
     ref, campaign_id = 'sha256:' + plan['draft_sha256'], ledger.manifest_binding()['campaign_id']
