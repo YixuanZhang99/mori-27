@@ -335,6 +335,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
     from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller
     from zoo.circle_packing.pilot_matrix import snapshot_matrix
     from zoo.circle_packing.pair_audit import audit_pair_snapshot
+    from zoo.circle_packing.supervisor_audit import audit_supervisor_result
     from zoo.circle_packing.reference_recovery import recover_reference_snapshot
     from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
 
@@ -372,6 +373,19 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         mori_view, vendor_view = view(mori_run, mori_physical_ref), view(vendor_run, vendor_physical_ref)
         recorded_mori = RecordedCellClock(mori_clock.export_evidence(), mori_view.cell_deadline_claim('mori-0'))
         recorded_vendor = RecordedCellClock(vendor_clock.export_evidence(), vendor_view.cell_deadline_claim('vendor-0'))
+        audited_mori_report = audit_supervisor_result(config, directory=tmp_path / 'mori-supervisor',
+            view=mori_view, clock=recorded_mori)
+        audited_vendor_report = audit_supervisor_result(vendor_config, directory=tmp_path / 'reference-supervisor',
+            view=vendor_view, clock=recorded_vendor)
+        assert audited_mori_report == mori_report
+        assert audited_vendor_report == vendor_report
+        with pytest.raises(ValueError):
+            audit_supervisor_result({**config, 'seed': 1}, directory=tmp_path / 'mori-supervisor',
+                                    view=mori_view, clock=recorded_mori)
+        with pytest.raises(ValueError):
+            audit_supervisor_result(config, directory=tmp_path / 'reference-supervisor',
+                                    view=mori_view, clock=recorded_mori)
+        assert ledger.snapshot()['journal_head'] == head
         def forbidden(*args, **kwargs):
             raise AssertionError('independent pair audit attempted external work')
         monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)

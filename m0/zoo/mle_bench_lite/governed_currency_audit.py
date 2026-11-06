@@ -123,6 +123,18 @@ class RecordedCurrencyView:
         claim = self._governance()['cell_claims'].get(cell_id)
         return dict(claim) if claim is not None else None
 
+    def cell_worker_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['worker_claims'].get(cell_id)
+        return dict(claim) if claim is not None else None
+
+    def reference_host_claim(self, cell_id):
+        from .cny_budget import _identifier
+        _identifier(cell_id, 'cell identity')
+        claim = self._governance()['reference_host_claims'].get(cell_id)
+        return dict(claim) if claim is not None else None
+
     def reference_authority_claim(self, cell_id):
         from .cny_budget import _identifier
         _identifier(cell_id, 'cell identity')
