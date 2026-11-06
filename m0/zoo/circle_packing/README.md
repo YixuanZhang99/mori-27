@@ -254,3 +254,7 @@ full frozen iteration count through the same host authorities, but checks the
 closed pilot gate before starting and again at each protected operation. The
 offline test overrides that gate only for a temporary campaign with intercepted
 transport. Live work remains disabled until pilot readiness is established.
+`reference_live_worker` provides a named trusted host that restores the
+original vendor clock and frozen source/runtime, removes the provider key from
+its environment, and calls the gated reference entry. It still needs whole-cell
+supervision, recovery and the remaining paired-pilot checks before paid use.

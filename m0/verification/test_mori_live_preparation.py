@@ -35,6 +35,46 @@ def prepared_cell(tmp_path, request):
     checkout = tmp_path / 'checkout'
     subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
     subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+    if getattr(request, 'param', None) == 'reference_fake_live':
+        host = checkout / 'm0/zoo/circle_packing/host_runtime.py'
+        worker = checkout / 'm0/zoo/circle_packing/reference_live_worker.py'
+        code = host.read_text()
+        gate = "    raise ValueError('live pilot gate is not complete')"
+        assert code.count(gate) == 1
+        host.write_text(code.replace(gate, '    return None'))
+        code = worker.read_text()
+        insertion = '    with authority:'
+        assert code.count(insertion) == 1
+        fake = '''    import socket as test_socket, urllib.request as test_request
+    original_connect = test_socket.socket.connect
+    def local_only(sock, address):
+        if sock.family != test_socket.AF_UNIX: raise AssertionError('external network forbidden')
+        return original_connect(sock, address)
+    test_socket.socket.connect = local_only
+    diff = ("<<<<<<< SEARCH\\n    # Initialize arrays for 26 circles\\n    n = 26\\n=======\\n"
+            "    c = np.array([[(i % 6 + .5) / 6, (i // 6 + .5) / 6] for i in range(26)])\\n"
+            "    r = np.full(26, .07)\\n    return c, r, float(np.sum(r))\\n>>>>>>> REPLACE\\n")
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self):
+            return json.dumps({'model': config['plan']['model'],
+                'usage': {'prompt_tokens': 3, 'completion_tokens': 4, 'total_tokens': 7},
+                'choices': [{'finish_reason': 'stop', 'message': {'content': diff}}]}).encode()
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == config['base_url'] + '/chat/completions'
+            assert request.get_header('Authorization') == 'Bearer fixture-only-secret'
+            return Response()
+    test_request.build_opener = lambda *args: Opener()
+'''
+        worker.write_text(code.replace(insertion, fake + insertion))
+        subprocess.run(['git', '-C', str(checkout), 'add', 'm0/zoo/circle_packing/host_runtime.py',
+                        'm0/zoo/circle_packing/reference_live_worker.py'], check=True)
+        subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet',
+                        '-m', 'offline reference live host test'], check=True)
+        commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     if getattr(request, 'param', None) in ('supervised_fake_live', 'supervised_fake_live_stall'):
         worker = checkout / 'm0/zoo/circle_packing/mori_live_worker.py'
         code = worker.read_text()
@@ -98,6 +138,34 @@ def prepared_cell(tmp_path, request):
         'clock': str(clock._store.path), 'output': str(output),
         'base_url': ledger.manifest_binding()['provider_base_url']}
     return config, ledger, clock, runner
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['reference_fake_live'], indirect=True)
+def test_reference_named_live_host_runs_with_fake_transport_and_original_authorities(prepared_cell, tmp_path):
+    config, ledger, _clock, _runner = prepared_cell
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+        cell_id='vendor-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
+    with tempfile.TemporaryDirectory(prefix='mori-ref-', dir='/tmp') as path:
+        config = {**config, 'clock': str(clock._store.path), 'output': str(tmp_path / 'reference-host'),
+                  'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(path).resolve())}
+        setup = tmp_path / 'reference-setup.json'
+        setup.write_text(json.dumps(config))
+        env = {'PATH': sandbox_child_path(), 'PYTHONPATH': config['source'], 'DEEPSEEK_API_KEY': 'fixture-only-secret',
+               'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
+        process = subprocess.run([str(Path(config['runtime']) / 'bin' / 'python'), '-m',
+            'zoo.circle_packing.reference_live_worker', str(setup)], cwd=tmp_path, env=env,
+            capture_output=True, text=True, timeout=240)
+        assert process.returncode == 0, process.stderr
+        result = json.loads(process.stdout)
+        assert result['mode'] == 'live' and result['performance_claim'] is False and result['state'] == 'completed'
+        assert result['selected_program']['metrics']['validity'] == 1.0
+        assert ledger.snapshot()['settled_upper_bound_micro_cny'] == config['plan']['iterations'] * 38
+        assert not ledger.snapshot()['pending_calls']
+        for root in (Path(config['output']), Path(config['worker_directory']), Path(path)):
+            for file in root.rglob('*'):
+                if file.is_file() and not file.is_symlink():
+                    assert b'fixture-only-secret' not in file.read_bytes(), f'fixture key persisted in {file}'
 
 
 @pytest.mark.linux

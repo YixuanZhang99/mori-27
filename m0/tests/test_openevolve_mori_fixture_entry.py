@@ -157,6 +157,17 @@ def test_live_supervisor_closed_gate_does_not_claim_or_create_files(tmp_path):
     assert not target.exists()
 
 
+def test_reference_live_host_discards_environment_key_before_closed_gate(tmp_path, monkeypatch):
+    from zoo.circle_packing import reference_live_worker
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'fixture-only-secret')
+    monkeypatch.setattr(reference_live_worker, '_prepare',
+                        lambda *args, **kwargs: pytest.fail('closed gate attempted preparation'))
+    with pytest.raises(ValueError, match='pilot gate'):
+        reference_live_worker.run({'output': str(tmp_path / 'reference')})
+    assert 'DEEPSEEK_API_KEY' not in os.environ
+    assert not (tmp_path / 'reference').exists()
+
+
 @pytest.mark.linux
 def test_live_supervisor_hands_key_only_to_child_environment(tmp_path, monkeypatch):
     from contextlib import nullcontext
