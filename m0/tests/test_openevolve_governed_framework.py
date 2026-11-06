@@ -18,7 +18,8 @@ def test_governed_circle_run_binds_roles_control_cost_and_replay(tmp_path, local
         '<<<<<<< SEARCH\n    n = 26\n=======\n    n = 26\n    # governed fixture\n>>>>>>> REPLACE\n'}}]))
     profile, registry, provider = governed_setup(tmp_path / 'run', ledger=campaign,
         api_key='fixture-only-secret', seed=0, iterations=1, base_url=local_endpoint.url,
-        max_completion_tokens=4)
+        max_completion_tokens=4, total_token_ceiling=4 * (1048576 + 4))
+    assert profile['budget']['options']['limits']['global']['token'] == 4 * (1048576 + 4)
     domain = CirclePackingDomain(tmp_path / 'run' / 'domain', runner=SandboxRunner())
     cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
                      reeval_floor=0, baseline_every=100)
@@ -37,7 +38,7 @@ def test_governed_circle_run_binds_roles_control_cost_and_replay(tmp_path, local
     def adapters(path, store):
         _, _, fresh_provider = governed_setup(tmp_path / 'run', ledger=campaign,
             api_key='fixture-only-secret', seed=0, iterations=1, base_url=local_endpoint.url,
-            max_completion_tokens=4)
+            max_completion_tokens=4, total_token_ceiling=4 * (1048576 + 4))
         return fresh_provider, CirclePackingDomain(tmp_path / 'replay-domain', runner=SandboxRunner())
     def forbidden(*args, **kwargs):
         raise AssertionError('recorded replay made an HTTP request')
@@ -65,3 +66,36 @@ def test_governed_circle_unknown_usage_keeps_reservation(tmp_path, local_endpoin
         fw.evolve('Improve the arrangement of 26 circles in a square')
     assert len(local_endpoint.requests) == 1
     assert len(campaign.snapshot()['pending_calls']) == 1
+
+
+def test_common_ceiling_must_fit_protected_control_and_main_attempts(tmp_path, local_endpoint):
+    from zoo.circle_packing.governed import governed_setup
+    campaign = campaign_fixture(tmp_path)
+    with pytest.raises(ValueError, match='ceiling'):
+        governed_setup(tmp_path / 'run', ledger=campaign, api_key='fixture-only-secret',
+            seed=0, iterations=1, base_url=local_endpoint.url, max_completion_tokens=4,
+            total_token_ceiling=4 * (1048576 + 4) - 1)
+    assert not campaign.snapshot()['pending_calls']
+
+
+def test_common_ceiling_includes_repair_attempts_and_control(tmp_path, local_endpoint):
+    from zoo.circle_packing.governed import governed_setup
+    campaign = campaign_fixture(tmp_path)
+    local_endpoint.responses.extend([
+        reply(choices=[{'finish_reason': 'stop', 'message': {'content': 'invalid diff'}}]),
+        reply(choices=[{'finish_reason': 'stop', 'message': {'content':
+            '<<<<<<< SEARCH\n    n = 26\n=======\n    n = 26\n    # repaired\n>>>>>>> REPLACE\n'}}])])
+    ceiling = 4 * (1048576 + 4)
+    profile, registry, provider = governed_setup(tmp_path / 'run', ledger=campaign,
+        api_key='fixture-only-secret', seed=0, iterations=1, base_url=local_endpoint.url,
+        max_completion_tokens=4, total_token_ceiling=ceiling)
+    cfg = LoopConfig(max_generations=1, total_budget=ceiling, reeval_floor=0, baseline_every=100)
+    domain = CirclePackingDomain(tmp_path / 'run' / 'domain', runner=SandboxRunner())
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(tmp_path / 'run' / 'framework'),
+                                component_registry=registry)
+    fw.evolve('Improve the arrangement of 26 circles in a square')
+    assert len(local_endpoint.requests) == 2
+    assert campaign.snapshot()['settled_upper_bound_micro_cny'] == 76
+    assert fw.inspect()['governance']['completed'] == 1
+    second = json.loads(local_endpoint.requests[1])['messages'][1]['content']
+    assert 'Repair feedback:' in second

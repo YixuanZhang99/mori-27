@@ -15,7 +15,7 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
 
 def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
-                   max_completion_tokens=16384):
+                   max_completion_tokens=16384, total_token_ceiling=None):
     policy = ledger.manifest_binding()
     snapshot = ledger.snapshot()
     if snapshot.get('pending_calls') or snapshot.get('protection_breaches') or \
@@ -42,6 +42,10 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
     limits = profile['budget']['options']['limits']['global']
     for unit in limits:
         limits[unit] += sum(part[unit] for part in reservations.values())
+    if total_token_ceiling is not None:
+        if type(total_token_ceiling) is not int or not 4 * bound <= total_token_ceiling <= limits['token']:
+            raise ValueError('token ceiling must fit protected control and one main operation')
+        limits['token'] = total_token_ceiling
     profile['governance'] = {'schema_version': 1, 'controls': {'after_main_cycles': [0], 'seed': seed,
         'provider': {'name': 'circle-control'}, 'domain': {'name': 'circle-control'},
         'operator': {'name': 'draft'}, 'request': {'fidelity': 'dev', 'split_id': 'dev'},
