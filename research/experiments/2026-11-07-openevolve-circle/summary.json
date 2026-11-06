@@ -1,0 +1,240 @@
+{
+  "audit_recorded_journal_head": {
+    "seq": 2921,
+    "sha256": "a98b47cb2f71cbcfad8306b7ae368a209cf2023c744d9f31fd42874c4064fef9"
+  },
+  "audited_journal_head": {
+    "seq": 2920,
+    "sha256": "2e2187a29fb4db5ee5ba374276a6a300f21aa5840aa8130896493f2e88fed8db"
+  },
+  "campaign_remaining_micro_cny": 160322618,
+  "campaign_settled_upper_bound_micro_cny": 39677382,
+  "declared_seeds": [
+    0,
+    1,
+    2
+  ],
+  "difference_mori_minus_reference": -0.6223620794681999,
+  "evidence_sha256": {
+    "mori_rows_sha256": "bb7b9fc0048cdd80fd714a665f34e25ad47c1a6bffa9db11d720cab0de283754",
+    "reference_bundle_sha256": "504088685f7e441df77cda3b3515d4e136ab1439492f7f54965df652d7e86ad0",
+    "reference_rows_sha256": "f5fa9b53a3951167faaf1082aa95a316889a47500ea1fc87b7c96d7d8f915e9d",
+    "replay_input_sha256": "f667d3da22b8b546eedcbd533817e3ae0a63104bd1896b955519fff356573f0e"
+  },
+  "independent_replay": {
+    "external_calls": 0,
+    "passed": true,
+    "performance_claim": false,
+    "scope": "independent_recorded_mori_replay"
+  },
+  "invoice_verified": false,
+  "iterations_per_cell": 6,
+  "max_completion_tokens": 16384,
+  "model_alias": "deepseek-flash",
+  "mori": {
+    "candidate": "a310030ae2bf142bae458a5bde2eacae4cfd142a4336ef692a5856f4d8bdb51a",
+    "settled_upper_bound_micro_cny": 806364,
+    "sum_radii": 0.9597642169962064,
+    "validity": 1.0
+  },
+  "mori_cycle_coverage": {
+    "cycles": [
+      {
+        "admitted": true,
+        "candidate": "a310030ae2bf142bae458a5bde2eacae4cfd142a4336ef692a5856f4d8bdb51a",
+        "cycle": 0,
+        "evaluation_status": "ok"
+      },
+      {
+        "admitted": false,
+        "candidate": "eb43e19db78ab696b9dd9d1d3e09837945bfdb98a055d162e766d249b67d1273",
+        "cycle": 1,
+        "evaluation_status": "failed_to_run"
+      },
+      {
+        "admitted": false,
+        "candidate": "8d1957bd25a07bc0cc1809beecfeabfa4d829ed023729e7148e7eeb50a427e2e",
+        "cycle": 2,
+        "evaluation_status": "failed_to_run"
+      },
+      {
+        "admitted": false,
+        "candidate": "7423db199287f0b64c9714a96ff88c87e64d6f854f4ea1975f112c0ca3c0d52d",
+        "cycle": 3,
+        "evaluation_status": "failed_to_run"
+      },
+      {
+        "admitted": false,
+        "candidate": "89bb4d1232c9ec5d0ad0a8b22ba45a2abbacaafbb32d288be6d5fd1554a817a3",
+        "cycle": 4,
+        "evaluation_status": "failed_to_run"
+      },
+      {
+        "admitted": false,
+        "candidate": "80422f571f4de7ff35466eded167ac05a0d8f3d91c57997749eaf174fb527057",
+        "cycle": 5,
+        "evaluation_status": "failed_to_run"
+      },
+      {
+        "admitted": false,
+        "candidate": "dc1fde182a31625356da24d6979e6efca475a88c79d93f5925a300788856ce3d",
+        "cycle": 6,
+        "evaluation_status": "failed_to_run"
+      }
+    ],
+    "performance_claim": false,
+    "schema_version": 1,
+    "scope": "caller_pinned_mori_cycle_commits"
+  },
+  "performance_claim": false,
+  "plan_ref": "sha256:28f9de372e345458e0a863e81109b3f852af368af50c078a178a7a94939fef43",
+  "public_range_threshold": 2.372379655271936,
+  "public_reference_sum_radii": 2.635977394746595,
+  "reasoning_effort": "low",
+  "reference": {
+    "selected_program_ref": "sha256:1017f138636951378a49652b668544210398bb66e56b95c30cf48402d0438dfa",
+    "settled_upper_bound_micro_cny": 259448,
+    "sum_radii": 1.5821262964644063,
+    "validity": 1.0
+  },
+  "reference_accounting_coverage": {
+    "complete_run_certified": false,
+    "iteration_accounting_complete": false,
+    "performance_claim": false,
+    "reasons": [
+      "iteration_2_error_phase_unverified",
+      "iteration_3_error_phase_unverified",
+      "iteration_3_provider_unverified",
+      "iteration_4_error_phase_unverified",
+      "iteration_4_provider_unverified",
+      "iteration_5_error_phase_unverified",
+      "iteration_5_provider_unverified",
+      "iteration_6_error_phase_unverified",
+      "iteration_6_provider_unverified"
+    ],
+    "schema_version": 1,
+    "scope": "reference_iteration_accounting_coverage",
+    "seed_stage_ids": [
+      "e2f59538a032470e8f30b1a51b5e303b"
+    ]
+  },
+  "reference_run_coverage": {
+    "complete_run_certified": false,
+    "controller_reported_completed_iterations": 6,
+    "controller_stop_reason": "iteration_limit",
+    "iterations": [
+      {
+        "iteration": 1,
+        "provider_states": [
+          "matched"
+        ],
+        "stages": [
+          {
+            "stage_status": "ok",
+            "state": "matched"
+          },
+          {
+            "stage_status": "ok",
+            "state": "matched"
+          }
+        ],
+        "submission_attempts": 1,
+        "submission_state": "candidate"
+      },
+      {
+        "iteration": 2,
+        "provider_states": [
+          "matched"
+        ],
+        "stages": [],
+        "submission_attempts": 1,
+        "submission_state": "worker_error"
+      },
+      {
+        "iteration": 3,
+        "provider_states": [
+          "not_observed"
+        ],
+        "stages": [],
+        "submission_attempts": 1,
+        "submission_state": "worker_error"
+      },
+      {
+        "iteration": 4,
+        "provider_states": [
+          "not_observed"
+        ],
+        "stages": [],
+        "submission_attempts": 1,
+        "submission_state": "worker_error"
+      },
+      {
+        "iteration": 5,
+        "provider_states": [
+          "not_observed"
+        ],
+        "stages": [],
+        "submission_attempts": 1,
+        "submission_state": "worker_error"
+      },
+      {
+        "iteration": 6,
+        "provider_states": [
+          "not_observed"
+        ],
+        "stages": [],
+        "submission_attempts": 1,
+        "submission_state": "worker_error"
+      }
+    ],
+    "missing_prompt_iterations": [],
+    "performance_claim": false,
+    "schema_version": 1,
+    "scope": "reference_run_partial_coverage",
+    "unattributed_provider_bindings": [],
+    "unattributed_stage_ids": [
+      "e2f59538a032470e8f30b1a51b5e303b"
+    ]
+  },
+  "schema_version": 1,
+  "scope": "audited_first_pair_final_snapshots",
+  "settled_completion_usage": {
+    "mori": [
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      },
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      },
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      },
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      },
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      },
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      }
+    ],
+    "reference": [
+      {
+        "completion_tokens": 14623,
+        "reasoning_tokens": 12682
+      },
+      {
+        "completion_tokens": 16384,
+        "reasoning_tokens": 16384
+      }
+    ]
+  },
+  "source_commit": "49fb0760f836f6e5efd64d5da1bcc3335c1e097a"
+}
