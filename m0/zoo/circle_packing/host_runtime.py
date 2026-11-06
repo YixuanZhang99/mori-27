@@ -50,6 +50,11 @@ def _sync_directory(path):
         os.close(fd)
 
 
+def _require_reference_live_gate():
+    # Whole-cell termination, recovery, and paired audits are not yet certified.
+    raise ValueError('live pilot gate is not complete')
+
+
 def _read_verified_worker_result(worker_directory, started):
     """Read bounded worker outputs from their opened, execution-bound files."""
     execution_id = started.get('execution_id')
@@ -398,7 +403,7 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
                                      currency_run_id, initial_ref)
     def start_work():
         if mode != 'fixture':
-            raise ValueError('live reference work requires the completed pilot gate')
+            _require_reference_live_gate()
         ledger.start_reference_authority_work(cell, authority_ref)
     lease.bind_start(start_work)
     run = ExternalRunContext(logical_run_id=authority_ref[:32], runtime_id=EXTERNAL_RUNTIME,
@@ -427,13 +432,30 @@ def run_reference_cell_fixture(authority, deadline, worker_directory, workspace,
     The selection is matched to original stage evidence for this invocation,
     but is not yet anchored as a final result or independently revalidated.
     """
-    if type(authority) is not ReferenceAuthorities:
+    if type(authority) is not ReferenceAuthorities or not authority.bridge.ledger.is_fixture_campaign():
         raise ValueError('reference fixture requires its original bounded cell authority')
     with authority._lease.session():
         return _run_reference_cell_fixture(authority, deadline, worker_directory, workspace,
             snapshot=snapshot, source_manifest=source_manifest, frozen_plan=frozen_plan,
             expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id,
             runtime=runtime, runtime_manifest=runtime_manifest, base_python=base_python, iterations=iterations)
+
+
+def run_reference_cell_live(authority, deadline, worker_directory, workspace, *, snapshot, source_manifest,
+                            frozen_plan, expected_plan_ref, expected_campaign_id, runtime,
+                            runtime_manifest, base_python):
+    """Run the full frozen reference cell only after the live pilot gate opens."""
+    _require_reference_live_gate()
+    if type(authority) is not ReferenceAuthorities or authority.bridge.ledger.is_fixture_campaign() or \
+            type(frozen_plan) is not dict or type(frozen_plan.get('iterations')) is not int:
+        raise ValueError('live reference requires its original non-fixture authority and plan')
+    with authority._lease.session():
+        result = _run_reference_cell_fixture(authority, deadline, worker_directory, workspace,
+            snapshot=snapshot, source_manifest=source_manifest, frozen_plan=frozen_plan,
+            expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id,
+            runtime=runtime, runtime_manifest=runtime_manifest, base_python=base_python,
+            iterations=frozen_plan['iterations'])
+    return {**result, 'mode': 'live', 'performance_claim': False}
 
 
 def _run_reference_cell_fixture(authority, deadline, worker_directory, workspace, *, snapshot, source_manifest,

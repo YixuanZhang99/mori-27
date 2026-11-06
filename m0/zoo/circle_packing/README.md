@@ -230,12 +230,14 @@ closed live gate, fake responses, and only local socket connections. The test
 reconstructs the anchored selection and geometry without any new model or
 candidate work; this is not a real result or a live readiness certification.
 `build_reference_provider` prepares the reference-side transport for the
-original campaign endpoint without sending a request. The existing reference
-cell launcher remains fixture-only; preparation alone does not authorize a
-real reference run. Its fixture authority also requires a separately created
+original campaign endpoint without sending a request. The reference fixture
+launcher requires a separately created
 fixture ledger and the fixed fake key before it can reserve or execute work.
 Reference `live_preparation` can assemble real-provider authorities without
 starting control, model or stage work. Preparation does write a durable
 reference claim and protects currency in the supplied campaign, so use only a
-dedicated temporary campaign for tests. Live work remains disabled until the
-pilot readiness gate is implemented.
+dedicated temporary campaign for tests. `run_reference_cell_live` routes the
+full frozen iteration count through the same host authorities, but checks the
+closed pilot gate before starting and again at each protected operation. The
+offline test overrides that gate only for a temporary campaign with intercepted
+transport. Live work remains disabled until pilot readiness is established.

@@ -207,7 +207,8 @@ print(json.dumps({'candidate': result['candidate'], 'state': result['final_state
 @pytest.mark.linux
 def test_reference_real_provider_path_with_test_gate_override_and_no_network(prepared_cell, tmp_path, monkeypatch):
     """Exercise real-provider wiring with a fake transport and test-only gate override."""
-    from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+    from zoo.circle_packing.host_runtime import (build_reference_authorities, run_reference_cell_fixture,
+                                                run_reference_cell_live)
     config, ledger, _mori_clock, runner = prepared_cell
     plan = config['plan']
     clock = CellDeadline.start(ContinuationStore(tmp_path / 'vendor-clock.jsonl'), lifecycle=CellLifecycle(ledger),
@@ -244,19 +245,31 @@ def test_reference_real_provider_path_with_test_gate_override_and_no_network(pre
         snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'], runner=runner,
         api_key='fixture-only-secret', base_url=config['base_url'], mode='live_preparation')
     try:
-        # Only this offline test bypasses the unfinished live gate. It uses a
-        # disposable ledger, fake key, intercepted transport and no network.
-        ref = ledger.reference_authority_claim('vendor-0')['authority_ref']
-        monkeypatch.setattr(authority._lease, '_on_start',
-                            lambda: ledger.start_reference_authority_work('vendor-0', ref))
-        with tempfile.TemporaryDirectory(prefix='mori-reference-', dir='/tmp') as path:
-            workspace = Path(path).resolve()
-            result = run_reference_cell_fixture(authority, clock, tmp_path / 'worker', workspace,
+        with pytest.raises(ValueError, match='fixture requires'):
+            run_reference_cell_fixture(authority, clock, tmp_path / 'worker', tmp_path / 'unused',
                 snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'],
                 frozen_plan=plan, expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'],
                 runtime=config['runtime'], runtime_manifest=config['runtime_manifest'],
-                base_python='/usr/bin/python3.12', iterations=plan['iterations'])
-            assert result['state'] == 'completed' and result['performance_claim'] is False
+                base_python='/usr/bin/python3.12')
+        with pytest.raises(ValueError, match='live pilot gate'):
+            run_reference_cell_live(authority, clock, tmp_path / 'worker', tmp_path / 'unused',
+                snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'],
+                frozen_plan=plan, expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'],
+                runtime=config['runtime'], runtime_manifest=config['runtime_manifest'],
+                base_python='/usr/bin/python3.12')
+        assert not ledger.reference_authority_claim('vendor-0')['work_started']
+        assert not calls and not (tmp_path / 'worker').exists()
+        # Only this offline test bypasses the unfinished live gate. It uses a
+        # disposable ledger, fake key, intercepted transport and no network.
+        monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+        with tempfile.TemporaryDirectory(prefix='mori-reference-', dir='/tmp') as path:
+            workspace = Path(path).resolve()
+            result = run_reference_cell_live(authority, clock, tmp_path / 'worker', workspace,
+                snapshot=Path(config['source']).parent, source_manifest=config['source_manifest'],
+                frozen_plan=plan, expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'],
+                runtime=config['runtime'], runtime_manifest=config['runtime_manifest'],
+                base_python='/usr/bin/python3.12')
+            assert result['state'] == 'completed' and result['mode'] == 'live' and result['performance_claim'] is False
             assert result['selected_program']['metrics']['validity'] == 1.0
             for root in (tmp_path / 'reference', tmp_path / 'worker', workspace):
                 for file in root.rglob('*'):
