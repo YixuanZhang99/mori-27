@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 
-def start_live_cell(arm, config, *, directory, api_key):
+def start_live_cell(arm, config, *, directory, api_key, _resume_unstarted=False):
     """Start one original cell clock, then launch its bounded trusted host."""
     if arm == 'mori':
         from zoo.circle_packing.mori_live_worker import _require_live_gate
@@ -40,6 +40,13 @@ def start_live_cell(arm, config, *, directory, api_key):
     cell = f"{arm}-{config['seed']}"
     binding = validate_draft_cell(ledger, config['plan'], cell, expected_plan_ref=config['ref'])
     require_first_pair_audit(config['seed'], ledger=ledger, expected_plan_ref=config['ref'])
+    if _resume_unstarted:
+        original = ledger.cell_deadline_claim(cell)
+        if original is None or original['plan_ref'] != config['ref']:
+            raise ValueError('resume requires the original claimed cell and plan')
+        if ledger.cell_worker_claim(cell) is not None or (arm == 'vendor' and (
+                ledger.reference_host_claim(cell) is not None or ledger.reference_authority_claim(cell) is not None)):
+            raise ValueError('resume refuses a cell with an already claimed worker or host')
     state = ledger.snapshot()
     if state['pending_calls'] or state['protected_micro_cny'] or state['protection_breaches']:
         raise ValueError('live cell requires a quiescent original campaign')
@@ -49,18 +56,25 @@ def start_live_cell(arm, config, *, directory, api_key):
     entry = ('zoo.circle_packing.mori_live_worker' if arm == 'mori'
              else 'zoo.circle_packing.reference_live_worker')
     with delegated_cell_group() as group:
-        clock = CellDeadline.start(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
-                                   cell_id=cell, plan_ref=config['ref'], seconds=binding['wallclock_seconds'])
+        create = CellDeadline.restore if _resume_unstarted else CellDeadline.start
+        clock = create(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
+                       cell_id=cell, plan_ref=config['ref'], seconds=binding['wallclock_seconds'])
         return _launch_controller(config, ledger=ledger, deadline=clock, directory=directory,
                                   entry=entry, api_key=api_key, containment_group=group)
 
 
+def resume_unstarted_live_cell(arm, config, *, directory, api_key):
+    """Resume only an original clock with no worker or reference host claim."""
+    return start_live_cell(arm, config, directory=directory, api_key=api_key, _resume_unstarted=True)
+
+
 def main():
-    if len(sys.argv) != 4:
-        raise SystemExit('usage: python -m zoo.circle_packing.live_cell ARM CONFIG SUPERVISOR_DIRECTORY')
+    if len(sys.argv) not in (4, 5) or (len(sys.argv) == 5 and sys.argv[4] != '--resume-unstarted'):
+        raise SystemExit('usage: python -m zoo.circle_packing.live_cell ARM CONFIG SUPERVISOR_DIRECTORY [--resume-unstarted]')
     key = os.environ.pop('DEEPSEEK_API_KEY', None)
     config = json.loads(Path(sys.argv[2]).read_text())
-    print(json.dumps(start_live_cell(sys.argv[1], config, directory=Path(sys.argv[3]), api_key=key), sort_keys=True))
+    start = resume_unstarted_live_cell if len(sys.argv) == 5 else start_live_cell
+    print(json.dumps(start(sys.argv[1], config, directory=Path(sys.argv[3]), api_key=key), sort_keys=True))
 
 
 if __name__ == '__main__':

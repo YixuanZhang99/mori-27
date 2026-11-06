@@ -234,6 +234,39 @@ def test_live_cell_preflight_failure_does_not_claim_deadline(tmp_path, monkeypat
     assert not (tmp_path / 'clock.jsonl').exists()
 
 
+def test_resume_unstarted_cell_uses_original_clock_and_refuses_started_worker(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    from core.composition.recovery import ContinuationStore
+    from test_governed_cny_framework import campaign_fixture
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.live_cell import resume_unstarted_live_cell
+    ledger = campaign_fixture(tmp_path)
+    policy = ledger.manifest_binding()
+    cfg = {**config(), 'ledger': str(ledger.path), 'campaign_id': policy['campaign_id'],
+           'base_url': policy['provider_base_url'], 'clock': str(tmp_path / 'clock.jsonl')}
+    clock = CellDeadline.start(ContinuationStore(cfg['clock']), lifecycle=CellLifecycle(ledger),
+                               cell_id='mori-0', plan_ref=cfg['ref'], seconds=30)
+    record = dict(clock._record)
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
+                        lambda *args, **kwargs: {'wallclock_seconds': 30})
+    monkeypatch.setattr('zoo.circle_packing.mori_supervisor.preflight_live_controller', lambda *a, **k: None)
+    monkeypatch.setattr('zoo.circle_packing.cell_containment.delegated_cell_group', lambda: nullcontext(tmp_path))
+    launches = []
+    def launch(_config, *, deadline, **kwargs):
+        assert deadline._record == record
+        launches.append(True)
+        return {'returncode': 0}
+    monkeypatch.setattr('zoo.circle_packing.mori_supervisor._launch_controller', launch)
+    assert resume_unstarted_live_cell('mori', cfg, directory=tmp_path / 'supervisor',
+                                      api_key='fixture-only-secret') == {'returncode': 0}
+    assert launches == [True]
+    ledger.claim_cell_worker('mori-0', record['record_sha256'], 'b' * 64)
+    with pytest.raises(ValueError, match='already.*claim'):
+        resume_unstarted_live_cell('mori', cfg, directory=tmp_path / 'other', api_key='fixture-only-secret')
+    assert launches == [True]
+
+
 @pytest.mark.parametrize('arm', ['mori', 'vendor'])
 def test_later_seed_supervisor_refuses_before_any_launch(tmp_path, monkeypatch, arm):
     from zoo.circle_packing.mori_supervisor import launch_live_controller, launch_reference_live_controller

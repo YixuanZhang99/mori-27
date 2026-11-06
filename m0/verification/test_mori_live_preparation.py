@@ -261,6 +261,34 @@ def test_live_cell_coordinator_starts_one_clock_and_runs_frozen_host(prepared_ce
 
 
 @pytest.mark.linux
+@pytest.mark.parametrize('prepared_cell', ['coordinator_fake_mori', 'coordinator_fake_vendor'], indirect=True)
+def test_resume_original_unstarted_cell_runs_under_its_existing_clock(prepared_cell, tmp_path, request, monkeypatch):
+    from zoo.circle_packing.live_cell import resume_unstarted_live_cell
+    config, ledger, clock, _runner = prepared_cell
+    assert clock is None
+    reference = request.node.callspec.params['prepared_cell'] == 'coordinator_fake_vendor'
+    arm = 'vendor' if reference else 'mori'
+    monkeypatch.setattr('zoo.circle_packing.mori_live_worker._require_live_gate', lambda _: None)
+    monkeypatch.setattr('zoo.circle_packing.host_runtime._require_reference_live_gate', lambda: None)
+    with tempfile.TemporaryDirectory(prefix='mori-resume-', dir='/tmp') as workspace:
+        if reference:
+            config = {**config, 'output': str(tmp_path / 'reference-host'),
+                      'worker_directory': str(tmp_path / 'reference-worker'), 'workspace': str(Path(workspace).resolve())}
+        original = CellDeadline.start(ContinuationStore(config['clock']), lifecycle=CellLifecycle(ledger),
+            cell_id=f'{arm}-0', plan_ref=config['ref'], seconds=config['plan']['limits']['wallclock_seconds'])
+        saved = dict(original._record)
+        result = resume_unstarted_live_cell(arm, config, directory=tmp_path / 'resumed-supervisor',
+                                            api_key='fixture-only-secret')
+        assert result['returncode'] == 0 and not result['timeout'] and not result['wrapper_error'], result['stderr']
+        claim = ledger.cell_deadline_claim(f'{arm}-0')
+        assert claim['record_sha256'] == saved['record_sha256']
+        events = list(ContinuationStore(config['clock']).read())
+        assert [row['payload'] for row in events if row['kind'] == 'circle_cell_deadline_started'] == [saved]
+        with pytest.raises(ValueError, match='already.*claim'):
+            resume_unstarted_live_cell(arm, config, directory=tmp_path / 'repeated', api_key='fixture-only-secret')
+
+
+@pytest.mark.linux
 @pytest.mark.parametrize('prepared_cell', ['supervised_fake_live_timeout', 'reference_fake_live_timeout'], indirect=True)
 def test_outer_deadline_during_provider_call_preserves_pending(prepared_cell, tmp_path, request, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
