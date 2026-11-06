@@ -59,8 +59,13 @@ def _validate_path(store):
 
 
 def _parameters(store, cell_id, plan_ref, seconds):
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    try:
+        parse_cell_identity(cell_id)
+    except ValueError:
+        raise ValueError('cell deadline requires a durable store and bounded frozen identity') from None
     if not isinstance(store, ContinuationStore) or type(cell_id) is not str or \
-            not re.fullmatch(r'(?:vendor|mori)-(?:0|[1-9][0-9]*)', cell_id) or type(plan_ref) is not str or \
+            type(plan_ref) is not str or \
             not re.fullmatch(r'sha256:[0-9a-f]{64}', plan_ref) or \
             type(seconds) is not int or not 1 <= seconds <= 86400:
         raise ValueError('cell deadline requires a durable store and bounded frozen identity')
@@ -98,7 +103,9 @@ def _sync_directory(path):
 
 
 def _require_unstarted(ledger, cell_id):
-    if ledger.cell_worker_claim(cell_id) is not None or (cell_id.startswith('vendor-') and (
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    _experiment_id, arm, _seed = parse_cell_identity(cell_id)
+    if ledger.cell_worker_claim(cell_id) is not None or (arm == 'vendor' and (
             ledger.reference_host_claim(cell_id) is not None or ledger.reference_authority_claim(cell_id) is not None)):
         raise ValueError('clock reconciliation requires an unstarted cell')
 
@@ -119,10 +126,20 @@ class CellLifecycle:
     def verify(self, record):
         claim = self.ledger.cell_deadline_claim(record['cell_id'])
         pilot = self.ledger.circle_pilot_binding()
-        if pilot is not None and (pilot['plan_ref'] != record['plan_ref'] or
-                pilot['wallclock_seconds'] != record['seconds'] or
-                re.fullmatch(r'(?:vendor|mori)-[012]', record['cell_id']) is None):
-            raise ValueError('cell duration or identity differs from the frozen pilot')
+        if pilot is not None:
+            from zoo.circle_packing.cell_identity import parse_cell_identity
+            experiment_id, _arm, seed = parse_cell_identity(record['cell_id'])
+            if experiment_id is None:
+                valid = seed in (0, 1, 2) and pilot['plan_ref'] == record['plan_ref'] and \
+                        pilot['wallclock_seconds'] == record['seconds']
+            else:
+                continuation = self.ledger.circle_continuation_binding(experiment_id)
+                valid = self.ledger.is_fixture_campaign() and continuation is not None and \
+                        'artifact_verification_sha256' in continuation and seed == 0 and \
+                        record['plan_ref'] == 'sha256:' + continuation['draft']['draft_sha256'] and \
+                        record['seconds'] == continuation['draft']['limits']['wallclock_seconds']
+            if not valid:
+                raise ValueError('cell duration or identity differs from the frozen pilot')
         if self.ledger.manifest_binding()['campaign_id'] != self.campaign_id or claim is None or \
                 claim['plan_ref'] != record['plan_ref'] or claim['record_sha256'] != record['record_sha256']:
             raise ValueError('cell lifecycle claim is missing or differs from the frozen deadline')
@@ -144,6 +161,10 @@ class CellDeadline:
         _parameters(store, cell_id, plan_ref, seconds)
         if type(lifecycle) is not CellLifecycle or lifecycle.ledger.path.resolve() == store.path.resolve():
             raise ValueError('cell lifecycle must be independent from the cell journal directory')
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        experiment_id, _arm, _seed = parse_cell_identity(cell_id)
+        if experiment_id is not None:
+            lifecycle.ledger.preflight_continuation_cell(cell_id, plan_ref, seconds)
         with _exclusive(store):
             rows = _rows(store)
             if any(row['kind'] == _KIND for row in rows):
@@ -298,9 +319,13 @@ class RecordedCellClock:
                 type(evidence['record']) is not dict or type(evidence['observations']) is not list:
             raise ValueError('invalid recorded cell clock evidence')
         record = evidence['record']
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        try:
+            parse_cell_identity(record.get('cell_id'))
+        except ValueError:
+            raise ValueError('recorded cell clock identity differs') from None
         if set(record) != {'schema_version', 'cell_id', 'plan_ref', 'seconds', 'boot_id', 'start_ns', 'record_sha256'} or \
                 type(record['schema_version']) is not int or record['schema_version'] != 1 or \
-                type(record['cell_id']) is not str or not re.fullmatch(r'(?:vendor|mori)-(?:0|[1-9][0-9]*)', record['cell_id']) or \
                 type(record['plan_ref']) is not str or not re.fullmatch(r'sha256:[0-9a-f]{64}', record['plan_ref']) or \
                 type(record['seconds']) is not int or not 1 <= record['seconds'] <= 86400 or \
                 type(record['boot_id']) is not str or not record['boot_id'] or \

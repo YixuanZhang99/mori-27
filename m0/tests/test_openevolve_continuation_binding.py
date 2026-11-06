@@ -53,7 +53,7 @@ def test_binding_verifies_artifacts_and_preserves_original_campaign(tmp_path, mo
     assert after['journal_head']['seq'] == before['journal_head']['seq'] + 1
     assert after['remaining_micro_cny'] == before['remaining_micro_cny']
     with pytest.raises(ValueError):
-        ledger.claim_cell_deadline('circle-v2--mori-0', 'sha256:' + draft['draft_sha256'], 'a' * 64, seconds=2700)
+        ledger.claim_cell_deadline('circle-v2--mori-1', 'sha256:' + draft['draft_sha256'], 'a' * 64, seconds=2700)
     assert ledger.snapshot() == after
 
 

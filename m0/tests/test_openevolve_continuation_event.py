@@ -44,7 +44,7 @@ def test_fixture_event_keeps_original_identity_and_creates_no_cell(tmp_path):
 
 
 @pytest.mark.parametrize('damage', ['stale', 'draft', 'source', 'runtime', 'python', 'manifest',
-                                     'pending', 'protected', 'breach', 'nonfixture', 'proof'])
+                                     'pending', 'protected', 'breach', 'nonfixture', 'proof', 'receipt'])
 def test_fixture_event_rejects_stale_tampered_or_unsafe_state(tmp_path, damage):
     policy, state, event = setup_state(tmp_path)
     if damage == 'stale': event['previous_head']['sha256'] = '0' * 64
@@ -53,6 +53,7 @@ def test_fixture_event_rejects_stale_tampered_or_unsafe_state(tmp_path, damage):
     elif damage == 'runtime': event['runtime_ref'] = 'bad'
     elif damage == 'python': event['python_sha256'] = 'bad'
     elif damage == 'manifest': event['runtime_manifest_sha256'] = 'bad'
+    elif damage == 'receipt': event['artifact_verification_sha256'] = '0' * 64
     elif damage == 'pending': state['pending'] = 'unresolved'
     elif damage == 'protected': state['governance']['runs']['fake'] = {'obligations': [
         {'status': 'pending', 'bound': {'reserved_micro_cny': 1}}]}
@@ -69,7 +70,9 @@ def fixture_pair_ledger(tmp_path):
     ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
     ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
                              expected_head=ledger.snapshot()['journal_head'])
-    ref = 'sha256:' + 'a' * 64
+    from zoo.circle_packing.pilot_plan import build_draft_plan
+    original_plan = build_draft_plan(ledger.manifest_binding(), source_commit='6' * 40, dependency_lock_sha256='7' * 64)
+    ref = 'sha256:' + original_plan['draft_sha256']
     tree = 'sha256:' + 'b' * 64
     ledger.freeze_circle_pilot(ref, tree, 2700, require_runtime=True, require_single_run=True)
     ledger.freeze_circle_runtime(ref, tree, 'sha256:' + 'c' * 64, 'd' * 64)

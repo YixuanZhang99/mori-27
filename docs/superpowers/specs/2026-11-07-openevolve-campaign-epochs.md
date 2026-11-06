@@ -83,8 +83,17 @@ not evidence of improved performance. It does not authorize paid calls.
 The `bind_circle_continuation` journal event currently rejects all campaigns
 without the immutable fixture marker. It checks the previous head, original
 proof identity, quiescence, unique experiment ID and declared artifact digest
-formats, but it does not verify source/runtime files or permit any new cell.
+formats. A bare event does not verify source/runtime files or permit any new cell. The fixture binder verifies actual artifacts before appending an artifact-verification marker, which is a trusted binder assertion, not an independently authenticated proof; internal event writers can forge it.
 An older reader does not understand this event and must fail closed. Before
 removing the fixture-only guard, the real binding path must verify durable
 artifacts and prove that the frozen first-pair replay remains available after
 migration; a test-only event is not evidence of that compatibility.
+
+## Fixture-only versioned cells
+
+A fixture continuation with that binder assertion may create its own seed-0 cell clocks and
+worker/host claims using version-qualified identities. The original pilot
+matrix and audit retain their own claims. Later seeds, unresolved provider
+usage and real campaign continuation cells are rejected. The clock preflight
+is not an authority: the ledger claim rechecks the same conditions atomically.
+This does not start a provider, prove first-pair coverage or enable live work.

@@ -17,7 +17,7 @@ from zoo.circle_packing.frozen_runtime import _runtime_manifest, _sync_runtime_t
 from zoo.circle_packing.frozen_source import _validate_lock
 from zoo.circle_packing.pilot_draft import _read_private_json, _sync_source_tree
 from zoo.circle_packing.pilot_plan import build_draft_plan, validate_source_preflight
-from zoo.mle_bench_lite.cny_budget import CampaignBudget
+from zoo.mle_bench_lite.cny_budget import CampaignBudget, _continuation_artifact_receipt
 
 
 @contextmanager
@@ -133,6 +133,7 @@ def bind_fixture_continuation(ledger, draft, *, checkout, source_directory, runt
                  'previous_head': draft['predecessor_head'], 'draft': draft, 'tree_ref': tree_ref,
                  'runtime_ref': 'sha256:' + payload_digest(manifest),
                  'python_sha256': manifest['base_python_sha256'], 'runtime_manifest_sha256': payload_digest(envelope)}
+        event['artifact_verification_sha256'] = _continuation_artifact_receipt(event)
         with ledger._transaction() as (db, _policy, state):
             current = state['governance']['circle_continuations'].get(draft['experiment_id'])
             if existing is not None:

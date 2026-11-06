@@ -168,6 +168,44 @@ def _circle_continuation_projection(policy, governance, *, head, pending, spent,
     return json.loads(_json(value))
 
 
+def _original_circle_claims(governance):
+    """Separate verified continuation claims from the original pilot claims."""
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    original = set()
+    for cell_id, claim in governance['cell_claims'].items():
+        experiment_id, _arm, seed = parse_cell_identity(cell_id)
+        if experiment_id is None:
+            original.add(cell_id)
+            continue
+        binding = governance['circle_continuations'].get(experiment_id)
+        if binding is None or seed != 0 or claim['plan_ref'] != 'sha256:' + binding['draft']['draft_sha256'] or \
+                not any(item['cell_id'] == cell_id for item in binding['draft']['cells']):
+            raise ValueError('unrecognized continuation claim in original pilot history')
+    return original
+
+
+def _validate_continuation_cell(governance, cell_id, plan_ref, seconds, *, pending):
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    experiment_id, _arm, seed = parse_cell_identity(cell_id)
+    continuation = governance['circle_continuations'].get(experiment_id)
+    if experiment_id is None or not governance['fixture_campaign'] or continuation is None or \
+            'artifact_verification_sha256' not in continuation or seed != 0 or \
+            pending is not None or governance['breaches']:
+        raise ValueError('versioned cells require a bound, resolved fixture first pair')
+    draft = continuation['draft']
+    if plan_ref != 'sha256:' + draft['draft_sha256'] or not any(
+            item.get('cell_id') == cell_id for item in draft['cells']) or \
+            type(seconds) is not int or seconds != draft['limits']['wallclock_seconds']:
+        raise ValueError('versioned cell differs from its frozen draft')
+
+
+def _continuation_artifact_receipt(event):
+    """Bind the trusted fixture verifier's assertion to its exact identities."""
+    return _hash({'draft_sha256': event['draft']['draft_sha256'], 'tree_ref': event['tree_ref'],
+                  'runtime_ref': event['runtime_ref'], 'python_sha256': event['python_sha256'],
+                  'runtime_manifest_sha256': event['runtime_manifest_sha256']})
+
+
 def _run(governance, run_id, plan_ref=None):
     _sha(run_id)
     if not governance["enabled"]:
@@ -242,7 +280,8 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
     elif kind == 'bind_circle_continuation':
         fields = {'kind', 'schema_version', 'previous_head', 'draft', 'tree_ref', 'runtime_ref',
                   'python_sha256', 'runtime_manifest_sha256'}
-        if set(event) != fields or not governance['fixture_campaign'] or pending is not None or \
+        if set(event) not in (fields, fields | {'artifact_verification_sha256'}) or \
+                not governance['fixture_campaign'] or pending is not None or \
                 _outstanding(governance) or governance['breaches'] or \
                 _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
             raise ValueError('continuation binding requires a quiescent fixture campaign at its exact head')
@@ -262,12 +301,18 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                 method_changes=draft['method_changes'])
             if draft != expected or draft['experiment_id'] in governance['circle_continuations']:
                 raise ValueError('continuation draft differs or experiment identity already exists')
+            if 'artifact_verification_sha256' in event and \
+                    _sha(event['artifact_verification_sha256']) != _continuation_artifact_receipt(event):
+                raise ValueError('continuation artifact verification identity differs')
         except (KeyError, TypeError) as error:
             raise ValueError('continuation binding has an invalid draft') from error
-        governance['circle_continuations'][draft['experiment_id']] = json.loads(_json({
+        binding = {
             'previous_head': event['previous_head'], 'draft': draft, 'tree_ref': event['tree_ref'],
             'runtime_ref': event['runtime_ref'], 'python_sha256': event['python_sha256'],
-            'runtime_manifest_sha256': event['runtime_manifest_sha256']}))
+            'runtime_manifest_sha256': event['runtime_manifest_sha256']}
+        if 'artifact_verification_sha256' in event:
+            binding['artifact_verification_sha256'] = event['artifact_verification_sha256']
+        governance['circle_continuations'][draft['experiment_id']] = json.loads(_json(binding))
     elif kind == 'record_first_pair_audit':
         if set(event) != {'kind', 'schema_version', 'previous_head', 'proof'} or \
                 _head_anchor(event['previous_head']) != {'seq': seq, 'sha256': previous}:
@@ -289,7 +334,7 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         if prior is not None and any(prior[key] != proof[key] for key in identity_fields):
             raise ValueError('superseding first pair audit changes original evidence identity')
         if pilot is None or pilot['plan_ref'] != plan_ref or \
-                set(governance['cell_claims']) != {'mori-0', 'vendor-0'} or pending is not None or \
+                _original_circle_claims(governance) != {'mori-0', 'vendor-0'} or pending is not None or \
                 _outstanding(governance) or governance['breaches']:
             raise ValueError('first pair audit requires a quiescent original pilot')
         for run_id, cell in ((mori_run, 'mori-0'), (vendor_run, 'vendor-0')):
@@ -329,13 +374,20 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         plan_ref = _plan_ref(event["plan_ref"])
         digest = _sha(event["record_sha256"])
         if pilot is not None:
-            if pilot.get('require_runtime') and governance['circle_runtime'] is None:
-                raise ValueError("cell requires the frozen runtime")
-            if pilot["plan_ref"] != plan_ref:
-                raise ValueError("cell deadline differs from the frozen pilot plan")
-            if re.fullmatch(r'(?:vendor|mori)-[012]', cell_id) is None:
-                raise ValueError("cell identity is outside the frozen pilot")
-            if type(event["seconds"]) is not int or event["seconds"] != pilot["wallclock_seconds"]:
+            from zoo.circle_packing.cell_identity import parse_cell_identity
+            experiment_id, _arm, seed = parse_cell_identity(cell_id)
+            if experiment_id is None:
+                if pilot.get('require_runtime') and governance['circle_runtime'] is None:
+                    raise ValueError("cell requires the frozen runtime")
+                if pilot["plan_ref"] != plan_ref:
+                    raise ValueError("cell deadline differs from the frozen pilot plan")
+                if seed not in (0, 1, 2):
+                    raise ValueError("cell identity is outside the frozen pilot")
+                seconds = pilot['wallclock_seconds']
+            else:
+                _validate_continuation_cell(governance, cell_id, plan_ref, event['seconds'], pending=pending)
+                seconds = event['seconds']
+            if type(event["seconds"]) is not int or event["seconds"] != seconds:
                 raise ValueError("cell duration differs from the frozen pilot")
         if cell_id in governance["cell_claims"]:
             raise ValueError("cell deadline claim already exists")
@@ -495,7 +547,9 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         cell_id = _identifier(event['cell_id'], 'cell identity')
         deadline_ref, host_ref = _sha(event['deadline_ref']), _sha(event['host_ref'])
         clock = governance['cell_claims'].get(cell_id)
-        if re.fullmatch(r'vendor-[012]', cell_id) is None or clock is None or \
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        _experiment_id, arm, seed = parse_cell_identity(cell_id)
+        if arm != 'vendor' or seed not in (0, 1, 2) or clock is None or \
                 clock['record_sha256'] != deadline_ref or cell_id in governance['reference_host_claims'] or \
                 cell_id in governance['reference_authority_claims'] or cell_id in governance['worker_claims']:
             raise ValueError('reference host requires an unclaimed original vendor cell')
@@ -505,7 +559,9 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
                           'currency_run_id', 'initial_budget_ref'}:
             raise ValueError('reference authority claim has invalid fields')
         cell_id = _identifier(event['cell_id'], 'cell identity')
-        if re.fullmatch(r'vendor-[012]', cell_id) is None:
+        from zoo.circle_packing.cell_identity import parse_cell_identity
+        _experiment_id, arm, seed = parse_cell_identity(cell_id)
+        if arm != 'vendor' or seed not in (0, 1, 2):
             raise ValueError('reference authority requires a vendor cell')
         deadline_ref, authority_ref = _sha(event['deadline_ref']), _sha(event['authority_ref'])
         currency_run_id = _sha(event['currency_run_id'])
@@ -552,7 +608,9 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
             raise ValueError('reference cell is bound to another currency authority')
         pilot = governance['circle_pilot']
         if pilot is not None and pilot.get('require_single_run'):
-            if cell_id.startswith('mori-') and cell_id not in governance['worker_claims']:
+            from zoo.circle_packing.cell_identity import parse_cell_identity
+            _experiment_id, arm, _seed = parse_cell_identity(cell_id)
+            if arm == 'mori' and cell_id not in governance['worker_claims']:
                 raise ValueError('single-run Mori cell requires its original worker claim')
             if any(existing['cell_id'] == cell_id for existing in governance['deadline_bindings'].values()):
                 raise ValueError('cell is already bound to another run')
@@ -996,9 +1054,13 @@ class CampaignBudget:
             head = {'seq': state['seq'], 'sha256': state['hash']}
             if head != expected_head:
                 raise ValueError('campaign head changed before the matrix snapshot')
+            continuations = {name: {'draft_sha256': value['draft']['draft_sha256'],
+                                    'cell_ids': [item['cell_id'] for item in value['draft']['cells']]}
+                             for name, value in state['governance']['circle_continuations'].items()}
             return {'journal_head': head, 'campaign': {**policy, 'policy_sha256': _hash(policy)},
                     'pilot': json.loads(_json(state['governance']['circle_pilot'])),
-                    'claims': json.loads(_json(state['governance']['cell_claims']))}
+                    'claims': json.loads(_json(state['governance']['cell_claims'])),
+                    'continuations': json.loads(_json(continuations))}
 
     def circle_continuation_inventory(self, *, expected_head):
         """Read original experiment and global funds together; grants no authority."""
@@ -1016,6 +1078,15 @@ class CampaignBudget:
         with self._transaction() as (_db, _policy, state):
             value = state['governance']['circle_continuations'].get(experiment_id)
             return json.loads(_json(value))
+
+    def preflight_continuation_cell(self, cell_id, plan_ref, seconds):
+        """Reject an ineligible fixture cell before its clock file is created."""
+        _identifier(cell_id, 'cell identity')
+        _plan_ref(plan_ref)
+        with self._transaction() as (_db, _policy, state):
+            _validate_continuation_cell(state['governance'], cell_id, plan_ref, seconds, pending=state['pending'])
+            if cell_id in state['governance']['cell_claims']:
+                raise ValueError('cell deadline claim already exists')
 
     def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
         _plan_ref(plan_ref)

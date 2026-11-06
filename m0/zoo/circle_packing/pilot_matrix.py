@@ -65,8 +65,13 @@ def snapshot_matrix(ledger, plan, *, expected_plan_ref, expected_head):
             raise ValueError('cell claim differs from frozen matrix plan')
         cells.append({'cell_id': identifier, 'seed': cell['seed'], 'arm': cell['arm'],
                       'state': 'not_claimed' if claim is None else 'claimed_outcome_unverified', 'score': None})
-    if set(claims) - {cell['cell_id'] for cell in cells}:
-        raise ValueError('campaign has a cell outside the frozen matrix')
+    from zoo.circle_packing.cell_identity import parse_cell_identity
+    for name in set(claims) - {cell['cell_id'] for cell in cells}:
+        experiment_id, _arm, seed = parse_cell_identity(name)
+        continuation = inventory['continuations'].get(experiment_id)
+        if experiment_id is None or seed != 0 or continuation is None or name not in continuation['cell_ids'] or \
+                claims[name]['plan_ref'] != 'sha256:' + continuation['draft_sha256']:
+            raise ValueError('campaign has an unrecognized cell outside the frozen matrix')
     return {'schema_version': 1, 'scope': 'campaign_claim_inventory_at_pinned_head',
             'performance_claim': False, 'plan_ref': ref, 'journal_head': inventory['journal_head'], 'cells': cells}
 
