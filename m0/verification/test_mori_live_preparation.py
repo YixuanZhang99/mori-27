@@ -385,6 +385,19 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         with pytest.raises(ValueError):
             audit_supervisor_result(config, directory=tmp_path / 'reference-supervisor',
                                     view=mori_view, clock=recorded_mori)
+        from types import SimpleNamespace
+        original_events = list(ContinuationStore(tmp_path / 'mori-supervisor' / 'controller.jsonl').read())
+        without_containment = [row for row in original_events if row['kind'] != 'executor_containment_verified']
+        import copy
+        wrong_terminal = copy.deepcopy(original_events)
+        next(row for row in wrong_terminal if row['kind'] == 'executor_process_finished')['payload']['recovered'] = True
+        for events in (without_containment, wrong_terminal):
+            with monkeypatch.context() as patch:
+                patch.setattr('zoo.circle_packing.supervisor_audit.ContinuationStore',
+                              lambda _: SimpleNamespace(read=lambda: iter(events)))
+                with pytest.raises(ValueError):
+                    audit_supervisor_result(config, directory=tmp_path / 'mori-supervisor',
+                                            view=mori_view, clock=recorded_mori)
         assert ledger.snapshot()['journal_head'] == head
         def forbidden(*args, **kwargs):
             raise AssertionError('independent pair audit attempted external work')
