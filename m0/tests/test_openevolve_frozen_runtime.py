@@ -43,7 +43,7 @@ def test_installer_inputs_reject_local_sources_and_artifacts(tmp_path):
         _validate_install_inputs(project)
 
 
-def fixture(tmp_path, *, require_runtime=False):
+def fixture(tmp_path, *, require_runtime=False, fixture_campaign=False):
     uv = shutil.which('uv')
     assert uv is not None
     root = tmp_path / 'checkout'
@@ -66,7 +66,13 @@ def fixture(tmp_path, *, require_runtime=False):
     subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
     subprocess.run(['git', '-C', str(root), 'commit', '-qm', 'fixture'], check=True)
     commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
-    ledger = campaign_fixture(tmp_path)
+    if fixture_campaign:
+        from zoo.mle_bench_lite.cny_budget import CampaignBudget
+        ledger = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
+        ledger.enable_governance(expected_policy_sha256=ledger.manifest_binding()['policy_sha256'],
+                                 expected_head=ledger.snapshot()['journal_head'])
+    else:
+        ledger = campaign_fixture(tmp_path)
     plan, ref = draft(ledger, root, commit)
     campaign_id = ledger.manifest_binding()['campaign_id']
     snapshot = tmp_path / 'source'

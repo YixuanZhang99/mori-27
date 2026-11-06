@@ -239,7 +239,7 @@ def build_reference_provider(ledger, plan, *, api_key, base_url, operator_cap, f
     if fixture:
         try:
             url = urllib.parse.urlsplit(base_url)
-            if api_key != 'fixture-only-secret' or url.scheme != 'http' or \
+            if not ledger.is_fixture_campaign() or api_key != 'fixture-only-secret' or url.scheme != 'http' or \
                     url.hostname not in {'127.0.0.1', '::1'} or not url.port or \
                     url.username or url.password or url.query or url.fragment:
                 raise ValueError('fixture reference requires its fake key and loopback provider')
@@ -259,6 +259,8 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
     if type(ledger) is not CampaignBudget or type(deadline) is not CellDeadline or \
             deadline._lifecycle.ledger is not ledger:
         raise ValueError('reference requires its original campaign and cell deadline')
+    if not ledger.is_fixture_campaign():
+        raise ValueError('reference fixture requires a marked fixture campaign')
     cell = deadline._record['cell_id']
     if not re.fullmatch(r'vendor-[012]', cell):
         raise ValueError('reference requires a declared vendor cell')

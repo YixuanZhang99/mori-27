@@ -210,4 +210,5 @@ currency accounting and recorded replay; it does not contact the provider.
 `build_reference_provider` prepares the reference-side transport for the
 original campaign endpoint without sending a request. The existing reference
 cell launcher remains fixture-only; preparation alone does not authorize a
-real reference run.
+real reference run. Its fixture authority also requires a separately created
+fixture ledger and the fixed fake key before it can reserve or execute work.

@@ -52,8 +52,9 @@ def test_reference_provider_uses_original_real_service_config_without_dispatch(t
 pytestmark = pytest.mark.linux
 
 
-def prepared_reference(tmp_path, local_endpoint):
-    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+def prepared_reference(tmp_path, local_endpoint, *, fixture_campaign=True):
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(
+        tmp_path, require_runtime=True, fixture_campaign=fixture_campaign)
     runtime = tmp_path / 'runtime'
     frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
@@ -69,7 +70,8 @@ def prepared_reference(tmp_path, local_endpoint):
 
 def test_reference_authorities_bind_frozen_plan_budget_clock_and_campaign(tmp_path, local_endpoint):
     from zoo.circle_packing.host_runtime import build_reference_authorities
-    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(
+        tmp_path, require_runtime=True, fixture_campaign=True)
     runtime = tmp_path / 'runtime'
     frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
@@ -92,6 +94,18 @@ def test_reference_authorities_bind_frozen_plan_budget_clock_and_campaign(tmp_pa
         ledger.manifest_binding()['context_tokens'] + plan['max_completion_tokens'])
     assert ledger.snapshot()['settled_upper_bound_micro_cny'] == before
     assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
+
+
+def test_reference_fixture_refuses_unmarked_campaign_before_protection(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
+    ledger = options['ledger']
+    assert not ledger.is_fixture_campaign()
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='fixture campaign'):
+        build_reference_authorities(tmp_path / 'reference', **options)
+    assert ledger.snapshot() == before
+    assert not local_endpoint.requests
 
 
 def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path, local_endpoint, monkeypatch):
@@ -183,7 +197,8 @@ def test_recorded_reference_snapshot_rejects_late_clock_observation(tmp_path, lo
 
 def test_reference_authorities_reject_mismatched_cell_before_protection(tmp_path, local_endpoint):
     from zoo.circle_packing.host_runtime import build_reference_authorities
-    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(
+        tmp_path, require_runtime=True, fixture_campaign=True)
     runtime = tmp_path / 'runtime'
     frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
         expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
