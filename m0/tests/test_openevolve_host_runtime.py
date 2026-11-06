@@ -90,6 +90,47 @@ def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path
         authority.close()
 
 
+def test_recorded_reference_snapshot_rejects_late_clock_observation(tmp_path, local_endpoint, monkeypatch):
+    import asyncio
+    from dataclasses import asdict
+    from core.x1.checkpoint import payload_digest
+    from test_openevolve_host_stage_budget import fake_result
+    from zoo.circle_packing.cell_deadline import RecordedCellClock
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    from zoo.circle_packing.reference_selection import audit_anchored_reference_physical
+    from zoo.mle_bench_lite.governed_currency_audit import RecordedCurrencyView
+    options = prepared_reference(tmp_path, local_endpoint)
+    authority = build_reference_authorities(tmp_path / 'reference', **options)
+    try:
+        ledger, clock = options['ledger'], options['deadline']
+        monkeypatch.setattr('zoo.circle_packing.stage.run_stage',
+                            lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+        assert asyncio.run(authority.control.execute('control-0000'))['status'] == 'evaluated'
+        monkeypatch.setattr('zoo.circle_packing.host_physical.run_stage',
+                            lambda program, *, stage, **kwargs: fake_result(program, stage, score=.4))
+        authority.stages.execute('a' * 32, 'program', stage=1)
+        worker_ref = 'b' * 64
+        ledger.claim_cell_worker('vendor-0', clock._record['record_sha256'], worker_ref)
+        run_id = authority.dispatch.ready.authority_binding['currency_run_id']
+        rows = list(authority.budget.store.read())
+        monkeypatch.setattr('zoo.circle_packing.cell_deadline._clock_ns',
+            lambda: clock._record['start_ns'] + clock._record['seconds'] * 1_000_000_000)
+        def anchor(observation):
+            value = observation['observation']
+            ledger.anchor_reference_physical_snapshot(run_id, 'vendor-0', payload_digest(rows), worker_ref,
+                ['a' * 32], value['sequence'], value['sha256'])
+        clock.observe_and_anchor(anchor)
+        evidence = ledger.export_governance_evidence(run_id, authority.dispatch.ready.physical_plan_ref)
+        view = RecordedCurrencyView(evidence, expected_run_id=run_id, expected_head=ledger.snapshot()['journal_head'])
+        recorded = RecordedCellClock(clock.export_evidence(), view.cell_deadline_claim('vendor-0'))
+        with pytest.raises(ValueError, match='late'):
+            audit_anchored_reference_physical(view, recorded, run_id,
+                options=authority.budget.options, stamp=asdict(authority.budget.stamp),
+                governance=authority.budget._governed.config, rows=rows, request_ids=['a' * 32])
+    finally:
+        authority.close()
+
+
 def test_reference_authorities_reject_mismatched_cell_before_protection(tmp_path, local_endpoint):
     from zoo.circle_packing.host_runtime import build_reference_authorities
     ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
