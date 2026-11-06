@@ -106,7 +106,9 @@ The offline reference evaluator records its physical stage receipt as an
 OpenEvolve artifact, so the selected program can be associated with one
 actual evaluation even when identical code is evaluated repeatedly. A scoped
 adapter hides only this internal receipt from host prompt artifacts while
-retaining other artifacts. The receipt is a host-worker assertion joined to
+retaining other artifacts. The filter is process-wide during the fixture;
+fixture calls are serialized, and unrelated same-process database callers can
+also observe the filter. The named entry runs it in an isolated worker process. The receipt is a host-worker assertion joined to
 physical records, not an independent final-winner proof or benchmark result.
 
 The draft paired plan allocates a common token ceiling of 14 worst-case call

@@ -269,3 +269,16 @@ def test_receipt_filter_serializes_overlapping_host_runs(monkeypatch):
     assert not a.is_alive() and not b.is_alive()
     assert second_entered.is_set()
     assert ProgramDatabase.get_artifacts is original
+
+
+def test_reference_fixture_restores_its_process_root_on_failure(monkeypatch):
+    import os
+    from zoo.circle_packing import host_reference
+    monkeypatch.delenv('MORI_CIRCLE_REFERENCE_ROOT', raising=False)
+    def fail(*args, **kwargs):
+        os.environ['MORI_CIRCLE_REFERENCE_ROOT'] = '/fake/fixture-output'
+        raise RuntimeError('fixture failure')
+    monkeypatch.setattr(host_reference, '_run_fixture', fail)
+    with pytest.raises(RuntimeError, match='fixture failure'):
+        host_reference.run_fixture('/fake/output')
+    assert 'MORI_CIRCLE_REFERENCE_ROOT' not in os.environ

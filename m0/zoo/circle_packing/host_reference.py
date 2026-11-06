@@ -72,8 +72,15 @@ def _hide_stage_receipts_from_prompts():
 def run_fixture(output, *, seed=0, iterations=1, fixture_broker=False, fixture_stage_broker=False):
     # The pinned controller and its environment use process-global state.
     with _FIXTURE_LOCK:
-        return _run_fixture(output, seed=seed, iterations=iterations, fixture_broker=fixture_broker,
-                            fixture_stage_broker=fixture_stage_broker)
+        previous_root = os.environ.get('MORI_CIRCLE_REFERENCE_ROOT')
+        try:
+            return _run_fixture(output, seed=seed, iterations=iterations, fixture_broker=fixture_broker,
+                                fixture_stage_broker=fixture_stage_broker)
+        finally:
+            if previous_root is None:
+                os.environ.pop('MORI_CIRCLE_REFERENCE_ROOT', None)
+            else:
+                os.environ['MORI_CIRCLE_REFERENCE_ROOT'] = previous_root
 
 
 def _run_fixture(output, *, seed, iterations, fixture_broker, fixture_stage_broker):
