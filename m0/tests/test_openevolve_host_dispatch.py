@@ -88,6 +88,15 @@ def test_unknown_usage_retains_physical_and_currency_and_blocks_next_call(author
     assert len(local_endpoint.requests) == 1
 
 
+def test_host_refuses_underreserved_provider_before_dispatch(authority, local_endpoint):
+    from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
+    ledger, budget, bridge, run, ready, main = authority
+    budget.options['operation_reservations']['operator']['token'] -= 1
+    with pytest.raises(ValueError, match='reservation'):
+        HostDispatchCoordinator(budget, bridge, run, ready)
+    assert not ledger.snapshot()['pending_calls'] and not local_endpoint.requests
+
+
 def test_billed_provider_failure_settles_both_authorities(authority, local_endpoint):
     from zoo.circle_packing.host_dispatch import HostDispatchCoordinator
     ledger, budget, bridge, run, ready, main = authority

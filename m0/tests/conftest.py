@@ -55,6 +55,9 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_openevolve_host_stage_budget.py": {
+        "test_real_sandbox_stages_are_charged_to_physical_budget",
+    },
     "test_openevolve_host_dispatch.py": {
         "test_actual_host_worker_uses_both_real_budget_authorities",
     },

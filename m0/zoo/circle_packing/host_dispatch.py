@@ -26,6 +26,9 @@ class HostDispatchCoordinator:
         if self.provider.governance_binding() != self.binding or \
                 self.provider.manifest_binding().get('message_mode') != 'openevolve_host_v1':
             raise ValueError('host provider must use its frozen exact-message mode')
+        reservation = budget.options.get('operation_reservations', {}).get('operator', budget.options['reservation'])
+        if reservation != {'token': self.binding['call_bound']['units']['token'], 'node': 1, 'eval_count': 0}:
+            raise ValueError('host physical reservation must cover exactly one bounded provider call')
 
     def audit(self):
         """Join original provider receipts to both existing authorities."""

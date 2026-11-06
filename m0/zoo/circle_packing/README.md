@@ -46,7 +46,9 @@ journal: it blocks a second call while a prior physical operation is open and
 only settles against an original completed provider receipt. The experimental
 `HostDispatchCoordinator` joins it to the CNY bridge and checks both authorities;
 loopback tests include a spawned upstream worker and crash after admission.
-It is not a complete live reference runner: evaluator and wall-clock ceilings,
+`HostStageAdmission` separately charges each sandbox stage and checks the first
+stage's geometry before authorizing the second. These components are not yet
+wired into a complete live reference runner: evaluator routing, wall-clock limits,
 control execution, full run recovery and end-to-end result export are pending.
 
 `governed_setup` is an internal composition factory for the existing CNY
