@@ -179,12 +179,32 @@ def _reduce_governance(event, policy, governance, operations, pending, spent, *,
         return pending, spent
     if not governance["enabled"]:
         raise ValueError("currency governance events precede explicit migration")
-    if kind == "claim_cell_deadline":
-        if set(event) != {"kind", "schema_version", "cell_id", "plan_ref", "record_sha256"}:
+    if kind == "freeze_circle_pilot":
+        if set(event) != {"kind", "schema_version", "plan_ref", "tree_ref", "wallclock_seconds"}:
+            raise ValueError("circle pilot binding has invalid fields")
+        seconds = _integer(event["wallclock_seconds"], "cell duration", 1)
+        if seconds > 86400:
+            raise ValueError("cell duration exceeds the supported limit")
+        value = {"plan_ref": _plan_ref(event["plan_ref"]), "tree_ref": _plan_ref(event["tree_ref"]),
+                 "wallclock_seconds": seconds}
+        if governance["circle_pilot"] is not None or governance["cell_claims"] or pending is not None:
+            raise ValueError("circle pilot must freeze once before any cell or unresolved call")
+        governance["circle_pilot"] = value
+    elif kind == "claim_cell_deadline":
+        fields = {"kind", "schema_version", "cell_id", "plan_ref", "record_sha256"}
+        pilot = governance["circle_pilot"]
+        if set(event) != (fields | {"seconds"} if pilot is not None else fields):
             raise ValueError("cell deadline claim has invalid fields")
         cell_id = _identifier(event["cell_id"], "cell identity")
         plan_ref = _plan_ref(event["plan_ref"])
         digest = _sha(event["record_sha256"])
+        if pilot is not None:
+            if pilot["plan_ref"] != plan_ref:
+                raise ValueError("cell deadline differs from the frozen pilot plan")
+            if re.fullmatch(r'(?:vendor|mori)-[012]', cell_id) is None:
+                raise ValueError("cell identity is outside the frozen pilot")
+            if type(event["seconds"]) is not int or event["seconds"] != pilot["wallclock_seconds"]:
+                raise ValueError("cell duration differs from the frozen pilot")
         if cell_id in governance["cell_claims"]:
             raise ValueError("cell deadline claim already exists")
         governance["cell_claims"][cell_id] = {"plan_ref": plan_ref, "record_sha256": digest,
@@ -337,7 +357,7 @@ def _reduce_history(policies, events, heads):
         raise ValueError("campaign authorization exceeds supported limit")
     operations, pending, spent = {}, None, 0
     governance = {"enabled": False, "runs": {}, "breaches": [], "cell_claims": {},
-                  "deadline_bindings": {}, "worker_claims": {}}
+                  "deadline_bindings": {}, "worker_claims": {}, "circle_pilot": None}
     seq, previous = 0, ZERO_HASH
     for number, payload, recorded_hash in events:
         event = json.loads(payload)
@@ -577,7 +597,7 @@ class CampaignBudget:
             return _call_bound(policy, {"schema_version": 1, "output_allowance": output_allowance,
                 "reserved_micro_cny": policy["context_tokens"] * 2 + output_allowance * 8})
 
-    def claim_cell_deadline(self, cell_id, plan_ref, record_sha256):
+    def claim_cell_deadline(self, cell_id, plan_ref, record_sha256, *, seconds=None):
         """Permanently bind one cell clock to this existing campaign journal."""
         _identifier(cell_id, "cell identity")
         _plan_ref(plan_ref)
@@ -585,8 +605,26 @@ class CampaignBudget:
         with self._transaction() as (db, _policy, state):
             if not state["governance"]["enabled"]:
                 raise ValueError("cell deadline claim requires currency governance")
-            self._append(db, state, {"kind": "claim_cell_deadline", "schema_version": 2,
-                "cell_id": cell_id, "plan_ref": plan_ref, "record_sha256": record_sha256})
+            event = {"kind": "claim_cell_deadline", "schema_version": 2,
+                     "cell_id": cell_id, "plan_ref": plan_ref, "record_sha256": record_sha256}
+            if state["governance"]["circle_pilot"] is not None:
+                event["seconds"] = seconds
+            self._append(db, state, event)
+
+    def freeze_circle_pilot(self, plan_ref, tree_ref, wallclock_seconds):
+        """Anchor one draft and source tree before any cell starts."""
+        _plan_ref(plan_ref)
+        _plan_ref(tree_ref)
+        _integer(wallclock_seconds, "cell duration", 1)
+        with self._transaction() as (db, _policy, state):
+            self._append(db, state, {"kind": "freeze_circle_pilot", "schema_version": 2,
+                                    "plan_ref": plan_ref, "tree_ref": tree_ref,
+                                    "wallclock_seconds": wallclock_seconds})
+
+    def circle_pilot_binding(self):
+        with self._transaction() as (_db, _policy, state):
+            value = state["governance"]["circle_pilot"]
+            return dict(value) if value is not None else None
 
     def anchor_cell_deadline_observation(self, cell_id, sequence, previous, observation_sha256):
         _identifier(cell_id, "cell identity")

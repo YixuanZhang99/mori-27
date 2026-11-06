@@ -106,10 +106,16 @@ class CellLifecycle:
         self.campaign_id = ledger.manifest_binding()['campaign_id']
 
     def create(self, record):
-        self.ledger.claim_cell_deadline(record['cell_id'], record['plan_ref'], record['record_sha256'])
+        self.ledger.claim_cell_deadline(record['cell_id'], record['plan_ref'], record['record_sha256'],
+                                        seconds=record['seconds'])
 
     def verify(self, record):
         claim = self.ledger.cell_deadline_claim(record['cell_id'])
+        pilot = self.ledger.circle_pilot_binding()
+        if pilot is not None and (pilot['plan_ref'] != record['plan_ref'] or
+                pilot['wallclock_seconds'] != record['seconds'] or
+                re.fullmatch(r'(?:vendor|mori)-[012]', record['cell_id']) is None):
+            raise ValueError('cell duration or identity differs from the frozen pilot')
         if self.ledger.manifest_binding()['campaign_id'] != self.campaign_id or claim is None or \
                 claim['plan_ref'] != record['plan_ref'] or claim['record_sha256'] != record['record_sha256']:
             raise ValueError('cell lifecycle claim is missing or differs from the frozen deadline')

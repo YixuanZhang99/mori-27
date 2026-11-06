@@ -33,7 +33,9 @@ def _stop_watch(deadline):
     return remaining
 
 
-def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=None, readonly_runtime=None):
+def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=None, readonly_runtime=None,
+                    frozen_plan=None, snapshot=None, source_manifest=None,
+                    expected_plan_ref=None, expected_campaign_id=None):
     """Launch one worker without inherited environment; expiry never certifies it."""
     if type(deadline) is not CellDeadline or type(command) is not list or not command or \
             any(type(part) is not str or not part for part in command):
@@ -57,6 +59,25 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
             directory in runtime.parents or runtime in deadline._store.path.resolve().parents or
             runtime in deadline._lifecycle.ledger.path.resolve().parents):
         raise ValueError('read-only runtime must be separate from workspace and authorities')
+    ledger = deadline._lifecycle.ledger
+    pilot = ledger.circle_pilot_binding()
+    frozen_args = (frozen_plan, snapshot, source_manifest, expected_plan_ref, expected_campaign_id)
+    if pilot is None:
+        if any(value is not None for value in frozen_args):
+            raise ValueError('worker has no frozen pilot binding')
+        verify_source = None
+    else:
+        if any(value is None for value in frozen_args) or source is None or \
+                deadline._record['plan_ref'] != expected_plan_ref:
+            raise ValueError('worker requires the frozen pilot source binding')
+        snapshot_root = Path(snapshot).resolve(strict=True)
+        if source != (snapshot_root / 'm0').resolve(strict=True):
+            raise ValueError('worker source differs from the frozen snapshot')
+        from zoo.circle_packing.frozen_source import verify_frozen_source
+        def verify_source():
+            return verify_frozen_source(ledger, frozen_plan, snapshot=snapshot, manifest=source_manifest,
+                expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
+        verify_source()
     remaining = deadline.remaining()
     if remaining <= 0:
         raise DeadlineExpired('cell deadline expired before worker claim')
@@ -102,6 +123,8 @@ def run_cell_worker(deadline, directory, workspace, command, *, readonly_source=
             journal.terminate_target(execution)
             return {'state': 'expired_unresolved'}
         result = journal.wait(process, execution)
+        if verify_source is not None:
+            verify_source()
         if result['timeout'] or deadline.remaining() <= 0:
             return {'state': 'expired_unresolved'}
         return {'state': 'completed' if result['returncode'] == 0 and not result['wrapper_error'] else 'failed',

@@ -11,7 +11,7 @@ from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_host_control import control_authority
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.cell_worker import run_cell_worker
-from zoo.circle_packing.clean_source import export_clean_source, verify_clean_source
+from zoo.circle_packing.frozen_source import freeze_source_plan, verify_frozen_source
 from zoo.circle_packing.host_control import HostSeedControl
 from zoo.circle_packing.host_dispatch import HostDispatchCoordinator, HostDispatchRouter
 from zoo.circle_packing.host_physical import HostStageAdmission
@@ -30,12 +30,14 @@ def test_timed_isolated_host_routes_model_and_stages_through_authorities(control
     lock = hashlib.sha256((checkout / 'm0' / 'uv.lock').read_bytes()).hexdigest()
     plan = build_draft_plan(ledger.manifest_binding(), source_commit=commit, dependency_lock_sha256=lock)
     ref = 'sha256:' + plan['draft_sha256']
+    campaign_id = ledger.manifest_binding()['campaign_id']
+    exported = freeze_source_plan(ledger, plan, checkout=checkout, destination=tmp_path / 'exported-source',
+                                  expected_plan_ref=ref, expected_campaign_id=campaign_id)
+    assert exported['source_commit'] == commit
     deadline = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='vendor-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
-    exported = export_clean_source(ledger, plan, 'vendor-0', checkout=checkout,
-                                   destination=tmp_path / 'exported-source', expected_plan_ref=ref)
-    assert exported['source_commit'] == commit
-    verify_clean_source(tmp_path / 'exported-source', exported['manifest'], expected_tree_ref=exported['tree_ref'])
+    verify_frozen_source(ledger, plan, snapshot=tmp_path / 'exported-source', manifest=exported['manifest'],
+                         expected_plan_ref=ref, expected_campaign_id=campaign_id)
     bridge.bind_cell_deadline(deadline, plan=plan, expected_plan_ref=ref, cell_id='vendor-0')
     assert asyncio.run(HostSeedControl(budget, bridge, run, ready, domain).execute('control-0000'))['status'] == 'evaluated'
     diff = ('<<<<<<< SEARCH\n    # Initialize arrays for 26 circles\n    n = 26\n=======\n'
@@ -68,11 +70,14 @@ assert result['stage_calls']==3 and result['performance_claim'] is False
         result = run_cell_worker(deadline, tmp_path / 'worker', workspace,
             ['/usr/bin/env', 'PYTHONHASHSEED=0', sys.executable, '-c', program,
              str(source), str(socket_path), str(token_path), str(workspace / 'host-run')],
-            readonly_source=source, readonly_runtime=Path(sys.prefix))
+            readonly_source=source, readonly_runtime=Path(sys.prefix), frozen_plan=plan,
+            snapshot=tmp_path / 'exported-source', source_manifest=exported['manifest'],
+            expected_plan_ref=ref, expected_campaign_id=campaign_id)
         thread.join(timeout=5)
         assert not thread.is_alive()
     assert result['state'] == 'completed'
-    verify_clean_source(tmp_path / 'exported-source', exported['manifest'], expected_tree_ref=exported['tree_ref'])
+    verify_frozen_source(ledger, plan, snapshot=tmp_path / 'exported-source', manifest=exported['manifest'],
+                         expected_plan_ref=ref, expected_campaign_id=campaign_id)
     assert len(local_endpoint.requests) == 1 and not ledger.snapshot()['pending_calls']
     assert budget.audit_governance()['physical_totals']['token'] == 7
     assert provider.audit()['currency']['protection_valid']
