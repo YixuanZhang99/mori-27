@@ -39,6 +39,53 @@ def _sync_dir(path):
         os.close(fd)
 
 
+
+def _verify_failed_construction_cycle(rows, event, logical_run_id):
+    """Bind unscored OpenEvolve failure to its original measured construction."""
+    from dataclasses import asdict
+    from core.composition.construction import decode_construction_outcome
+    from core.composition.contracts import OperatorFailure
+    from core.executor.types import CostVec
+    try:
+        cycle, proposal, evidence = event['cycle'], event['proposal'], event['evidence']
+        candidate = proposal['candidate']
+        candidate_id = candidate['id']
+        plans = [row['payload'] for row in rows if row['kind'] == 'openevolve_construction_plan'
+                 and row['payload'].get('candidate_id') == candidate_id]
+        outcomes = [row['payload'] for row in rows if row['kind'] == 'construction_outcome'
+                    and row['payload'].get('identity', {}).get('operation', {}).get('cycle') == cycle
+                    and row['payload']['identity']['operation'].get('run_id') == logical_run_id
+                    and row['payload']['identity']['operation'].get('lane') == 'main'
+                    and row['payload']['identity']['operation'].get('phase') == 'operator']
+        if type(cycle) is not int or len(plans) != 1 or len(outcomes) != 1:
+            raise ValueError('failed construction lacks a unique original plan or terminal')
+        plan, terminal = plans[0], outcomes[0]
+        identity = terminal['identity']
+        starts = [index for index, row in enumerate(rows) if row['kind'] == 'construction_started'
+                  and row['payload'].get('identity') == identity]
+        terminal_index = next(index for index, row in enumerate(rows)
+                              if row['kind'] == 'construction_outcome' and row['payload'] is terminal)
+        plan_index = next(index for index, row in enumerate(rows)
+                          if row['kind'] == 'openevolve_construction_plan' and row['payload'] is plan)
+        planned = plan['plan']['candidate']
+        if len(starts) != 1 or not plan_index < starts[0] < terminal_index or plan['plan_ref'] != 'sha256:' + payload_digest(plan['plan']) or \
+                plan['plan_ref'] != identity['plan_ref'] or identity['operation'].get('slot_id') is not None or \
+                identity['materializer']['kind'] != 'openevolve_diff_materializer_v1' or \
+                {**planned, 'hypothesis': candidate['hypothesis']} != candidate or \
+                candidate['created_cycle'] != cycle or proposal['artifact'] != '':
+            raise ValueError('failed construction differs from its original identity')
+        failure = decode_construction_outcome(terminal, identity)
+        result = evidence['eval_result']
+        if type(failure) is not OperatorFailure or payload_digest(asdict(failure.cost)) != payload_digest(proposal['cost']) or \
+                list(failure.measured_cost_units) != proposal['measured_cost_units'] or \
+                evidence['candidate_id'] != candidate_id or evidence['executor_status'] != 'failed_to_run' or \
+                evidence['result_text'] != str(failure) or result['status'] != 'failed_to_run' or \
+                result['text_feedback'] != str(failure) or result['metrics'] != {} or \
+                payload_digest(result['cost']) != payload_digest(asdict(CostVec())) or result['contract']['binding']['candidate_id'] != candidate_id:
+            raise ValueError('failed construction evidence differs from original outcome')
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('invalid failed construction evidence') from error
+
 class CNYInvocationBridge:
     """Fresh per-runtime adapter; the campaign itself remains independently shared."""
 
@@ -749,7 +796,7 @@ class CNYInvocationBridge:
             if key in proofs:
                 raise ValueError('duplicate cycle eligibility evidence')
             proofs[key] = (index, value)
-        by_candidate, decisions, pending = {}, set(), set()
+        by_candidate, decisions, pending, unscored = {}, set(), set(), set()
         for index, row in enumerate(rows):
             value = row['payload']
             if row['kind'] == 'composed_evidence':
@@ -762,7 +809,8 @@ class CNYInvocationBridge:
                 physical = [item for item in rows[:proof[0]] if item['kind'] == 'composed_physical_evidence'
                             and item['payload'].get('evidence', {}).get('evidence') == value['evidence']]
                 if not physical:
-                    raise ValueError('cycle eligibility lacks original physical evaluation')
+                    _verify_failed_construction_cycle(rows[:proof[0]], value, self._run.logical_run_id)
+                    unscored.add(candidate)
                 if candidate in by_candidate:
                     raise ValueError('duplicate candidate cycle eligibility evidence')
                 by_candidate[candidate] = proof
@@ -771,7 +819,8 @@ class CNYInvocationBridge:
                 candidate = value.get('candidate_id')
                 proof = by_candidate.get(candidate)
                 receipt = {key: item for key, item in value.items() if key not in {'event_id', 'receipt_id'}}
-                if proof is None or candidate in decisions or proof[1]['decision_sha256'] != payload_digest(receipt):
+                if proof is None or candidate in decisions or proof[1]['decision_sha256'] != payload_digest(receipt) or \
+                        (candidate in unscored and value.get('decision', {}).get('admit') is not False):
                     raise ValueError('decision differs from cycle eligibility evidence')
                 decisions.add(candidate)
                 pending.remove(candidate)
