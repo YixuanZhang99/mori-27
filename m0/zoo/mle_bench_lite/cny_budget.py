@@ -1010,6 +1010,13 @@ class CampaignBudget:
             return _circle_continuation_projection(policy, state['governance'], head=head,
                 pending=state['pending'], spent=state['spent'], reserved=state['reserved'])
 
+    def circle_continuation_binding(self, experiment_id):
+        """Read a recorded fixture continuation without granting new work."""
+        _identifier(experiment_id, 'experiment identity')
+        with self._transaction() as (_db, _policy, state):
+            value = state['governance']['circle_continuations'].get(experiment_id)
+            return json.loads(_json(value))
+
     def freeze_circle_runtime(self, plan_ref, tree_ref, runtime_ref, python_sha256):
         _plan_ref(plan_ref)
         _plan_ref(tree_ref)
