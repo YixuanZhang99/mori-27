@@ -254,13 +254,18 @@ def build_reference_provider(ledger, plan, *, api_key, base_url, operator_cap, f
 
 
 def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expected_campaign_id,
-                                deadline, snapshot, source_manifest, runner, api_key, base_url=None):
+                                deadline, snapshot, source_manifest, runner, api_key, base_url=None,
+                                mode='fixture'):
     """Prepare one bounded reference cell; callers still own process supervision."""
     if type(ledger) is not CampaignBudget or type(deadline) is not CellDeadline or \
             deadline._lifecycle.ledger is not ledger:
         raise ValueError('reference requires its original campaign and cell deadline')
-    if not ledger.is_fixture_campaign():
+    if mode not in ('fixture', 'live_preparation'):
+        raise ValueError('unsupported reference authority mode')
+    if mode == 'fixture' and not ledger.is_fixture_campaign():
         raise ValueError('reference fixture requires a marked fixture campaign')
+    if mode == 'live_preparation' and ledger.is_fixture_campaign():
+        raise ValueError('live preparation requires a non-fixture campaign')
     cell = deadline._record['cell_id']
     if not re.fullmatch(r'vendor-[012]', cell):
         raise ValueError('reference requires a declared vendor cell')
@@ -278,14 +283,8 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
         raise ValueError('reference requires the original frozen campaign runtime')
     verify_frozen_source(ledger, plan, snapshot=snapshot, manifest=source_manifest,
                          expected_plan_ref=expected_plan_ref, expected_campaign_id=expected_campaign_id)
-    if type(api_key) is not str or not api_key.strip():
-        raise ValueError('reference provider requires an in-memory key')
-    if type(base_url) is not str:
-        raise ValueError('reference fixture requires an explicit loopback provider')
-    url = urllib.parse.urlsplit(base_url)
-    if url.scheme != 'http' or url.hostname not in {'127.0.0.1', '::1'} or \
-            url.username or url.password or url.query or url.fragment:
-        raise ValueError('reference fixture requires an explicit loopback provider')
+    build_reference_provider(ledger, plan, api_key=api_key, base_url=base_url,
+                             operator_cap=1, fixture=mode == 'fixture')
     deadline.check()
     requested = Path(output)
     if requested.is_symlink():
@@ -336,19 +335,19 @@ def build_reference_authorities(output, *, ledger, plan, expected_plan_ref, expe
         return _build_authorities(root, ledger=ledger, plan=plan, deadline=deadline, cell=cell,
                                   expected_plan_ref=expected_plan_ref, runner=runner, api_key=api_key,
                                   base_url=base_url, authority_ref=authority_ref, existing_claim=fresh_claim,
-                                  currency_run_id=currency_run_id, lease=lease)
+                                  currency_run_id=currency_run_id, lease=lease, mode=mode)
     except BaseException:
         lease.close()
         raise
 
 
 def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref, runner, api_key,
-                       base_url, authority_ref, existing_claim, currency_run_id, lease):
+                       base_url, authority_ref, existing_claim, currency_run_id, lease, mode):
     policy = ledger.manifest_binding()
 
     def provider(operator_cap):
         return build_reference_provider(ledger, plan, api_key=api_key, base_url=base_url,
-                                        operator_cap=operator_cap, fixture=True)
+                                        operator_cap=operator_cap, fixture=mode == 'fixture')
 
     main, control_provider = provider(1), provider(2)
     bound = main.governance_binding()['call_bound']['units']['token']
@@ -397,7 +396,11 @@ def _build_authorities(root, *, ledger, plan, deadline, cell, expected_plan_ref,
         raise ValueError('reference physical journal differs from original authority claim')
     ledger.claim_reference_authority(cell, deadline._record['record_sha256'], authority_ref,
                                      currency_run_id, initial_ref)
-    lease.bind_start(lambda: ledger.start_reference_authority_work(cell, authority_ref))
+    def start_work():
+        if mode != 'fixture':
+            raise ValueError('live reference work requires the completed pilot gate')
+        ledger.start_reference_authority_work(cell, authority_ref)
+    lease.bind_start(start_work)
     run = ExternalRunContext(logical_run_id=authority_ref[:32], runtime_id=EXTERNAL_RUNTIME,
         workdir=str(root), physical_plan=physical_plan, main_provider_binding=main.governance_binding(),
         control_provider_bindings={'control-0000': control_provider.governance_binding()},

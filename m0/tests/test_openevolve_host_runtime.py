@@ -108,6 +108,49 @@ def test_reference_fixture_refuses_unmarked_campaign_before_protection(tmp_path,
     assert not local_endpoint.requests
 
 
+def test_real_reference_authorities_prepare_but_cannot_start_without_live_gate(tmp_path, local_endpoint, monkeypatch):
+    import asyncio
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
+    options = prepared_reference(tmp_path, local_endpoint, fixture_campaign=False)
+    ledger = options['ledger']
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='campaign provider'):
+        build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    assert ledger.snapshot() == before
+    options['base_url'] = ledger.manifest_binding()['provider_base_url']
+    def forbidden(*args, **kwargs):
+        raise AssertionError('live preparation must not perform a provider request')
+    monkeypatch.setattr(GovernedCNYProvider, 'perform_request', forbidden)
+    authority = build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    try:
+        assert authority.run.provider_sessions['main'].manifest_binding()['base_url'] == options['base_url']
+        assert authority.budget.options['limits']['global']['token'] == options['plan']['limits']['token']
+        with pytest.raises(ValueError, match='live.*gate'):
+            asyncio.run(authority.control.execute('control-0000'))
+        with pytest.raises(ValueError, match='live.*gate'):
+            authority.stages.execute('a' * 32, 'program', stage=1)
+        assert not ledger.snapshot()['pending_calls']
+        assert ledger.snapshot()['settled_upper_bound_micro_cny'] == 0
+        assert ledger.reference_authority_claim('vendor-0')['work_started'] is False
+        assert not local_endpoint.requests
+        for path in (tmp_path / 'reference').rglob('*'):
+            if path.is_file() and not path.is_symlink():
+                assert b'fixture-only-secret' not in path.read_bytes(), f'fixture credential persisted in {path}'
+    finally:
+        authority.close()
+
+
+def test_live_reference_preparation_rejects_fixture_campaign(tmp_path, local_endpoint):
+    from zoo.circle_packing.host_runtime import build_reference_authorities
+    options = prepared_reference(tmp_path, local_endpoint)
+    ledger = options['ledger']
+    before = ledger.snapshot()
+    with pytest.raises(ValueError, match='non-fixture campaign'):
+        build_reference_authorities(tmp_path / 'reference', **options, mode='live_preparation')
+    assert ledger.snapshot() == before
+
+
 def test_reference_snapshot_requires_original_worker_and_anchored_stage(tmp_path, local_endpoint, monkeypatch):
     import asyncio
     from test_openevolve_host_stage_budget import fake_result

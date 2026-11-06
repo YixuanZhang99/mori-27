@@ -212,3 +212,8 @@ original campaign endpoint without sending a request. The existing reference
 cell launcher remains fixture-only; preparation alone does not authorize a
 real reference run. Its fixture authority also requires a separately created
 fixture ledger and the fixed fake key before it can reserve or execute work.
+Reference `live_preparation` can assemble real-provider authorities without
+starting control, model or stage work. Preparation does write a durable
+reference claim and protects currency in the supplied campaign, so use only a
+dedicated temporary campaign for tests. Live work remains disabled until the
+pilot readiness gate is implemented.
