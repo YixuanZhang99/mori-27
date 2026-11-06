@@ -12,6 +12,7 @@ import stat
 
 from core.composition.recovery import ContinuationStore
 from core.executor.process import ProcessJournal
+from core.x1.checkpoint import payload_digest
 from zoo.circle_packing.cell_deadline import CellDeadline
 from zoo.circle_packing.mori_fixture_worker import validate_config
 from zoo.mle_bench_lite.cny_budget import CampaignBudget
@@ -57,11 +58,18 @@ def launch_fixture_controller(config, *, deadline, directory):
     fd = os.open(setup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w', encoding='utf-8') as stream:
         json.dump(config, stream, sort_keys=True, allow_nan=False)
+    worker_ref = payload_digest({'schema_version': 1, 'cell_id': record['cell_id'],
+        'deadline_ref': record['record_sha256'], 'config_sha256': payload_digest(config),
+        'directory': str(root), 'entry': 'zoo.circle_packing.mori_fixture_worker'})
+    ledger.claim_cell_worker(record['cell_id'], record['record_sha256'], worker_ref)
+    remaining = deadline.remaining()
+    if remaining <= 0:
+        raise ValueError('fixture controller deadline expired after claim')
     journal = ProcessJournal(ContinuationStore(root / 'controller.jsonl'))
     process, execution = journal.launch(
         [str(runtime / 'bin' / 'python'), '-m', 'zoo.circle_packing.mori_fixture_worker', str(setup)], root,
         {'PATH': os.defpath, 'PYTHONPATH': str(source), 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'},
-        remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1}, die_with_parent=True,
+        remaining, {'candidate_id': 'fixture-coordinator', 'attempt': 1, 'worker_ref': worker_ref}, die_with_parent=True,
         absolute_deadline={'boot_id': record['boot_id'],
             'deadline_ns': record['start_ns'] + record['seconds'] * 1_000_000_000})
     try:

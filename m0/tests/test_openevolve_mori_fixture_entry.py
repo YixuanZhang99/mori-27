@@ -85,6 +85,38 @@ def test_fixture_supervisor_rejects_missing_clock_before_creating_files(tmp_path
     assert not output.exists()
 
 
+@pytest.mark.linux
+def test_fixture_supervisor_claims_cell_once_before_start(tmp_path, monkeypatch):
+    from core.composition.recovery import ContinuationStore
+    from core.executor.process import ProcessJournal
+    from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+    from zoo.circle_packing.mori_supervisor import launch_fixture_controller
+    ledger = fixture_campaign(tmp_path)
+    ref = 'sha256:' + 'a' * 64
+    deadline = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'),
+        lifecycle=CellLifecycle(ledger), cell_id='mori-0', plan_ref=ref, seconds=30)
+    source = tmp_path / 'source' / 'm0'
+    runtime = tmp_path / 'runtime'
+    source.mkdir(parents=True)
+    runtime.mkdir()
+    campaign_id = ledger.manifest_binding()['campaign_id']
+    cfg = {**config(), 'ledger': str(ledger.path), 'clock': str(deadline._store.path),
+           'source': str(source), 'runtime': str(runtime), 'output': str(tmp_path / 'output'),
+           'campaign_id': campaign_id, 'ref': ref}
+    monkeypatch.setattr('zoo.circle_packing.pilot_plan.validate_draft_cell',
+                        lambda *a, **k: {'campaign_id': campaign_id, 'wallclock_seconds': 30})
+    monkeypatch.setattr('zoo.circle_packing.frozen_source.verify_frozen_source', lambda *a, **k: None)
+    monkeypatch.setattr('zoo.circle_packing.frozen_runtime.verify_frozen_runtime', lambda *a, **k: None)
+    starts = []
+    monkeypatch.setattr(ProcessJournal, 'launch', lambda *a, **k: (starts.append(True), {}))
+    monkeypatch.setattr(ProcessJournal, 'wait', lambda *a, **k: {'returncode': 0})
+    launch_fixture_controller(cfg, deadline=deadline, directory=tmp_path / 'first')
+    assert ledger.cell_worker_claim('mori-0') is not None
+    with pytest.raises(ValueError, match='claimed'):
+        launch_fixture_controller(cfg, deadline=deadline, directory=tmp_path / 'second')
+    assert len(starts) == 1
+
+
 def test_fixture_campaign_cannot_bind_real_provider(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from test_governed_cny_framework import framework, CountedProvider

@@ -343,6 +343,7 @@ print(json.dumps(recover_reference_snapshot(view, clock, value['run_id'], plan=v
         'clock': str(mori_clock._store.path), 'output': str(mori_output), 'base_url': local_endpoint.url}
     process_result = launch_fixture_controller(config, deadline=mori_clock, directory=tmp_path / 'mori-controller')
     assert process_result['returncode'] == 0 and not process_result['timeout'], process_result['stderr']
+    assert ledger.cell_worker_claim('mori-0')['deadline_ref'] == mori_clock._record['record_sha256']
     assert process_result['wrapper_error'] is None
     mori = json.loads(process_result['stdout'])
     assert mori['mode'] == 'fixture' and mori['performance_claim'] is False

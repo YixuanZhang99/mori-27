@@ -180,4 +180,6 @@ This does not make the fixture a live entry point or establish score parity.
 `launch_fixture_controller` starts the named Mori controller from a fresh
 private directory after checking the original fixture campaign, cell clock,
 frozen plan, source and runtime. Its process journal and deadline guard retain
-execution evidence. It does not certify all descendants or authorize live use.
+execution evidence. It claims the cell before process launch; a duplicate or
+interrupted claim cannot silently start the controller again. It does not
+certify all descendants or authorize live use.
