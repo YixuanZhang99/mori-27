@@ -893,6 +893,7 @@ def test_supervised_pair_recalculates_both_arms_at_one_campaign_head(prepared_ce
         assert supervised['reference_accounting_coverage']['complete_run_certified'] is False
         assert supervised['reference_best_coverage']['selected_id'] == vendor_report['selected_program']['id']
         assert supervised['reference_best_coverage']['complete_run_certified'] is False
+        assert supervised['reference_best_coverage']['candidate_iteration_and_island_verified'] is True
         replay_input = json.loads((Path(config['output']) / 'replay-input.json').read_text())
         replay_payload = {'mori_config': config, 'reference_config': vendor_config,
             'mori_directory': str(tmp_path / 'mori-supervisor'),
