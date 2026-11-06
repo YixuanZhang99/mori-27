@@ -363,7 +363,7 @@ def audit_reference_iteration_stages(trace, rows, *, planned_iterations):
                     if status not in ('ok', 'timeout', 'failed_to_run'):
                         raise ValueError('reference stage outcome is invalid')
                     output.update(state='matched', stage_status=status,
-                                  candidate_identity_verified=submitted[0]['state'] == 'candidate')
+                                  candidate_program_digest_matches=submitted[0]['state'] == 'candidate')
                     attributed.add(request_id)
             results.append(output)
         return {'schema_version': 1, 'scope': 'caller_pinned_reference_iteration_stages',

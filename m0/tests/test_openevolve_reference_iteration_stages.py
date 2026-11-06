@@ -17,6 +17,7 @@ def test_recorded_iteration_stage_checks_original_identity_and_outcome():
             {'kind': 'host_stage_completed', 'payload': {'request_id': stage_id, 'result': {'status': 'timeout'}}}]
     result = audit_reference_iteration_stages(trace, rows, planned_iterations=2)
     assert result['stages'][0]['state'] == 'matched' and result['stages'][0]['stage_status'] == 'timeout'
+    assert result['stages'][0]['candidate_program_digest_matches'] is True
     assert result['unattributed_stage_ids'] == []
     damaged = copy.deepcopy(rows)
     damaged[0]['payload']['program_ref'] = 'sha256:' + 'f' * 64
