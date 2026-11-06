@@ -1,5 +1,8 @@
 """Real Framework currency/role plumbing over loopback, never a paid run."""
 import json
+import os
+from pathlib import Path
+import subprocess
 
 import pytest
 from core.loop import Framework, LoopConfig
@@ -8,6 +11,66 @@ from test_governed_cny_framework import campaign_fixture
 from test_governed_cny_provider import local_endpoint, reply
 from zoo.circle_packing.domain import CirclePackingDomain
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
+
+
+@pytest.mark.linux
+def test_mori_control_and_main_use_same_locked_runtime(tmp_path, local_endpoint):
+    from test_openevolve_source_preflight import draft
+    from zoo.circle_packing.frozen_source import freeze_source_plan
+    from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
+    from zoo.circle_packing.governed import governed_setup
+    campaign = campaign_fixture(tmp_path)
+    runner = SandboxRunner()
+    clock_options = {}
+    cache = os.environ.get('MORI_TEST_OFFLINE_CACHE')
+    if cache:
+        repository = Path(__file__).resolve().parents[2]
+        commit = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+        checkout = tmp_path / 'checkout'
+        subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(repository), str(checkout)], check=True)
+        subprocess.run(['git', '-C', str(checkout), 'checkout', '--quiet', '--detach', commit], check=True)
+        plan, ref = draft(campaign, checkout, commit)
+        campaign_id = campaign.manifest_binding()['campaign_id']
+        source = tmp_path / 'source'
+        exported = freeze_source_plan(campaign, plan, checkout=checkout, destination=source,
+                                      expected_plan_ref=ref, expected_campaign_id=campaign_id, require_runtime=True)
+        runtime = tmp_path / 'runtime'
+        frozen = prepare_frozen_runtime(campaign, plan, snapshot=source, source_manifest=exported['manifest'],
+            expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+            base_python='/usr/bin/python3.12', uv_cache=cache)
+        runner = SandboxRunner.for_campaign_runtime(campaign, runtime=runtime, manifest=frozen['manifest'],
+                                                    base_python='/usr/bin/python3.12')
+        from core.composition.recovery import ContinuationStore
+        from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
+        clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(campaign),
+                                   cell_id='mori-0', plan_ref=ref, seconds=plan['limits']['wallclock_seconds'])
+        clock_options = {'cell_deadline': clock, 'draft_plan': plan, 'expected_plan_ref': ref}
+    local_endpoint.responses.append(reply(choices=[{'finish_reason': 'stop', 'message': {'content':
+        '<<<<<<< SEARCH\n    n = 26\n=======\n    n = 26\n    # fixture\n>>>>>>> REPLACE\n'}}]))
+    options = dict(ledger=campaign, api_key='fixture-only-secret', seed=0, iterations=1,
+                   base_url=local_endpoint.url, max_completion_tokens=4, runner=runner, **clock_options)
+    profile, registry, provider = governed_setup(tmp_path / 'run', **options)
+    domain = CirclePackingDomain(tmp_path / 'run' / 'domain', runner=runner)
+    cfg = LoopConfig(max_generations=1, total_budget=profile['budget']['options']['limits']['global']['token'],
+                     reeval_floor=0, baseline_every=100)
+    fw = Framework.from_profile(profile, provider, domain, cfg, str(tmp_path / 'run' / 'framework'),
+                                component_registry=registry)
+    fw.evolve('Improve the arrangement of 26 circles in a square')
+    assert fw.inspect()['governance']['completed'] == 1
+    assert len(local_endpoint.requests) == 1 and not campaign.snapshot()['pending_calls']
+    if cache:
+        assert runner.manifest_binding['runtime_ref'] == campaign.circle_runtime_binding()['runtime_ref']
+    def adapters(path, store):
+        _, _, replay_provider = governed_setup(tmp_path / 'run', **options)
+        return replay_provider, CirclePackingDomain(tmp_path / 'replay-domain', runner=runner.independent_runner())
+    if cache:
+        # Timed replay deliberately fails closed until eligibility evidence exists.
+        with pytest.raises(RuntimeError, match='replay execution failed') as error:
+            fw.replay(adapter_factory=adapters)
+        assert 'deadline-bound replay requires recorded eligibility evidence' in str(error.value.__cause__)
+    else:
+        assert fw.replay(adapter_factory=adapters)['replay_certificate']['passed']
+    assert len(local_endpoint.requests) == 1
 
 
 def test_governed_circle_run_binds_roles_control_cost_and_replay(tmp_path, local_endpoint, monkeypatch):

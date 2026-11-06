@@ -79,4 +79,6 @@ Linux 进程隔离回归使用现有 ProcessJournal 和 Bubblewrap 实际启动�
 
 离线评测 runner 现可显式绑定同一 campaign runtime，独立控制 runner 和 host 调度器可继承这一绑定，评测前后校验其内容；验证也检查 runtime 挂载根与受保护路径不得重叠。这些接口需要调用方显式配置，并不构成完整 live 启动器或执行期间不可变性的证明。
 
+Mori 的 `governed_setup` 接受绑定原 campaign 的 runner，并用独立实例构造控制域；campaign 已绑定 runtime 时拒绝省略或替换该绑定，要求 runtime 的冻结计划还须提供对应单元时钟。调用方仍须将对应 runner 传给主域并由未来的 live 入口核验主域与控制域一致，现有工厂不单独授权真实运行。
+
 参考侧离线夹具现有命名 worker 入口：它从已冻结的源码副本启动上游控制器，并在消耗唯一 worker 声明前与本地 broker 完成不触发模型或评测的 capability 握手。该握手依赖可信调用方创建并持有 broker 和临时令牌；令牌文件若在父子进程检查之间被替换，worker 可能失败并消耗声明。它不能代替真实依赖冻结、两臂监督和付费试跑验收。

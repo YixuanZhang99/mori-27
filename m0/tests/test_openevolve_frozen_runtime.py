@@ -123,6 +123,36 @@ def test_stage_runner_executes_and_verifies_campaign_runtime(tmp_path):
         independent.execute(workspace, timeout=15)
 
 
+def test_mori_governance_control_uses_original_campaign_runtime(tmp_path):
+    from types import SimpleNamespace
+    from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
+    from zoo.circle_packing.governed import governed_setup
+    from zoo.mle_bench_lite.composed_domain import SandboxRunner
+    ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path, require_runtime=True)
+    options = dict(ledger=ledger, api_key='fixture-only-secret', seed=0, iterations=1,
+                   max_completion_tokens=4)
+    with pytest.raises(ValueError, match='runtime'):
+        governed_setup(tmp_path / 'run', **options)
+    runtime = tmp_path / 'runtime'
+    frozen = prepare_frozen_runtime(ledger, plan, snapshot=snapshot, source_manifest=exported['manifest'],
+        expected_plan_ref=ref, expected_campaign_id=campaign_id, destination=runtime,
+        base_python='/usr/bin/python3.12', uv_cache=cache)
+    runner = SandboxRunner.for_campaign_runtime(ledger, runtime=runtime, manifest=frozen['manifest'],
+                                                base_python='/usr/bin/python3.12')
+    with pytest.raises(ValueError, match='runtime'):
+        governed_setup(tmp_path / 'run', **options)
+    with pytest.raises(ValueError, match='clock'):
+        governed_setup(tmp_path / 'run', runner=runner, **options)
+    clock = CellDeadline.start(ContinuationStore(tmp_path / 'mori-clock.jsonl'), lifecycle=CellLifecycle(ledger),
+                               cell_id='mori-0', plan_ref=ref, seconds=2700)
+    _, registry, _ = governed_setup(tmp_path / 'run', runner=runner, cell_deadline=clock,
+                                    draft_plan=plan, expected_plan_ref=ref, **options)
+    factory = registry._entries[('domain', 'circle-control')].factory
+    control = factory(SimpleNamespace(invocation_scope={'slot_id': 'control-0000'}), {})
+    assert control.runner is not runner
+    assert control.runner.manifest_binding == runner.manifest_binding
+
+
 def test_runtime_creation_rejects_started_cell_and_existing_destination(tmp_path):
     from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
     ledger, plan, ref, campaign_id, snapshot, exported, cache = fixture(tmp_path)

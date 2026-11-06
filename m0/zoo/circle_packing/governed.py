@@ -16,12 +16,27 @@ from zoo.mle_bench_lite.governed_provider import GovernedCNYProvider
 
 def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
                    max_completion_tokens=16384, total_token_ceiling=None,
-                   cell_deadline=None, draft_plan=None, expected_plan_ref=None):
+                   cell_deadline=None, draft_plan=None, expected_plan_ref=None, runner=None):
     policy = ledger.manifest_binding()
     snapshot = ledger.snapshot()
     if snapshot.get('pending_calls') or snapshot.get('protection_breaches') or \
             snapshot.get('journal_schema_version') != 2:
         raise ValueError('existing campaign must be quiescent and governance enabled')
+    pilot = ledger.circle_pilot_binding()
+    binding = ledger.circle_runtime_binding()
+    if pilot is not None and pilot.get('require_runtime') and binding is None:
+        raise ValueError('frozen pilot requires a bound runtime before setup')
+    if runner is not None and type(runner) is not SandboxRunner:
+        raise ValueError('control runner requires a trusted sandbox')
+    if binding is not None:
+        if runner is None or runner._campaign_runtime is None or runner._campaign_runtime[0] is not ledger or \
+                runner.manifest_binding.get('runtime_ref') != binding['runtime_ref']:
+            raise ValueError('control runner must use the original campaign runtime')
+    elif runner is not None and runner._campaign_runtime is not None:
+        raise ValueError('control runtime is not bound to this campaign')
+    if pilot is not None and pilot.get('require_runtime') and any(
+            value is None for value in (cell_deadline, draft_plan, expected_plan_ref)):
+        raise ValueError('frozen pilot setup requires its original cell clock')
     root = Path(output).resolve()
     def fresh():
         return GovernedCNYProvider(policy['model'], base_url or policy['provider_base_url'],
@@ -50,7 +65,8 @@ def governed_setup(output, *, ledger, api_key, seed, iterations, base_url=None,
     registry.register('provider', 'circle-control', lambda _ctx, _opts: fresh(),
                       governance=fresh().governance_binding())
     registry.register('domain', 'circle-control', lambda ctx, _opts: CirclePackingDomain(
-        root / 'controls' / ctx.invocation_scope['slot_id'], runner=SandboxRunner()),
+        root / 'controls' / ctx.invocation_scope['slot_id'],
+        runner=SandboxRunner() if runner is None else runner.independent_runner()),
         governance={'schema_version': 1, 'fresh_session': True, 'state_independent': True})
     reservations = {'operator': {'token': 2 * bound, 'node': 1, 'eval_count': 0},
                     'evaluation': {'token': 0, 'node': 0, 'eval_count': 2}}
