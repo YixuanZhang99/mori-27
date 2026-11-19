@@ -25,8 +25,9 @@ def short_socket_dir():
     with tempfile.TemporaryDirectory(prefix='mori-sock-', dir='/tmp') as directory:
         yield Path(directory).resolve()
 
-# Every test in these modules constructs a Linux-dependent execution backend.
+# Every test in these modules uses a Linux-dependent execution backend or clock.
 LINUX_MODULES = {
+    "test_openevolve_contained_terminal.py": "contained terminal fixtures bind the real Linux boot identity and clock",
     "test_openevolve_host_dispatch.py": "reference host runs a real sandboxed independent control",
     "test_openevolve_host_control.py": "protected circle control uses real sandbox evaluation",
     "test_openevolve_governed_framework.py": "real governed circle evaluation with loopback HTTP",
@@ -65,6 +66,25 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_openevolve_deadline_currency.py": {
+        "test_single_run_bridge_rejects_unsupervised_process_before_protection",
+        "test_live_bridge_rejects_later_seed_before_using_a_supervisor_claim",
+    },
+    "test_openevolve_matrix_report.py": {
+        "test_six_cells_keep_unrun_unknown_cost_and_verified_timeout",
+        "test_omitted_evidence_does_not_invent_failure_or_zero_cost",
+        "test_report_rejects_caller_supplied_score_and_uses_exact_head",
+        "test_recorded_currency_can_be_known_while_terminal_remains_unresolved",
+        "test_report_rejects_valid_currency_prefix_at_a_newer_head",
+        "test_report_does_not_accept_conflicting_terminal_files",
+        "test_pair_score_cannot_be_injected_as_caller_data",
+        "test_legacy_multi_run_cell_cannot_report_one_run_as_its_total",
+        "test_original_matrix_rejects_mutated_recorded_currency_cache",
+    },
+    "test_openevolve_mori_fixture_entry.py": {
+        "test_resume_unstarted_cell_uses_original_clock_and_refuses_started_worker",
+        "test_recorded_mori_setup_needs_no_provider_key_and_refuses_live_run",
+    },
     "test_openevolve_host_stage_budget.py": {
         "test_real_sandbox_stages_are_charged_to_physical_budget",
     },

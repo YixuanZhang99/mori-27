@@ -82,7 +82,9 @@ jobs:
       - name: Prepare fast private temporary directory for acceptance
         run: bash scripts/setup_ci_tmpdir.sh
       - name: Full acceptance with no skipped tests
-        run: make accept-linux
+        run: |
+          export MORI_TEST_OFFLINE_CACHE="$(uv cache dir)"
+          make accept-linux
       - name: Confirm historical certificates were not modified
         if: always()
         run: git diff --exit-code -- m0/verifier

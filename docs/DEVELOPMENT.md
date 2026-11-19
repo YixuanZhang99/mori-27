@@ -62,6 +62,12 @@ Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不�
 
 新增测试默认进入可移植集合。只有确实依赖 Linux 执行机制的测试才应显式标记或加入清单，并同时在 Linux 验收；不要用平台标记掩盖业务断言失败。
 
+OpenEvolve 的四项完整 continuation 集成测试还需要显式提供已填充的 uv 缓存。
+先运行 `make setup`，再使用 `MORI_TEST_OFFLINE_CACHE="$(uv cache dir)" make accept-linux`。
+测试会从当前 Git 提交导出源码，在独立目录中离线安装锁定运行时；不会下载依赖
+或调用真实模型。Linux CI 在完整验收步骤传入同一缓存，继续保留
+`--fail-on-skip`，缺少前置条件不能产生通过结果。
+
 五阶段分别是 S1 模块组装、S2 统一评估契约、S3 记忆与知识回流、S4 三层准入、S5 分层预算。每阶段都要补充通过公共 API 的端到端场景，先通过 `make check`，再取得同一阶段提交的 Linux Actions 全量成功证据，才能记录该阶段验收完成。S1 验收不会把 S2–S5 标为完成；后续 verifier 保留旧命令组与历史证据，新增阶段测试，避免用替换旧测试缩小验收范围。
 
 ## GitHub Actions 实际运行路径
