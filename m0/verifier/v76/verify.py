@@ -66,8 +66,15 @@ def verify_historical_acceptance():
 
 
 def run_command(name, command, timeout=300):
-    proc = subprocess.run(command, cwd=ROOT, env=environment(), capture_output=True,
-                          text=True, timeout=timeout)
+    try:
+        proc = subprocess.run(command, cwd=ROOT, env=environment(), capture_output=True,
+                              text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        # Timeout output can be bytes even with text=True, or end mid-character.
+        output = ''.join(part.decode('utf-8', errors='replace') if isinstance(part, bytes) else part or ''
+                         for part in (error.stdout, error.stderr))
+        print(output, flush=True)
+        raise
     output = (proc.stdout + proc.stderr).strip()
     print(output, flush=True)
     check(name, proc.returncode == 0 and "skipped" not in output.lower(), output[-3500:])
@@ -332,7 +339,7 @@ def main():
                      *recovery], timeout=600)
         run_command("complete_local_regression",
                     [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
-                    timeout=1500)
+                    timeout=2100)
         run_command("static_axioms", [sys.executable, "ci/check_axioms.py"])
         benchmark_source = (ROOT / "core/tasks/benchmark.py").read_text()
         re_runner = (ROOT / "zoo/re_bench/runner.py").read_text()

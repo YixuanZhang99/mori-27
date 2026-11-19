@@ -24,6 +24,22 @@ def commands(version):
 
 
 class V76ContractTests(unittest.TestCase):
+    def test_timed_out_command_retains_utf8_output_without_recording_success(self):
+        spec = importlib.util.spec_from_file_location('v76_timeout_fixture', ROOT / 'm0/verifier/v76/verify.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        command = [sys.executable, '-c',
+            "import os,time; os.write(1, 'stdout: 进度\\n'.encode('utf-8')); "
+            "os.write(2, 'stderr: 警告\\n'.encode('utf-8')); time.sleep(30)"]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(subprocess.TimeoutExpired) as raised:
+            module.run_command('timeout_fixture', command, timeout=1)
+        self.assertEqual(raised.exception.cmd, command)
+        self.assertEqual(raised.exception.timeout, 1)
+        self.assertIn('stdout: 进度', output.getvalue())
+        self.assertIn('stderr: 警告', output.getvalue())
+        self.assertEqual(module.CHECKS, [])
+
     def test_all_v75_commands_are_retained_and_only_full_timeout_changes(self):
         old, new = commands('v75'), commands('v76')
         self.assertEqual(set(old), set(new))
@@ -31,7 +47,7 @@ class V76ContractTests(unittest.TestCase):
             current = new[name]
             if name == 'complete_local_regression':
                 self.assertEqual(previous.keywords[0].value.value, 900)
-                self.assertEqual(current.keywords[0].value.value, 1500)
+                self.assertEqual(current.keywords[0].value.value, 2100)
                 current.keywords[0].value.value = 900
             self.assertEqual(ast.dump(previous), ast.dump(current), name)
 
@@ -51,7 +67,7 @@ class V76ContractTests(unittest.TestCase):
         makefile = (ROOT / 'Makefile').read_text()
         self.assertIn('full v76', workflow)
         self.assertIn('timeout-minutes: 60', workflow)
-        self.assertIn('scripts/run_acceptance_v76.py --timeout 3000', makefile)
+        self.assertIn('scripts/run_acceptance_v76.py --timeout 3300', makefile)
         self.assertIn('scripts/run_acceptance_v75.py --timeout 2100', makefile)
 
     def test_v75_verification_rejects_modified_or_omitted_sources(self):

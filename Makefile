@@ -44,7 +44,7 @@ check: axioms test examples tooling
 
 accept-linux:
 	$(UV) run --project m0 --locked python scripts/check_linux.py
-	$(UV) run --project m0 --locked python scripts/run_acceptance_v76.py --timeout 3000
+	$(UV) run --project m0 --locked python scripts/run_acceptance_v76.py --timeout 3300
 
 accept-linux-v75:
 	$(UV) run --project m0 --locked python scripts/check_linux.py

@@ -25,3 +25,13 @@
 ## Follow-up: preserve Git identity in the isolated execution copy
 
 The first complete local v76 run reached the full-regression deadline but failed three tests: the copied source had no Git checkout, while OpenEvolve fixtures require commit identity and a local clone. Reproduce this with an acceptance fixture that checks the execution commit and excludes a fake untracked secret. For v76 only, create a local, non-hardlinked checkout of the exact commit; retain the original source and execution-manifest binding and the v75 default copy behavior. Verify both wrapper generations, rerun the three failing cases in an isolated checkout, then rerun the complete acceptance and publish its actual result.
+
+## Follow-up: measured active v76 limits (2026-11-19)
+
+The unfiltered Linux diagnostic [run 44476673632](https://github.com/YixuanZhang99/mori-27/actions/runs/44476673632), at commit `7bd740e6bdc9d822890c318f794b133cf5951270`, completed with **3398 passed, no skips, in 1598.90 seconds**. The offline dependency cache was enabled, so the continuation integrations ran. This establishes the full-suite duration; it is not a certificate for the revised v76 harness.
+
+Adjust the active v76 full-suite limit to 2100 seconds: `ceil(1598.90 * 1.25 / 300) * 300`. Set the outer limit to 3300 seconds: `ceil((2100 + 957 + 120) / 300) * 300`, using 957 seconds of observed other verifier work and 120 seconds of margin. The hosted job remains at 60 minutes. Keep every command, all other group limits, the 57 checks, no-skip enforcement and exact-source artifact verification. Production cell deadlines, stage limits and paid campaign budgets do not change.
+
+This updates the active v76 harness rather than adding another verifier generation. Preserve v75 source bytes, its entrypoint and every historical result, including the original v76 timeout failures. The active contract expectations must fail at 1500/3000 and pass at 2100/3300; run `make tooling`, then run the revised committed v76 acceptance and independently verify its artifacts before claiming acceptance.
+
+Local verification: both updated deadline contract tests failed against the old limits and passed after the change. `make tooling` passed all 154 tests in 8.349 seconds, including historical-source, required-check, wrapper and independent artifact-verifier regressions. The revised committed Linux acceptance and artifact verification remain pending.
