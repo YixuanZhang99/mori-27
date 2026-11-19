@@ -27,8 +27,25 @@ def launch_fixture_controller(config, *, deadline, directory):
     ledger = CampaignBudget(config['ledger'])
     if not ledger.is_fixture_campaign():
         raise ValueError('fixture campaign is required')
-    return _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
-                              entry='zoo.circle_packing.mori_fixture_worker', api_key=None)
+    result = _launch_controller(config, ledger=ledger, deadline=deadline, directory=directory,
+                                entry='zoo.circle_packing.mori_fixture_worker', api_key=None)
+    _verify_fixture_continuation(config, ledger=ledger)
+    return result
+
+
+def _verify_fixture_continuation(config, *, ledger):
+    """Verify a versioned fixture's original bundles without acquiring authority."""
+    plan = config['plan']
+    if type(plan) is not dict or type(plan.get('schema_version')) is not int or plan['schema_version'] != 3:
+        return False
+    from zoo.circle_packing.continuation_binding import verify_bound_fixture_continuation
+    source, runtime = Path(config['source']), Path(config['runtime'])
+    verified = verify_bound_fixture_continuation(ledger, plan,
+        source_directory=source.parent.parent, runtime_directory=runtime.parent,
+        base_python='/usr/bin/python3.12', expected_head=ledger.snapshot()['journal_head'])
+    if source != Path(verified['source']) / 'm0' or runtime != Path(verified['runtime']):
+        raise ValueError('fixture supervisor differs from its bound continuation artifacts')
+    return True
 
 
 def launch_live_controller(config, *, deadline, directory, api_key):
@@ -83,9 +100,11 @@ def preflight_live_controller(config, *, ledger, directory, reference):
     source, runtime = Path(config['source']).resolve(strict=True), Path(config['runtime']).resolve(strict=True)
     from zoo.circle_packing.frozen_source import verify_frozen_source
     from zoo.circle_packing.frozen_runtime import verify_frozen_runtime
-    verify_frozen_source(ledger, config['plan'], snapshot=source.parent, manifest=config['source_manifest'],
-                         expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'])
-    verify_frozen_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'], base_python='/usr/bin/python3.12')
+    versioned = _verify_fixture_continuation(config, ledger=ledger)
+    if not versioned:
+        verify_frozen_source(ledger, config['plan'], snapshot=source.parent, manifest=config['source_manifest'],
+                             expected_plan_ref=config['ref'], expected_campaign_id=config['campaign_id'])
+        verify_frozen_runtime(ledger, runtime=runtime, manifest=config['runtime_manifest'], base_python='/usr/bin/python3.12')
     requested = Path(directory)
     parent = requested.parent.resolve(strict=True)
     info = parent.stat()
@@ -94,6 +113,12 @@ def preflight_live_controller(config, *, ledger, directory, reference):
         raise ValueError('fixture supervisor requires a fresh private directory')
     root = parent / requested.name
     protected = (source.parent, runtime, ledger.path.resolve(), Path(config['clock']).resolve(), Path(config['output']).resolve())
+    if versioned:
+        bundles = (source.parent.parent, runtime.parent)
+        if any(path == bundle or path in bundle.parents or bundle in path.parents
+               for path in protected[2:] for bundle in bundles):
+            raise ValueError('fixture writable path overlaps its continuation artifacts')
+        protected += bundles
     if reference:
         try:
             workspace_path, worker_path = Path(config['workspace']), Path(config['worker_directory'])
@@ -128,7 +153,13 @@ def _launch_controller(config, *, ledger, deadline, directory, entry, api_key, c
     record = deadline._record
     reference = entry == 'zoo.circle_packing.reference_live_worker'
     arm = 'vendor' if reference else 'mori'
-    if record['cell_id'] != f"{arm}-{config['seed']}" or record['plan_ref'] != config['ref'] or \
+    cell_id = f"{arm}-{config['seed']}"
+    plan = config['plan']
+    if type(plan) is dict and type(plan.get('schema_version')) is int and plan['schema_version'] == 3:
+        if entry != 'zoo.circle_packing.mori_fixture_worker' or not ledger.is_fixture_campaign():
+            raise ValueError('continuation supervisor requires the named Mori fixture worker')
+        cell_id = f"{plan.get('experiment_id')}--{cell_id}"
+    if record['cell_id'] != cell_id or record['plan_ref'] != config['ref'] or \
             Path(config['clock']).resolve(strict=True) != deadline._store.path.resolve(strict=True):
         raise ValueError('fixture controller clock differs from the original cell')
     from zoo.circle_packing.pilot_plan import validate_draft_cell

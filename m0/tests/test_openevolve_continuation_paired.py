@@ -10,12 +10,14 @@ import pytest
 from core.composition.recovery import ContinuationStore
 from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_continuation_event import fixture_pair_ledger
+from test_openevolve_continuation_frozen_worker import assert_supervisor_record
 from test_openevolve_continuation_reference_evolve import assert_iteration_trace
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.continuation_binding import bind_fixture_continuation
 from zoo.circle_packing.continuation_draft import build_continuation_draft
 from zoo.circle_packing.continuation_runtime import prepare_continuation_runtime
 from zoo.circle_packing.host_runtime import build_reference_authorities, run_reference_cell_fixture
+from zoo.circle_packing.mori_supervisor import launch_fixture_controller
 from zoo.circle_packing.pilot_matrix import snapshot_continuation_matrix
 from zoo.mle_bench_lite.composed_domain import SandboxRunner
 
@@ -60,21 +62,16 @@ def test_frozen_continuation_pair_shares_campaign_and_preserves_both_arms(tmp_pa
                                     for _ in range(16))
     mori_clock = CellDeadline.start(ContinuationStore(tmp_path / 'mori-clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='circle-v2--mori-0', plan_ref=ref, seconds=draft['limits']['wallclock_seconds'])
-    ledger.claim_cell_worker('circle-v2--mori-0', mori_clock._record['record_sha256'], 'a' * 64)
     cfg = {'plan': draft, 'ref': ref, 'runtime_manifest': {}, 'source_manifest': {},
            'source': str(source_root / 'm0'), 'runtime': artifacts['runtime'], 'ledger': str(ledger.path),
            'clock': str(tmp_path / 'mori-clock.jsonl'), 'output': str(tmp_path / 'mori'),
            'base_url': local_endpoint.url, 'campaign_id': draft['campaign_id'], 'seed': 0}
-    cfg_path = tmp_path / 'config.json'
-    fd = os.open(cfg_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream: json.dump(cfg, stream)
-    env = {'PATH': os.defpath, 'HOME': str(tmp_path), 'PYTHONPATH': cfg['source'],
-           'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
     executable = str(Path(artifacts['runtime']) / 'bin/python')
-    process = subprocess.run([executable, '-m', 'zoo.circle_packing.mori_fixture_worker', str(cfg_path)],
-                             cwd=cfg['source'], env=env, capture_output=True, text=True, timeout=900)
-    assert process.returncode == 0, process.stderr[-4000:]
-    mori = json.loads(process.stdout)
+    supervisor_directory = tmp_path / 'mori-supervisor'
+    process = launch_fixture_controller(cfg, deadline=mori_clock, directory=supervisor_directory)
+    assert process['returncode'] == 0 and not process['timeout'], process['stderr'][-4000:]
+    assert_supervisor_record(cfg, mori_clock, supervisor_directory, ledger)
+    mori = json.loads(process['stdout'])
     assert mori['mode'] == 'fixture' and not mori['performance_claim'] and mori['replay_passed']
     assert mori['executable'] == executable and Path(cfg['source']) in Path(mori['source']).resolve().parents
     mori_rows = [json.loads(line) for line in (tmp_path / 'mori/framework/x1.jsonl').read_text().splitlines()]

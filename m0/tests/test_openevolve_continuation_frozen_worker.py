@@ -7,14 +7,36 @@ import subprocess
 
 import pytest
 from core.composition.recovery import ContinuationStore
+from core.x1.checkpoint import payload_digest
 from test_governed_cny_provider import local_endpoint, reply
 from test_openevolve_continuation_event import fixture_pair_ledger
 from zoo.circle_packing.cell_deadline import CellDeadline, CellLifecycle
 from zoo.circle_packing.continuation_binding import bind_fixture_continuation
 from zoo.circle_packing.continuation_draft import build_continuation_draft
 from zoo.circle_packing.continuation_runtime import prepare_continuation_runtime
+from zoo.circle_packing.mori_supervisor import launch_fixture_controller
 
 pytestmark = pytest.mark.linux
+
+
+def assert_supervisor_record(config, clock, directory, ledger):
+    rows = list(ContinuationStore(directory / 'controller.jsonl').read())
+    starts = [row['payload'] for row in rows if row['kind'] == 'executor_process_started']
+    finishes = [row['payload'] for row in rows if row['kind'] == 'executor_process_finished']
+    assert len(starts) == len(finishes) == 1
+    start, finish = starts[0], finishes[0]
+    binding = {'schema_version': 1, 'cell_id': clock._record['cell_id'],
+        'deadline_ref': clock._record['record_sha256'], 'config_sha256': payload_digest(config),
+        'directory': str(directory), 'entry': 'zoo.circle_packing.mori_fixture_worker'}
+    assert ledger.cell_worker_claim(clock._record['cell_id']) == {
+        'deadline_ref': clock._record['record_sha256'], 'worker_ref': payload_digest(binding)}
+    assert start['worker_ref'] == payload_digest(binding)
+    assert finish['execution_id'] == start['execution_id'] and finish['returncode'] == 0 and not finish['timeout']
+    spec = json.loads(Path(start['spec_path']).read_text())
+    assert spec['args'] == [str(Path(config['runtime']) / 'bin/python'), '-m', binding['entry'],
+                            str(directory / 'config.json')]
+    assert spec['absolute_deadline'] == {'boot_id': clock._record['boot_id'],
+        'deadline_ns': clock._record['start_ns'] + clock._record['seconds'] * 1_000_000_000}
 
 
 def test_frozen_worker_runs_six_cycle_continuation(tmp_path, local_endpoint):
@@ -40,25 +62,19 @@ def test_frozen_worker_runs_six_cycle_continuation(tmp_path, local_endpoint):
     ref = 'sha256:' + draft['draft_sha256']
     clock = CellDeadline.start(ContinuationStore(tmp_path / 'clock.jsonl'), lifecycle=CellLifecycle(ledger),
         cell_id='circle-v2--mori-0', plan_ref=ref, seconds=draft['limits']['wallclock_seconds'])
-    ledger.claim_cell_worker('circle-v2--mori-0', clock._record['record_sha256'], 'a' * 64)
     config = {'plan': draft, 'ref': ref, 'runtime_manifest': {}, 'source_manifest': {},
               'source': str(source / 'source/m0'), 'runtime': artifacts['runtime'],
               'ledger': str(ledger.path), 'clock': str(tmp_path / 'clock.jsonl'),
               'output': str(tmp_path / 'controller'), 'base_url': local_endpoint.url,
               'campaign_id': draft['campaign_id'], 'seed': 0}
-    config_path = tmp_path / 'config.json'
-    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        json.dump(config, stream)
     content = '<<<<<<< SEARCH\n    n = 26\n=======\n    n = 26\n    # fixture\n>>>>>>> REPLACE\n'
     local_endpoint.responses.extend([reply(choices=[{'finish_reason': 'stop', 'message': {'content': content}}]) for _ in range(16)])
-    env = {'PATH': os.defpath, 'HOME': str(tmp_path), 'PYTHONPATH': config['source'],
-           'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
     executable = str(Path(artifacts['runtime']) / 'bin/python')
-    process = subprocess.run([executable, '-m', 'zoo.circle_packing.mori_fixture_worker', str(config_path)],
-                             cwd=config['source'], env=env, capture_output=True, text=True, timeout=900)
-    assert process.returncode == 0, process.stderr[-4000:]
-    result = json.loads(process.stdout)
+    directory = tmp_path / 'supervisor'
+    process = launch_fixture_controller(config, deadline=clock, directory=directory)
+    assert process['returncode'] == 0 and not process['timeout'], process['stderr'][-4000:]
+    assert_supervisor_record(config, clock, directory, ledger)
+    result = json.loads(process['stdout'])
     assert result['mode'] == 'fixture' and result['performance_claim'] is False and result['replay_passed']
     assert result['executable'] == executable
     for key in ('source', 'governed_source'):

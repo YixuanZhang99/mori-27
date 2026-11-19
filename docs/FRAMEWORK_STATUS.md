@@ -1,5 +1,13 @@
 # 框架交付范围与后续开发顺序
 
+## 最新接续入口（2026-11-19）
+
+GEPA、FunSearch、AIDE、Arbor 已合入 main；当前方法分支是
+`codex/classic-openevolve`／[PR #9](https://github.com/YixuanZhang99/mori-27/pull/9)。
+本轮将版本化 Mori fixture 接入已有监督器，并修复跨平台验收与离线缓存接线。
+准确范围、验收状态及剩余工作见 [当前执行目标](CURRENT_GOAL.md#本轮接续2026-11-19)。
+下文为历史状态，不把旧的 Arbor 分支或待合入描述当作当前事实。
+
 ## 当前执行入口（2026-11-05）
 
 用户已批准按 [经典工作接入计划](CLASSIC_WORKS_PLAN.md) 收敛分支，并从 GEPA 起逐项施工；执行目标与 Goal 状态记录于 [CURRENT_GOAL](CURRENT_GOAL.md)。

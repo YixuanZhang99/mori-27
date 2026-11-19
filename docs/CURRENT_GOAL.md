@@ -13,7 +13,27 @@
 
 应用 Goal 控件：用户已于 2026-11-05 将目标更新为“按 docs/CURRENT_GOAL.md 收敛分支，并从 GEPA 开始逐项完成 spec、实现、实测和合入”，并点击继续；工具查询已确认状态为 active。此前 paused 和无法由工具恢复的限制已由此次用户操作解除。后续按本页顺序持续推进，单个方法交付不代表整个 Goal 完成。
 
-## 当前交付状态（2026-11-07）
+## 本轮接续（2026-11-19）
+
+用户再次确认按仓库计划继续。本轮沿用 `codex/classic-openevolve` 和
+[PR #9](https://github.com/YixuanZhang99/mori-27/pull/9)，接续基线为 `2c7fb7f`。
+
+- schema-3 Mori fixture 已接到原有控制器监督器：由真实启动参数生成 worker
+  声明，使用原单元绝对截止时间，启动前及返回后复核绑定的源码和运行环境；
+  监督器及控制器输出不能写入任一完整产物包。冻结单侧及双臂测试改走该入口。
+- 修正旧测试对已支持 `reasoning_effort=none` 的拒绝预期，并补齐确实依赖
+  Linux 时钟或 Bubblewrap 的测试分类。Linux CI 显式传入已安装依赖的 uv
+  缓存，使四项完整续跑集成测试实际运行，继续拒绝 skip/xfail。
+- 本轮的本机/远端验收结果以提交对应的检查为准；不会沿用旧提交的绿色状态。
+  该改动仅增加 fixture 控制器的进程与截止时间监督，不认证整单元 cgroup
+  隔离，不开放真实续跑或后续 seed。
+- OpenEvolve 后续仍需参考侧监督、版本化双臂独立回放/几何报告、完整参考
+  迭代与数据库迁移证据，以及原真实账本迁移兼容验收。完成当前方法验收后，
+  按既定顺序进入 AIRA、LoongFlow、R&D-Agent。
+
+下文保留历史交付证据和当时的应用 Goal 状态；它们不是本聊天控件状态的查询结果。
+
+## 历史交付状态（2026-11-07）
 
 - GEPA、FunSearch、AIDE、Arbor 已分别合入 main；真实试跑的结果和局限见下方对应记录。
 - OpenEvolve 正在 `codex/classic-openevolve` 开发，尚未合入。[首对真实试跑](../research/experiments/2026-11-07-openevolve-circle/README.md)使用冻结源码 `49fb076`：Mori 半径和 0.959764，参考侧 1.582126，均有效但低于预设阈值 2.372380。两侧最终几何、费用和 Mori 零外部调用回放已独立核对；参考侧完整运行覆盖未认证，此结果不是完整 benchmark 或论文预算复现。
