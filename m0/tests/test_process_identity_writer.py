@@ -146,3 +146,35 @@ def test_fast_child_still_has_a_durable_identity_and_successful_result(tmp_path)
     assert completed["returncode"] == 0 and completed["wrapper_error"] is None
     target = json.loads(Path(record["target_path"]).read_text())
     assert type(target["start_ticks"]) is int and target["start_ticks"] >= 0
+
+
+@pytest.mark.linux
+def test_required_containment_failure_never_publishes_or_recovers_success(tmp_path):
+    journal = ProcessJournal(AppendOnlyStore(tmp_path / 'process.jsonl'))
+    wrapper, record = journal.launch(['/bin/true'], tmp_path, {'PATH': '/usr/bin:/bin'}, 5,
+        {'candidate_id': 'containment', 'attempt': 1, 'containment_required': True})
+    def unresolved():
+        raise RuntimeError('containment unresolved')
+    with pytest.raises(RuntimeError, match='containment unresolved'):
+        journal.wait(wrapper, record, before_record=unresolved)
+    assert not journal.finished_ids()
+    with pytest.raises(RuntimeError, match='containment'):
+        journal.recover(record)
+    assert not journal.finished_ids()
+
+
+@pytest.mark.linux
+def test_verified_containment_can_recover_a_result_after_terminal_write_interruption(tmp_path, monkeypatch):
+    journal = ProcessJournal(AppendOnlyStore(tmp_path / 'process.jsonl'))
+    wrapper, record = journal.launch(['/bin/true'], tmp_path, {'PATH': '/usr/bin:/bin'}, 5,
+        {'candidate_id': 'containment', 'attempt': 1, 'containment_required': True})
+    original = journal._completed
+    def interrupted(*args, **kwargs):
+        raise RuntimeError('simulated interruption')
+    monkeypatch.setattr(journal, '_completed', interrupted)
+    with pytest.raises(RuntimeError, match='simulated interruption'):
+        journal.wait(wrapper, record, before_record=lambda: None)
+    assert not journal.finished_ids()
+    monkeypatch.setattr(journal, '_completed', original)
+    assert journal.recover(record)['status'] == 'finished'
+    assert record['execution_id'] in journal.finished_ids()

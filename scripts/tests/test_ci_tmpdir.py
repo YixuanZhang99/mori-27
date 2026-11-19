@@ -5,15 +5,22 @@ import subprocess
 import tempfile
 import unittest
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'scripts/setup_ci_tmpdir.sh'
 
 
 class CITemporaryDirectoryTests(unittest.TestCase):
     def test_workflow_configures_temp_before_full_acceptance(self):
-        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        self.assertLess(workflow.index('bash scripts/setup_ci_tmpdir.sh'),
-                        workflow.index('run: make accept-linux'))
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        commands = [step.get('run', '').splitlines()
+                    for step in workflow['jobs']['linux-acceptance']['steps']]
+        setup = next(i for i, lines in enumerate(commands)
+                     if 'bash scripts/setup_ci_tmpdir.sh' in lines)
+        acceptance = next(i for i, lines in enumerate(commands)
+                          if 'make accept-linux' in lines)
+        self.assertLess(setup, acceptance)
 
     def test_creates_private_unique_directory_and_exports_it(self):
         with tempfile.TemporaryDirectory() as base:

@@ -396,7 +396,10 @@ def test_population_sigkill_continuation_commits_rng_once_without_repeating_paid
             directory, operation = _wait_population_operation(tmp_path, owner)
             target = json.loads((directory / 'target.json').read_text())
         else:
-            wait_pause(tmp_path, owner, timeout=20)
+            # This owner completes sandbox setup and durable writes before it
+            # reaches the pause. Allow for loaded CI machines while still
+            # failing promptly if the child exits or never reaches it.
+            wait_pause(tmp_path, owner, timeout=60)
         stop(owner)
         provider = CodePopulationProvider(tmp_path)
         profile = command_population_profile(tmp_path, delay=0.3)

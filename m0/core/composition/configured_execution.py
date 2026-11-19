@@ -79,6 +79,9 @@ class ConfiguredExecution:
                     context_pack_ref=context["context_pack_ref"])
                 plan = ConstructionPlan.create(candidate, recipe, owner.config.spec,
                     ContextPack(_json(context["retrieval"])), roles=owner.parts["constructor"].roles)
+                if owner.parts['constructor'].manifest_binding['kind'] == 'openevolve_diff_materializer_v1':
+                    owner.store.append('openevolve_construction_plan',
+                        {'candidate_id': candidate.id, 'plan': plan.to_dict(), 'plan_ref': plan.ref})
                 materialized = await owner.owner.materialize(plan, operation=operation)
                 owner.materializations[candidate.id] = materialized
                 return materialized.proposal

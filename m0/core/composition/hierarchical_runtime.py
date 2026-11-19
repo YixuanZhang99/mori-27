@@ -118,6 +118,11 @@ class HierarchicalRuntime(ProxyRuntime):
         if getattr(self, "governed", None):
             from core.composition.provider_evidence import evidence_reference
             proof["provider_evidence_ref"] = evidence_reference(self.store, receipt.intent_id)
+            evidence_seal = getattr(self, "evaluation_evidence_seal", None)
+            if evaluation and callable(evidence_seal):
+                ref = evidence_seal(receipt.intent_id)
+                if ref is not None:
+                    proof["measurement_evidence_ref"] = ref
         self.budget.settle_operation(receipt.intent_id,
             {unit: values[unit] for unit in self.budget.units},
             measured_units=tuple(covered), fingerprint=receipt.fingerprint, **proof)

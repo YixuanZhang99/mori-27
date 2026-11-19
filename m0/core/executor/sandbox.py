@@ -6,11 +6,63 @@ not a complete resource-limit policy or a boundary against a hostile kernel.
 """
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 from core.executor.seccomp import (SECCOMP_FD_PLACEHOLDER, build_seccomp_policy)
 from core.executor.workspace import safe_relative
+
+
+# Run only from the read-only system Python, with workspace imports disabled.
+# bwrap arms PID 1's parent-death signal before exec; fork the untrusted command
+# only afterwards, rather than racing bwrap's separate init startup. This does
+# not close bwrap's earlier setup-before-exec parent-death window.
+_NAMESPACE_INIT = '''import os,sys
+if os.getpid() != 1:
+    raise SystemExit('sandbox init requires its own PID namespace')
+import ctypes,signal
+libc = ctypes.CDLL(None, use_errno=True)
+death_signal = ctypes.c_int()
+if libc.prctl(2, ctypes.byref(death_signal), 0, 0, 0) != 0:
+    raise OSError(ctypes.get_errno(), 'PR_GET_PDEATHSIG')
+if death_signal.value != signal.SIGKILL:
+    raise SystemExit('sandbox init requires inherited parent-death SIGKILL')
+if libc.prctl(4, 0, 0, 0, 0) != 0:
+    raise OSError(ctypes.get_errno(), 'PR_SET_DUMPABLE')
+# wrap's cleared environment never supplies a locale. Undo Python startup's
+# C-locale coercion before launching a non-Python command.
+os.environ.pop('LC_CTYPE', None)
+arguments = [os.fsencode(value) for value in sys.argv[1:]]
+argv = (ctypes.c_char_p * (len(arguments) + 1))(*arguments, None)
+libc.execvp.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p))
+libc.execvp.restype = ctypes.c_int
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+child = os.fork()
+if child == 0:
+    for name in ('SIGPIPE', 'SIGXFZ', 'SIGXFSZ'):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), signal.SIG_DFL)
+    libc.execvp(argv[0], argv)
+    print('sandbox command exec failed: ' + os.strerror(ctypes.get_errno()),
+          file=sys.stderr, flush=True)
+    os._exit(1)
+while True:
+    pid, status = os.wait()
+    if pid == child:
+        if os.WIFEXITED(status):
+            os._exit(os.WEXITSTATUS(status))
+        if os.WIFSIGNALED(status):
+            os._exit(128 + os.WTERMSIG(status))
+'''
+
+
+def sandbox_child_path():
+    """Keep the host-selected bwrap available in a sanitized child environment."""
+    executable = shutil.which('bwrap')
+    if not executable or not Path(executable).is_file():
+        raise RuntimeError('BubblewrapSandbox requires an installed bwrap executable')
+    return str(Path(executable).absolute().parent) + os.pathsep + os.defpath
 
 
 class BubblewrapSandbox:
@@ -38,7 +90,7 @@ class BubblewrapSandbox:
                 command.extend(["--dir", str(directory)])
 
     def wrap(self, args: list[str], cwd: Path, protected_paths=(),
-             data_dir: str = "", env: dict | None = None) -> list[str]:
+             data_dir: str = "", env: dict | None = None, readonly_paths=()) -> list[str]:
         root = cwd.resolve()
         if not args or not root.is_dir():
             raise ValueError("sandbox requires a command and existing workspace")
@@ -47,7 +99,7 @@ class BubblewrapSandbox:
             # ProcessJournal's wrapper replaces this marker with a real inherited
             # memfd number; bwrap never receives the placeholder itself.
             command.extend(["--seccomp", SECCOMP_FD_PLACEHOLDER])
-        command.extend(["--unshare-all", "--die-with-parent",
+        command.extend(["--unshare-all", "--die-with-parent", "--as-pid-1",
                    "--new-session", "--cap-drop", "ALL", "--clearenv",
                    "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
                    "--setenv", "LD_LIBRARY_PATH",
@@ -76,5 +128,12 @@ class BubblewrapSandbox:
                 raise ValueError("sandbox data_dir must be an existing directory")
             self._directories(command, data)
             command.extend(["--ro-bind", str(data), str(data)])
-        command.extend(["--chdir", str(root), "--", *args])
+        for value in readonly_paths:
+            readonly = Path(value).resolve(strict=True)
+            if not readonly.is_dir() or readonly == root or root in readonly.parents or readonly in root.parents:
+                raise ValueError("read-only runtime must be a separate directory")
+            self._directories(command, readonly)
+            command.extend(["--ro-bind", str(readonly), str(readonly)])
+        command.extend(["--chdir", str(root), "--", "/usr/bin/python3", "-I", "-S",
+                        "-c", _NAMESPACE_INIT, *args])
         return command

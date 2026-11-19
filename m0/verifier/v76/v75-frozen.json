@@ -1,0 +1,12 @@
+{
+  "m0/verifier/v75/README.md": "7fd8b9e1c3b0fcdbfcc4851d0b73831a695b63f3947ed0894b33f0bd5602e4a8",
+  "m0/verifier/v75/expected-checks.json": "ba1863c365698eaf5d4d9a7979a29a2e909242c691d07a6461b570a60fcec171",
+  "m0/verifier/v75/transition-baseline.json": "fb23e493c908fb82f632c7ef11d7341962775cbd4368f3f4f3ee37e023ace4dd",
+  "m0/verifier/v75/v73-provenance.json": "2a857777da03fc4d22945487e8bad02a60ec6b51a91688ddcce5b1915ff2e93e",
+  "m0/verifier/v75/v74-frozen.json": "1d75a95f63c5e5e67c01d9813da3ecb8bbe7cf3ef71801a58563298eb80a6732",
+  "m0/verifier/v75/verify.py": "9895854e2a6a6641ddd32b9eb1a71e1026119994c18a00cbf80969fbfc201f1d",
+  "scripts/run_acceptance_v75.py": "bf989ada58390d933aaaa72fd08f68920bbe470e7d1ff87009f62ebf36973a5d",
+  "scripts/tests/test_run_acceptance_v75.py": "7f20e29aa7db3b13a0e22c8c3ab3ba579dfbf6ab0420ebe1387dd55807e6107a",
+  "scripts/tests/test_verify_acceptance_v75.py": "25dfb316262f736d783e25035e60fd6e6351f40eedfd875d03492920a1159af9",
+  "scripts/verify_acceptance_v75.py": "8ace1fae6822169f4d86c734a0b7e9f6a6874c45882c21409c337eccdb266a36"
+}

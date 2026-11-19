@@ -20,8 +20,17 @@ class ProviderBudgetExhausted(ValueError):
     """The current provider call was refused for budget before dispatch.
 
     This does not erase charges from earlier calls in the same operator. Callers
-    must still consume and settle their complete known invocation costs.
+    must still consume and settle their complete known invocation costs. A
+    specialized deadline subclass may also represent a billed late response.
     """
+
+
+class ProviderDeadlineSignal(TimeoutError):
+    """An authority-confirmed operation deadline, distinct from transport timeouts."""
+
+
+class ProviderDeadlineExpired(ProviderBudgetExhausted):
+    """Stop construction after the original provider usage has been accounted."""
 
 
 def validate_usage(usage) -> dict[str, int]:

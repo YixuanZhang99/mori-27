@@ -62,11 +62,17 @@ Mac 使用 `-m 'not linux'`，输出明确的 Linux deselected 数量；这不�
 
 新增测试默认进入可移植集合。只有确实依赖 Linux 执行机制的测试才应显式标记或加入清单，并同时在 Linux 验收；不要用平台标记掩盖业务断言失败。
 
+OpenEvolve 的四项完整 continuation 集成测试还需要显式提供已填充的 uv 缓存。
+先运行 `make setup`，再使用 `MORI_TEST_OFFLINE_CACHE="$(uv cache dir)" make accept-linux`。
+测试会从当前 Git 提交导出源码，在独立目录中离线安装锁定运行时；不会下载依赖
+或调用真实模型。Linux CI 在完整验收步骤传入同一缓存，继续保留
+`--fail-on-skip`，缺少前置条件不能产生通过结果。
+
 五阶段分别是 S1 模块组装、S2 统一评估契约、S3 记忆与知识回流、S4 三层准入、S5 分层预算。每阶段都要补充通过公共 API 的端到端场景，先通过 `make check`，再取得同一阶段提交的 Linux Actions 全量成功证据，才能记录该阶段验收完成。S1 验收不会把 S2–S5 标为完成；后续 verifier 保留旧命令组与历史证据，新增阶段测试，避免用替换旧测试缩小验收范围。
 
 ## GitHub Actions 实际运行路径
 
-根目录 `.github/workflows/ci.yml` 在 push、pull_request 和手动触发时运行。新增 `macos-14` / Python 3.12 job 执行锁定安装及 `make check`，上传 portable 日志；其显式排除的 Linux 用例由独立 Linux job 验证。以下是 `ubuntu-24.04` x86_64 job：
+根目录 `.github/workflows/ci.yml` 在 push、pull_request 和手动触发时运行。`macos-15` / Python 3.12 job 执行锁定安装及 `make check`，上传 portable 日志；其显式排除的 Linux 用例由独立 Linux job 验证。以下是 `ubuntu-24.04` x86_64 job：
 
 1. 安装固定版本 uv、系统 Python 3.12、Bubblewrap 与 AppArmor 工具。
 2. 验证 user namespace 可用；必要时只给一份 root-owned CI 专用 bwrap 加允许 userns 的 AppArmor profile，保留全局限制。
@@ -112,6 +118,8 @@ make accept-linux
 ## 证据和历史文件
 
 v74 verifier 会创建或更新 `LAST_RUN.json` 并追加 journal，因此 `scripts/run_acceptance_v74.py` 通过原包装器复制当前 `m0` 后才运行。它要求所执行的源码与 Git 提交、运行前后文件摘要一致；摘要及精确文件清单随验收证据保存。`make accept-linux-v73` 保留旧入口。v1–v73 verifier 源码保持原样；原包里的 v1–v57 历史成功/失败记录及历史 `m0/.github/workflows/axioms.yml` 也保留。归档的 `m0/verifier/v58/LAST_RUN.json` 与 `m0/verifier/runs/v58.jsonl` 来自真实 [v58 CI 运行 40870494602](https://github.com/YixuanZhang99/mori-27/actions/runs/40870494602)。v59 同名证据文件原样来自提交 `b45654fe22a2db87f64e12f0142ba39bbd603216` 的 [v59 CI 运行 40879734092](https://github.com/YixuanZhang99/mori-27/actions/runs/40879734092)，均不代表 v68 的运行结果。新增历史证据必须来自其真实成功的阶段验收，归档前核对提交、摘要、证书与 journal；本地验收必须明确标记来源，不得称为远端 CI；不得在新的接线上重新运行旧 verifier 后把结果当成历史。
+
+当前 Linux 入口为 v76：保留 v75 的全部命令和检查，并在保留 v75 verifier、包装器及历史证据的前提下，将全量回归上限从 900 秒延长到 1500 秒；外层上限为 3000 秒，CI job 上限为 60 分钟。`make accept-linux-v75` 保留旧入口。v75 配套测试中对活跃 CI 的断言已改为验证旧入口，v76 测试验证新入口。v76 的通过状态必须来自其实际验收产物，不能用此前版本或本地检查代替远端结果。
 
 v60 成功证据已原样归档自提交 `06491ce5639dd33f7f89bc8e1288f881b54ecb8c` 的 [S1 CI 40889093796](https://github.com/YixuanZhang99/mori-27/actions/runs/40889093796)：1,131 项 pytest、29 个验收检查通过。其 SHA-256 与 artifact 来源见 [v61 归档说明](../m0/verifier/v61/README.md#archived-v60-evidence-provenance)，工具测试固定保护归档字节。
 

@@ -2,7 +2,7 @@
 
 一个带预算账本、准入凭据和常驻随机对照的自动研究／进化运行时。
 
-本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前验收入口为 **v75 候选**（实际通过状态见[统一进度页](docs/FRAMEWORK_STATUS.md)）。它仍在开发：部分真实任务已有成绩，完整 benchmark 与产品级验收尚未完成。
+本仓库由 `AutoResearch-接续开发完整包.zip` 导入，原始基线为 **M0 / verifier v57**，当前 Linux 验收入口为 **v76**。各提交的实际检查状态以对应 CI 为准。项目仍在开发：部分真实任务已有成绩，完整 benchmark 与产品级验收尚未完成。
 
 ## 真实任务结果：三任务、两个批次、三个 seed
 
@@ -16,7 +16,18 @@
 
 全部 18 份提交有效。seed 1 和 seed 2/3 分为两个冻结批次，第二批在看到第一批结果后启动；模型标识为可变别名 `deepseek-flash`，尚未验证不可变模型快照。这里只覆盖三个任务，不代表完整 MLE-Bench Lite 或统计显著结果。逐 seed 成绩、批次差异、费用、审计与失败记录见[试跑报告](research/experiments/2026-11-05-m7-real-mle-three-seeds/README.md)。
 
-经典方法开发进展：GEPA 已通过公共 Framework 接通配对反思、validation 实例赢家、冻结 test、费用计量与记录回放，并在 GSM8K 小子集上进行了真实模型试跑；[运行报告](research/experiments/2026-11-05-gepa-gsm8k/README.md)保留所有预声明 seed 的成功与失败。FunSearch 已完成三 seed 真实 OR3 搜索、冻结留出评估和回放，31/33 候选有效；[完整结果](research/experiments/2026-11-05-funsearch-or3/README.md)中三组 held-out 均为 210.1 箱，与 best-fit 持平。两者均不宣称完整论文复现，GEPA 小试跑也不构成优化收益证据。
+## 经典工作的真实小规模结果
+
+以下为已合入 main 的适配方法，均使用真实模型运行；具体规模、失败和证据见各报告。它们不是等预算方法对照，也不表示完整论文复现。
+
+| 方法与任务 | 真实终评结果 | 解释与证据 |
+| --- | --- | --- |
+| GEPA / GSM8K | 1/3 次完成终评：127/128；另 2 次因模型输出截断失败 | 只进行一次反思提案，最终选中初始 prompt，不能将成绩归因于优化。[结果与失败](research/experiments/2026-11-05-gepa-gsm8k/README.md) |
+| FunSearch / OR3 装箱 | 3/3 个 seed 的 held-out 均为 210.1 箱，越少越好 | 三次均与固定 best-fit 持平，未显示留出集收益；31/33 候选有效。[结果与失败](research/experiments/2026-11-05-funsearch-or3/README.md) |
+| AIDE / MLE 三任务 | 官方 score 均值：spooky 0.369990、leaf 0.080923、nomad 0.062363，越低越好 | 每任务 3/3 份提交有效；nomad 的历史阈值映射为铜／银／银。[九组结果](research/experiments/2026-11-05-aide-mle/README.md) |
+| Arbor / MLE 三任务 | 官方 score 均值：spooky 0.453330、leaf 0.172093、nomad 0.061257，越低越好 | 每任务 3/3 份提交有效；nomad 三组达到历史银牌阈值。[九组结果](research/experiments/2026-11-05-arbor-mle/README.md) |
+
+MLE 历史阈值由固定评分器映射，不是新的 Kaggle 在线排名或实际获奖；两个方法的预算与搜索设置不同，不应仅凭表格比较方法优劣。GEPA 各 seed 的输出上限并不完全一致，也不计算三 seed 均值。OpenEvolve 的单 seed 双臂真实试跑已完成：最终有效快照为 Mori 0.959764、参考侧 1.582126；参考侧完整运行覆盖未认证，不能作为完整 benchmark 对比。其余 seed 尚未运行，详见[首对试跑及限制](research/experiments/2026-11-07-openevolve-circle/README.md)。AIRA、LoongFlow 和 R&D-Agent 仍在后续计划中。
 
 GEPA 新入口（默认离线、不访问模型）：
 
@@ -41,7 +52,7 @@ uv run --project m0 --locked python -m zoo.funsearch_binpacking.runner \
 | GEPA 单组件 prompt 优化 | GSM8K train/validation/test；M7 | [真实试跑、逐题成绩与失败](research/experiments/2026-11-05-gepa-gsm8k/README.md)；[运行命令](m0/zoo/gepa_gsm8k/PROVENANCE.md) | 更充分的多提案搜索、同配置多 seed 等预算对照与公开区间复现 |
 | FunSearch 程序进化 | OR3 dev/held-out；M7 隔离执行 | [三 seed 真实搜索、全部失败与留出成绩](research/experiments/2026-11-05-funsearch-or3/README.md)；[运行命令](m0/zoo/funsearch_binpacking/PROVENANCE.md) | 更大规模、等预算对照与论文区间复现；本批无留出收益 |
 | AIDE 代码树搜索 | 三个 MLE 任务 × 三 seed；M7 | [九组官方评分、代码树、失败与费用](research/experiments/2026-11-05-aide-mle/README.md)；70/90 主候选有效，九组提交均有效 | 完整 MLE-Bench、等预算方法对照与论文区间复现；历史奖牌阈值不等于实际获奖 |
-| Arbor 假设驱动研究 | 三个 MLE 任务 × 三 seed；M7 | [九组官方成绩、准入拒绝、经验来源与费用](research/experiments/2026-11-05-arbor-mle/README.md)；38/44 主候选有效；[运行命令](m0/zoo/mle_bench_lite/README.md#c04-arbor-adapted-recipe) | 最终证据提交检查/合入；完整 benchmark、等预算对照与论文区间复现 |
+| Arbor 假设驱动研究 | 三个 MLE 任务 × 三 seed；M7 | [九组官方成绩、准入拒绝、经验来源与费用](research/experiments/2026-11-05-arbor-mle/README.md)；38/44 主候选有效；[运行命令](m0/zoo/mle_bench_lite/README.md#c04-arbor-adapted-recipe) | 完整 benchmark、等预算对照与论文区间复现 |
 
 本仓库使用化名 `mori-27`，按交接包独立导入；公开内容仍可能被搜索引擎索引。
 
@@ -108,7 +119,7 @@ S9 新增 MLE-Bench Lite 的 `composed_agent` 和显式 `pilot` 入口，把最�
 
 新增 [外部费用治理桥接](docs/GOVERNED_CURRENCY.md) 提供独立的 loopback HTTP 示例、双重准入和记录恢复；真实付费三任务试跑已使用该桥接，但尚未完成同搜索治理收益对照。
 
-**当前代码位置：** `main` 已包含历史治理/M7 开发链，以及 GEPA、FunSearch、AIDE 的适配和真实小规模结果；AIDE [PR #7](https://github.com/YixuanZhang99/mori-27/pull/7) 已完成最终检查并合入。当前唯一开发分支 `codex/classic-arbor` 已完成假设循环、经验上溯、准入隔离及九组真实 MLE 官方评分；38/44 主候选有效，全部提交有效，待最终证据提交检查和合入。最新证据和缺口见 [框架交付状态](docs/FRAMEWORK_STATUS.md)。
+**当前代码位置：** `main` 已包含 GEPA、FunSearch、AIDE 和 Arbor 的适配及小规模真实结果；Arbor 已通过 [PR #8](https://github.com/YixuanZhang99/mori-27/pull/8) 合入。当前开发分支为 `codex/classic-openevolve`：单 seed 真实双臂试跑已记录，完整运行覆盖、其余 seed 和合入尚未完成。后续顺序和详细状态见[当前执行目标](docs/CURRENT_GOAL.md)。
 
 ## 目录
 
@@ -139,7 +150,7 @@ make check
 
 `make check` 运行静态公理、全部可移植测试、离线示例及验收包装器回归。Linux 集成测试由 GitHub Actions 在 Ubuntu x86_64 上执行；完整验收运行全部 pytest，任何 skip/xfail 都使验收失败。
 
-根 `.github/workflows/ci.yml` 在 push/PR 时自动运行完整 v73，使用系统 Python 和 `/usr/local/share` 虚拟环境以满足现有沙箱挂载范围。验收在临时副本中运行，保留原历史证书，结果与安装包作为 Actions artifacts 保存。
+根 `.github/workflows/ci.yml` 在 push/PR 时运行 macOS 可移植检查、Linux v76 完整验收及 MLE 合成数据检查。Linux 验收在临时副本中运行，结果作为 Actions artifacts 保存；具体通过状态以对应提交的工作流为准。
 
 ```bash
 make test          # Mac 可移植测试

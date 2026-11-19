@@ -362,6 +362,11 @@ class WorktreeCommandExecutor:
             raise ValueError("supervisor authorization changed")
         while not (directory / "process-result.json").exists():
             if not process_alive(owner["pid"], owner["start_ticks"]):
+                # The supervisor may publish its result after the loop's file
+                # check and exit before the identity check. Adopt that result
+                # through the normal validation path instead of discarding it.
+                if (directory / "process-result.json").exists():
+                    break
                 target_path = directory / "target.json"
                 if target_path.exists():
                     target = self._identity(read(target_path), recorded, spec_sha)

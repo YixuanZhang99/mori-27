@@ -27,7 +27,7 @@ def test_pure_request_encoder_uses_bound_effort():
     assert json.loads(protocol().build_request('hello', binding(reasoning_effort='low')))['reasoning_effort'] == 'low'
 
 
-@pytest.mark.parametrize('bad', ['medium', 'none', '', True, None, []])
+@pytest.mark.parametrize('bad', ['medium', 'disabled', '', True, None, []])
 def test_unsupported_effort_is_rejected_before_dispatch(bad):
     with pytest.raises(ValueError, match='reasoning effort'):
         protocol().build_request('hello', binding(reasoning_effort=bad))

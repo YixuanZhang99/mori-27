@@ -22,9 +22,10 @@ from test_governed_cny_bridge import Store
 CHILD = r'''
 import json, os, signal, sys
 from pathlib import Path
+from types import SimpleNamespace
 from test_governed_cny_bridge import setup
 path, boundary = Path(sys.argv[1]), sys.argv[2]
-ledger, bridge, run, context, providers, calls, store, physical = setup.__wrapped__(path)
+ledger, bridge, run, context, providers, calls, store, physical = setup.__wrapped__(path, SimpleNamespace())
 (path / 'recovery.json').write_text(json.dumps({'run': run.to_dict(), 'context': context.to_dict(),
     'physical': physical, 'rows': store.rows}))
 raw = providers['control-0000']

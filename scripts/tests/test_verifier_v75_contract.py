@@ -31,11 +31,9 @@ class V75ContractTests(unittest.TestCase):
                 current.keywords[0].value.value = 600
             self.assertEqual(ast.dump(previous), ast.dump(current), name)
 
-    def test_active_acceptance_has_matching_outer_and_job_deadlines(self):
-        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+    def test_v75_legacy_entrypoint_retains_its_outer_deadline(self):
         makefile = (ROOT / 'Makefile').read_text()
-        self.assertIn('full v75', workflow)
-        self.assertIn('timeout-minutes: 45', workflow)
+        self.assertIn('accept-linux-v75:', makefile)
         self.assertIn('scripts/run_acceptance_v75.py --timeout 2100', makefile)
 
     def test_v74_source_manifest_detects_historical_mutation(self):

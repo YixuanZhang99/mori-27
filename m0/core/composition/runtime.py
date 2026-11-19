@@ -242,6 +242,27 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         elif (any(spec.name == 'funsearch' for spec in self.assembly.operators) or
               self.construction_enabled and self.assembly.execution.constructor.name == 'funsearch_prompt'):
             raise ValueError('FunSearch components require the FunSearch policy')
+        self.openevolve = None
+        if self.assembly.policy.name == 'openevolve':
+            from core.composition.openevolve_runtime import OpenEvolveCoordinator, is_openevolve_domain
+            if (not self.construction_enabled or self.assembly.executor.name != 'inprocess'
+                    or not is_openevolve_domain(self.parts['domain'])
+                    or [spec.name for spec in self.assembly.operators] != ['draft', 'openevolve']
+                    or self.assembly.execution.constructor.name != 'openevolve_diff'
+                    or self.assembly.execution.constructor.options
+                    or self.assembly.execution.spec.role != 'general'
+                    or not self.assembly.execution.spec.hypothesis_frozen
+                    or self.assembly.execution.spec.context_projection != []
+                    or self.assembly.skills or self.assembly.knowledge is not None
+                    or self.assembly.admission.name != 'metric_final' or not self.hierarchical
+                    or self.frontier.metric != 'dev/score'
+                    or not getattr(self.frontier, 'retain_rejected', False)):
+                raise ValueError('OpenEvolve requires the pinned serial M7 circle configuration')
+            self.openevolve = OpenEvolveCoordinator(self.parts['policy'], self.store,
+                logical_run_id=self._logical_run_id, domain=self.parts['domain'], require_materializations=True, budget=self.budget)
+        elif (any(spec.name == 'openevolve' for spec in self.assembly.operators)
+              or self.construction_enabled and self.assembly.execution.constructor.name == 'openevolve_diff'):
+            raise ValueError('OpenEvolve components require the OpenEvolve policy')
         self.arbor = None
         if self.assembly.policy.name == 'arbor':
             from core.composition.arbor_runtime import ArborCoordinator
@@ -431,7 +452,14 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
             restore = getattr(component, "restore_state", None)
             if not callable(restore):
                 raise ValueError(f"component cannot restore saved state: {key}")
-            restore(state)
+            if self.openevolve and kind in {'policy', 'policy_absorber'}:
+                events = [row['payload'] for row in self.store.read('openevolve_host_event')] if kind == 'policy' else []
+                restore(state, events)
+            else:
+                restore(state)
+        if self.openevolve:
+            self.parts['domain'].restore_evidence(list(self.store.read('composed_evidence')))
+            self.openevolve._audit()
         self._validate_aide_restore(restored, payload['incumbent'], proposals, evidence_by_id)
         if self.arbor:
             self.arbor.restore(payload, list(self.store.read()))
@@ -695,8 +723,12 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         for identifier in unavailable:
             selection_view.nodes[identifier].status = "pruned"
         selection_budget = self.budget.main_account_summary() if self.governed else self.budget.account_summary()
-        parents = await self.funsearch.select(candidate_id, selection_view, selection_budget) if self.funsearch \
-            else await self._policy("select", selection_view, selection_budget)
+        if self.openevolve:
+            parents = await self.openevolve.select(candidate_id, selection_view, selection_budget)
+        elif self.funsearch:
+            parents = await self.funsearch.select(candidate_id, selection_view, selection_budget)
+        else:
+            parents = await self._policy("select", selection_view, selection_budget)
         if isinstance(parents, Selection):
             strategy = {**strategy, 'operator': parents.operator}
             parents = parents.parents
@@ -754,6 +786,10 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         strategy = {**strategy, "hypotheses": hypotheses}
         if self.arbor:
             strategy['arbor'] = self.arbor.selection(candidate_id, cycle, context)
+        if self.openevolve and parents:
+            materialized = self.openevolve.materialize(candidate_id, evolution_round=cycle)
+            strategy['openevolve'] = {'selection': self.parts['policy'].pending_selection(),
+                                       'materialization': materialized}
         if self.funsearch and parents:
             options = self.assembly.policy.options
             materialized = self.funsearch.materialize(candidate_id, options['template'], options['function_name'])
@@ -909,11 +945,18 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
     def _commit_cycle(self, cycle, proposal, evidence, decision, mutations, context, evidence_ref, evaluation_request):
         candidate_id = proposal.candidate.id
         public = public_projection(evidence)
-        self.store.append("composed_evidence", {"cycle": cycle, "proposal": _jsonable(proposal),
-                                                "evidence_ref": evidence_ref,
-                                                "evidence": encode_evidence(evidence)["evidence"]})
+        evidence_event = {"cycle": cycle, "proposal": _jsonable(proposal),
+                          "evidence_ref": evidence_ref, "evidence": encode_evidence(evidence)["evidence"]}
         receipt = {"candidate_id": candidate_id, "incumbent": self.incumbent,
                    "evidence": _jsonable(evidence), "decision": asdict(decision)}
+        eligibility = getattr(self.budget, "check_cycle_eligibility", None)
+        if callable(eligibility):
+            eligibility(evidence_event, receipt)
+        else:
+            eligibility = getattr(self.budget, "check_work_eligibility", None)
+            if callable(eligibility):
+                eligibility()
+        self.store.append("composed_evidence", evidence_event)
         # Full cost is durable evidence; decision plugins must not interpret it.
         event_id = "sha256:" + payload_digest(receipt)
         self.store.append("composed_decision", {**receipt, "event_id": event_id,
@@ -937,6 +980,11 @@ class ComposedRuntime(PopulationRuntime, HierarchicalRuntime):
         self._finalize_frontier_admission(candidate_id, decision,
             decision.receipt_id if self.layered else event_id)
         self.proposals[candidate_id], self.evidence[candidate_id] = proposal, evidence
+        if self.openevolve:
+            if evidence.eval_result.status is EvalStatus.OK:
+                self.openevolve.record_evaluated(candidate_id)
+            elif self.parts['policy'].pending_selection() is not None:
+                self.openevolve.abandon(candidate_id, 'evaluation_failed')
         if self.funsearch:
             if evidence.eval_result.status is EvalStatus.OK:
                 self.funsearch.record_evaluated(candidate_id)

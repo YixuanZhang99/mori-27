@@ -15,7 +15,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from core.llm import ProviderBudgetExhausted, UsageError
+from core.llm import ProviderBudgetExhausted, ProviderDeadlineExpired, ProviderDeadlineSignal, UsageError
 from core.x1.checkpoint import RunCheckpoint, payload_digest
 from core.x1.store import AppendOnlyStore
 
@@ -159,10 +159,26 @@ class ContinuationStore(AppendOnlyStore):
             if row is None or row["kind"] != "composed_provider_completed" \
                     or row["payload"].get("binding") != binding:
                 if row is None and self.recover_external_outcomes and governed is not None and governed.get("schema_version") == 2:
-                    data = self._recover_external_provider(provider, binding, governed, request_sha256)
-                    return self._adopt_provider(provider, data, governed=governed)
+                    try:
+                        data = self._recover_external_provider(provider, binding, governed, request_sha256)
+                    except ProviderDeadlineSignal:
+                        self._recover_expired_provider(provider, binding, governed, request_sha256, adopt=True)
+                    result = self._adopt_provider(provider, data, governed=governed, propagate=False)
+                    self._check_replayed_deadline(provider, binding)
+                    if data.get("outcome") == "budget_exhausted":
+                        raise ProviderBudgetExhausted(data["result"])
+                    if data.get("outcome") == "failed":
+                        raise RuntimeError(data["result"])
+                    return result
                 raise UsageError("provider invocation has no durable completion; refusing paid retry")
-            return self._adopt_provider(provider, row["payload"], governed=governed)
+            data = row["payload"]
+            result = self._adopt_provider(provider, data, governed=governed, propagate=False)
+            self._check_replayed_deadline(provider, binding)
+            if data.get("outcome") == "budget_exhausted":
+                raise ProviderBudgetExhausted(data["result"])
+            if data.get("outcome") == "failed":
+                raise RuntimeError(data["result"])
+            return result
         before = provider.usage_total
         refusal, failed = None, None
         try:
@@ -170,6 +186,8 @@ class ContinuationStore(AppendOnlyStore):
         except ProviderBudgetExhausted as error:
             refusal = error
             result = str(error)
+        except ProviderDeadlineSignal:
+            self._recover_expired_provider(provider, binding, governed, request_sha256, before=before)
         except UsageError:
             raise
         except Exception as error:
@@ -201,9 +219,49 @@ class ContinuationStore(AppendOnlyStore):
             raise failed
         return result
 
-    def _recover_external_provider(self, provider, binding, governed, request_sha256):
+    def _recover_expired_provider(self, provider, binding, governed, request_sha256, *, adopt=False, before=None):
+        guard = provider.__dict__.get("external_deadline_check")
+        accounting = provider.__dict__.get("external_accounting_recover")
+        if governed is None or not callable(guard) or not callable(accounting):
+            raise UsageError("deadline recovery requires its original external authority")
+        try:
+            guard()
+        except ProviderDeadlineSignal:
+            pass
+        else:
+            raise UsageError("provider timeout has no expired deadline authority")
+        data = self._recover_external_provider(provider, binding, governed, request_sha256, recover=accounting)
+        if adopt:
+            self._adopt_provider(provider, data, governed=governed, propagate=False)
+        else:
+            if data["tokens"] != provider.usage_total - before:
+                raise UsageError("deadline recovery differs from measured provider usage")
+            self.append("composed_provider_completed", data)
+        self.append("composed_provider_deadline_expired", {"binding": binding})
+        raise ProviderDeadlineExpired("cell deadline expired after accounting") from None
+
+    def _check_replayed_deadline(self, provider, binding):
+        row = self.peek()
+        if row is not None and row["kind"] == "composed_provider_deadline_expired":
+            if row["payload"] != {"binding": binding}:
+                raise ValueError("recorded provider deadline identity differs")
+            self.append("composed_provider_deadline_expired", row["payload"])
+            raise ProviderDeadlineExpired("cell deadline expired after accounting")
+        guard = provider.__dict__.get("external_deadline_check")
+        if callable(guard):
+            try:
+                guard()
+            except ProviderDeadlineSignal:
+                if self.peek() is None:
+                    # The original completion may have persisted just before
+                    # the coordinator crashed while recording the deadline.
+                    self.append("composed_provider_deadline_expired", {"binding": binding})
+                    raise ProviderDeadlineExpired("cell deadline expired after accounting") from None
+                raise ProviderDeadlineExpired("cell deadline expired during recovery") from None
+
+    def _recover_external_provider(self, provider, binding, governed, request_sha256, *, recover=None):
         from core.composition.external_provider import GovernedCallContext, ExternalCallOutcome
-        recover = provider.__dict__.get("external_recover")
+        recover = recover or provider.__dict__.get("external_recover")
         if not callable(recover):
             raise UsageError("external provider has no authoritative recovery capability")
         context = GovernedCallContext.from_dict(governed["external_context"])
@@ -272,11 +330,16 @@ class ContinuationStore(AppendOnlyStore):
         row = self.peek()
         if row is None or row["kind"] != "composed_provider_completed" or row["payload"].get("binding") != data["binding"]:
             if row is None and self.recover_external_outcomes and expected.get("schema_version") == 2:
-                completion = self._recover_external_provider(provider, data["binding"], expected, data["request_sha256"])
+                try:
+                    completion = self._recover_external_provider(provider, data["binding"], expected, data["request_sha256"])
+                except ProviderDeadlineSignal:
+                    self._recover_expired_provider(provider, data["binding"], expected, data["request_sha256"], adopt=True)
                 self._adopt_provider(provider, completion, governed=expected, propagate=False)
+                self._check_replayed_deadline(provider, data["binding"])
                 return
             raise UsageError("nested provider has no completion; evaluator retry forbidden")
         self._adopt_provider(provider, row["payload"], governed=expected, propagate=False)
+        self._check_replayed_deadline(provider, data["binding"])
 
     async def construction_call(self, identity, invoke, *, provider, recoverable):
         """Adopt a bound construction outcome or its original recorded calls.
@@ -303,15 +366,24 @@ class ContinuationStore(AppendOnlyStore):
             for row in self.rows[self.cursor:]:
                 if self.external(row["kind"]) or self._diagnostic(row):
                     continue
-                if row["kind"] in {"composed_provider_started", "composed_provider_completed"}:
+                if row["kind"] in {"composed_provider_started", "composed_provider_completed",
+                                    "composed_provider_deadline_expired"}:
                     continue
                 if row["kind"] == "construction_outcome":
                     terminal = row["payload"]
                 break
         if terminal is not None:
-            while self.peek() is not None and self.peek()["kind"] == "composed_provider_started":
-                self._adopt_nested_provider(provider)
+            deadline_expired = False
+            try:
+                while self.peek() is not None and self.peek()["kind"] == "composed_provider_started":
+                    self._adopt_nested_provider(provider)
+            except ProviderDeadlineExpired:
+                deadline_expired = True
             result = decode(terminal)
+            if deadline_expired:
+                from core.composition.contracts import OperatorBudgetExhausted
+                if not isinstance(result, OperatorBudgetExhausted):
+                    raise ValueError('recorded deadline differs from construction outcome')
             self.append("construction_outcome", terminal)
             provider.last_usage = {"total_tokens": 0}
         else:

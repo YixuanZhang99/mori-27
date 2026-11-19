@@ -12,13 +12,30 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+import tempfile
 
 import pytest
 
 TEST_ROOT = Path(__file__).resolve().parent
 
-# Every test in these modules constructs a Linux-dependent execution backend.
+
+@pytest.fixture
+def short_socket_dir():
+    """AF_UNIX paths must fit macOS's short sun_path limit."""
+    with tempfile.TemporaryDirectory(prefix='mori-sock-', dir='/tmp') as directory:
+        yield Path(directory).resolve()
+
+# Every test in these modules uses a Linux-dependent execution backend or clock.
 LINUX_MODULES = {
+    "test_openevolve_contained_terminal.py": "contained terminal fixtures bind the real Linux boot identity and clock",
+    "test_openevolve_host_dispatch.py": "reference host runs a real sandboxed independent control",
+    "test_openevolve_host_control.py": "protected circle control uses real sandbox evaluation",
+    "test_openevolve_governed_framework.py": "real governed circle evaluation with loopback HTTP",
+    "test_openevolve_reference.py": "real upstream host worker and sandboxed evaluation",
+    "test_openevolve_framework_sandbox.py": "real public Framework sandboxed circle evaluation",
+    "test_openevolve_coordinator_sandbox.py": "real sandboxed evidence for OpenEvolve coordination",
+    "test_openevolve_prompt_sandbox.py": "real sandboxed evidence for OpenEvolve prompt binding",
+    "test_circle_packing_sandbox.py": "real Bubblewrap circle evaluator execution",
     "test_composed_worktree_durable_flush.py": "fault injection reads Linux /proc descriptor paths",
     "test_funsearch_priority_sandbox.py": "real Bubblewrap and x86_64 priority seccomp execution",
     "test_funsearch_or3_domain.py": "domain identity freezes an x86_64 seccomp policy even for validation tests",
@@ -49,6 +66,35 @@ LINUX_MODULES = {
 # These modules also contain portable tests. List only the Linux test functions;
 # parametrized cases inherit their function's classification.
 LINUX_FUNCTIONS = {
+    "test_openevolve_deadline_currency.py": {
+        "test_single_run_bridge_rejects_unsupervised_process_before_protection",
+        "test_live_bridge_rejects_later_seed_before_using_a_supervisor_claim",
+    },
+    "test_openevolve_matrix_report.py": {
+        "test_six_cells_keep_unrun_unknown_cost_and_verified_timeout",
+        "test_omitted_evidence_does_not_invent_failure_or_zero_cost",
+        "test_report_rejects_caller_supplied_score_and_uses_exact_head",
+        "test_recorded_currency_can_be_known_while_terminal_remains_unresolved",
+        "test_report_rejects_valid_currency_prefix_at_a_newer_head",
+        "test_report_does_not_accept_conflicting_terminal_files",
+        "test_pair_score_cannot_be_injected_as_caller_data",
+        "test_legacy_multi_run_cell_cannot_report_one_run_as_its_total",
+        "test_original_matrix_rejects_mutated_recorded_currency_cache",
+    },
+    "test_openevolve_mori_fixture_entry.py": {
+        "test_resume_unstarted_cell_uses_original_clock_and_refuses_started_worker",
+        "test_recorded_mori_setup_needs_no_provider_key_and_refuses_live_run",
+    },
+    "test_openevolve_host_stage_budget.py": {
+        "test_real_sandbox_stages_are_charged_to_physical_budget",
+    },
+    "test_governed_cny_bridge.py": {
+        "test_actual_host_worker_routes_to_currency_bridge_over_loopback",
+    },
+    "test_openevolve_runner.py": {
+        "test_default_cli_runs_without_credentials_or_external_network",
+        "test_fixture_terminal_recovery_replays_without_new_calls",
+    },
     "test_funsearch_sandbox_framework.py": {
         "test_funsearch_uses_sandboxed_worktree_and_replays_without_workers",
     },
