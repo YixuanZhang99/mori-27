@@ -132,7 +132,11 @@ def test_mori_control_and_main_use_same_locked_runtime(tmp_path, local_endpoint,
     from zoo.circle_packing.frozen_source import freeze_source_plan
     from zoo.circle_packing.frozen_runtime import prepare_frozen_runtime
     from zoo.circle_packing.governed import governed_setup
-    campaign = campaign_fixture(tmp_path)
+    from zoo.mle_bench_lite.cny_budget import CampaignBudget
+    campaign = CampaignBudget.create_fixture(tmp_path / 'campaign.db')
+    campaign.enable_governance(expected_policy_sha256=campaign.manifest_binding()['policy_sha256'],
+                               expected_head=campaign.snapshot()['journal_head'])
+    assert campaign.is_fixture_campaign()
     runner = SandboxRunner()
     clock_options = {}
     cache = os.environ.get('MORI_TEST_OFFLINE_CACHE')
