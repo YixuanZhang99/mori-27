@@ -87,9 +87,11 @@ def _runtime_manifest(runtime, base_python, lock_sha256):
     def onerror(error):
         raise error
     for directory, dirs, files in os.walk(root, topdown=True, followlinks=False, onerror=onerror):
+        relative_directory = Path(directory).relative_to(root).as_posix()
+        prefix = '' if relative_directory == '.' else relative_directory + '/'
         for name in sorted(dirs + files):
             path = Path(directory) / name
-            relative = path.relative_to(root).as_posix()
+            relative = prefix + name
             info = path.lstat()
             if stat.S_ISLNK(info.st_mode):
                 target = path.resolve(strict=True)

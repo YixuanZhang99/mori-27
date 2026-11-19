@@ -43,3 +43,11 @@ focused results do not substitute for that gate.
 This is fixture controller deadline supervision. It does not certify cgroup
 containment of every descendant, complete reference iteration accounting,
 independent continuation geometry replay, or readiness for paid continuation.
+
+The first committed Linux runs on 2026-11-19 exhausted the unchanged 1,500-second
+full-regression timeout. A separate six-case diagnostic identified repeated
+per-file relative-path construction during complete artifact verification.
+Compute each directory's relative prefix once and remove the consecutive
+duplicate sandbox precheck; retain full prelaunch/postexecution byte checks.
+The temporary manual profiling job is removed after collecting its evidence.
+The final same-commit acceptance gate above remains required.

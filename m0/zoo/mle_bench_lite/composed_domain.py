@@ -119,7 +119,6 @@ class SandboxRunner:
 
     def execute(self, workspace, timeout):
         self.validate_paths(workspace)
-        self._verify_campaign_runtime()
         system_roots = [Path(name).resolve() for name in ("/usr", "/bin", "/sbin", "/lib", "/lib64")]
         runtime_mount = () if any(self.runtime_root == root or root in self.runtime_root.parents
                                   for root in system_roots) else (self.runtime_root,)

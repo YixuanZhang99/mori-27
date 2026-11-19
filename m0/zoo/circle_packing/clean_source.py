@@ -139,14 +139,16 @@ def verify_clean_source(snapshot, manifest, *, expected_tree_ref):
         def onerror(error):
             raise error
         for directory, directories, files in os.walk(root, followlinks=False, onerror=onerror):
+            relative_directory = Path(directory).relative_to(root).as_posix()
+            prefix = '' if relative_directory == '.' else relative_directory + '/'
             for name in directories:
                 path = Path(directory) / name
                 if path.is_symlink():
                     raise ValueError('source snapshot contains a symlink')
-                seen_dirs.add(path.relative_to(root).as_posix())
+                seen_dirs.add(prefix + name)
             for name in files:
                 path = Path(directory) / name
-                relative = path.relative_to(root).as_posix()
+                relative = prefix + name
                 entry = expected.get(relative)
                 if entry is None or path.is_symlink():
                     raise ValueError('source snapshot contains an unexpected path')
