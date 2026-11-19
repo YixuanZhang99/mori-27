@@ -110,6 +110,15 @@ also installs the versioned dangerous-syscall seccomp denylist by default; expli
 `seccomp=False` disables only that layer. It is not a complete syscall allowlist,
 complete resource-limit policy or hostile-kernel boundary.
 
+The Linux sandbox also requires `/usr/bin/python3` with its standard library and
+`ctypes`. It runs a fixed `-I -S` init program as namespace PID 1, verifies the
+inherited parent-death SIGKILL and disables dumpability before forking the actual
+command. This keeps lifecycle control outside the untrusted payload, including
+when `seccomp=False`, while reaping orphans and preserving command exit status.
+It closes the separate reaper's startup race after a payload is ready; it does
+not close Bubblewrap's earlier setup-before-exec parent-death window or certify
+whole-cell cgroup containment. Existing resource limits still apply.
+
 `ExecutorPool` runs the blocking M7 backend under a fixed `max_inflight` quota.
 `run()` returns exactly one matching EvidenceRecord; `run_many()` executes real
 candidates in parallel, then invokes optional result callbacks serially in input

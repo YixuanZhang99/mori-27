@@ -1,6 +1,8 @@
 """Exercise existing Linux executor containment before cell-supervisor wiring."""
 import json
+import os
 from pathlib import Path
+import signal
 import time
 
 import pytest
@@ -14,8 +16,8 @@ from core.x1.store import AppendOnlyStore
 pytestmark = pytest.mark.linux
 
 
-def launch_detached_child(tmp_path, *, timeout):
-    sandbox = BubblewrapSandbox()
+def launch_detached_child(tmp_path, *, timeout, seccomp=True, clear_parent_death=False):
+    sandbox = BubblewrapSandbox(seccomp=seccomp)
     journal = ProcessJournal(AppendOnlyStore(tmp_path / 'process.jsonl'))
     # The child deliberately leaves the target's session.  A process-group
     # kill alone would not stop it; the enclosing PID namespace must do so.
@@ -23,6 +25,9 @@ def launch_detached_child(tmp_path, *, timeout):
                "(os.setsid(), print('ready:%s' % os.getpid(),flush=True), time.sleep(5), "
                "open('escaped','w').write('alive'), os._exit(0)) "
                "if p == 0 else time.sleep(30)")
+    if clear_parent_death:
+        program = ("import ctypes; "
+                   "assert ctypes.CDLL(None).prctl(1,0,0,0,0) == 0; " + program)
     args = sandbox.wrap(['/usr/bin/python3', '-c', program], tmp_path)
     process, record = journal.launch(args, tmp_path, {}, timeout,
         {'candidate_id': 'fixture', 'attempt': 1}, seccomp_policy=sandbox.seccomp_spec())
@@ -101,4 +106,35 @@ def test_detached_child_can_write_without_termination(tmp_path):
     finally:
         process.kill()
         process.wait(timeout=5)
+        assert journal.recover(record)['status'] == 'lost'
+
+
+@pytest.mark.parametrize('seccomp', [False, True])
+def test_payload_cannot_cancel_namespace_parent_death(tmp_path, seccomp):
+    journal, process, record, child = launch_detached_child(
+        tmp_path, timeout=30, seccomp=seccomp, clear_parent_death=True)
+    # Retain the actual namespace init identity for cleanup even if a regression
+    # lets an untrusted payload become PID 1 and cancel the death signal.
+    namespace_init = None
+    try:
+        pid = child[0]
+        while True:
+            status = Path(f'/proc/{pid}/status').read_text().splitlines()
+            namespace = next(line for line in status if line.startswith('NSpid:')).split()[1:]
+            if len(namespace) >= 2 and namespace[-1] == '1':
+                namespace_init = (pid, start_ticks(pid))
+                break
+            pid = int(next(line for line in status if line.startswith('PPid:')).split()[1])
+            assert pid > 0
+        process.kill()
+        process.wait(timeout=5)
+        assert_child_stopped(child)
+        time.sleep(5.2)
+        assert not (tmp_path / 'escaped').exists()
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+        if namespace_init is not None and process_alive(*namespace_init):
+            os.kill(namespace_init[0], signal.SIGKILL)
         assert journal.recover(record)['status'] == 'lost'
