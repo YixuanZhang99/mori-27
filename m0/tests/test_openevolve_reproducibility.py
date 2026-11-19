@@ -22,7 +22,8 @@ def test_hash_seed_must_match_actual_process_not_mutated_environment():
 def test_hash_seed_probe_does_not_write_into_venv(tmp_path):
     import venv
     runtime = tmp_path / 'runtime'
-    venv.create(runtime)
+    # Keep uv-managed macOS Python beside its relative libpython dependency.
+    venv.create(runtime, symlinks=True)
     site = next((runtime / 'lib').glob('python*/site-packages'))
     (site / 'fixture_probe.py').write_text('pass\n')
     (site / 'fixture_probe.pth').write_text('import fixture_probe\n')
