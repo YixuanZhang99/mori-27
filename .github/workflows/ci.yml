@@ -4,16 +4,23 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      diagnostic:
+        description: Run only the temporary full-suite timing diagnostic
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: acceptance-${{ github.workflow }}-${{ github.ref }}
+  group: acceptance-${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic && '-diagnostic' || '' }}
   cancel-in-progress: false
 
 jobs:
   macos-portable:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.diagnostic) }}
     name: macOS / Python 3.12 / portable checks
     runs-on: macos-15
     timeout-minutes: 30
@@ -48,6 +55,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   linux-acceptance:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.diagnostic) }}
     name: Linux x86_64 / Python 3.12 / full v76
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -97,6 +105,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   mle-cloud-runtime:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.diagnostic) }}
     name: MLE CPU dependencies / pinned official graders / synthetic data
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -137,5 +146,51 @@ jobs:
         with:
           name: mle-runtime-${{ github.sha }}
           path: artifacts/mle-runtime/report.json
+          if-no-files-found: warn
+          retention-days: 14
+  full-suite-diagnostic:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic }}
+    name: Temporary Linux full-suite timing diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      UV_PROJECT_ENVIRONMENT: /usr/local/share/mori27-venv
+      UV_PYTHON: /usr/bin/python3.12
+      UV_PYTHON_DOWNLOADS: never
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install locked uv tool version
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.6.8'
+          enable-cache: true
+          cache-dependency-glob: m0/uv.lock
+      - name: Prepare Linux execution prerequisites
+        run: bash scripts/setup_linux_ci.sh
+      - name: Install locked Python environment
+        run: make setup PYTHON=/usr/bin/python3.12
+      - name: Prepare fast private temporary directory for diagnostic
+        run: bash scripts/setup_ci_tmpdir.sh
+      - name: Measure every test without producing an acceptance certificate
+        run: |
+          mkdir -p artifacts/full-suite-diagnostic
+          export MORI_TEST_OFFLINE_CACHE="$(uv cache dir)"
+          set -o pipefail
+          git rev-parse HEAD | tee artifacts/full-suite-diagnostic/commit.txt
+          cd m0
+          uv run --locked python -m pytest -vv -s --durations=40 \
+            --fail-on-skip --strict-markers -p no:cacheprovider \
+            2>&1 | tee ../artifacts/full-suite-diagnostic/pytest.log
+      - name: Upload full-suite diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: full-suite-diagnostic-${{ github.sha }}
+          path: artifacts/full-suite-diagnostic/
           if-no-files-found: warn
           retention-days: 14
